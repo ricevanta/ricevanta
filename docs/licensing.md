@@ -10,6 +10,7 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 - Rule packs carry their own license record, author fields and signature from the first pack. Rule licenses are tracked separately from application code.
 - Sigma rules under DRL 1.1 require the rule author to be shown wherever a match is displayed, including console alert views and exported events.
 - An SBOM is produced for every release.
+- Extensions carry an SPDX license expression in their manifest, which the console shows at install; a release SBOM covers first-party extensions. Connector contracts are project OpenAPI 3.1 documents and add no library.
 
 ## Code and rule sources
 
@@ -79,6 +80,10 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `clickhouse-go` | Apache-2.0 (verify) | Raw store client |
 | OpenSearch | Apache-2.0 | Export destination; not bundled |
 | Elasticsearch | AGPL-3.0, SSPL or Elastic License (verify) | Export destination; never bundled |
+| `wasmtime`, `wasmtime-wasi`, Cranelift | Apache-2.0 per the repository; LLVM exception, verify | `ricevanta-ext` WebAssembly runtime and compiler (EXT-03) |
+| `wit-bindgen` | Apache-2.0 per the repository; LLVM exception, verify | Guest bindings in the extension SDK; host bindings come from `wasmtime::component::bindgen!` |
+| `wasm-tools` | Apache-2.0 per the repository; LLVM exception, verify | SDK packaging: component and WIT validation; build tool, not shipped in the agent |
+| `@module-federation/vite` | MIT | Console code splitting for first-party code only, if used; never for third-party console modules (EXT-04) |
 | `blake3` crate | CC0-1.0, Apache-2.0 or Apache-2.0 with LLVM exception | Content identity |
 | TLSH and its Rust crate | Apache-2.0 (verify both) | Content similarity |
 | `crc32c` crate | Apache-2.0 or MIT (verify) | Spool record checksums |

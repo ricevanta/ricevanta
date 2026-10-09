@@ -19,6 +19,7 @@ Design phase. No application code. Work happens in `docs/`; brand assets and the
 | What works on which OS | `docs/platform-support.md` |
 | What code and rules may be used | `docs/licensing.md` |
 | When | `docs/roadmap.md` |
+| What is in hand right now | `TODO.md` (short-term tasks; a task leaves when committed) |
 | System design | `docs/architecture.md`, then `docs/design/<domain>.md` and `docs/specs/<name>.md` |
 | Brand identity and assets | `branding/BRAND_SPEC.md`, `branding/README.md` |
 
@@ -27,7 +28,7 @@ Design phase. No application code. Work happens in `docs/`; brand assets and the
 | Any design work | `docs/blueprint.md`, `docs/decisions.md`, `instructions/workflow.md`, then the domain's design file |
 | Writing or changing a document | `instructions/documentation.md` |
 | Reviewing, committing, reporting a task | `instructions/workflow.md` |
-| Work in one domain (mdm, edr, dlp, lineage, pki, radius, policy, events, console, agent, backend) | This file, `docs/design/<domain>.md`, that domain's section of `docs/decisions.md`. Nothing else is required. |
+| Work in one domain (mdm, edr, dlp, lineage, pki, radius, policy, events, console, agent, backend, extensions) | This file, `docs/design/<domain>.md`, that domain's section of `docs/decisions.md`. Nothing else is required. |
 
 ## Three rules for every task
 

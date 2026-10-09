@@ -3,7 +3,7 @@
 | Item | Value |
 |---|---|
 | Name | Ricevanta |
-| Domain and namespace | `ricevanta.io`: `apiVersion: ricevanta.io/v1*` in policies and schemas, reverse-DNS `io.ricevanta.*` for bundle, browser extension and service identifiers, PKI subject and SAN patterns, default download, update and documentation URLs; the OCSF extension is named `ricevanta`, since OCSF extension names are path prefixes. No other domain is used in identifiers. |
+| Domain and namespace | `ricevanta.io`: `apiVersion: ricevanta.io/v1*` in policies and schemas, reverse-DNS `io.ricevanta.*` for bundle, browser extension, first-party extension and service identifiers, PKI subject and SAN patterns, default download, update and documentation URLs; the OCSF extension is named `ricevanta`, since OCSF extension names are path prefixes. No other domain is used in identifiers. |
 | Repository | `github.com/ricevanta/ricevanta`, public, default branch `master` |
 | Continuous integration | GitHub Actions with hosted macOS Apple silicon, Windows and Linux runners for build, tests and the core footprint benchmark; self-hosted physical machines for each qualified OS/security configuration and sensor benchmark; an HLK lab (controller plus Windows test clients) for driver certification. Qualification records exact versions, configurations, package digests and evidence (`specs/platform-qualification.md`). Hosted builds do not establish sensor compatibility. |
 | License | Apache-2.0 (`LICENSE`) |
@@ -12,7 +12,7 @@
 
 ## Vendor programs and signing
 
-The project holds the Apple developer team, granted sensor entitlements and Windows driver submission accounts for the distributed packages (PF-03). Each self-hosted Apple MDM service needs its own Apple MDM Push Certificate, obtained at identity.apple.com from a signing request the project signs with its MDM Vendor CSR Signing Certificate; the project operates that signing service, designed with the MDM server, the one project-hosted step a self-hoster cannot remove, used at setup and at yearly renewal. The operator renews with the same Apple ID so the push topic and enrollments survive. The project's IANA Private Enterprise Number, requested in v0.1.x (`roadmap.md`), anchors the policy-signing extended key usage OID (`design/pki.md` section 4). Self-builders need their own applicable grants and signatures to provide the complete feature set.
+The project holds the Apple developer team, granted sensor entitlements and Windows driver submission accounts for the distributed packages (PF-03). Each self-hosted Apple MDM service needs its own Apple MDM Push Certificate, obtained at identity.apple.com from a signing request the project signs with its MDM Vendor CSR Signing Certificate; the project operates that signing service, designed with the MDM server, the one project-hosted step a self-hoster cannot remove, used at setup and at yearly renewal. The operator renews with the same Apple ID so the push topic and enrollments survive. The project's extension publisher key (Ed25519, held offline by maintainers) signs first-party extensions and the extension index; servers ship its public key on their trust list (`design/extensions.md` section 2). The project's IANA Private Enterprise Number, requested in v0.1.x (`roadmap.md`), anchors the policy-signing extended key usage OID (`design/pki.md` section 4). Self-builders need their own applicable grants and signatures to provide the complete feature set.
 
 | Phase | Accounts |
 |---|---|

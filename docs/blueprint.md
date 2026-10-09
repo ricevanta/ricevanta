@@ -243,6 +243,15 @@ No external SIEM is mandatory for Ricevanta to operate.
 - APIs and GitOps configuration.
 - Agent/version management and updates.
 
+### 3.9 Extensions
+
+- Third parties extend Ricevanta through signed packages of content, browser adapters, sandboxed agent modules, sandboxed console modules and out-of-process service connectors.
+- No third-party code runs inside the agent, the server or the sensors.
+- Browser support is an adapter, so any browser a vendor documents for enterprise management can be added without a core change.
+- Operators choose which publishers they trust and approve the capabilities each extension receives.
+
+The extension model is defined in [the extension design](design/extensions.md).
+
 ---
 
 ## 4. Unified Rules & Policies
@@ -547,7 +556,7 @@ Before v1.0.0, each functional module must have an end-to-end, documented, teste
 
 ## 11. Repository structure
 
-[Architecture section 6](architecture.md#6-repository-layout) defines the planned repository layout (SH-04). Adapters live with their owning server or agent modules. Code directories are created with their first real implementation after the relevant design exists; the current repository remains in the design phase.
+[Architecture section 6](architecture.md#6-repository-layout) defines the planned repository layout (SH-04). Rule and destination adapters live with their owning server or agent modules; browser adapters and other first-party extensions live in `extensions/`. Code directories are created with their first real implementation after the relevant design exists; the current repository remains in the design phase.
 
 ---
 

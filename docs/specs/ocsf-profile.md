@@ -46,6 +46,7 @@ Declared in `schemas/ocsf/extensions/ricevanta/extension.json`; its `dictionary.
 | `classification_ref` | Object | `scheme_uid`, `label`, `version`, `regulations` (list of `{regulation, article}` per DLP-03); added to `data_security_finding` and `file` |
 | `match_evidence` | Object | `content_hash`, `rule_uid`, `offsets` (list of byte ranges) per DLP-02; added to `data_security_finding`; the redacted snippet itself goes in the core `data_security.pattern_match` |
 | `policy_bundle` | Object | `bundle_uid`, `sequence`, `scope_id`; added to `metadata` of every agent event |
+| `extension_origin` | Object | Descriptive `id` and `version`; immutable `package_digest`, `component`, `component_digest` and `grant_generation`; added to `metadata` of every event an extension component causes (a module match, a collector row, a responder plan step, an enrichment, an API call through a console module), so a SIEM can filter them (`../design/extensions.md` section 2.6) |
 | `enforcement_mode_id` | Attribute on classes carrying the `security_control` profile | `enforce`, `monitor`, `fail_open_applied`, `fail_closed_applied`, `unsupported` |
 | `author` | Attribute on `analytic` | Rule author for DRL attribution |
 | `policy_activity` | Class, System Activity | `activity_id` evaluated, error, exception_applied, fail_open_applied, fail_closed_applied, command_refused; `policy`, `policy_bundle`, `exception_uid`, `reason` (the policy-health and audit events the specs require) |

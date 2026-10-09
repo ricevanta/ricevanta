@@ -1,6 +1,6 @@
 # Architecture
 
-The system view: which processes exist, how they talk, who holds which key, and how the system is deployed. Requirements are in `blueprint.md`; decisions are registered in `decisions.md`. The agent's internals are in `design/agent.md`, the server's in `design/backend.md`, enrollment and certificates in `design/pki.md`, the lineage graph in `design/lineage.md`; schemas and protocols go in `specs/`. Claims that rest on vendor behaviour rather than first-party documentation are marked "verify".
+The system view: which processes exist, how they talk, who holds which key, and how the system is deployed. Requirements are in `blueprint.md`; decisions are registered in `decisions.md`. The agent's internals are in `design/agent.md`, the server's in `design/backend.md`, enrollment and certificates in `design/pki.md`, the lineage graph in `design/lineage.md`, the extension model in `design/extensions.md`; schemas and protocols go in `specs/`. Claims that rest on vendor behaviour rather than first-party documentation are marked "verify".
 
 ## 1. Components
 
@@ -11,7 +11,7 @@ The system view: which processes exist, how they talk, who holds which key, and 
 | `ricevanta` CLI | Administrator workstation, CI | Go | User | Same API as the console; GitOps apply |
 | PostgreSQL 17+ | Server | | | System of record |
 | ClickHouse | Server, optional | | | Raw telemetry store (EV-01); OpenSearch and Elasticsearch are export destinations |
-| Blob store | Server: local volume or S3-compatible bucket | | | Installers, agent packages, rule-pack archives |
+| Blob store | Server: local volume or S3-compatible bucket | | | Installers, agent packages, rule-pack archives, extension packages |
 | `ricevanta-agent` | Endpoint, system service | Rust | root, LocalSystem | Agent core: identity, policy, events, MDM, EDR and DLP logic, lineage |
 | `ricevanta-updater` | Endpoint, system service | Rust | root, LocalSystem | Applies signed updates, watches core health, rolls back |
 | `Ricevanta.app` | macOS, system-wide application | Swift shim | User | Hosts the two system extensions and the Safari extension handler; activates the extensions |
@@ -20,9 +20,12 @@ The system view: which processes exist, how they talk, who holds which key, and 
 | `ricevanta.sys` | Windows kernel driver | C (AG-01) | Kernel, WHCP-certified | Minifilter, process-creation callbacks, WFP callout, self-protection |
 | eBPF programs | Linux kernel, loaded by the core | C, CO-RE, dual MIT/GPL | Kernel | Telemetry, BPF LSM blocking |
 | `ricevanta-scan` | Endpoint, started on demand by the core | Rust | Reduced privilege, memory cap | Content inspection (AG-02) |
+| `ricevanta-ext` | Endpoint, started on demand by the core | Rust, `wasmtime` | Reduced privilege, memory cap | Runs sandboxed WebAssembly extension modules: classifiers, parsers, collectors, responder plans (EXT-03) |
 | `ricevanta-session` | Endpoint, one per graphical login session | Rust | Logged-in user | Clipboard, user prompts, session context (DLP-01) |
-| `ricevanta-nmhost` | Endpoint, started by Chrome, Edge or Firefox | Rust | Logged-in user | Native messaging relay between the browser extension and the core |
-| Browser extension | Chrome, Edge, Firefox, Safari | TypeScript | Browser | Content-script gate with `webRequest` and `declarativeNetRequest` backstops, tab URL and user context (DLP-01); upload, paste, print and download decisions come from the core's content-analysis agent |
+| `ricevanta-nmhost` | Endpoint, started by a browser whose adapter declares a native host | Rust | Logged-in user | Native messaging relay between the browser extension and the core |
+| Browser extension | Browsers declared by a browser adapter (EXT-06); first-party adapters: Chrome, Edge, Firefox, Safari | TypeScript | Browser | Content-script gate with `webRequest` and `declarativeNetRequest` backstops, tab URL and user context (DLP-01); upload, paste, print and download decisions come from the core's content-analysis agent |
+| Console modules | Sandboxed iframes inside the console | Web assets from any toolchain | Opaque origin, no network | Extension UI in console slots through the bridge (EXT-04) |
+| Service connectors | Operator's infrastructure: own container, Compose service or Helm deployment | Any | Chosen by the operator | Export destinations, external CA, notifiers and enrichers over versioned HTTP contracts (EXT-05) |
 
 The agent is one product with one installer, one identity and one update lifecycle. It is several processes because the operating systems require it (blueprint section 5).
 
@@ -30,11 +33,11 @@ The agent is one product with one installer, one identity and one update lifecyc
 
 | OS | Core and updater | Kernel or system component | Helpers |
 |---|---|---|---|
-| macOS | launchd system daemons | `Ricevanta.app` hosts `io.ricevanta.agent.es` (Endpoint Security) and `io.ricevanta.agent.ne` (Network Extension content filter) | `ricevanta-scan`; `ricevanta-session` as a launchd user agent; `ricevanta-nmhost` for Chrome, Edge and Firefox; the Safari extension handler inside `Ricevanta.app` |
-| Windows | Services, LocalSystem | `ricevanta.sys` | `ricevanta-scan`; `ricevanta-session` launched into each interactive session by the core; `ricevanta-nmhost` |
-| Linux | systemd services, root | eBPF programs loaded by the core with links and maps pinned in bpffs; fanotify from the core | `ricevanta-scan`; `ricevanta-session` through an XDG autostart entry per graphical session; `ricevanta-nmhost` |
+| macOS | launchd system daemons | `Ricevanta.app` hosts `io.ricevanta.agent.es` (Endpoint Security) and `io.ricevanta.agent.ne` (Network Extension content filter) | `ricevanta-scan`; on-demand DLP and batch instances of `ricevanta-ext`; `ricevanta-session` as a launchd user agent; `ricevanta-nmhost` for every browser whose adapter declares a native host; the Safari extension handler inside `Ricevanta.app` |
+| Windows | Services, LocalSystem | `ricevanta.sys` | `ricevanta-scan`; on-demand DLP and batch instances of `ricevanta-ext`; `ricevanta-session` launched into each interactive session by the core; `ricevanta-nmhost` |
+| Linux | systemd services, root | eBPF programs loaded by the core with links and maps pinned in bpffs; fanotify from the core | `ricevanta-scan`; on-demand DLP and batch instances of `ricevanta-ext`; `ricevanta-session` through an XDG autostart entry per graphical session; `ricevanta-nmhost` |
 
-The core owns the server connection, the device identity, the policy cache, the event pipeline and all domain logic. Every other process is a sensor, an enforcement point, the updater or a user-session proxy, and never talks to the server. Enforcement points hold their own compiled rules and decide locally; only content decisions ask the core (AG-06). Processes in the user session are untrusted input to the core. The internal structure, enforcement model, local IPC, state, memory budget, resource governance, updates and tamper resistance are in `design/agent.md`.
+The core owns the server connection, the device identity, the policy cache, the event pipeline and all domain logic. Every other process is a sensor, an enforcement point, the updater, a content or extension helper, or a user-session proxy, and never talks to the server. `ricevanta-ext` is one binary with at most one active DLP instance and one active batch instance, each separately replaceable and capped at 128 MB by default, with a 256 MB default aggregate active cap. Batch work cannot borrow the DLP process, workers or memory reserve. Both instances stop when idle, and modules never receive resident processes of their own (`specs/extension-agent-runtime.md` section 1). Browser adapters select policy names and capabilities within a protected browser registration that owns each exact policy and native-host target (`design/extensions.md` section 7). Enforcement points hold their own compiled rules and decide locally; only content decisions ask the core (AG-06). Processes in the user session are untrusted input to the core. The internal structure, enforcement model, local IPC, state, memory budget, resource governance, updates and tamper resistance are in `design/agent.md`.
 
 ## 3. Server
 
@@ -44,11 +47,11 @@ The core owns the server connection, the device identity, the policy cache, the 
 
 | Role | Listeners | State and keys |
 |---|---|---|
-| `api` | HTTPS: console, `/api/v1`, embedded console assets; any certificate | Stateless; holds the master key and the policy and command signing key; signs bundles, rule packs and commands at creation, while `jobs` signs assignments and dispatch grants |
+| `api` | HTTPS: console, `/api/v1`, embedded console assets, extension assets under `/ext/`; any certificate | Stateless; holds the master key and the policy and command signing key; signs bundles, rule packs and commands at creation, while `jobs` signs assignments and dispatch grants; verifies extension packages against the trust list at install |
 | `agent` | HTTPS: `/agent/v1`; server certificate from the Ricevanta PKI, pinned by agents; TLS terminated by the server itself; a client certificate is requested on every connection and required on every path except enrollment; renewal accepts an expired, unrevoked certificate within the grace period | Holds long-poll connections; public keys only; PostgreSQL credentials that read bundles and commands and write only events, check-ins, command results, certificate and dispatch requests and minted ACME nonces |
 | `device` | HTTPS: Apple MDM, OMA-DM, SCEP and ACME for MDM payloads, network devices and third-party clients; publicly trusted or Ricevanta certificate; TLS terminated by the server itself | Stateless; its TLS key only; SCEP envelopes and certificate requests go to `jobs` through request rows; writes minted ACME nonces |
 | `radius` | UDP 1812 and 1813, RadSec TCP 2083 | EAP conversations live in the replica's memory; its TLS key and the per-gateway shared secrets under a role-scoped data key |
-| `jobs` | None | Schedulers, exporters, retention, directory sync, correlation, certificate issuance, APNs pushes; holds the master key, the issuing CA keys, the APNs push key and the signing key; one active leader per job through a lease row (`design/backend.md` section 3) |
+| `jobs` | None; outbound calls to service connectors | Schedulers, exporters, connector calls and health probes, retention, directory sync, correlation, certificate issuance, APNs pushes; holds the master key, the issuing CA keys, the APNs push key, the signing key and the `service` client key it presents to connectors; one active leader per job through a lease row (`design/backend.md` section 3) |
 
 Key custody follows exposure: the agent-facing `agent`, `device` and `radius` roles never receive the master key or any CA or signing key, hold their TLS keys under role-scoped data keys, run with per-role PostgreSQL credentials, and cannot write bundle, command, approval or certificate rows. Issuing CA keys are readable and unwrappable by `jobs` alone (`design/backend.md` section 6). Certificate and dispatch request rows are untrusted input: `jobs` verifies protocol proof and reconstructs authorization from protected records before issuance or a fresh dispatch grant (`design/pki.md` section 3, `specs/policy-envelope.md` section 7, BE-03).
 
@@ -58,17 +61,19 @@ The console is a Vue 3 single-page application compiled into the binary and serv
 
 ### 3.2 Modules
 
-Fourteen modules with schema ownership and an import-graph check (BE-04); contents, rules, library choices, coordination, pipelines and storage are in `design/backend.md`.
+Fifteen modules with schema ownership and an import-graph check (BE-04); contents, rules, library choices, coordination, pipelines and storage are in `design/backend.md`.
 
 ### 3.3 APIs
 
 | API | Path | Consumers | Authentication | Format |
 |---|---|---|---|---|
-| Administration | `/api/v1` | Console, CLI, GitOps, integrations | Browser session from OIDC, SAML or break-glass local login (BE-01), or a scoped API token | JSON, described by a hand-written OpenAPI 3.1 document, validated in CI, that lives in `schemas/openapi/` from the first server build (v0.1.x) |
+| Administration | `/api/v1`, including `/api/v1/extension-bridge/bindings` | Console, console extension bridge, CLI, GitOps, integrations | Browser session from OIDC, SAML or break-glass local login (BE-01), or a scoped API token; extension bridge dispatch also requires a live server-side mount binding (EXT-04) | JSON, described by a hand-written OpenAPI 3.1 document, validated in CI, that lives in `schemas/openapi/` from the first server build (v0.1.x) |
 | Agent | `/agent/v1` | `ricevanta-agent` | mTLS with the device identity certificate; enrollment token on `/agent/v1/enroll`; expired certificate accepted on `/agent/v1/acme` within the grace period | JSON; NDJSON batches for events, zstd-compressed; ACME for renewal |
 | Native device protocols | `/mdm/apple`, `/mdm/windows`, `/scep`, `/acme` | MDM clients, network equipment, third-party clients | Protocol-specific (`design/pki.md`, MDM-01) | Protocol-specific |
+| Extension assets | `/ext/<id>/<version>/` on the `api` role | Console module iframes | None; the assets hold no secret and are served with a `Content-Security-Policy` `sandbox` header (EXT-04) | Static files from the blob store |
+| Connector contracts | Outbound from `jobs` to each registered connector URL | `export-destination`, `ca-connector`, `notifier` and `enricher` connectors | mTLS with `service` certificates from the Ricevanta PKI, or a pinned certificate and scoped token (EXT-05) | JSON and NDJSON, described by OpenAPI 3.1 documents in `schemas/openapi/connectors/` |
 
-The administration API is the only write path; the console and the CLI have no privileges the API does not expose. GitOps is a directory of YAML resources (`apiVersion: ricevanta.io/v1*`; kinds such as `Policy`, `RulePack`, `DeviceGroup`, `Baseline`, `ExportDestination`) applied by `ricevanta apply` or by the server polling a Git repository. Apply is a declarative three-way diff against the stored state; protected actions become approval requests (BE-02).
+The administration API is the only write path; the console, its extension bridge and the CLI have no privileges the API does not expose. The bridge route fixes the extension identity in a server-side binding and invokes the same authorization and application handlers as the requested operation (`design/extensions.md` section 5.2). GitOps is a directory of YAML resources (`apiVersion: ricevanta.io/v1*`; kinds such as `Policy`, `RulePack`, `DeviceGroup`, `Baseline`, `ExportDestination`, `Extension`) applied by `ricevanta apply` or by the server polling a Git repository. Apply is a declarative three-way diff against the stored state; protected actions become approval requests (BE-02).
 
 ### 3.4 Agent protocol
 
@@ -89,12 +94,15 @@ Compatibility window: the server serves `/agent/v1` to agents from the current m
 | Key | Held by | Signs | Verified by |
 |---|---|---|---|
 | Root CA | Offline, M-of-N custodian quorum (PKI-01); its certificate is what agents pin | Issuing CA certificates | Everything that trusts the PKI |
-| Issuing CAs (device, server, network access) | `jobs` role: software key under envelope encryption, or PKCS#11 | Device identity, management and network-access certificates; server certificates for the `agent` and `device` roles; the policy signing certificate | Agents, MDM clients, VPN gateways, RADIUS |
+| Issuing CAs (device, server, network access) | `jobs` role: software key under envelope encryption, or PKCS#11 | Device identity, management and network-access certificates; server certificates for the `agent` and `device` roles; `service` certificates for `jobs` and service connectors; the policy signing certificate | Agents, MDM clients, VPN gateways, RADIUS, `jobs` and connectors |
 | Policy and command signing key (Ed25519, one per organization) | `api` and `jobs` roles, under envelope encryption; its public key is carried in a certificate from the issuing CA | Policy bundles, device assignments, rule packs, commands and dispatch grants, bound as specified in `specs/policy-envelope.md` sections 6 and 7 | Agents, against the pinned root, the device issuing CA, the policy-signing subject and extended key usage, and a fresh CRL (`design/pki.md` section 4) |
 | Release signing keys (Ed25519) | Project maintainers, offline root and successor keys; self-builders use their own | Release manifests, which carry an expiry, and packages | `ricevanta-updater`; both public keys are compiled in, a manifest signed by the successor retires the root |
+| Extension publisher keys (Ed25519) | Each publisher; the project's extension publisher key is held offline by maintainers | Extension manifests in DSSE envelopes; the project key also signs the extension index | `api` at install, against the operator's trust list; agents never verify them (EXT-02) |
 | Platform code-signing identities | The company (PF-03) | Binaries, system extensions, the WHCP submission of the driver | Operating systems |
 
 For `/agent/v1`, TLS protects the transport and signatures bind policy, commands and releases to keys the agent-facing roles never hold. Command dispatch also needs a fresh device/poll-bound grant so stored signed bytes cannot authorize a delayed expired action. A stolen `agent`-role TLS key cannot forge those artifacts. The native MDM channels have no second signature: Apple MDM and OMA-DM commands rest on the `device` role's TLS key, which is therefore short-lived, kept in the KMS or PKCS#11 device where one is configured, and revocable from the console. Enrollment, renewal and recovery are in `design/pki.md`; updates in `design/agent.md`.
+
+The extension trust list (publisher fingerprints, allowed id prefixes, revocations) is server state owned by the `extensions` module. Agent-bound extension components reach agents only inside the signed policy bundle, so the agent's trust chain stays the organization's policy signing key and the per-device assignment (`design/extensions.md` section 2).
 
 ## 5. Deployment
 
@@ -105,18 +113,21 @@ For `/agent/v1`, TLS protects the transport and signatures bind policy, commands
 
 High availability: `api`, `agent` and `device` are stateless and run two or more replicas; `jobs` runs replicas with per-job leader election; `radius` replicas each hold their own EAP state, and gateways are configured with a primary and a secondary server; PostgreSQL high availability is the operator's choice. Upgrades run `ricevanta-server migrate` before the new version serves; migrations are forward-only and compatible with the previous server version for a rolling upgrade.
 
+Server container images are built for `linux/amd64` and `linux/arm64`.
+
 Observability: Prometheus metrics on `/metrics`, structured JSON logs, health and readiness endpoints, optional OpenTelemetry traces. The server's own audit and security events are OCSF events in the same pipeline.
 
 ## 6. Repository layout
 
 ```
 ricevanta/
-├── agent/        Rust workspace: crates (core, updater, os-macos, os-windows, os-linux, scan, session, nmhost), bpf/ (dual MIT/GPL), app bundles, packaging
+├── agent/        Rust workspace: crates (core, updater, os-macos, os-windows, os-linux, scan, ext, session, nmhost), bpf/ (dual MIT/GPL), app bundles, packaging
 ├── driver/       Windows kernel driver (C), WDK build, HLK test configuration
-├── extension/    Browser extension (TypeScript, Manifest V3), Safari handler sources
+├── browser/      Browser extension (TypeScript, WebExtensions) built per engine family: chromium (Manifest V3), gecko, webkit with the Safari handler sources
 ├── server/       Go module: cmd/ricevanta-server, cmd/ricevanta, internal/<module>
 ├── console/      Vue 3 application, built into server/ at release
-├── schemas/      Policy envelope JSON Schema, CEL profile, OCSF profile and extension, OpenAPI
+├── extensions/   Extension SDK (guest bindings, console bridge library, connector contract test kit, `ricevanta ext` packaging and signing) and first-party extensions, including the browser adapters
+├── schemas/      Policy envelope JSON Schema, CEL profile, OCSF profile and extension, OpenAPI; extension/ (manifest and adapter JSON Schemas), wit/, console-bridge/, openapi/connectors/
 ├── rulepacks/    First-party rule packs with license records
 ├── deploy/       Docker Compose, Helm chart, examples
 ├── tests/        Capability matrix acceptance tests, integration and end-to-end tests, footprint benchmark
@@ -124,11 +135,11 @@ ricevanta/
 └── instructions/ How to work
 ```
 
-One repository, one version number per release for server, console, agent and extension (SH-04). Language-specific instructions are added when the first directory is created (`instructions/workflow.md`).
+One repository, one version number per release for server, console, agent, browser extension and first-party extensions (SH-04). Third-party extensions version on their own against interface versions (EXT-07). Language-specific instructions are added when the first directory is created (`instructions/workflow.md`).
 
 ## 7. Cross-cutting rules
 
-- Versioning: SemVer for the product; `/api/v1` and `/agent/v1` change additively within a major; the policy envelope is `apiVersion: ricevanta.io/v1alpha1` throughout v0.x and `v1` from v1.0.0. The v1.0.0 server migration relabels stored resources; agents receive compiled bundles whose format is versioned with `/agent/v1`, so the envelope label never reaches them.
+- Versioning: SemVer for the product; `/api/v1` and `/agent/v1` change additively within a major; the policy envelope is `apiVersion: ricevanta.io/v1alpha1` throughout v0.x and `v1` from v1.0.0. The v1.0.0 server migration relabels stored resources; agents receive compiled bundles whose format is versioned with `/agent/v1`, so the envelope label never reaches them. Extension interfaces carry their own versions (`ext.ricevanta.io/<kind or contract>/v1`, WIT package versions, the console bridge schema version, connector contract versions), change additively within a major and are the compatibility key for extensions, not the product version (EXT-07).
 - Failure behaviour: every policy declares its fail mode for each enforcement point (`design/agent.md`); every unsupported capability is reported, never silently skipped.
 - Privacy: classification runs on the endpoint; only the evidence DLP-02 allows leaves the device.
 - Configuration: the server reads environment variables and one YAML file; the agent reads the enrollment configuration (`design/pki.md`) plus server-delivered signed policy. Ricevanta rejects unsigned local configuration changes and requires authorization on its own uninstall paths; OS and administrator escape paths follow the limits in `design/agent.md` section 9.
@@ -139,12 +150,12 @@ One repository, one version number per release for server, console, agent and ex
 
 ## 8. Benefits, trade-offs, dependencies, limits, alternatives
 
-Benefits: one server binary and one agent package keep deployment and upgrades simple for self-hosters, the shape Fleet, Velociraptor, Loki and Teleport scale with; enforcement points that hold their own rules keep decision latency off the IPC path; signed policy, commands and releases with keys the agent-facing roles never hold make the TLS certificate, the ingress and the download channel non-critical for integrity; per-module schemas keep the monolith splittable later.
+Benefits: one server binary and one agent package keep deployment and upgrades simple for self-hosters, the shape Fleet, Velociraptor, Loki and Teleport scale with; enforcement points that hold their own rules keep decision latency off the IPC path; signed policy, commands and releases with keys the agent-facing roles never hold make the TLS certificate, the ingress and the download channel non-critical for integrity; per-module schemas keep the monolith splittable later; extensions add browsers, detectors, UI and integrations while no third-party code runs in the agent core, the server or the sensors (`design/extensions.md`).
 
-Trade-offs: JSON over HTTPS costs more bytes than gRPC and Protobuf for telemetry, paid back by one serialization format (OCSF JSON) and one API stack. Long-poll holds one connection per agent on the `agent` role, which is cheap in Go. TLS passthrough for the `agent` and `device` roles removes ingress-level TLS management for those endpoints. WHCP certification of the driver needs an HLK lab and adds weeks to every driver release.
+Trade-offs: JSON over HTTPS costs more bytes than gRPC and Protobuf for telemetry, paid back by one serialization format (OCSF JSON) and one API stack. Long-poll holds one connection per agent on the `agent` role, which is cheap in Go. TLS passthrough for the `agent` and `device` roles removes ingress-level TLS management for those endpoints. WHCP certification of the driver needs an HLK lab and adds weeks to every driver release. Server-side extension code runs as connector processes the operator deploys, because no Go WebAssembly runtime offers WASIp2 with fuel metering without cgo (EXT-05).
 
 Dependencies: listed per domain in `design/agent.md`, `design/backend.md` and `design/pki.md`, plus CloudNativePG, the Prometheus client and the OpenTelemetry SDK for deployment and observability; every one has a row in `licensing.md`.
 
-Limits: Kubernetes clusters without a UDP-capable load balancer need an external one for RADIUS. The macOS extensions need the company's entitlements for production (PF-03). The agent compatibility window means a server more than two minor releases ahead stops serving old agents except for updates.
+Limits: Kubernetes clusters without a UDP-capable load balancer need an external one for RADIUS. The macOS extensions need the company's entitlements for production (PF-03). The agent compatibility window means a server more than two minor releases ahead stops serving old agents except for updates. Community adapters are not qualified (`design/extensions.md` section 7.3).
 
-Alternatives considered: recorded as the Rejected line of each decision this document introduces (SH-04, AG-03, AG-04, BE-03, BE-05, BE-07) and of the domain designs' decisions.
+Alternatives considered: recorded as the Rejected line of each decision this document introduces (SH-04, AG-03, AG-04, BE-03, BE-05, BE-07, EXT-01 to EXT-07) and of the domain designs' decisions.

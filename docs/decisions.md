@@ -22,9 +22,9 @@ Why: no requirement for multi-tenancy at v1.0.0.
 Rejected: multi-tenancy at v1.0.0, which no requirement asks for and which would add a tenant check to every table and query.
 
 ### SH-04. One repository, one release version
-Decision: one repository with `agent/`, `driver/`, `extension/`, `server/`, `console/`, `schemas/`, `rulepacks/`, `deploy/`, `tests/`, `docs/` and `instructions/`. Server, console, agent and extension share one SemVer version per release.
-Why: cross-component changes (policy envelope, agent API) land in one change and one test run.
-Rejected: a separate `integrations/` directory for adapters; they are server modules and live with the server.
+Decision: one repository with `agent/`, `driver/`, `browser/`, `server/`, `console/`, `extensions/`, `schemas/`, `rulepacks/`, `deploy/`, `tests/`, `docs/` and `instructions/`. Server, console, agent, browser extension and the first-party extensions in `extensions/` share one SemVer version per release; third-party extensions carry their own versions and declare the interface versions they need (EXT-07).
+Why: cross-component changes (policy envelope, agent API, extension interfaces) land in one change and one test run.
+Rejected: a separate `integrations/` directory for rule and destination adapters, since they are server modules and live with the server; a separate repository for first-party extensions, which would test the extension interfaces apart from their first users.
 Detail: `architecture.md` section 6.
 
 ## Platform (PF)
@@ -67,7 +67,7 @@ Rejected: inspection inside the core process, which would keep rules, models and
 Detail: `design/agent.md` section 6.
 
 ### AG-03. Process topology and local IPC
-Decision: one core service per endpoint owns the server connection, identity, policy, events and domain logic. Sensors and enforcement points (macOS Endpoint Security and Network Extension system extensions, the Windows driver, Linux eBPF programs), the updater, the scanner helper, one session helper per graphical session and the browser relays never talk to the server. Local IPC is XPC on macOS, Unix domain sockets on Linux and named pipes on Windows, with peer identity checks and `postcard`-serialized messages; the browser extension uses the native messaging each browser provides; the driver uses its communication port.
+Decision: one core service per endpoint owns the server connection, identity, policy, events and domain logic. Sensors and enforcement points (macOS Endpoint Security and Network Extension system extensions, the Windows driver, Linux eBPF programs), the updater, the scanner helper, the extension helper (EXT-03), one session helper per graphical session and the browser relays never talk to the server. Local IPC is XPC on macOS, Unix domain sockets on Linux and named pipes on Windows, with peer identity checks and `postcard`-serialized messages; the browser extension uses the native messaging each browser provides; the driver uses its communication port.
 Why: the OSes require separate privileged components (C3, C5); one server connection keeps identity and policy single.
 Rejected: JSON for local IPC; too slow for Endpoint Security event volume.
 Detail: `architecture.md` section 2 and `design/agent.md` section 4.
@@ -85,7 +85,7 @@ Rejected: RocksDB or a pure-Rust key-value store, which have no SQL; policy expi
 Detail: `design/agent.md` section 5.
 
 ### AG-06. Enforcement points hold compiled rules
-Decision: the core compiles the policy bundle into rule sets installed incrementally into each enforcement point; rule-only decisions complete inside the enforcement point and are never throttled or muted. Content decisions pass an open file descriptor to the core and the scanner helper within a per-policy deadline; every policy declares its fail mode, `open` (default, with an audit event) or `closed`; a repeated scanner crash on the same content applies `closed`. Ricevanta's own processes are excluded from their own checks.
+Decision: the core compiles the policy bundle into rule sets installed incrementally into each enforcement point; rule-only decisions complete inside the enforcement point and are never throttled or muted. Content decisions pass an open file descriptor to the core and the scanner helper, and to the extension helper for extension parsers and classifiers (EXT-03), within a per-policy deadline; every policy declares its fail mode, `open` (default, with an audit event) or `closed`; a repeated scanner crash on the same content applies `closed`. Ricevanta's own processes are excluded from their own checks.
 Why: authorization callbacks have OS deadlines and must not wait on IPC or inspection (blueprint section 7).
 Rejected: routing every decision through the core; adds IPC latency to every file and process operation.
 Detail: `design/agent.md` section 3; the rule-only subset is in `specs/policy-envelope.md` section 2.2.
@@ -97,7 +97,7 @@ Rejected: trusting the server TLS connection alone for updates; the core applyin
 Detail: `design/agent.md` section 8.
 
 ### AG-08. Self-watchdog and hot-source control
-Decision: the agent meters CPU per OS thread and memory per owned data structure for each unit of work (telemetry source, rule pack, scan) against budgets in the policy bundle, throttles and then disables a unit that exceeds its budget, and reports the degradation. Notification telemetry rate-limits per path and per process and mutes busy sources at the enforcement point with the mute reported; authorization and permission rules are exempt, a throttled content check takes the policy fail mode, and repeated mutes attributed to one user are a detection.
+Decision: the agent meters CPU per OS thread and memory per owned data structure for each unit of work (telemetry source, rule pack, scan, extension module) against budgets in the policy bundle, throttles and then disables a unit that exceeds its budget, and reports the degradation. Notification telemetry rate-limits per path and per process and mutes busy sources at the enforcement point with the mute reported; authorization and permission rules are exempt, a throttled content check takes the policy fail mode, and repeated mutes attributed to one user are a detection.
 Why: no comparable EDR and DLP agent publishes a footprint near the 80 MB target (blueprint section 7), and the documented failures of osquery and Sysmon trace to unbounded work on busy paths (verify).
 Rejected: a fixed process memory cap that restarts the agent, which loses enforcement; muting authorization rules, which would let a user flood a path to get it unprotected.
 Detail: `design/agent.md` section 7.
@@ -127,10 +127,10 @@ Detail: `specs/ocsf-profile.md` section 5.
 ## DLP
 
 ### DLP-01. Browser extension and session helpers
-Decision: browser channels are gated at the browser's own hold point: the core serves one `content_analysis_sdk`-compatible local agent for Chrome (through Chrome Enterprise Core), Edge (Windows and macOS) and Firefox, and the managed extension's content script gates Chrome without cloud management, Edge on Linux and Safari, backed by synchronous `webRequest` on Chrome and Edge and `declarativeNetRequest` on Safari. Clipboard blocking is owner-side mediation: the session helper re-owns the clipboard on every change and answers each consumer request after the decision, the re-own interval is an OS limit with a measured bound, and Wayland is served through `ext-data-control-v1` or, on GNOME, a GNOME Shell extension that owns the selection inside Mutter. Cloud sync clients are the file channel through known sync folders.
+Decision: browser channels are gated at the browser's own hold point, chosen from the browser's adapter (EXT-06): the core serves one `content_analysis_sdk`-compatible local agent to every browser whose adapter declares a connector on that OS, and the managed extension's content script gates the others, backed by the blocking `webRequest` or `declarativeNetRequest` rules the adapter declares. The qualified adapters at v1.0.0 are Chrome (connector through Chrome Enterprise Core, otherwise the content script with synchronous `webRequest`), Edge (connector on Windows and macOS, the content script with `webRequest` on Linux), Firefox (connector) and Safari (the content script with `declarativeNetRequest`). Clipboard blocking is owner-side mediation: the session helper re-owns the clipboard on every change and answers each consumer request after the decision, the re-own interval is an OS limit with a measured bound, and Wayland is served through `ext-data-control-v1` or, on GNOME, a GNOME Shell extension that owns the selection inside Mutter. Cloud sync clients are the file channel through known sync folders.
 Why: browsers expose uploads, pastes and printing only through their own analysis hooks, and after the re-own the clipboard owner answers every consumer request (C5).
 Rejected: TLS interception, which contradicts the privacy principle and breaks pinning; clearing or replacing the clipboard after a change, which never mediates a request.
-Detail: `platform-support.md`, `design/agent.md` section 3, `specs/platform-qualification.md`.
+Detail: `platform-support.md`, `design/agent.md` section 3, `design/extensions.md` section 7, `specs/platform-qualification.md`.
 
 ### DLP-02. Evidence
 Decision: a match stores the content hash, rule ID, byte offsets and a redacted snippet of at most 200 characters; the snippet can be disabled by policy. Raw user content is never stored; script content is exported under `specs/ocsf-profile.md` section 3 after the secret and identifier detectors redact it.
@@ -158,7 +158,7 @@ Rejected: ECS or a proprietary schema; the blueprint names OCSF as the canonical
 Detail: `specs/ocsf-profile.md`.
 
 ### EV-03. OCSF profile and extension
-Decision: each domain emits the OCSF 1.9.0 classes in the profile table with the `host` and `security_control` profiles, and the `ricevanta` extension, registered with the OCSF project before v1.0.0 and on the development uid until then, adds what OCSF lacks for lineage, PKI, agent health, classification references, match evidence and enforcement mode. Every event carries a UUIDv7, the bundle in force and a correlation uid; fixtures are validated in CI and events failing validation at ingest are quarantined.
+Decision: each domain emits the OCSF 1.9.0 classes in the profile table with the `host` and `security_control` profiles, and the `ricevanta` extension, registered with the OCSF project before v1.0.0 and on the development uid until then, adds what OCSF lacks for lineage, PKI, agent health, classification references, match evidence, enforcement mode and the extension that caused an event. Every event carries a UUIDv7, the bundle in force and a correlation uid; fixtures are validated in CI and events failing validation at ingest are quarantined.
 Why: OCSF has no PKI, lineage or agent health class and no regulation reference, and mapping drift must fail a build rather than a customer's query (EV-02).
 Rejected: emitting PKI events as `authentication`, whose activities do not fit issuance; lineage inside `detection_finding.evidences`, which would inflate the finding store; deprecated classes; a self-assigned extension uid, since the registry assigns them.
 Detail: `specs/ocsf-profile.md`.
@@ -222,7 +222,7 @@ Rejected: local accounts as the primary user store; drifts from the directory.
 Detail: `design/backend.md` section 2.
 
 ### BE-02. RBAC with access policies for protected actions
-Decision: one permission per action, bundled into built-in and custom roles, assignable to users or directory groups, optionally scoped to device groups. Access policies name protected actions and an approver group; a protected action from the console, the API or GitOps becomes a pending request that a different account approves before dispatch, with targets frozen at request time and requester, approver and targets audited; wipe, response actions on more than 10 devices, rule-pack publish, CA key operations, weakening DLP and EDR policies and publishing ones with isolate, revoke or kill actions (`specs/policy-envelope.md` section 2.3) are protected by default. Single-administrator installations can disable approval policies and see a persistent warning; just-in-time role activation is not in v1.0.0.
+Decision: one permission per action, bundled into built-in and custom roles, assignable to users or directory groups, optionally scoped to device groups. Access policies name protected actions and an approver group; a protected action from the console, the API or GitOps becomes a pending request that a different account approves before dispatch, with targets frozen at request time and requester, approver and targets audited; wipe, response actions on more than 10 devices, rule-pack publish, extension install, upgrade, enable and capability grants, browser-registration changes, trust-list changes other than adding a revocation, and disabling a component an enforcing policy depends on (EXT-02), CA key operations, weakening DLP and EDR policies and publishing ones with isolate, revoke or kill actions (`specs/policy-envelope.md` section 2.3) are protected by default. Single-administrator installations can disable approval policies and see a persistent warning; just-in-time role activation is not in v1.0.0.
 Why: a compromised or mistaken administrator is the most damaging failure; regulated customers require separation of duties (DLP-03).
 Rejected: RBAC and audit only; no protection against one compromised account.
 Detail: `specs/policy-envelope.md` section 2.3.
@@ -234,7 +234,7 @@ Rejected: one service per domain; Redis as a second stateful service; advisory l
 Detail: `architecture.md` section 3.1 and `design/backend.md` sections 3 and 6.
 
 ### BE-04. Module boundaries
-Decision: modules `identity`, `authz`, `devices`, `mdm`, `policy`, `detection`, `dlp`, `lineage`, `pki`, `radius`, `events`, `audit`, `transport` and `platform`. Each owns one PostgreSQL schema that no other module reads or writes, exposes Go interfaces, publishes on an in-process bus, and coordinates across replicas only through PostgreSQL; an import-graph check in CI enforces the boundaries.
+Decision: fifteen modules, `identity`, `authz`, `devices`, `mdm`, `policy`, `detection`, `dlp`, `lineage`, `pki`, `radius`, `events`, `extensions`, `audit`, `transport` and `platform`. Each owns one PostgreSQL schema that no other module reads or writes, exposes Go interfaces, publishes on an in-process bus, and coordinates across replicas only through PostgreSQL; an import-graph check in CI enforces the boundaries.
 Why: the monolith stays splittable and testable per module.
 Rejected: shared tables across modules; couples schemas and blocks later extraction.
 Detail: `design/backend.md` section 1.
@@ -246,7 +246,7 @@ Rejected: a separate GraphQL or gRPC administration API; no consumer needs it.
 Detail: `architecture.md` section 3.3.
 
 ### BE-06. Storage
-Decision: PostgreSQL 17+ as the system of record with natively day-partitioned event tables, batched `COPY` ingest and partition-drop retention; a blob store with local-filesystem and S3-compatible backends for installers, release packages, rule-pack archives and reports; secrets at rest under envelope encryption with a server master key from the environment, a file or an external KMS, with PKCS#11 as the alternative for CA keys. Backups are `pg_dump` plus the blob store plus the separately held master key under Docker Compose, and the PostgreSQL operator's backups under Helm.
+Decision: PostgreSQL 17+ as the system of record with natively day-partitioned event tables, batched `COPY` ingest and partition-drop retention; a blob store with local-filesystem and S3-compatible backends for installers, release packages, rule-pack archives, extension packages and reports; secrets at rest under envelope encryption with a server master key from the environment, a file or an external KMS, with PKCS#11 as the alternative for CA keys. Backups are `pg_dump` plus the blob store plus the separately held master key under Docker Compose, and the PostgreSQL operator's backups under Helm.
 Why: minimal infrastructure (blueprint section 5) while keeping large binaries out of the database.
 Rejected: storing packages in PostgreSQL; TimescaleDB, whose retention and compression are not under Apache-2.0; `pg_partman`, an extension for what a small job does.
 Detail: `design/backend.md` sections 5 and 6.
@@ -256,3 +256,47 @@ Decision: Docker Compose runs all roles in one container with PostgreSQL and an 
 Why: EV-01 scale targets and self-hoster simplicity.
 Rejected: a required message queue; PostgreSQL `LISTEN`/`NOTIFY` and job tables cover the coordination needed.
 Detail: `architecture.md` section 5.
+
+## Extensions (EXT)
+
+### EXT-01. Extension model and kinds
+Decision: third parties extend Ricevanta through one signed package format, `extension.yaml` under `apiVersion: ricevanta.io/v1alpha1` and `kind: Extension`, carrying components of five kinds: `content`, `browser-adapter`, `agent-module`, `console-module` and `service-connector`. No third-party code runs inside `ricevanta-agent`, `ricevanta-server`, the sensors, the driver, the system extensions or the browser extension; code enters only through the `ricevanta-ext` WebAssembly helper, a sandboxed console iframe or a separately deployed connector process, and everything else is data validated against a JSON Schema.
+Why: the surveyed platforms give extension code either the host's address space (Caddy, Kibana, Headlamp, Velociraptor's compiled-in plugins) or an unauthenticated process (go-plugin calls its handshake "not a security measure"), so isolation and signing must be Ricevanta's own.
+Rejected: one in-process plugin API per component, which puts foreign code beside enforcement and signing keys; compile-time modules as in Caddy, which force self-hosters to rebuild and re-sign binaries.
+Detail: `design/extensions.md`.
+
+### EXT-02. Extension trust and signing
+Decision: a package manifest lists the SHA-256 of every file and is signed in a DSSE envelope with the publisher's Ed25519 key; the server installs only packages whose publisher is on the operator's trust list with a matching id prefix, and the trust list ships with the project's extension publisher key, which the operator can remove. Install, upgrade, enable, capability grants, browser-registration changes and trust-list changes other than adding a revocation are protected actions (BE-02), as is disabling, uninstalling or revoking a component an enforcing policy or a qualified adapter depends on. The server stores the granted set with a never-reused component generation that advances on every grant write; every agent-bound component receives both in the signed policy bundle (POL-02), and agents never verify publisher keys. Revoking a key, id or version invalidates live console bindings immediately and disables agent components at the next bundle compile; revoking a key is never held for approval.
+Why: Grafana loads only signed plugins with a hashed manifest and Mattermost checks bundles against a trusted-key list, and Ed25519 over DSSE gives the same model offline in Go and Rust with code the project already needs for bundles, while `sigstore-rs` describes itself as experimental and Sigstore's offline bundle verification is only partly documented.
+Rejected: Sigstore keyless signing with Rekor as the required trust root, an online dependency with an experimental Rust client; agents verifying publisher keys, which adds a second trust root to every endpoint and pushes publisher-key rotation to the fleet.
+Detail: `design/extensions.md` section 2.
+
+### EXT-03. Agent extension runtime
+Decision: `agent-module` components are `wasm32-wasip2` WebAssembly components run by separately replaceable DLP and batch instances of the reduced-privilege `ricevanta-ext` Wasmtime binary, never one process per module. Every call has fuel and memory limits plus one end-to-end monotonic deadline covering queues, guest work, async host imports, IPC, output and cleanup; classifier and parser calls share the DLP decision's deadline and fail mode. Separate executor, broker-worker, process and memory capacity keeps batch timeouts from killing or starving DLP work. Collectors use a per-operation core broker with no raw filesystem preopens and refuse every multiply-linked file, and responders produce a whole validated, durably persisted plan whose steps recover through existing action contracts.
+Why: `wasmtime` is the only surveyed runtime with documented CPU limits (fuel, epoch interruption) and a memory limiter and marks WASIp2 and the component model Tier 1, while Starlark, Rhai and Lua document no sandbox for untrusted code and native loading shares the address space without a stable Rust ABI; fuel and epoch interruption bound guest execution but not synchronous host I/O, and raw privileged directory preopens cannot exclude denied descendants, so host async embedding, a core broker and a durable plan journal keep those authorities outside untrusted code.
+Rejected: Extism, which has no component model and no 1.0 stability statement; embedded interpreters; native dynamic libraries; one subprocess per module, whose resource caps the sources leave to each OS and whose resident processes work against the 80 MB target.
+Detail: `specs/extension-agent-runtime.md`.
+
+### EXT-04. Console module isolation
+Decision: a `console-module` renders in an opaque-origin `<iframe sandbox="allow-scripts">` with no network access. A server-side mount binding fixes its package digest, component, grant generation, slot and operator session; every bridged API dispatch under `/api/v1` rechecks current enabled and revocation state, grant and operator rights, and invalidation cancels queued requests and closes the frame. The module never receives the session cookie, a token or the operator's identity beyond display name and locale.
+Why: Grafana without its preview sandbox, Backstage, Kibana, Mattermost, Headlamp and Home Assistant hand plugin code the host page's session and API objects, and an opaque-origin frame, as in Figma's plugin UI, is the privilege boundary browsers offer; an asset 404 cannot revoke an existing `MessagePort`, and browser-held grant state cannot authorize server operations after disable, revocation or role change, so the server holds the binding.
+Rejected: same-page loading of third-party code through Module Federation (`@module-federation/vite`) or Vue async components; Web Components and Shadow DOM, which MDN does not describe as a security boundary; ShadowRealm, which browsers have not shipped (verify).
+Detail: `design/extensions.md` section 5.
+
+### EXT-05. Service connectors out of process
+Decision: server-side extension code runs as a `service-connector`, a separately deployed process that implements a versioned HTTP contract (`export-destination`, `ca-connector`, `notifier`, `enricher`) and that `jobs` calls over mTLS with `service` certificates from the Ricevanta PKI or with a scoped token. No third-party code loads into `ricevanta-server`.
+Why: `wazero` implements WASI preview 1 only and documents no fuel metering, `wasmtime-go` needs cgo and supports x86_64 only, which breaks ARM64 server images, Go's `plugin` package supports Linux, FreeBSD and macOS only and shares the address space, and go-plugin has no authenticity check and would give a third-party binary the server's network and database position.
+Rejected: in-process server plugins on any of those four, to revisit when `wazero` implements WASIp2 with fuel metering, since the contracts are written so an in-process runtime could implement them.
+Detail: `design/extensions.md` section 6.
+
+### EXT-06. Browser adapters
+Decision: browser support is adapter data constrained by a separately approved registration for one browser. The registration owns exact canonical OS policy and native-host targets and a bounded engine-specific policy-name allow list; server and agent intersect the adapter request, registration and grant, reject reserved namespaces and aliases, and permit only agent-generated values. First-party registrations and adapters for Chrome, Edge, Firefox and Safari are required qualification units; other registered adapters remain community status until qualified.
+Why: Chrome and Edge read Chromium policy and native-host conventions, Brave reads Chromium policy, and Waterfox and Zen ship the Firefox policy engine (verify), so browsers of one engine family differ in paths and keys rather than in code, and a registration preserves that data-only addition while preventing an adapter from turning the privileged agent into a writer for arbitrary OS policy, filesystem, plist or registry namespaces.
+Rejected: a fixed browser list in the agent, which makes every new browser a core change; qualifying an adapter because it loads, since only the bypass self-test shows that the gate holds a transfer until the decision.
+Detail: `design/extensions.md` section 7.
+
+### EXT-07. Distribution and compatibility
+Decision: no marketplace service; the project publishes a DSSE-signed static JSON index of first-party and listed community packages with publisher fingerprints, download URLs and hashes, which the server fetches only when the operator enables it, and packages also arrive by console upload or the GitOps kind `Extension`. Each kind has its own interface version (`ext.ricevanta.io/<kind or contract>/v1`, WIT package versions, the console bridge schema version, connector contract versions) that changes additively within a major; the server refuses a package that needs an interface version it does not serve and names that version. The product version is not the compatibility key.
+Why: OCI 1.1 does not require registries to accept arbitrary artifact types and referrers support on GHCR, Harbor, Distribution and Zot is unconfirmed, while Kubernetes-style versioned groups let each interface move on its own.
+Rejected: an OCI registry as the v1.0.0 channel, which the package format can still be wrapped for later; a project-hosted marketplace, a service every installation would depend on; product-version ranges as in VS Code's `engines` and Grafana's `grafanaDependency`, which tie an extension to release numbers instead of the interfaces it uses.
+Detail: `design/extensions.md` section 8.
