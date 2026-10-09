@@ -11,7 +11,7 @@
 
 ## Outputs
 
-`build.py` writes every file below into `dist/`. Git tracks only the files in use, listed in `.gitignore`: `symbol-color.svg`, `symbol-dark.svg`, `horizontal-color.svg`, `horizontal-dark.svg`, `horizontal-with-tagline.svg`, `github-avatar-500.png`, `horizontal-with-tagline-1600w.png`, and the web icons and manifest in `dist/web/` except the 16 and 32 px favicon PNGs. Run the build for the rest.
+`build.py` writes every file below into `dist/`. Git tracks only the files in use, listed in `.gitignore`: `symbol-color.svg`, `symbol-dark.svg`, `horizontal-color.svg`, `horizontal-dark.svg`, `horizontal-with-tagline.svg`, `horizontal-with-tagline-on-dark.svg`, `github-avatar-500.png`, `social-preview-1280x640.png`, and the web icons and manifest in `dist/web/` except the 16 and 32 px favicon PNGs. Run the build for the rest.
 
 | Path | Content |
 |---|---|
@@ -19,11 +19,12 @@
 | `dist/svg/symbol-dark.svg` | Ivory arc, gold grains, for dark backgrounds. |
 | `dist/svg/symbol-micro.svg` | Grains scaled to 82% so gaps stay open at 16 to 24 px; also used by the favicons. |
 | `dist/svg/symbol-mono-indigo.svg`, `symbol-mono-ivory.svg` | One-color symbol. |
-| `dist/svg/horizontal-*.svg`, `stacked-*.svg` | Lockups: color, with tagline, dark, one-color. |
+| `dist/svg/horizontal-*.svg`, `stacked-*.svg` | Lockups: color, with tagline, dark, one-color. `horizontal-with-tagline.svg` and `horizontal-with-tagline-on-dark.svg` are the README banner for light and dark GitHub themes. |
 | `dist/svg/appicon-light.svg`, `appicon-dark.svg` | Rounded tiles, ivory and indigo: previews and Android `any` icons. |
 | `dist/svg/appicon-light-square.svg`, `appicon-dark-square.svg` | Full-bleed tiles for platforms that apply their own mask (iOS, macOS). |
 | `dist/svg/appicon-maskable.svg` | Square tile with art inside the PWA maskable safe zone. |
 | `dist/svg/github-avatar.svg`, `dist/png/github-avatar-500.png` | GitHub organization avatar: square, opaque ivory, full color. |
+| `dist/png/social-preview-1280x640.png` | GitHub repository social preview: opaque ivory, 1280 × 640, under 1 MB. Upload at repository Settings → General → Social preview. |
 | `dist/png/` | Transparent symbol PNGs 16 to 512 px, opaque full-bleed app icons 64 to 1024 px, lockup PNGs 1600 px wide. |
 | `dist/preview/size-test.png` | Contact sheet at 16, 24, 32, 48 and 64 px, shown 1:1, for review. |
 | `dist/web/` | `favicon.svg`, `favicon.ico` (16, 32, 48), Apple touch icon, Android and maskable PNGs, `site.webmanifest`. |

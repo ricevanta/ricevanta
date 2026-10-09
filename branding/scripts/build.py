@@ -153,6 +153,7 @@ def main():
     tile('favicon.svg', IVORY, COLOR, 0.96, 0.22, D_MICRO)      # favicons render at 16-48 px
     lockup('horizontal-color.svg', COLOR, IND, 'horizontal')
     lockup('horizontal-with-tagline.svg', COLOR, IND, 'horizontal', tagline=True)
+    lockup('horizontal-with-tagline-on-dark.svg', DARK, IVORY, 'horizontal', tagline=True)  # transparent, for dark pages
     lockup('horizontal-dark.svg', DARK, IVORY, 'horizontal', bg=IND)
     lockup('horizontal-mono-indigo.svg', mono(IND), IND, 'horizontal')
     lockup('horizontal-mono-ivory.svg', mono(IVORY), IVORY, 'horizontal')
@@ -171,6 +172,10 @@ def main():
     for name in ('horizontal-color', 'horizontal-with-tagline', 'stacked-color'):
         subprocess.run(['magick', '-background', 'none', '-density', '96', str(SVG / f'{name}.svg'), '-resize', '1600x',
                         *PNG_OPTS, f'PNG32:{PNG / f"{name}-1600w.png"}'], check=True)
+    # GitHub social preview: 1280 x 640, opaque, under 1 MB; lockup 1040 px wide keeps margins for cropping platforms.
+    subprocess.run(['magick', '-size', '1280x640', f'xc:{IVORY}', '(', '-background', 'none', '-density', '300',
+                    str(SVG / 'horizontal-with-tagline.svg'), '-resize', '1040x', ')', '-gravity', 'center', '-composite',
+                    '-alpha', 'off', *PNG_OPTS, f'PNG24:{PNG / "social-preview-1280x640.png"}'], check=True)
     render(SVG / 'favicon.svg', 16, WEB / 'favicon-16x16.png')
     render(SVG / 'favicon.svg', 32, WEB / 'favicon-32x32.png')
     render(SVG / 'appicon-light-square.svg', 180, WEB / 'apple-touch-icon.png', bg=IVORY)
@@ -217,11 +222,12 @@ EXPECTED = {
     'svg': {f'{n}.svg' for n in ('symbol-color', 'symbol-dark', 'symbol-mono-indigo', 'symbol-mono-ivory', 'symbol-micro',
                                  'appicon-light', 'appicon-dark', 'appicon-light-square', 'appicon-dark-square',
                                  'appicon-maskable', 'favicon', 'github-avatar', 'horizontal-color', 'horizontal-with-tagline',
-                                 'horizontal-dark', 'horizontal-mono-indigo', 'horizontal-mono-ivory', 'stacked-color', 'stacked-dark')},
+                                 'horizontal-with-tagline-on-dark', 'horizontal-dark', 'horizontal-mono-indigo', 'horizontal-mono-ivory', 'stacked-color', 'stacked-dark')},
     'png': {f'symbol-transparent-{p}.png' for p in (16, 24, 32, 48, 64, 128, 256, 512)}
            | {f'appicon-{m}-{p}.png' for m in ('light', 'dark') for p in (64, 128, 180, 192, 256, 512, 1024)}
            | {'github-avatar-500.png', 'github-avatar-1024.png'}
-           | {f'{n}-1600w.png' for n in ('horizontal-color', 'horizontal-with-tagline', 'stacked-color')},
+           | {f'{n}-1600w.png' for n in ('horizontal-color', 'horizontal-with-tagline', 'stacked-color')}
+           | {'social-preview-1280x640.png'},
     'web': {'favicon.svg', 'favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png', 'apple-touch-icon.png',
             'android-chrome-192x192.png', 'android-chrome-512x512.png', 'maskable-192x192.png', 'maskable-512x512.png',
             'site.webmanifest'},
@@ -240,6 +246,11 @@ def validate():
         ids = [el.attrib['id'] for el in r.iter() if 'id' in el.attrib]
         assert not ids, f'{f.name}: generated SVGs carry no IDs, found {ids}'
     for f in PNG.glob('*.png'):
+        if f.name.startswith('social-preview-'):
+            with Image.open(f) as im:
+                assert im.size == (1280, 640) and im.mode == 'RGB', f'{f.name}: {im.size} {im.mode}'
+            assert f.stat().st_size < 1_000_000, 'GitHub social preview must be under 1 MB'
+            continue
         if f.name.endswith('w.png'):  # lockups: fixed width, natural height
             with Image.open(f) as im:
                 assert im.size[0] == 1600 and im.mode == 'RGBA', f
@@ -271,7 +282,7 @@ def validate():
     assert (PREVIEW / 'size-test.png').is_file(), 'size-test contact sheet missing'
     assert (PNG / 'github-avatar-500.png').stat().st_size < 1_000_000, 'GitHub avatar must be under 1 MB'
     print('PASS: exact dist file set; SVG hygiene, viewBox, labels and IDs; PNG sizes, alpha and opacity; symbol safe area; '
-          'web icons, ICO frames and manifest; avatar size; size-test sheet present')
+          'web icons, ICO frames and manifest; avatar and social preview size; size-test sheet present')
 
 
 if __name__ == '__main__':

@@ -1,6 +1,9 @@
-# Ricevanta
-
-Lightweight by Nature. Powerful by Design.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/dist/svg/horizontal-with-tagline-on-dark.svg">
+    <img src="branding/dist/svg/horizontal-with-tagline.svg" alt="Ricevanta: Lightweight by Nature. Powerful by Design." width="560">
+  </picture>
+</p>
 
 Ricevanta is a free, open-source, self-hosted endpoint security and management platform built around one lightweight agent: device management (MDM), endpoint detection and response (EDR), data loss prevention (DLP), data lineage, PKI, RADIUS network access, unified policies and SIEM export. One agent, one platform, one device identity, no device-count limits, no paid tiers.
 

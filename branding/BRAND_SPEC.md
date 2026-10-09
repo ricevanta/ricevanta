@@ -134,7 +134,8 @@ The brand palette is **not** a complete WCAG semantic UI palette. Agents must de
 | Variant | Arrangement | Use |
 |---|---|---|
 | `horizontal-color` | Mark left, wordmark right | Site header, GitHub/org headers, docs |
-| `horizontal-with-tagline` | Mark left, wordmark with tagline below | Hero, announcement, README banner |
+| `horizontal-with-tagline` | Mark left, wordmark with tagline below | Hero, announcement, README banner, GitHub social preview (on ivory, 1280 × 640) |
+| `horizontal-with-tagline-on-dark` | Ivory arc and type, gold grains, transparent | README banner in dark themes |
 | `horizontal-dark` | Ivory mark and wordmark on indigo | Dark headers and slides |
 | `stacked-color`, `stacked-dark` | Mark centered above wordmark | Social shares, talks and slides |
 | `symbol-*` | Mark without type | App launcher, favicon, avatar |
@@ -205,7 +206,7 @@ branding/
   dist/
     svg/
       symbol-{color,dark,mono-indigo,mono-ivory,micro}.svg
-      horizontal-{color,with-tagline,dark,mono-indigo,mono-ivory}.svg
+      horizontal-{color,with-tagline,with-tagline-on-dark,dark,mono-indigo,mono-ivory}.svg
       stacked-{color,dark}.svg
       appicon-{light,dark}.svg            rounded tiles
       appicon-{light,dark}-square.svg     full-bleed tiles for system-masked platforms
@@ -217,6 +218,7 @@ branding/
       appicon-{light,dark}-{64,128,180,192,256,512,1024}.png
       github-avatar-{500,1024}.png
       {horizontal-color,horizontal-with-tagline,stacked-color}-1600w.png
+      social-preview-1280x640.png
     preview/
       size-test.png
     web/
