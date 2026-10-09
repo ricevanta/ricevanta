@@ -1,0 +1,35 @@
+{
+  "name": "Ricevanta",
+  "short_name": "Ricevanta",
+  "description": "Open-source endpoint security and management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6F2E7",
+  "theme_color": "#173B54",
+  "icons": [
+    {
+      "src": "/brand/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/brand/maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

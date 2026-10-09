@@ -1,0 +1,18 @@
+# scripts/build.py generates everything under dist/. Only the files in use are committed;
+# run the build to get the rest.
+/dist/*/*
+!/dist/svg/symbol-color.svg
+!/dist/svg/symbol-dark.svg
+!/dist/svg/horizontal-color.svg
+!/dist/svg/horizontal-dark.svg
+!/dist/svg/horizontal-with-tagline.svg
+!/dist/png/github-avatar-500.png
+!/dist/png/horizontal-with-tagline-1600w.png
+!/dist/web/favicon.svg
+!/dist/web/favicon.ico
+!/dist/web/apple-touch-icon.png
+!/dist/web/android-chrome-192x192.png
+!/dist/web/android-chrome-512x512.png
+!/dist/web/maskable-192x192.png
+!/dist/web/maskable-512x512.png
+!/dist/web/site.webmanifest
