@@ -6,7 +6,7 @@ Where the blueprint collides with platform realities or with itself, what depend
 
 ### C1. Vendor programs break "no external cloud" for the agent
 
-Apple MDM needs an Apple push certificate. Endpoint Security and Network Extensions need Apple-granted entitlements tied to one developer team. Windows kernel drivers need an EV certificate and Microsoft attestation signing; ELAM needs Microsoft Virus Initiative membership. The server runs without any cloud, but the agent's privileged components cannot be built by self-hosters. Details in `platform-support.md`, vendor programs table. Resolved by PF-03.
+Apple MDM needs an Apple push certificate. Endpoint Security and Network Extensions need Apple-granted entitlements tied to one developer team. Windows kernel drivers need an EV certificate and WHCP certification through HLK testing; ELAM needs Microsoft Virus Initiative membership. The server runs without any cloud, but the agent's privileged components cannot be built by self-hosters. Details in `platform-support.md`, vendor programs table. Resolved by PF-03.
 
 ### C2. The native MDM channel is mandatory
 
@@ -51,7 +51,7 @@ Sigma rules declare Sysmon or Windows Event Log logsources and field names. Eval
 
 ### C8. Two CEL runtimes
 
-Server policies evaluate in `cel-go`; agent policies in Rust (`cel-rust`, parity undocumented; `cel-cxx`, which adds a C++ build dependency). Divergence means a policy passes on the server and fails on an endpoint. Resolved by SH-02.
+Server policies evaluate in `cel-go`; agent policies in Rust (the `cel` crate, which ships the cel-spec conformance harness with an ignored-test list; or `cel-cxx`, which wraps cel-cpp through a C++ build chain). Divergence means a policy passes on the server and fails on an endpoint. Resolved by SH-02 and POL-01.
 
 ### C9. PostgreSQL alone vs telemetry volume
 
@@ -84,33 +84,36 @@ Agent runtime + OS adapters ───┼─> Enrollment + device identity (minim
                                │        └─> Event export ──> SIEM adapters
 ```
 
-Lineage needs stable file identities (inode, device and generation; Windows file ID; macOS file ID) and process identities (pid plus start time, or audit token) from both EDR and DLP before it can be built.
+Lineage needs the stable file and process identities of `design/lineage.md` section 2 from both EDR and DLP before it can be built.
 
 ## 3. Missing specifications
 
 To be settled in design documents with a stated default.
 
-- Identity: directory integration (LDAP, SCIM, OIDC claims); user-to-device binding on shared devices; enrollment bootstrap (pre-shared token, admin approval, Automated Device Enrollment); re-enrollment after re-imaging.
+- Identity: OIDC claim and directory attribute mapping; user-to-device binding on shared devices.
 - MDM: installer hosting and package formats; security baseline authoring (CIS Benchmarks cannot be bundled); the definition of "compliant" and its consumers.
 - EDR: telemetry source list per OS and the default set; response action catalogue and authorization; threat intelligence feeds and licenses.
 - DLP: Vietnamese identifier validation rules (12-digit CCCD, 9-digit CMND, tax code, bank account patterns) and financial data types; fingerprinting method and partial-match threshold; Rust extraction libraries per document format.
-- Lineage: data model, node and edge types, confidence scoring, cross-device lineage, retention.
-- PKI: CA hierarchy, CA key protection (file, PKCS#11 HSM), certificate profiles and lifetimes, CRL and OCSP, external CA protocol.
-- RADIUS: accounting, CoA and disconnect, high availability, FortiGate and Cisco attribute profiles.
-- Events: OCSF version to pin (1.9.0 is the newest found; verify) and class profile; export guarantees.
-- Backend: API style, agent protocol versioning window, GitOps format and reconciliation, audit log immutability, backup and restore including CA keys, high-availability shape.
-- Agent: update channel, signing keys, staged rollout and rollback, configuration protection, uninstall authorization, offline policy cache lifetime, event buffer disk cap.
-- Program: test lab (Apple silicon hardware for macOS CI), console languages, AI/NLP models.
+- Lineage: confidence scoring, cross-device joins, console exploration views (model, identities, storage and retention are settled by LIN-01).
+- PKI: certificate profiles and lifetimes, OCSP, CRL serving for non-agent consumers, external CA protocol.
+- RADIUS: accounting, CoA and disconnect, FortiGate and Cisco attribute profiles.
+- Events: OCSF class profile per domain and the `io.ricevanta` extension; export guarantees.
+- Backend: audit log immutability.
+- Agent: the offline one-time uninstall code's derivation and lifetime.
+- Program: test lab (Apple silicon hardware for macOS CI), AI/NLP models.
 
 ## 4. Facts to verify
 
 - Whether Apple issues MDM push certificates to accounts without Apple Business Manager.
 - Timing of legacy MDM software-update command removal and DDM mandates in macOS 26 and 27.
 - FortiClient and Cisco Secure Client EAP-TLS support; FortiOS SSL VPN deprecation status.
-- `windows-drivers-rs` production status and WHCP acceptance of Rust drivers.
-- `cel-rust` conformance against `cel-spec`.
-- Latest OCSF release.
-- Licenses of HarfangLab `endpoint-sec`, pySigma and Magika model weights.
+- Whether attestation-signed drivers are blocked once the Windows Driver Policy enforces; Microsoft's pages name only WHCP-signed and allow-listed drivers.
+- `windows-drivers-rs` minifilter and WFP binding coverage and WHCP acceptance of Rust drivers; not production-ready as of its README.
+- Firefox policy equivalent of Chrome's `NativeMessagingUserLevelHosts`; Safari native messaging from the sandboxed handler to the core's Mach service.
+- `device-attest-01` draft status and whether a macOS daemon can obtain any platform attestation.
+- Licenses of TLSH and its Rust crate, `clickhouse-go` and the `crc32c` crate; ClickHouse's documented single-node minimum; reading the Linux inode generation from BPF per file system.
+- The `cel` crate's ignored-test list against the CEL profile once the profile is written.
+- Licenses of pySigma, Magika model weights and `tss-esapi`.
 
 ## 5. Sources
 

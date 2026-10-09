@@ -15,6 +15,8 @@ Status: design phase. No application code yet. The design lives in `docs/`:
 | `docs/platform-support.md` | Targets, version floor, capability matrix |
 | `docs/licensing.md` | Third-party code and rule licenses |
 | `docs/roadmap.md` | Release milestones |
+| `docs/architecture.md` | System design: components, roles, protocols, keys, deployment |
+| `docs/design/<domain>.md` | Per-domain design: `agent.md`, `backend.md`, `pki.md`, `lineage.md` |
 
 Targets for v1.0.0: macOS on Apple silicon, Windows x64, Linux x64.
 

@@ -1,11 +1,11 @@
-# Ricevanta — Project Context & Technical Blueprint
+# Ricevanta: Project Context and Technical Blueprint
 
 **Tagline:** Lightweight by Nature. Powerful by Design.
 
 **Slogan:** One Agent. Unified Protection. Open to Everyone.
 
 **Status:** Planning and architecture design  
-**Target:** v1.0.0 — First complete, production-ready release  
+**Target:** v1.0.0, first complete, production-ready release  
 **License:** Apache-2.0  
 **Development:** Open-source, community-driven, self-hosted
 
@@ -61,7 +61,7 @@ The objective is not to combine existing agents into a single installer. Ricevan
 | VPN Authentication | RADIUS, EAP-TLS where supported |
 | Authentication | OIDC / SAML |
 | Deployment | Docker Compose and Helm |
-| Optional Event Search | OpenSearch / Elasticsearch |
+| Optional Raw Telemetry Store | ClickHouse; OpenSearch and Elasticsearch as export destinations |
 | Source License | Apache-2.0 |
 
 ### Supported Platforms
@@ -90,11 +90,11 @@ The v1.0.0 scope covers endpoint management for macOS, Windows and Linux. Androi
 
 ---
 
-## 3. Core Features — v1.0.0
+## 3. Core Features for v1.0.0
 
 All modules below are part of the initial complete product, developed incrementally during v0.x.y releases.
 
-### 3.1 MDM — Device Management
+### 3.1 MDM: Device Management
 
 - Device enrollment and identity.
 - Hardware and software inventory.
@@ -109,7 +109,7 @@ All modules below are part of the initial complete product, developed incrementa
 - Device lifecycle: enrollment, operation, suspension and retirement.
 - Native management protocols and enrollment integration.
 
-### 3.2 EDR — Endpoint Detection & Response
+### 3.2 EDR: Endpoint Detection and Response
 
 - Process and process-tree monitoring.
 - File and filesystem monitoring.
@@ -123,7 +123,7 @@ All modules below are part of the initial complete product, developed incrementa
 - Threat intelligence and MITRE ATT&CK mappings.
 - Security event history.
 
-### 3.3 DLP — Data Loss Prevention
+### 3.3 DLP: Data Loss Prevention
 
 - Sensitive content identification and classification.
 - PII, secrets, credentials and confidential-document detection.
@@ -139,7 +139,7 @@ All modules below are part of the initial complete product, developed incrementa
 
 Initial emphasis should include source code, API keys, customer information, Vietnamese personal identifiers and financial data.
 
-### 3.4 Data Lineage — Data Provenance
+### 3.4 Data Lineage: Data Provenance
 
 Track supported data transformations and relationships:
 
@@ -160,7 +160,7 @@ Do not assume every copy or transformation can be detected. Distinguish directly
 
 Data Lineage is a shared intelligence layer for EDR and DLP.
 
-### 3.5 PKI — Certificate Management
+### 3.5 PKI: Certificate Management
 
 - Built-in certificate authority capabilities.
 - Unique device identities.
@@ -172,7 +172,7 @@ Data Lineage is a shared intelligence layer for EDR and DLP.
 - Secure key storage, TPM/Secure Enclave where available.
 - Certificate-based device authentication.
 
-### 3.6 RADIUS — VPN & Network Authentication
+### 3.6 RADIUS: VPN and Network Authentication
 
 Provide a self-hosted RADIUS service integrated with platform identity, certificates and device compliance.
 

@@ -42,7 +42,7 @@ External dependencies the project holds on behalf of all self-hosters (PF-03). S
 |---|---|---|---|
 | macOS | MDM server | Apple push certificate from the Apple Push Certificates Portal; one-year lifetime; renew with the same Apple ID or every device re-enrolls | Days |
 | macOS | Endpoint Security client, Network Extension | Entitlements granted by Apple to one developer team; months of waiting reported (verify); manual signing with a provisioning profile; notarization | Months |
-| Windows | Kernel driver | Partner Center account, EV certificate, attestation signing | Weeks |
+| Windows | Kernel driver | Partner Center account, EV certificate, minifilter altitude from Microsoft (30 business days), WHCP certification through an HLK lab (controller plus physical test clients); attestation and preproduction signing for development only | Months |
 | macOS | Automated Device Enrollment (v2.0.0) | Apple Business Manager account | Weeks |
 | Windows | ELAM and protected process (v2.0.0) | Microsoft Virus Initiative membership plus HLK submission; membership not guaranteed | Months |
 
@@ -61,17 +61,19 @@ External dependencies the project holds on behalf of all self-hosters (PF-03). S
 | Network telemetry | ES plus NE | ETW | eBPF |
 | Block network | NE | WFP user mode; driver callout where needed | eBPF cgroup and LSM hooks |
 | Clipboard monitor and block | Session helper (poll `changeCount`, replace) | Session helper (listener, clear) | X11 session helper; Wayland unsupported |
-| Browser upload, paste, download | Ext (Chrome, Edge, Firefox, Safari) | Ext | Ext |
+| Browser upload, paste, download | Ext (Chrome, Edge, Firefox); Safari upload and paste through Ext, download through the file channel | Ext | Ext |
 | Profiles, OS updates, lock, wipe | Apple MDM server | Agent plus OMA-DM server | Agent; no native wipe, LUKS key destruction where LUKS is managed |
 | Software install, update, remove | Agent (pkg; Homebrew optional) plus MDM | Agent (msi, msix, exe; winget optional) | Agent (apt, dnf, zypper, flatpak) |
-| Hardware key for identity | Secure Enclave (P-256) | TPM 2.0 | TPM 2.0 if present, else encrypted file |
-| Tamper resistance | ES extension protection | Driver self-protection | Permissions, immutable attributes, BPF LSM self-protection |
+| Hardware key for identity | Secure Enclave (P-256) | TPM 2.0 | TPM 2.0 if present, else a root-only software key flagged per device |
+| Tamper resistance (preconditions in `design/agent.md` section 9) | ES extension protection with the MDM `SystemExtensions` payload | Driver self-protection; reporting only against a local administrator until ELAM and protected process (v2.0.0) | Permissions, immutable attributes, BPF LSM self-protection; reporting only against root |
 
 ## OS-imposed limits
 
 Recorded as unsupported and shown per device in the console:
 
 - Wayland clipboard: the protocol forbids reading another client's clipboard.
+- Linux fanotify permission checks lapse while the agent core is down; BPF LSM rules, the Windows driver and the Endpoint Security extension keep enforcing (`design/agent.md` section 3).
 - Linux native remote wipe.
 - Content inspection inside email clients, messaging apps and AirDrop; these are observed through file and network channels only.
-- Windows devices whose HVCI policy rejects the driver (none expected with attestation signing; verify).
+- Safari downloads: Safari exposes no downloads API to extensions, so they are observed through the file channel only.
+- Windows devices whose code-integrity policy rejects the driver: none expected with WHCP certification and HVCI-compatible code (verify).

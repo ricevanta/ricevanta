@@ -1,0 +1,39 @@
+# PKI design
+
+How devices get and keep their identity: the enrollment bootstrap, renewal and recovery, certificate issuance inside the server, and the policy signing certificate. The key table and who holds what are in `architecture.md` section 4. Decisions: PKI-01 and PKI-02 in `decisions.md`. Certificate profiles and lifetimes, OCSP, CRL serving for non-agent consumers, and the external CA protocol are open (`analysis.md` section 3) and belong in this file.
+
+## 1. Enrollment bootstrap
+
+1. The installer package is the company-signed package, unchanged (PF-03). Enrollment configuration (server URL, the Ricevanta root CA certificate to pin, and an enrollment token) is delivered beside it: a root-only or SYSTEM-only file written by the deployment tool on every OS, an MDM-pushed configuration profile on macOS, or, as a fallback, a hidden MSI property on Windows, which stays out of installer logs but not out of the `msiexec` command line (verify). The agent deletes the token after use. The configuration's integrity rests on the distribution channel plus the pinned CA.
+2. The token is scoped to a device group and expires. For any group whose devices may receive network-access certificates or MDM management, tokens are single-use and enrollment waits for administrator approval by default; multi-use tokens without approval are allowed only for groups limited to telemetry.
+3. The agent creates its identity key in the `KeyStore` (hardware-backed from v0.3.x, `roadmap.md`), collects hardware identifiers and a platform attestation where one exists (TPM on Windows and Linux, checked against an endorsement-key allow list the administrator imports; none for a macOS daemon, verify), and posts a certificate signing request with the token to `/agent/v1/enroll` over server-authenticated TLS against the pinned CA.
+4. The `agent` role writes a request row; the `jobs` role records the device as pending or active, issues the device identity certificate from the device issuing CA, and answers through `NOTIFY`; the response returns the certificate with the policy signing certificate and the agent API endpoint. Network-access certificates are issued only to approved records.
+5. All later traffic uses mTLS on `/agent/v1`.
+
+Apple MDM enrollment, Windows OMA-DM enrollment and management certificates are separate flows that reuse the device record (MDM-01).
+
+## 2. Renewal and recovery
+
+- Renewal runs through ACME on `/agent/v1/acme` with a Ricevanta pre-authorization: proof of possession of the current identity certificate over mTLS, or `device-attest-01` where a platform attestation exists (verify the draft's status). The `agent` listener verifies client certificates itself so that this path accepts an expired, unrevoked certificate within a grace period (default 30 days), and an offline device recovers on its own.
+- Beyond the grace period, or after re-imaging, an administrator issues a new token. Re-enrollment takes over an existing record only with proof of the previous identity key or administrator approval; hardware identifiers alone select the record but never authorize the takeover, since serial numbers are not secrets.
+- The cached policy stays in force throughout (`design/agent.md`).
+
+## 3. Issuance inside the server
+
+Every certificate the `device` or `agent` role is asked for (enrollment, ACME, SCEP for MDM payloads and network devices) becomes a request row. The `jobs` role, the only role holding issuing CA keys, decrypts SCEP envelopes where needed, signs, writes the certificate and notifies; the requesting role returns it, or a SCEP `PENDING` while it waits. A compromised agent-facing replica can therefore request but not mint. The issuing CA keys sit under envelope encryption or in a PKCS#11 device; the root stays offline under the M-of-N quorum (PKI-01).
+
+## 4. Policy signing certificate
+
+The organization's policy and command signing key has its public key in a short-lived certificate (90 days) from the issuing CA. Agents validate it against the pinned root and against the issuing CA's CRL fetched from `/agent/v1/crl`, outside the bundle channel the key signs. Rotation is a new certificate delivered in the next bundle; a compromised key is revoked in the CRL, so recovery never requires re-enrolling devices.
+
+## 5. Benefits, trade-offs, dependencies, limits, alternatives
+
+Benefits: a stolen token cannot become a VPN credential or take over another device's record; issuance in `jobs` keeps CA keys out of every internet-facing process; the grace period lets devices recover from long outages without administrator action; revocation of the signing key is independent of the channel it protects.
+
+Trade-offs: single-use tokens with approval add administrator work per device, accepted as the default for groups that carry network access or management; issuance through a request row adds one round trip; a hidden MSI property is still visible on the command line, so the file delivery is preferred.
+
+Dependencies: `smallstep/crypto`, `micromdm/scep`, and on the agent `rustls`, `rustls-cng`, `security-framework`, `tss-esapi`; all with rows in `licensing.md`.
+
+Limits: no attestation exists for a macOS daemon (verify), so macOS enrollment rests on the token and approval; Linux hosts without a TPM enroll with a software key flagged per device.
+
+Alternatives considered: enrollment configuration embedded in the installer (rejected: the company-signed package cannot be rebuilt per installation); multi-use tokens without approval as the default (rejected: a stolen token would enroll any machine); re-enrollment matched on serial numbers (rejected: not secrets); SCEP for the agent (rejected: commonly assumes RSA, Secure Enclave keys are P-256); revocation of the signing key through the bundle channel (rejected: the bundle is signed by the key being revoked).
