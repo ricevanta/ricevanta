@@ -1,6 +1,6 @@
 # Platform support
 
-What Ricevanta supports on each operating system, which mechanism delivers it, and which limits the operating system imposes. Acceptance tests in v0.9.x prove every row; until then, entries are the mechanism expected to deliver the capability, not results.
+Ricevanta targets modern, maintained operating systems. This document owns OS eligibility, required configuration and the capability matrix. Matrix entries are design mechanisms, not compatibility results; the [qualification specification](specs/platform-qualification.md) defines the evidence required before claiming support.
 
 ## Targets
 
@@ -11,44 +11,77 @@ What Ricevanta supports on each operating system, which mechanism delivers it, a
 | Linux x64 | v1.0.0 |
 | Windows ARM64 | v1.x; needs ARM64 driver signing and ARM64 CI hardware |
 | Linux ARM64 | v1.x; eBPF and the agent are architecture-neutral, so this is a build and test matter |
-| macOS x64 (Intel) | v1.x, only if still supported by Apple at that time; macOS 26 is reported as the last Intel release (verify) |
+| macOS x64 (Intel) | v1.x, only on releases Apple still maintains and after separate qualification |
 
 The design stays architecture-independent: no x64-only assumptions in the agent, the driver or the build.
 
-## Version floor
+## OS eligibility and qualification
 
-| OS | Floor | Reason |
+| OS | Eligible releases | Required baseline |
 |---|---|---|
-| macOS | 14 | Endpoint Security and DDM feature set |
-| Windows | 11 23H2; Windows 10 22H2 until Microsoft support ends | Driver and CSP baseline |
-| Linux | Kernel 5.10 with BTF and BPF LSM enabled; Ubuntu 22.04+, Debian 12+, RHEL 9 family, Fedora current, openSUSE Leap 15.6+ | BPF CO-RE needs BTF; blocking needs BPF LSM; fanotify permission events need CAP_SYS_ADMIN |
+| macOS | Current and previous stable major releases on Apple silicon | Endpoint Security and Network Extension entitlements; user-approved device management and supervised enrollment where required; managed Safari extension settings require macOS 15 or later |
+| Windows | Windows 11 x64 Pro, Enterprise and Education releases receiving Microsoft security maintenance for that edition and servicing channel | Production-signed driver, tested management CSPs and required browser policies; HVCI qualification |
+| Linux | Maintained x64 releases in the distribution table below | Running kernel 5.10 or later, usable BTF and CO-RE, active BPF LSM, required fanotify permission and cgroup hooks, and a qualified filesystem/session configuration |
 
-Out of scope at v1.0.0 unless a decision adds them: Windows Home editions, Windows Server, Linux without BPF LSM (telemetry only), Android, iOS.
+The macOS window is Ricevanta's policy, not an Apple lifecycle promise. Windows eligibility follows Microsoft's edition-specific lifecycle, including the servicing channel; an extended-support purchase does not restore an end-of-life release to eligibility. Windows 10, Windows Home, Windows Server, Android and iOS are outside v1.0.0 scope.
+
+| Linux distribution | Eligible release rule |
+|---|---|
+| Ubuntu LTS | 22.04 or later while receiving standard security maintenance |
+| Debian | 12 or later while receiving Debian security maintenance or Debian LTS coverage for the required packages |
+| RHEL family | RHEL 9 or later and compatible rebuilds while the installed vendor release receives security updates |
+| Fedora | Releases still in Fedora maintenance |
+| openSUSE Leap | 16 or later while receiving maintenance updates |
+
+Vendor maintenance and the API baseline make a release eligible. Support applies to declared configuration profiles that have qualification evidence, not every possible hardware and software combination. The finite required-unit manifest in `specs/platform-qualification.md` enumerates every eligible OS release and the browser, Linux kernel/filesystem/session, security and deployment coverage required for a Ricevanta release. Evidence records the exact lab environment and package digests. Neither a version number nor a successful build establishes support. Every required unit must pass before v1.0.0 ships.
+
+Qualification is a property of a release candidate on a configuration profile (`specs/platform-qualification.md`). A device in the field has no qualification state: it reports its preflight result and per-capability support, and the console shows unsupported capabilities per device with the reason. Before an OS leaves the support window, the console identifies affected devices and the required upgrade. Cached policy remains installed when an OS becomes unsupported; continued operation is not a compatibility guarantee. An unresolved required mechanism remains a release blocker, not a reason to relabel the feature as optional.
+
+### Browser coverage
+
+| Browser | Required platforms | Eligible versions |
+|---|---|---|
+| Chrome | macOS, Windows, Linux | Current stable release with current vendor security updates |
+| Edge | macOS, Windows, Linux | Current stable release with current vendor security updates |
+| Firefox | macOS, Windows, Linux | Current stable release and ESR releases still receiving vendor security updates |
+| Safari | macOS | Vendor-maintained Safari version for each eligible macOS release, with its current security updates |
+
+Each required browser/version enters the qualification manifest with its managed policy and extension/native-host package. Chrome (through Chrome Enterprise Core), Edge (Windows and macOS) and Firefox are gated through the local content-analysis agent; Chrome without cloud management, Edge on Linux and Safari through the extension's content script with a `webRequest` backstop (`design/agent.md` section 3). Browser applicability follows this table, not whether the browser happens to be installed on a test host. Preview channels do not qualify production support.
+
+### Installation prerequisites
+
+- macOS: verify the app and system-extension signatures, granted entitlements, extension activation, user-approved MDM and the supervision state needed by managed Safari settings. The host app must be installed before its Safari extension can be managed; Connector and `ContentAnalysis` policies name and pin the core (Chrome `verification` keys, Firefox `ClientSignature`), and the Handoff restriction keeps Universal Clipboard from capturing content before the helper re-owns it.
+- Windows: verify edition and release eligibility, the Microsoft-signed driver package, load and denial behavior with HVCI enabled, the configured code-integrity policy, required CSPs, managed browser connector and extension policies that name and pin the core, and `AllowClipboardHistory` and `AllowCrossDeviceClipboard` disabled. A policy that rejects the driver needs remediation before the endpoint qualifies.
+- Linux: inspect `/sys/kernel/btf/vmlinux` and `/sys/kernel/security/lsm`, then load, attach and trigger the shipped CO-RE, BPF LSM and cgroup probes. Exercise fanotify allow and deny with the production flags on each protected filesystem class. Record kernel, boot configuration, cgroup mode, filesystem/mount layout and graphical sessions. Verify the managed browser policies (`ContentAnalysis` pinning the core through `ClientSignature`, extension force-install) and the compositor's `ext-data-control-v1` support. A configuration flag or successful attach does not prove denial behavior.
+
+Linux kernels may include BPF LSM without activating `bpf` in the boot-time LSM list. If activation needs a boot change, the installer proposes an additive change that preserves the complete existing LSM list. An administrator approves and reboots before qualification proceeds. A kernel package installed on disk does not qualify the running kernel. Required capabilities and permissions are tested before enrollment completes; qualification diagnostics do not make a telemetry-only device a supported v1 endpoint.
 
 ## Deferred to v2.0.0
 
-These cannot be tested on personal accounts (`project.md`, vendor programs), so no acceptance test can pass before v1.0.0 (SH-01). The console shows them as "not available in this version".
+These require vendor programs outside the v1.0.0 plan (`project.md`, vendor programs; SH-01). The console shows them as "not available in this version".
 
 | Capability | Needs | v1.0.0 behaviour |
 |---|---|---|
-| Apple Automated Device Enrollment | Apple Business Manager | Manual and token-based enrollment |
+| Apple Automated Device Enrollment | Apple Business Manager | Profile-based Device Enrollment plus Ricevanta agent token bootstrap |
 | Windows ELAM and protected process | Microsoft Virus Initiative membership, HLK submission | Driver self-protection (`ObRegisterCallbacks`) |
 
 ## Vendor programs and signing
 
-External dependencies the project holds on behalf of all self-hosters (PF-03). Self-built sensors run without the features that depend on them.
+External dependencies are owned as described in PF-03 and `project.md`. Production qualification uses the signed distribution packages. Self-built sensors that lack the required entitlements or signatures do not provide the complete supported feature set.
 
-| Platform | Component | Dependency | Lead time |
-|---|---|---|---|
-| macOS | MDM server | Apple push certificate from the Apple Push Certificates Portal; one-year lifetime; renew with the same Apple ID or every device re-enrolls | Days |
-| macOS | Endpoint Security client, Network Extension | Entitlements granted by Apple to one developer team; months of waiting reported (verify); manual signing with a provisioning profile; notarization | Months |
-| Windows | Kernel driver | Partner Center account, EV certificate, minifilter altitude from Microsoft (30 business days), WHCP certification through an HLK lab (controller plus physical test clients); attestation and preproduction signing for development only | Months |
-| macOS | Automated Device Enrollment (v2.0.0) | Apple Business Manager account | Weeks |
-| Windows | ELAM and protected process (v2.0.0) | Microsoft Virus Initiative membership plus HLK submission; membership not guaranteed | Months |
+| Platform | Component | Dependency |
+|---|---|---|
+| macOS | MDM server | MDM Vendor CSR Signing Certificate held by the project, granted by Apple Developer Support to a Developer Program or Enterprise Program account holder on request; each self-hosted MDM service obtains its own Apple MDM Push Certificate at identity.apple.com from a request the project's signing service signs, and renews it with the same Apple ID so the push topic and enrollments survive |
+| macOS | Host app, Endpoint Security client, Network Extension | Project Apple developer team; granted entitlements and provisioning profiles; Developer ID signing, hardened runtime, notarization and stapling |
+| Windows | Kernel driver | Hardware Dev Center/Partner Center account associated with an EV certificate, assigned minifilter altitude, HLK results and WHCP submission for Microsoft's production signature; attestation and preproduction signing are development paths |
+| macOS | Automated Device Enrollment (v2.0.0) | Apple Business Manager |
+| Windows | ELAM and protected process (v2.0.0) | Microsoft Virus Initiative membership and the required HLK submission |
 
 ## Capability matrix
 
 "Driver" is the Windows kernel component (AG-01). "Ext" is the browser extension (DLP-01). "ES" is macOS Endpoint Security. "NE" is a macOS Network Extension.
+
+Each row needs allow, deny, bypass and failure tests on the qualified configuration. File-channel protection of a downloaded file is a separate claim from preventing a browser transfer. A notification followed by remediation is a separate claim from preventing access.
 
 | Capability | macOS | Windows | Linux |
 |---|---|---|---|
@@ -60,20 +93,33 @@ External dependencies the project holds on behalf of all self-hosters (PF-03). S
 | Block write to removable media | ES AUTH_MOUNT plus path rules | Driver plus device install policy | BPF LSM, udev |
 | Network telemetry | ES plus NE | ETW | eBPF |
 | Block network | NE | WFP user mode; driver callout where needed | eBPF cgroup and LSM hooks |
-| Clipboard monitor and block | Session helper (poll `changeCount`, replace) | Session helper (listener, clear) | X11 session helper; Wayland unsupported |
-| Browser upload, paste, download | Ext (Chrome, Edge, Firefox); Safari upload and paste through Ext, download through the file channel | Ext | Ext |
+| Clipboard monitoring | Session helper polling `changeCount` | Session helper receiving clipboard-change notifications | X11 selection watcher; Wayland through `ext-data-control-v1` where offered |
+| Clipboard blocking | Session helper re-owns with promised data and decides when a consumer asks (verify API) | Session helper re-owns with delayed rendering and decides at `WM_RENDERFORMAT`; consumer identity best effort from `GetOpenClipboardWindow` | X11 selection owner answers each request; Wayland through `ext-data-control-v1` where offered, else unsupported |
+| Browser upload, paste, print blocking | Content-analysis agent for Chrome (Chrome Enterprise Core), Edge and Firefox (verify macOS); Safari content-script gate; print outside a connector at the CUPS spool (verify); downloads through the connector hook where one exists, else the file channel | Content-analysis agent for Chrome (Chrome Enterprise Core), Edge and Firefox; content-script gate for Chrome without cloud management; print outside a connector at the spooler directory through the driver (verify); downloads through the connector hook where one exists, else the file channel | Content-analysis agent for Chrome (Chrome Enterprise Core) and Firefox (verify Linux); content-script gate for Edge and for Chrome without cloud management; print outside a connector at the CUPS spool (verify); downloads through the connector hook where one exists, else the file channel |
 | Profiles, OS updates, lock, wipe | Apple MDM server | Agent plus OMA-DM server | Agent; no native wipe, LUKS key destruction where LUKS is managed |
 | Software install, update, remove | Agent (pkg; Homebrew optional) plus MDM | Agent (msi, msix, exe; winget optional) | Agent (apt, dnf, zypper, flatpak) |
 | Hardware key for identity | Secure Enclave (P-256) | TPM 2.0 | TPM 2.0 if present, else a root-only software key flagged per device |
-| Tamper resistance (preconditions in `design/agent.md` section 9) | ES extension protection with the MDM `SystemExtensions` payload | Driver self-protection; reporting only against a local administrator until ELAM and protected process (v2.0.0) | Permissions, immutable attributes, BPF LSM self-protection; reporting only against root |
+| Tamper resistance (preconditions in `design/agent.md` section 9) | MDM controls extension approval and activation; manual enrollment removal is an escape path that must be detected | Driver self-protection; reporting only against a local administrator until ELAM and protected process (v2.0.0) | Permissions, immutable attributes, BPF LSM self-protection; reporting only against root |
+
+Clipboard rows pass when every consumer request after the re-own is answered only after the decision and the re-own interval stays within the declared bound; browser rows pass when the hold point keeps the data from the page until the decision. Both need bypass tests: alternate request paths, a second consumer, clipboard history and cross-device clipboard, a disconnected helper or extension. A notification followed by remediation does not pass.
 
 ## OS-imposed limits
 
 Recorded as unsupported and shown per device in the console:
 
-- Wayland clipboard: the protocol forbids reading another client's clipboard.
+- Wayland clipboard: the core protocol gives a background client no access to another client's selection; `ext-data-control-v1` (wayland-protocols staging) does, and KWin, wlroots compositors, Hyprland and Niri offer it. Mutter support is unconfirmed (verify); a GNOME Shell extension that owns the selection inside the compositor is the candidate where the protocol is absent. Sessions with neither are shown as unsupported.
+- Clipboard re-own interval: between the source's write and the helper's re-own a consumer is served by the source. The bound is 10 ms at the 99th percentile under concurrent readers, measured per OS and published per release; a longer interval fails qualification.
+- Chrome connector policies are `cloud_only`: without Chrome Enterprise Core, Chrome is gated by the content script. Edge connectors exist on Windows and macOS only, so Edge on Linux is gated by the content script.
+- Print outside a connector is held at the print spool, after the application rendered the job, not at the browser's print dialog; the content-script gate does not cover print.
 - Linux fanotify permission checks lapse while the agent core is down; BPF LSM rules, the Windows driver and the Endpoint Security extension keep enforcing (`design/agent.md` section 3).
 - Linux native remote wipe.
 - Content inspection inside email clients, messaging apps and AirDrop; these are observed through file and network channels only.
-- Safari downloads: Safari exposes no downloads API to extensions, so they are observed through the file channel only.
-- Windows devices whose code-integrity policy rejects the driver: none expected with WHCP certification and HVCI-compatible code (verify).
+- Safari downloads: no extension API, so the file channel decides at the first open or move of the downloaded file; qualification records that this is post-download, not pre-transfer.
+- Windows code-integrity policies can reject a driver despite its production signature. Such a configuration does not qualify until the policy permits the driver and its enforcement tests pass.
+
+## Sources
+
+- Lifecycle: [Apple security releases](https://support.apple.com/en-us/100100), [Windows release and edition servicing](https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information), [Ubuntu](https://ubuntu.com/about/release-cycle), [Debian LTS](https://www.debian.org/lts/), [RHEL](https://access.redhat.com/support/policy/updates/errata), [Fedora](https://fedoraproject.org/wiki/Fedora_Release_Life_Cycle), [openSUSE Leap](https://news.opensuse.org/2026/04/01/leap-15-eol/).
+- Apple prerequisites: [Safari extension management](https://support.apple.com/guide/deployment/depff7fad9d8/web), [Device Enrollment](https://support.apple.com/guide/deployment/device-enrollment-and-device-management-depd1c27dfe6/web), [certificates](https://developer.apple.com/help/account/create-certificates/certificates-overview), [notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution), [MDM Vendor CSR Signing Certificate](https://developer.apple.com/help/account/certificates/mdm-vendor-csr-signing-certificate/).
+- Windows signing: [driver signing offerings](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/driver-signing-offerings), [HLK](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/), [minifilter altitude](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/minifilter-altitude-request).
+- Enforcement: [Chromium OnFileAttachedEnterpriseConnector](https://chromium.googlesource.com/chromium/src/+/main/components/policy/resources/templates/policy_definitions/Miscellaneous/OnFileAttachedEnterpriseConnector.yaml), [Edge OnFileAttachedEnterpriseConnector](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/onfileattachedenterpriseconnector), [Edge OnBulkDataEntryEnterpriseConnector](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/onbulkdataentryenterpriseconnector), [Firefox policy templates, ContentAnalysis](https://mozilla.github.io/policy-templates/#contentanalysis), [content_analysis_sdk](https://github.com/chromium/content_analysis_sdk), [Chrome webRequest](https://developer.chrome.com/docs/extensions/reference/api/webRequest), [Firefox onBeforeRequest](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/onBeforeRequest), [Windows clipboard operations](https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-operations), [GetOpenClipboardWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getopenclipboardwindow), [ext-data-control](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/336), [Linux LSM activation](https://docs.kernel.org/admin-guide/LSM/index.html), [BPF LSM](https://docs.kernel.org/bpf/prog_lsm.html), [fanotify permissions](https://man7.org/linux/man-pages/man2/fanotify_init.2.html).

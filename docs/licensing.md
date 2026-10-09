@@ -40,7 +40,9 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | Fleet `server/mdm/microsoft` | MIT (outside `ee/`) | MS-MDE2 and SyncML code reusable; verify each file |
 | Falco rules | Apache-2.0 | Reusable through logsource mapping |
 | MITRE ATT&CK | MITRE terms, free with attribution notice | Include the notice |
-| OCSF schema | Apache-2.0 | Used as the event format |
+| OCSF schema, `ocsf-schema-compiler`, `ocsf-validator` | Apache-2.0 | Event format and its CI tooling |
+| cel-spec and its conformance suite | Apache-2.0 | Language definition and the profile's CI gate |
+| DSSE specification | Apache-2.0 | Bundle and command signature envelope |
 | CIS Benchmarks | Not freely redistributable | Not bundled; baselines are authored in-project |
 
 ## Libraries named in the architecture

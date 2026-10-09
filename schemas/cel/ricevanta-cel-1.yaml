@@ -1,0 +1,67 @@
+# CEL profile ricevanta-cel-1. Detail: docs/specs/cel-profile.md.
+# Both runtimes (cel-go on the server, the cel crate on the agent) must pass the
+# conformance files listed under `conformance.run`, minus `conformance.exclude_cases`.
+profile: ricevanta-cel-1
+cel_spec_version: v0.25.3        # the version the pinned cel crate targets; all three pins verified at the first CI run
+cel_crate_version: "0.15.0"
+cel_go_version: v0.32.0
+
+types: [bool, int, double, string, list, map, null, timestamp, duration]
+excluded_types: [uint, bytes, proto, enum, wrapper, optional]
+
+operators: ["!", "-", "*", "/", "%", "+", "<", "<=", ">", ">=", "==", "!=", in, "&&", "||", "?:", ".", "[]"]
+mixed_numeric: forbidden         # int and double never compared or combined without conversion
+
+macros: [has, all, exists, exists_one, filter, map1]
+excluded_macros: [map3, two_variable_comprehensions, optional, bind, block]
+
+functions:
+  core: [size, contains, startsWith, endsWith, matches, string, int, double, bool, timestamp, duration,
+         getFullYear, getMonth, getDayOfMonth, getDayOfWeek, getHours, getMinutes, getSeconds]
+  excluded: [getMilliseconds]
+  time_zone_arguments: forbidden
+  candidates:                    # admitted only when both runtimes pass the extension file in CI
+    strings: { file: string_ext, functions: [lowerAscii, upperAscii, trim, replace, split, join, indexOf, substring] }
+    math:    { file: math_ext,   functions: [greatest, least] }
+
+regex:
+  max_repetition_count: 1000     # RE2 limit, verify
+  allowed: [literal, dot, explicit_class, negated_class, anchors, "* + ? {n,m}", alternation, non_capturing_group, "(?i)"]
+  forbidden: ["\\d \\w \\s shorthand classes", "\\b", unicode_class, lookaround, backreference, named_group, runtime_built_pattern]
+  max_pattern_length: 256
+  compiled_once_at_install: true
+
+limits:
+  max_expression_chars: 4096
+  max_ast_nodes: 500
+  max_comprehension_depth: 2
+  server_static_cost_ceiling: 100000     # cel-go checker.Cost
+  server_runtime_cost_limit_multiplier: 10
+  agent_enforces: size_only
+
+normalization:
+  collapse_whitespace: false     # preserve exact parsed scalar contents; lex whitespace without changing literals
+
+semantics:
+  overflow: error
+  division_by_zero: error
+  string_order: code_point
+  now: injected_variable
+  time_fields: timestamp_with_raw_ms_sibling
+  error_outcome: policy_error    # fail mode for enforcement, suppressed alert plus health event for detections
+
+conformance:
+  run: [basic, comparisons, conversions, fp_math, integer_math, lists, logic, macros, string, timestamps]
+  candidates: [string_ext, math_ext]
+  skip: [dynamic, enums, fields, macros2, namespace, network_ext, optionals, parse, plumbing, proto2, proto2_ext, proto3,
+         type_deduction, wrappers, bindings_ext, block_ext, encoders_ext, lists_ext, unknowns]
+  exclude_cases:                 # within run files; refined to exact case names when CI first runs
+    - "comparisons/eq_wrapper/*"
+    - "conversions/*uint*"
+    - "conversions/*bytes*"
+    - "integer_math/*uint*"
+    - "string/*bytes*"
+    - "*/*proto*"
+    - "timestamps/get_milliseconds*"
+    - "timestamps/*timezone*"
+  fixtures: [unicode_digits_and_spaces_in_matches]

@@ -1,0 +1,115 @@
+# Platform qualification
+
+The release gate that proves Ricevanta works as one product on every v1.0.0 target. Exact operating-system versions, editions, distributions, kernel prerequisites, capability mechanisms and documented OS limits come from `../platform-support.md`; this specification does not repeat them. Every feature in `../blueprint.md` remains required. The workflows below exercise integration risks and do not reduce that scope.
+
+## 1. Required units and state
+
+A qualification unit is one release candidate on one declared configuration profile. Before release freeze, the release owner creates a finite required-unit manifest from the live eligibility and browser windows in `../platform-support.md`.
+
+The manifest must contain:
+
+- One entry for every eligible macOS release; every eligible Windows release, edition and servicing channel; and every eligible Linux distribution release. Each Linux entry pins a tested running kernel and a filesystem and graphical-session profile.
+- Chrome, Edge and Firefox on every OS entry, plus Safari on every macOS entry. Each entry records the browser and extension version. A declared browser family cannot become inapplicable on one OS.
+- Candidate and server release, OS and security configuration, CPU architecture, package format and immutable package and image digests, signing identities, filesystem, session, browser, extension, driver and deployment profile, enabled stores, test-suite revision, feature and case coverage, owner and state.
+- Representative or pairwise coverage assignments for hardware, firmware, deployment shape, optional store, installation path and other unbounded dimensions. Mandatory interaction cases cover hardware key and identity lifecycle, Windows security policy and driver, Linux kernel and filesystem enforcement, session and clipboard enforcement, browser and native host enforcement, and deployment or store failure and recovery.
+
+An automated omission check compares the manifest with the frozen eligibility and browser inputs and the complete blueprint feature list. Any absent eligible release, Windows edition or channel, Linux profile, browser family, blueprint feature, required interaction or coverage assignment blocks release. Applicability may select a documented OS mechanism or explicit OS limit; it cannot remove an eligible unit or blueprint feature.
+
+Each unit has one state:
+
+| State | Meaning | Transition |
+|---|---|---|
+| Candidate | An eligible required unit is under evaluation, including while preflight, evidence or remediation is pending or failed | Entered when the manifest is frozen, for every new candidate, or after a material change |
+| Qualified | Every applicable requirement and blueprint traceability item passes with acceptance evidence; no open blocker or unexplained retry remains | Candidate to qualified only after the evidence manifest is complete and independently approved |
+| Unsupported | The configuration is outside eligibility in `platform-support.md`, or the tested capability has an explicit documented OS limit | Recorded with the exact eligibility rule or limit; never used for failed preflight, pending remediation or a missing required mechanism |
+
+These states belong to release candidates in the lab. A device in the field reports its preflight result and per-capability support (`../platform-support.md`) and has no qualification state.
+
+A product release qualifies only when every required unit is qualified. A later security finding, invalid artifact, revoked signing identity or reproducible regression returns affected units to candidate. Observation-only results never preserve qualified state.
+
+A change to an OS release, running kernel, browser, extension, driver, security policy, filesystem, session type or declared configuration profile is material. Affected profiles enter candidate before preflight and every requirement selected by impact analysis reruns; signing or package changes also rerun integrity, install, update, rollback and tamper cases. The evidence records the change, impact analysis and retest set.
+
+An unresolved, missing or failing mechanism on a required v1 target is a release blocker, not an unsupported result. This includes a browser gate that does not hold the upload, paste or print until the core decides, and a clipboard helper that answers a consumer before the decision. Notification, audit and clearing content after access do not prove blocking.
+
+## 2. Preflight
+
+Preflight must establish before functional testing:
+
+- The environment matches a target and all prerequisites in `platform-support.md`. Linux checks the named distribution, kernel capabilities, BTF, BPF LSM, bpffs, fanotify privilege, service manager, package manager and graphical-session protocol. Windows checks the supported edition, Secure Boot, HVCI state, TPM state and acceptance of the WHCP-signed driver. macOS checks architecture, MDM enrollment where required, APNs reachability, granted entitlements, notarization and activation of system extensions.
+- Host time, DNS, server trust, storage headroom and required network paths are usable. The test records proxy, firewall and TLS-passthrough configuration.
+- Server roles, PostgreSQL, blob storage and each enabled optional store are healthy. The environment records Docker Compose or Helm topology, replica count and migration level.
+- Production qualification uses release-signed packages and the production signing chain. Development signatures can produce diagnostic evidence but cannot qualify a unit.
+- Every browser family required by the manifest, its managed extension and its native-messaging host are installed; where a connector applies, the connector or `ContentAnalysis` policy names and pins the core, and Chrome Enterprise Core enrollment is recorded. A missing or failed browser prerequisite leaves the unit in candidate and blocks qualification.
+
+Preflight failure stops dependent tests. The report keeps the failure rather than converting later cases to passes.
+
+## 3. Identity and lifecycle gates
+
+Each platform proves the following flows through the public API, console and endpoint state where each surface applies:
+
+1. Enroll with an approved, scoped, expiring single-use token. Verify the pinned root, locally created identity key, certificate chain, device record, group assignment, inventory, atomic token-use consumption and retained audit record. Reject concurrent or later reuse, an expired, wrong-scope or unapproved token and a takeover authorized only by hardware identifiers.
+2. Prove hardware-backed key use where the platform provides it. Linux without a TPM must show the flagged root-only software-key fallback defined by the agent design.
+3. Renew before expiry and during the expired-certificate grace period through ACME as in `../design/pki.md` section 2: the order and finalize requests are JWS-signed by the current identity key over a server replay nonce, and the certificate signing request proves the new key. Reject a reused or unknown nonce, a JWS by another key, a revoked or non-current certificate, and a request for another device. An identical finalize retry must return the persisted certificate without another issuance. Beyond the grace period and after re-imaging, prove recovery with a new token and proof of the prior key or administrator approval.
+4. Suspend and retire a device. Verify command refusal or access loss, certificate status, retained audit evidence and the documented cleanup of local management state.
+5. Treat every exposed-role certificate request row as untrusted input under `../design/pki.md` section 3. Attempt to substitute the asserted identity, group, certificate profile, certificate signing request and approval. Verify that `jobs` verifies the JWS, nonce and certificate signing request itself, derives authority from stored state, accepts only an approval bound to the exact request, certificate signing request, device and profile, and records the authorization inputs and decision.
+6. Provision an Apple MDM Push Certificate for each self-hosted MDM service through the project's signing service and identity.apple.com. Renew the existing certificate with the same Apple ID while preserving its push topic and prove enrolled devices continue without re-enrollment. Verify the exact first-party behavior for expiry, revocation and topic mismatch, and require degraded state, operator warning and recovery evidence rather than assuming continuity.
+
+## 4. Policy gates
+
+- Publish a valid policy, exception, baseline and rule pack through the console, API and GitOps. Verify identical validation, compiled content, signature chain, per-device assignment, monotonic sequence, scope resolution, installed enforcement rules and OCSF policy references.
+- Move a device between groups and prove the next higher-sequence assignment changes policy. A rollback republishes the prior content as a new signed bundle and higher assignment sequence. It never installs an older assignment.
+- Exercise a protected weakening change and verify approval is required on every write surface. Verify dry-run and audit output before apply.
+- Reject malformed YAML and JSON, schema violations, an out-of-profile or over-cost CEL expression, missing and untranslatable rule references as specified, an invalid DSSE signature, foreign-device assignment, hash mismatch, replayed or lower sequence, expired or replayed command, archive traversal, links and decompression beyond the bundle limit. The active bundle must remain unchanged and the refusal must produce the specified health or audit event.
+- Exercise the signed command, dispatch-grant and action-journal protocol in `policy-envelope.md` section 7. Verify that a protected-action approval binds its immutable request, exact fields and frozen device and command uid pairs and authorizes each pair once; an identical creation retry returns the original signed command; reused approval, changed fields, a substituted uid or an added target creates no command. Verify refusal of a grant after `valid_for_ms`, a grant or command substituted across device, poll nonce, hash or command, and a grant for a command with a verified result. Verify that a command replayed on a later poll is answered from its journal row without execution, that an undo command waits for its predecessor and runs when `open_seqs` voids it, that an unsigned or forged journal report or result is refused by `jobs`, that a crash between the journal write and execution resumes through the command type's reconciliation without repeating a side effect, and that the server marks a command the device never journaled as undelivered after its expiry.
+- Prove equal-priority conflict resolution, exclusions, exception expiry, monitor and disabled modes, point and core placement, deadline fail mode and explicit unsupported-channel reporting.
+
+## 5. Whole-product workflows
+
+The evidence manifest maps every blueprint feature to at least one passing case on every required unit through its documented platform mechanism or limit. The omission check reconciles this matrix with the required-unit manifest. These representative workflows must also pass end to end:
+
+| Domain | Required workflow and observable result |
+|---|---|
+| MDM | Enroll, collect hardware, OS, software, user and disk inventory, apply and remove configuration, install, update and remove software, manage an OS update, assess compliance, run remote actions, and exercise lock and wipe by the platform mechanism. State, result, failure and audit records must agree. |
+| EDR | Generate process-tree, file, network, integrity and behavioral activity; match a supported Sigma rule; create an alert and investigation with ATT&CK and intelligence context; terminate a process and quarantine and restore a file. Validate history and remediation events. |
+| DLP | Detect renamed content by format, inspect a file and archive, classify representative source code, API key, customer, Vietnamese identifier and financial samples, then exercise allow, monitor, warn and block across every supported file, clipboard, removable-media, browser, cloud and network channel. A browser block must hold the upload, paste or print until the decision on Chrome, Edge and Firefox and through the content-script gate on Safari, with the bypass tests in `../platform-support.md`, capability matrix. A clipboard block must answer every consumer request after the re-own only after the decision, and the measured re-own interval must stay within the declared bound. Verify local classification, redaction, exception handling and explicit OS limits. |
+| Lineage | Copy, move, rename, modify, extract, archive and send classified data through supported destinations. Verify origin, actor, device, process, direct evidence, inferred edges, confidence, classification inheritance and investigation queries without presenting inference as observation. |
+| PKI | Operate the offline-root and issuing-CA separation; issue, renew, revoke and check agent identity, management and network-access certificates; exercise X.509, ACME, RSA and ECDSA SCEP, external-CA integration and signing-key rotation. |
+| RADIUS | With FortiGate and Cisco acceptance profiles, prove certificate-derived authorization and EAP-TLS over their supported transports, compliant accept, noncompliant and revoked-certificate reject, identity binding, attributes, accounting and audit. Exercise optional 802.1X when configured. |
+| Events and export | Disconnect the server, fill and recover the bounded spool, reconnect, retry an idempotent batch and validate OCSF events from every domain. Prove filtering, deduplication, retention and delivery to every supported destination adapter, including destination outage and recovery. Ricevanta must remain usable without an external SIEM. |
+| Administration | Exercise inventory, alerts, investigations, DLP, lineage, CA, RADIUS, policy, rule-pack, dashboard, report, audit, version and update views. Prove OIDC, SAML, directory sync, RBAC denial, approved protected actions, break-glass controls, scoped API tokens and equivalent CLI and GitOps results. |
+
+## 6. Tamper, offline, recovery and update gates
+
+- On macOS, remove a profile-based enrollment manually and verify prompt detection of enrollment, managed-setting and extension loss, degraded protection, operator warning and the server's missed-check-in fallback. Exercise direct OS removal paths separately from Ricevanta-controlled removal. On Windows as administrator and Linux as root, exercise direct service, driver or BPF removal and verify the reporting and missed-check-in limits in `../design/agent.md` section 9 without claiming prevention.
+- For Ricevanta-controlled online uninstall and stop, require a valid token bound to the device. Reject a missing, invalid, replayed or foreign-device token and retain audit evidence. For offline removal, reject expired, reused and foreign-device codes.
+- Disconnect an enrolled endpoint long enough to cross event retries and a certificate expiry. Cached policy and local enforcement stay active without expiry; events preserve class-priority drop behavior and record every drop. Reconnection uploads valid retained events and completes renewal within the grace path.
+- Restart or crash the core, scanner, session helper and each enforcement component. Verify the per-platform persistence and lapse rules, content-decision fail mode, one scanner retry, health reporting and recovery without corrupting state.
+- Corrupt the tail of local state or an active spool segment and interrupt power during a response action. Verify documented SQLite durability, action-specific reconciliation of received and running journal entries, refusal to repeat an unreconciled side effect, and truncation at the first bad spool record. Each command type must prove its declared idempotency and recovery contract.
+- Stage updates by group and percentage. Verify manifest expiry, release and OS signatures, downgrade refusal, local health gate, server-outage behavior, core and updater replacement order, automatic package rollback and continued enforcement. Test current and the two supported prior minor agents, plus update-only behavior for an older agent.
+- Restore the server from backup and prove the assignment-sequence floor prevents rollback before normal policy delivery resumes.
+
+## 7. Resource and scale gates
+
+Measure the performance objectives in `../blueprint.md` section 7 with the metric definitions and process accounting in `../design/agent.md`. Cover idle, login, browser, build-tree, software deployment, full telemetry, DLP scan, event backlog and policy-update workloads on each required platform. Record distributions, not only averages, for footprint, CPU, battery or energy, wakeups, event and decision latency, disk and network use, descriptors, kernel memory and dropped events.
+
+The candidate must meet the blueprint targets and its declared policy budgets without sampling or muting authorization rules. Deliberately exceed a telemetry and content budget to prove throttling, fail-mode behavior, degradation status and alerts. Run the declared endpoint-count, ingest, retention, exporter, RADIUS and administrative concurrency tests for both deployment shapes that the release supports, and measure dispatch-grant latency and throughput at the declared endpoint count with the jobs leader on the command path (`policy-envelope.md` section 7). A benchmark regression gate must compare the candidate with the last qualified release on the same controlled environment.
+
+## 8. Evidence and artifacts
+
+Acceptance evidence is a machine-readable assertion tied to a case ID, requirement ID, unit identity, candidate digest and raw artifacts. An automated case supplies command output, structured results and relevant logs. A manual case supplies numbered steps, expected and observed results, operator identity, timestamps and screenshots or protocol captures. Security-sensitive failures also preserve server, endpoint and enforcement-point evidence with secrets and raw sensitive content removed.
+
+An observation records context such as noisy timing, vendor behavior or a non-required environment. It cannot satisfy a requirement, waive a failure or change unsupported behavior into support. Flaky, skipped, retried without explanation, missing-artifact and expected-failure results block qualification. A justified environmental retry keeps both attempts and the reason.
+
+The signed evidence manifest contains the frozen required-unit manifest and omission-check result, requirement-to-case matrix, exact lab inventory, preflight report, result files, benchmark data, schema and signature validation, logs, screenshots or captures, known OS limits, blocker list and reviewer decision. Artifacts use immutable hashes, access controls and the product's configured retention and data-minimization rules. Test data uses synthetic sensitive content and nonproduction keys.
+
+## 9. Design assessment
+
+Benefits: one state model prevents partial platform claims; blueprint traceability keeps representative workflows from narrowing scope; immutable evidence makes a release decision reproducible.
+
+Trade-offs: the matrix requires substantial hardware, gateway and browser coverage; manual MDM, wipe, recovery and vendor-integration cases remain costly even when most assertions are automated.
+
+Dependencies: release-signed platform packages, vendor entitlements and signing programs, supported test hardware, FortiGate and Cisco gateways, identity providers, directory services, external CA fixtures, every export destination, controlled performance hosts and an independent reviewer.
+
+Limits: support applies to the declared qualified configuration profiles. Representative and pairwise assignments bound uncountable hardware, firmware, deployment and store combinations; qualification does not claim every combination. OS-imposed limits and the two capabilities deferred in `platform-support.md` remain explicit and cannot be generalized to supported channels.
+
+Alternatives considered: one smoke suite per OS was rejected because it cannot prove full feature scope; capability-only tests were rejected because they miss cross-domain identity, policy and event failures; field observation was rejected as release evidence because it is not controlled or reproducible.

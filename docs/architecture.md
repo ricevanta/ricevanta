@@ -45,12 +45,12 @@ The core owns the server connection, the device identity, the policy cache, the 
 | Role | Listeners | State and keys |
 |---|---|---|
 | `api` | HTTPS: console, `/api/v1`, embedded console assets; any certificate | Stateless; holds the master key and the policy and command signing key, and signs at creation |
-| `agent` | HTTPS: `/agent/v1`; server certificate from the Ricevanta PKI, pinned by agents; TLS terminated by the server itself; a client certificate is requested on every connection and required on every path except enrollment; renewal accepts an expired, unrevoked certificate within the grace period | Holds long-poll connections; public keys only; PostgreSQL credentials that read bundles and commands and write only events, check-ins, command results and certificate requests |
+| `agent` | HTTPS: `/agent/v1`; server certificate from the Ricevanta PKI, pinned by agents; TLS terminated by the server itself; a client certificate is requested on every connection and required on every path except enrollment; renewal accepts an expired, unrevoked certificate within the grace period | Holds long-poll connections; public keys only; PostgreSQL credentials that read bundles and commands and write only events, check-ins, command results, certificate and dispatch requests and minted ACME nonces |
 | `device` | HTTPS: Apple MDM, OMA-DM, SCEP and ACME for MDM payloads, network devices and third-party clients; publicly trusted or Ricevanta certificate; TLS terminated by the server itself | Stateless; its TLS key only; SCEP envelopes and certificate requests go to `jobs` through request rows |
 | `radius` | UDP 1812 and 1813, RadSec TCP 2083 | EAP conversations live in the replica's memory; its TLS key and the per-gateway shared secrets under a role-scoped data key |
 | `jobs` | None | Schedulers, exporters, retention, directory sync, correlation, certificate issuance, APNs pushes; holds the master key, the issuing CA keys, the APNs push key and the signing key; one active leader per job through a lease row (`design/backend.md` section 3) |
 
-Key custody follows exposure: the agent-facing `agent`, `device` and `radius` roles never receive the master key or any CA or signing key, hold their TLS keys under role-scoped data keys, run with per-role PostgreSQL credentials, and cannot write bundle, command, approval or certificate rows, only request rows that `jobs` answers (`design/pki.md` section 3, BE-03).
+Key custody follows exposure: the agent-facing `agent`, `device` and `radius` roles never receive the master key or any CA or signing key, hold their TLS keys under role-scoped data keys, run with per-role PostgreSQL credentials, and cannot write bundle, command, approval or certificate rows. Certificate and dispatch request rows are untrusted input: `jobs` verifies protocol proof and reconstructs authorization from protected records before issuance or a fresh dispatch grant (`design/pki.md` section 3, `specs/policy-envelope.md` section 7, BE-03).
 
 The `agent` and `device` roles terminate TLS in the server process: a client certificate does not survive an ingress that terminates TLS, and the agent pins the Ricevanta root CA. Ingress controllers in front of them run in TLS passthrough mode or as layer-4 load balancers.
 
@@ -72,13 +72,13 @@ The administration API is the only write path; the console and the CLI have no p
 
 ### 3.4 Agent protocol
 
-HTTPS with required mTLS, HTTP/2 preferred and HTTP/1.1 accepted, JSON bodies. No gRPC. The four flows:
+HTTPS with required mTLS, HTTP/2 preferred and HTTP/1.1 accepted, JSON bodies. No gRPC. The agent flows:
 
 | Flow | Mechanism |
 |---|---|
-| Check-in | `POST /agent/v1/checkin` every 5 minutes (policy-tunable) with health, versions and inventory deltas; the response carries the current policy bundle version and pending command count |
-| Commands | `GET /agent/v1/commands` long-poll; the hold time is a server setting, default 50 s so that a 60 s proxy idle timeout is never hit, raised to minutes once the operator sets the load balancer timeout above it. A `NOTIFY` on the commands channel wakes the replica holding the device's connection. Every command is signed (section 4), acknowledged, and its result posted individually |
-| Policy | `GET /agent/v1/policy` with `If-None-Match`; the body is a signed bundle compiled for the device's scope and carrying the organization, scope ID and a sequence number; the agent refuses a lower sequence or a foreign scope |
+| Check-in | `POST /agent/v1/checkin` every 5 minutes (policy-tunable) with health, versions, the installed bundle sequence and inventory deltas; the check-in carries the journal report of `specs/policy-envelope.md` section 7, signed by the device identity key; the response carries the current assignment sequence and pending command count |
+| Commands | `GET /agent/v1/commands` long-poll with a fresh `poll_nonce`; default hold 50 s, below a 60 s proxy idle timeout. `NOTIFY` wakes the replica. Every signed command is delivered under a `jobs`-signed dispatch grant bound to that device, poll nonce and command, which is the freshness guard, while the agent's journal is the replay guard; longer holds can exceed the grant budget and trigger an immediate fresh poll. Receipt, ordering, execution and reconciliation follow `specs/policy-envelope.md` section 7; results are posted individually and signed by the device identity key |
+| Policy | `GET /agent/v1/policy` with `If-None-Match`; the body is a signed bundle plus a signed per-device assignment binding device, scope, bundle hash and an organization-wide sequence; the agent refuses a bundle without a valid assignment for itself or with a sequence not above the installed one (`specs/policy-envelope.md` section 6) |
 | Events | `POST /agent/v1/events` with NDJSON OCSF batches, zstd, a batch ID for idempotent retry, at most 5 MB per request |
 | CRL and update | `GET /agent/v1/crl` for the issuing CA's CRL, fetched with the policy and cached; `GET /agent/v1/update` for the release manifest |
 
@@ -90,11 +90,11 @@ Compatibility window: the server serves `/agent/v1` to agents from the current m
 |---|---|---|---|
 | Root CA | Offline, M-of-N custodian quorum (PKI-01); its certificate is what agents pin | Issuing CA certificates | Everything that trusts the PKI |
 | Issuing CAs (device, server, network access) | `jobs` role: software key under envelope encryption, or PKCS#11 | Device identity, management and network-access certificates; server certificates for the `agent` and `device` roles; the policy signing certificate | Agents, MDM clients, VPN gateways, RADIUS |
-| Policy and command signing key (Ed25519, one per organization) | `api` and `jobs` roles, under envelope encryption; its public key is carried in a certificate from the issuing CA | Policy bundles, rule packs and every agent command, each command bound to the device ID, a nonce and an expiry | Agents, against the pinned root and the CRL (`design/pki.md` section 4) |
+| Policy and command signing key (Ed25519, one per organization) | `api` and `jobs` roles, under envelope encryption; its public key is carried in a certificate from the issuing CA | Policy bundles, device assignments, rule packs, commands and dispatch grants, bound as specified in `specs/policy-envelope.md` sections 6 and 7 | Agents, against the pinned root and the CRL (`design/pki.md` section 4) |
 | Release signing keys (Ed25519) | Project maintainers, offline root and successor keys; self-builders use their own | Release manifests, which carry an expiry, and packages | `ricevanta-updater`; both public keys are compiled in, a manifest signed by the successor retires the root |
 | Platform code-signing identities | The company (PF-03) | Binaries, system extensions, the WHCP submission of the driver | Operating systems |
 
-For `/agent/v1`, TLS protects the transport and the signatures bind policy, commands and releases to keys the agent-facing roles never hold, so a stolen `agent`-role TLS key, a wrong pin or a mirrored download cannot inject policy, commands or code. The native MDM channels have no second signature: Apple MDM and OMA-DM commands rest on the `device` role's TLS key, which is therefore short-lived, kept in the KMS or PKCS#11 device where one is configured, and revocable from the console. Enrollment, renewal and recovery are in `design/pki.md`; updates in `design/agent.md`.
+For `/agent/v1`, TLS protects the transport and signatures bind policy, commands and releases to keys the agent-facing roles never hold. Command dispatch also needs a fresh device/poll-bound grant so stored signed bytes cannot authorize a delayed expired action. A stolen `agent`-role TLS key cannot forge those artifacts. The native MDM channels have no second signature: Apple MDM and OMA-DM commands rest on the `device` role's TLS key, which is therefore short-lived, kept in the KMS or PKCS#11 device where one is configured, and revocable from the console. Enrollment, renewal and recovery are in `design/pki.md`; updates in `design/agent.md`.
 
 ## 5. Deployment
 
@@ -131,10 +131,11 @@ One repository, one version number per release for server, console, agent and ex
 - Versioning: SemVer for the product; `/api/v1` and `/agent/v1` change additively within a major; the policy envelope is `apiVersion: ricevanta.io/v1alpha1` throughout v0.x and `v1` from v1.0.0. The v1.0.0 server migration relabels stored resources; agents receive compiled bundles whose format is versioned with `/agent/v1`, so the envelope label never reaches them.
 - Failure behaviour: every policy declares its fail mode for each enforcement point (`design/agent.md`); every unsupported capability is reported, never silently skipped.
 - Privacy: classification runs on the endpoint; only the evidence DLP-02 allows leaves the device.
-- Configuration: the server reads environment variables and one YAML file; the agent reads the enrollment configuration (`design/pki.md`) plus server-delivered signed policy. Agent configuration cannot be changed locally, and the agent cannot be removed without the uninstall authorization in `design/agent.md` section 9.
+- Configuration: the server reads environment variables and one YAML file; the agent reads the enrollment configuration (`design/pki.md`) plus server-delivered signed policy. Ricevanta rejects unsigned local configuration changes and requires authorization on its own uninstall paths; OS and administrator escape paths follow the limits in `design/agent.md` section 9.
 - Tamper resistance against a local administrator is prevention only where the OS provides it and reporting elsewhere; the preconditions per OS are in `design/agent.md` and `platform-support.md`.
 - Time: the server is the clock of record; agent events carry monotonic sequence numbers and the agent's clock, and the server records receipt time.
 - Internationalization: console strings through `vue-i18n` from the first component (`project.md`).
+- Platform support: `platform-support.md` owns maintained-release eligibility and required configuration. `specs/platform-qualification.md` defines whole-product workflows, negative cases and evidence; unsupported configurations and unresolved required mechanisms are distinct states.
 
 ## 8. Benefits, trade-offs, dependencies, limits, alternatives
 

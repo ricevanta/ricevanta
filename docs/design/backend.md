@@ -44,7 +44,7 @@ Rules:
 
 Taken from the documented scaling failures of comparable servers (Fleet's per-check-in reads of shared state and commit-bound result writes, Elastic Fleet Server's per-check-in authentication):
 
-- A check-in or long-poll request reads nothing shared beyond the device's own row; the current policy bundle version per scope is held in process memory and refreshed by `NOTIFY`.
+- Routine check-ins and waiting long polls avoid fleet-wide shared-state reads; the current policy bundle version per scope is held in process memory and refreshed by `NOTIFY`. When a command is ready, `jobs` reads the protected command, frozen target and approval records before signing a dispatch grant for the device's fresh poll nonce. These authorization reads are required and cannot be replaced by the exposed handler's cached claims (`../specs/policy-envelope.md` section 7).
 - The certificate-to-device lookup is cached in process for the certificate's lifetime.
 - Events are written in batches with `COPY` into the day partitions, never row by row.
 - Enrollment is rate-limited per source.
@@ -59,7 +59,7 @@ Reference points: Fleet runs 10 instances for 25,000 hosts; Elastic Fleet Server
 Author (console, CLI, GitOps)
   └─> policy: validate envelope and CEL profile ──> compile per domain ──> sign in api ──> store bundle versions
         └─> transport: agents fetch bundle for their scope
-              └─> agent policy: verify signature, scope and sequence ──> CEL single-event evaluation ──> compiled rule sets to enforcement points
+              └─> agent policy: verify assignment and signature ──> CEL single-event evaluation ──> compiled rule sets to enforcement points
 
 Sensors ──> agent events: OCSF construction, telemetry profile filter ──> spool ──> batch upload
   └─> server events: validate, store detections and context, raw to the raw store if enabled
@@ -68,9 +68,11 @@ Sensors ──> agent events: OCSF construction, telemetry profile filter ──
         └─> exporters: SIEM destinations with per-destination queues and retries
 ```
 
+Certificate and command-dispatch requests from exposed roles are untrusted. The PKI module derives issuance authority from protected records and independently verifies proof (`pki.md` section 3); the command dispatcher verifies approval and expiry against database time before signing a fresh artifact-bound grant. Request-row insertion never confers signing authority. Module interfaces provide those protected records under BE-04; roles do not bypass schema ownership.
+
 Single-event rules evaluate on the agent, correlation on the server (EDR-01). The same policy envelope carries MDM desired state, EDR detections and DLP enforcement with domain-specific execution semantics (blueprint section 4).
 
-Events are OCSF 1.9.0 (EV-02). The OCSF profile in `schemas/` lists the classes and attributes each domain emits; attributes OCSF lacks, such as lineage edges and DLP classification references, go into an `io.ricevanta` OCSF extension (verify the extension naming and uid registration rules).
+Events are OCSF 1.9.0 (EV-02); the classes each domain emits and the `ricevanta` extension are in `specs/ocsf-profile.md`.
 
 ## 5. Storage
 

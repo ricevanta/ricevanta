@@ -56,7 +56,7 @@ The objective is not to combine existing agents into a single installer. Ricevan
 | Primary Database | PostgreSQL |
 | Default Security Event Schema | OCSF JSON |
 | Unified Policy Format | YAML with CEL-style conditions |
-| Communication | HTTPS, mTLS, optional gRPC/Protobuf |
+| Communication | HTTPS with mTLS and JSON; protocol in `architecture.md` |
 | Certificate Management | Built-in PKI, X.509, ACME, SCEP |
 | VPN Authentication | RADIUS, EAP-TLS where supported |
 | Authentication | OIDC / SAML |
@@ -75,6 +75,8 @@ Required before v1.0.0, chosen for the largest installed bases:
 In v1.x: Windows ARM64, Linux ARM64, and macOS x64 where Apple still supports it. The design must stay architecture-independent so these are build and test work, not redesign. See `platform-support.md`.
 
 These are intended support targets, not a claim of existing compatibility.
+
+`platform-support.md` defines modern maintained-release eligibility, required configuration and OS limits. `specs/platform-qualification.md` defines the evidence required for full support. Every agreed v1.0.0 feature remains required on its applicable target configurations; an unresolved mechanism is a release blocker.
 
 The endpoint must use one managed Rust agent architecture, with native OS helpers, extensions or drivers only where required.
 
@@ -267,41 +269,7 @@ The common policy envelope should include:
 - Severity and confidence.
 - Logging and evidence requirements.
 
-Example proposed format:
-
-```yaml
-apiVersion: ricevanta.io/v1alpha1
-kind: Policy
-
-metadata:
-  id: dlp.block-confidential-upload
-  name: Block Confidential Uploads
-
-spec:
-  domain: dlp
-
-  scope:
-    device_groups:
-      - corporate-devices
-
-  trigger: data.egress.attempt
-
-  detectors:
-    - ref: yara:confidential-documents
-    - ref: pii:vn.national-id
-
-  condition: >
-    data.classification == "restricted" &&
-    destination.managed == false &&
-    confidence >= 0.90
-
-  enforcement:
-    supported: block
-    unsupported: alert
-    audit: true
-```
-
-This schema is illustrative and must be formally defined.
+The canonical resource shape, examples, validation, domain actions, signatures and device assignments are defined in [the policy envelope](specs/policy-envelope.md). Conditions use [the CEL profile](specs/cel-profile.md), and event fields use [the OCSF profile](specs/ocsf-profile.md). Those specifications own the format; the blueprint owns the feature requirements.
 
 ### Community Rule Support
 
@@ -573,28 +541,13 @@ Earlier modules must continue to evolve throughout subsequent v0.x.y releases.
 
 v1.0.0 is not intended as a restricted MVP.
 
-Before v1.0.0, each functional module must have an end-to-end, documented, tested operational capability on its declared supported platforms. Features must not be silently omitted. Exact OS-specific capability matrices and acceptance tests should be established during the design phase.
+Before v1.0.0, each functional module must have an end-to-end, documented, tested operational capability on its declared supported platforms. Features must not be silently omitted. The capability matrix in `platform-support.md` and the release gates in `specs/platform-qualification.md` define design obligations; they are not present test results.
 
 ---
 
-## 11. Suggested Repository Structure
+## 11. Repository structure
 
-```text
-ricevanta/
-├── agent/             # Rust endpoint agent
-├── server/            # Go backend and services
-├── console/           # Vue 3 administration UI
-├── schemas/           # Event and policy specifications
-├── rulepacks/         # Native/community security rules
-├── integrations/      # MDM, PKI, RADIUS, SIEM adapters
-├── deploy/            # Docker Compose, Helm, examples
-├── docs/              # Architecture, ADRs, specifications
-├── tests/             # Integration, E2E, compatibility tests
-├── LICENSE
-└── README.md
-```
-
-The final repository layout should be determined during architecture design.
+[Architecture section 6](architecture.md#6-repository-layout) defines the planned repository layout (SH-04). Adapters live with their owning server or agent modules. Code directories are created with their first real implementation after the relevant design exists; the current repository remains in the design phase.
 
 ---
 

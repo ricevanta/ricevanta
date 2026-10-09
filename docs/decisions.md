@@ -13,6 +13,7 @@ Rejected: an MVP v1.0.0 with alert-only DLP on Windows and no browser extension.
 Decision: the policy envelope, a CEL subset profile and the OCSF profile are defined in v0.1.x. Both CEL runtimes (Go on the server, Rust on the agent) pass the `cel-spec` conformance suite for the profile in CI; policies outside the profile are refused.
 Why: EDR and DLP ship before the rule adapters, and two CEL runtimes can diverge (C8, C11).
 Rejected: ad hoc per-module formats until v0.8.x; forces a migration.
+Detail: `specs/policy-envelope.md`, `specs/cel-profile.md`, `specs/ocsf-profile.md`.
 
 ### SH-03. Single organization per server
 Decision: v1.0.0 serves one organization per server. Tables carry an organization ID so multi-tenancy is a later addition, not a migration.
@@ -31,15 +32,22 @@ Decision: macOS ARM64, Windows x64, Linux x64. Windows ARM64, Linux ARM64 and ma
 Why: largest installed bases; separate driver signing and CI hardware for the others.
 Detail: `platform-support.md`.
 
-### PF-02. Version floor
-Decision: macOS 14+; Windows 11 23H2+ and Windows 10 22H2 until Microsoft support ends; Linux kernel 5.10+ with BTF and BPF LSM on the listed distributions.
-Why: BPF CO-RE needs BTF; blocking on Linux needs BPF LSM (C3, C12).
+### PF-02. Modern OS support and qualification
+Decision: qualify the current and previous stable macOS major releases on Apple silicon, Microsoft-maintained Windows 11 x64 Pro, Enterprise and Education releases for their edition and servicing channel, and maintained Linux releases meeting the distribution and runtime-capability rules in `platform-support.md`. OS eligibility does not establish support: each exact configuration must pass the platform qualification specification, including required blocking behavior.
+Why: maintained releases reduce compatibility branches; Linux enforcement depends on active hooks, not the version string alone (C3, C12).
+Rejected: fixed OS floors with no lifecycle rule; telemetry-only results labeled as full support.
 Detail: `platform-support.md`.
 
 ### PF-03. Vendor programs held by the project
-Decision: development and testing on personal accounts; a company registered before sensor distribution holds the Apple team, Partner Center account, EV certificate and the HLK lab for WHCP certification of the driver; all production binaries signed under it.
+Decision: development and testing on personal accounts; a company registered before sensor distribution holds the Apple team, the MDM Vendor CSR Signing Certificate, Partner Center account, EV certificate and the HLK lab for WHCP certification of the driver; all production binaries are signed under it and the production push-certificate signing service runs under its vendor certificate.
 Why: entitlements and driver signatures bind to one organization (C1), and WHCP submissions need a Partner Center account and HLK results (AG-01).
 Detail: `project.md`.
+
+### PF-04. Platform qualification is a release gate
+Decision: a finite required-unit manifest covers every eligible OS release and every blueprint feature across the declared configuration profiles; whole-product workflows, negative security cases, offline recovery, updates and resource budgets also pass. An unresolved required enforcement mechanism blocks release and cannot become an unsupported-feature exception.
+Why: a build or a notification does not prove complete endpoint protection.
+Rejected: one smoke test per OS; support inferred from vendor API availability.
+Detail: `specs/platform-qualification.md`.
 
 ## Agent (AG)
 
@@ -60,13 +68,13 @@ Rejected: JSON for local IPC; too slow for Endpoint Security event volume.
 Detail: `architecture.md` section 2 and `design/agent.md` section 4.
 
 ### AG-04. Agent protocol
-Decision: `/agent/v1` over HTTPS with mTLS terminated by the server process and required on every path except enrollment, HTTP/2 preferred, JSON bodies: periodic check-in, long-poll for signed commands with an operator-set hold time, ETag-based signed policy bundles that carry scope and sequence so an agent refuses older or foreign bundles, zstd-compressed NDJSON OCSF event batches with idempotent batch IDs. The server serves agents from the current minor release and the two before it; older agents enter update-only mode.
+Decision: `/agent/v1` over HTTPS with mTLS terminated by the server process and required on every path except enrollment, HTTP/2 preferred, JSON bodies: periodic check-in, long-poll for signed commands delivered under a `jobs`-signed dispatch grant bound to a fresh agent nonce, ETag-based signed policy bundles with a signed per-device assignment so an agent refuses older or foreign bundles, zstd-compressed NDJSON OCSF event batches with idempotent batch IDs, and command results and journal reports signed by the device identity key. The server serves agents from the current minor release and the two before it; older agents enter update-only mode.
 Why: one serialization (OCSF JSON) and one API stack; a client certificate does not survive TLS termination at an ingress.
 Rejected: gRPC with Protobuf; a second API stack and a Protobuf mapping of OCSF.
 Detail: `architecture.md` section 3.4.
 
 ### AG-05. Local state and event spool
-Decision: SQLite in WAL mode for local state, in two databases, the response-action journal fully synchronous and the lineage graph batched; an append-only segment spool for events with one event class per segment, a CRC per record, a shared disk cap, and whole-segment drops from the lowest class first, with the drop recorded. Cached policy stays in force offline without expiry.
+Decision: SQLite in WAL mode for local state, in two databases, the response-action journal fully synchronous with received, running and terminal states keyed by command uid and action-specific crash reconciliation, and the lineage graph batched. An append-only segment spool holds one event class per segment, a CRC per record, a shared disk cap, and whole-segment drops from the lowest class first, with the drop recorded. Cached policy stays in force offline without expiry.
 Why: the lineage graph needs recursive queries, and drops by class need a segment layout that no existing shipper provides (blueprint sections 5 and 7).
 Rejected: RocksDB or a pure-Rust key-value store, which have no SQL; policy expiry offline, which would turn an outage into a loss of enforcement.
 Detail: `design/agent.md` section 5.
@@ -75,7 +83,7 @@ Detail: `design/agent.md` section 5.
 Decision: the core compiles the policy bundle into rule sets installed incrementally into each enforcement point; rule-only decisions complete inside the enforcement point and are never throttled or muted. Content decisions pass an open file descriptor to the core and the scanner helper within a per-policy deadline; every policy declares its fail mode, `open` (default, with an audit event) or `closed`; a repeated scanner crash on the same content applies `closed`. Ricevanta's own processes are excluded from their own checks.
 Why: authorization callbacks have OS deadlines and must not wait on IPC or inspection (blueprint section 7).
 Rejected: routing every decision through the core; adds IPC latency to every file and process operation.
-Detail: `design/agent.md` section 3.
+Detail: `design/agent.md` section 3; the rule-only subset is in `specs/policy-envelope.md` section 2.2.
 
 ### AG-07. Signed releases and staged updates
 Decision: release manifests and packages are signed with offline Ed25519 release keys, a root and a successor, whose public keys are compiled into the updater; self-builders substitute their own. A separate `ricevanta-updater` service verifies the release signature, the manifest expiry and the OS code signature, refuses lower manifest versions, applies through the OS package mechanism, and restores the previous package unless the core reports healthy locally within a window. Rollout is staged by device group and percentage.
@@ -113,12 +121,13 @@ Rejected: server-only evaluation.
 ## DLP
 
 ### DLP-01. Browser extension and session helpers
-Decision: a browser extension for Chrome, Edge, Firefox and Safari asks the agent over native messaging for allow, warn or block on uploads, pastes and downloads; it is force-installed through managed-browser policy on Chrome, Edge and Firefox, which also unlocks blocking `webRequest` under Manifest V3, and on Safari it ships inside `Ricevanta.app` with its state set to always on through the Safari extension settings declaration (supervised macOS 15+), with Safari downloads covered by the file-system channel since Safari has no downloads API. A per-user-session helper on each OS monitors the clipboard and blocks by clearing or replacing it, and cloud sync clients are the file-system channel through known sync folders. Wayland clipboard is unsupported and shown as such.
-Why: no OS exposes browser uploads or clipboard events to a system service (C5).
-Rejected: TLS interception; contradicts the privacy principle and breaks pinning.
+Decision: browser channels are gated at the browser's own hold point: the core serves one `content_analysis_sdk`-compatible local agent for Chrome (through Chrome Enterprise Core), Edge (Windows and macOS) and Firefox, and the managed extension's content script with a synchronous `webRequest` backstop gates Chrome without cloud management, Edge on Linux and Safari. Clipboard blocking is owner-side mediation: the session helper re-owns the clipboard on every change and answers each consumer request after the decision, the re-own interval is an OS limit with a measured bound, and Wayland is served through `ext-data-control-v1` where the compositor offers it. Cloud sync clients are the file channel through known sync folders.
+Why: browsers expose uploads, pastes and printing only through their own analysis hooks, and after the re-own the clipboard owner answers every consumer request (C5).
+Rejected: TLS interception, which contradicts the privacy principle and breaks pinning; clearing or replacing the clipboard after a change, which never mediates a request.
+Detail: `platform-support.md`, `design/agent.md` section 3, `specs/platform-qualification.md`.
 
 ### DLP-02. Evidence
-Decision: a match stores the content hash, rule ID, byte offsets and a redacted snippet of at most 200 characters; the snippet can be disabled by policy. Raw content is never stored.
+Decision: a match stores the content hash, rule ID, byte offsets and a redacted snippet of at most 200 characters; the snippet can be disabled by policy. Raw user content is never stored; script content is exported under `specs/ocsf-profile.md` section 3 after the secret and identifier detectors redact it.
 Why: blueprint section 8 limits raw content collection; investigations need evidence.
 
 ### DLP-03. Classification aligned with Vietnamese data protection law
@@ -129,15 +138,21 @@ Rejected: pattern-only detectors; loses reporting value and costs a later schema
 ## Events (EV)
 
 ### EV-01. Telemetry default and scale targets
-Decision: the default profile sends detections plus bounded context to PostgreSQL. A device group can be switched to full raw telemetry, which goes to the optional bundled ClickHouse, to an external destination through the exporters (OpenSearch, Elasticsearch, a SIEM), or, for a bounded investigation set of at most 50 devices for 7 days, into PostgreSQL. Targets, measured not assumed: Docker Compose 2,000 endpoints, 30-day detection retention, 7-day raw retention; Helm 20,000 endpoints.
+Decision: the default profile sends findings, lineage, inventory, configuration state and agent health plus bounded context to PostgreSQL (`specs/ocsf-profile.md` section 4). A device group can be switched to full raw telemetry, which goes to the optional bundled ClickHouse, to an external destination through the exporters (OpenSearch, Elasticsearch, a SIEM), or, for a bounded investigation set of at most 50 devices for 7 days, into PostgreSQL. Targets, measured not assumed: Docker Compose 2,000 endpoints, 30-day detection retention, 7-day raw retention; Helm 20,000 endpoints.
 Why: fleet-wide raw telemetry exceeds what PostgreSQL alone should hold (C9), and the bounded mode spares small installations a second store for occasional investigations.
 Rejected: OpenSearch as the bundled store, kept as an export destination; raw telemetry only outside PostgreSQL, which forces a second store for a single investigation.
 Detail: `design/backend.md` section 5.
 
 ### EV-02. OCSF version and extension
-Decision: OCSF 1.9.0 is the event schema; an OCSF profile in `schemas/` lists the classes and attributes each domain emits; attributes OCSF lacks (lineage, DLP classification references) go into an `io.ricevanta` OCSF extension. The pinned version moves only at a minor release with a documented mapping.
+Decision: OCSF 1.9.0 is the event schema; what each domain emits and what the `ricevanta` extension adds are in EV-03. The pinned version moves only at a minor release with a documented mapping.
 Why: agents, server and exporters must agree on one schema before EDR ships (C11).
-Detail: `design/backend.md` section 4.
+Detail: `specs/ocsf-profile.md`.
+
+### EV-03. OCSF profile and extension
+Decision: each domain emits the OCSF 1.9.0 classes in the profile table with the `host` and `security_control` profiles, and the `ricevanta` extension, registered with the OCSF project before v1.0.0 and on the development uid until then, adds what OCSF lacks for lineage, PKI, agent health, classification references, match evidence and enforcement mode. Every event carries a UUIDv7, the bundle in force and a correlation uid; fixtures are validated in CI and events failing validation at ingest are quarantined.
+Why: OCSF has no PKI, lineage or agent health class and no regulation reference, and mapping drift must fail a build rather than a customer's query (EV-02).
+Rejected: emitting PKI events as `authentication`, whose activities do not fit issuance; lineage inside `detection_finding.evidences`, which would inflate the finding store; deprecated classes; a self-assigned extension uid, since the registry assigns them.
+Detail: `specs/ocsf-profile.md`.
 
 ## Policy (POL)
 
@@ -146,6 +161,18 @@ Decision: `cel-go` on the server and the `cel` crate (cel-rust) on the agent. Bo
 Why: `cel` is pure Rust, MIT, and ships the cel-spec conformance harness (C8).
 Rejected: `cel-cxx`; wraps cel-cpp through a C++ build chain that limits cross-compilation.
 Detail: `design/backend.md` section 2.
+
+### POL-02. Policy envelope
+Decision: `Policy`, `Exception`, `RulePack` and `Baseline` resources in the Kubernetes object shape under `apiVersion: ricevanta.io/v1alpha1`, compiled per scope into a signed bundle, with a signed per-device assignment that binds device, scope, bundle hash and an organization-wide sequence. Enforcement-weakening changes to DLP and EDR policies are protected actions, and an excepted, monitoring or disabled policy never votes in conflict resolution.
+Why: one validator serves the console, the API, GitOps and the compiler; an agent cannot verify its own scope, so the assignment is what stops a stolen TLS key serving another scope's bundle (blueprint section 4, `architecture.md` section 4).
+Rejected: inline exceptions, which die with their policy; scope binding inside the bundle alone, which the agent cannot check; OPA-style JWT bundle signatures, since DSSE is simpler and shared with in-toto; a policy bundle expiry, which AG-05 forbids.
+Detail: `specs/policy-envelope.md`.
+
+### POL-03. CEL profile
+Decision: conditions use the profile `ricevanta-cel-1`, the subset of types, operators, macros, functions and regular-expression syntax that `cel-go` and the `cel` crate evaluate identically, with no mixed numeric operands, UTC-only time accessors and no shorthand regex classes. The server bounds cost with the `cel-go` estimator and the agent enforces size limits; extensions enter the profile only when both runtimes pass the corresponding cel-spec file in CI.
+Why: the two runtimes differ on optional types, two-variable comprehensions, parse edge cases, cross-type numeric comparison and the Unicode meaning of regex shorthand classes, so only the common subset evaluates identically (C8).
+Rejected: a full CEL environment with per-runtime flags, which makes a condition pass on one side and fail on the other; a custom expression language without a conformance suite; Rego or Cedar, which lack a conformant Rust runtime or are authorization languages.
+Detail: `specs/cel-profile.md`.
 
 ## Lineage (LIN)
 
@@ -158,13 +185,13 @@ Detail: `design/lineage.md`.
 ## PKI
 
 ### PKI-01. Enrollment and certificate protocols
-Decision: the agent enrolls through a token bootstrap (PKI-02) and renews through ACME with a Ricevanta pre-authorization, proof of possession of the current certificate over mTLS or `device-attest-01` where a platform attestation exists; the PKI also serves SCEP (RSA and ECDSA) and ACME for Apple MDM payloads, network devices and third-party clients. Agent identity, management and network-access certificates are all issued at v1.0.0. The root CA stays offline under an M-of-N custodian quorum and is the certificate agents pin; only issuing CAs are online.
+Decision: the agent enrolls through a token bootstrap (PKI-02) and renews through ACME with the device identity key as the ACME account key, so the JWS over the server replay nonce authorizes replacement and the CSR proves the new key; mTLS admits the request, optional `device-attest-01` adds evidence without replacing those proofs, and lost-key recovery needs a new token and administrator approval. The PKI also serves SCEP (RSA and ECDSA) and ACME for Apple MDM payloads, network devices and third-party clients. The root CA stays offline under an M-of-N custodian quorum and is the certificate agents pin; only issuing CAs are online.
 Why: Secure Enclave keys are P-256 only and SCEP commonly assumes RSA (C10).
 Rejected: SCEP for the agent.
 Detail: `design/pki.md` sections 2 to 4.
 
 ### PKI-02. Enrollment bootstrap
-Decision: the company-signed installer ships unchanged; an enrollment configuration delivered beside it carries the server URL, the Ricevanta root CA to pin and an enrollment token scoped to a device group and expiring, single-use with administrator approval by default for any group that can receive network-access certificates or MDM management. The agent posts a certificate signing request with the token and a platform attestation where available, checked against an imported endorsement-key allow list; the `jobs` role issues the device identity certificate, and network-access certificates go only to approved records. Expired certificates renew within a grace period; beyond it, or after re-imaging, a new token is issued, and taking over an existing record needs proof of the previous key or approval, never hardware identifiers alone.
+Decision: the company-signed installer ships unchanged; an enrollment configuration delivered beside it carries the server URL, the Ricevanta root CA to pin and an enrollment token scoped to a device group and expiring, single-use with administrator approval by default for any group that can receive network-access certificates or MDM management. The agent posts a certificate signing request with the token and a platform attestation where available, checked against an imported endorsement-key allow list; `jobs` independently verifies proof and derives issuance authority from protected records, with approvals bound to the exact request, CSR, device and profile. Expired certificates renew within a grace period; beyond it, or after re-imaging, a new token is issued, and taking over an existing record needs proof of the previous key or approval, never hardware identifiers alone.
 Why: signed packages cannot be rebuilt per installation (PF-03), the first contact has no certificate yet, and a stolen token must not become a VPN credential or a takeover of another device's record (blueprint section 8).
 Rejected: enrollment configuration embedded in the installer; multi-use tokens without approval as the default; re-enrollment matched on serial numbers.
 Detail: `design/pki.md`.
@@ -186,12 +213,12 @@ Rejected: local accounts as the primary user store; drifts from the directory.
 Detail: `design/backend.md` section 2.
 
 ### BE-02. RBAC with access policies for protected actions
-Decision: one permission per action, bundled into built-in and custom roles, assignable to users or directory groups, optionally scoped to device groups. Access policies name protected actions and an approver group; a protected action from the console, the API or GitOps becomes a pending request that a different account approves before dispatch, with targets frozen at request time and requester, approver and targets audited; wipe, response actions on more than 10 devices, rule-pack publish and CA key operations are protected by default. Single-administrator installations can disable approval policies and see a persistent warning; just-in-time role activation is not in v1.0.0.
+Decision: one permission per action, bundled into built-in and custom roles, assignable to users or directory groups, optionally scoped to device groups. Access policies name protected actions and an approver group; a protected action from the console, the API or GitOps becomes a pending request that a different account approves before dispatch, with targets frozen at request time and requester, approver and targets audited; wipe, response actions on more than 10 devices, rule-pack publish, CA key operations, weakening DLP and EDR policies and publishing ones with isolate, revoke or kill actions (`specs/policy-envelope.md` section 2.3) are protected by default. Single-administrator installations can disable approval policies and see a persistent warning; just-in-time role activation is not in v1.0.0.
 Why: a compromised or mistaken administrator is the most damaging failure; regulated customers require separation of duties (DLP-03).
 Rejected: RBAC and audit only; no protection against one compromised account.
 
 ### BE-03. One server binary with roles
-Decision: `ricevanta-server` is a Go modular monolith that runs the roles `api`, `agent`, `device`, `radius` and `jobs` in one process by default and as separate deployments under Helm, with the console compiled into the binary. Private keys follow exposure: the master key and the signing key live in `api` and `jobs`, the issuing CA keys in `jobs` only, and the agent-facing `agent`, `device` and `radius` roles hold their TLS keys, role-scoped data keys and per-role database credentials that write only events, check-ins, results and request rows. Jobs elect one leader per job through a lease row in PostgreSQL, and agent-facing handlers read nothing shared per request.
+Decision: `ricevanta-server` is a Go modular monolith that runs the roles `api`, `agent`, `device`, `radius` and `jobs` in one process by default and as separate deployments under Helm, with the console compiled into the binary. Private keys follow exposure: the master key and the signing key live in `api` and `jobs`, the issuing CA keys in `jobs` only, and the agent-facing `agent`, `device` and `radius` roles hold their TLS keys, role-scoped data keys and per-role database credentials that write only events, check-ins, results and request rows, which `jobs` treats as untrusted input and authorizes against protected records before issuance or dispatch. Jobs elect one leader per job through a lease row in PostgreSQL, and agent-facing handlers read no fleet-wide shared state per routine request.
 Why: self-hosters get one artifact and roles scale separately (blueprint section 5); a compromised exposed replica must not be able to sign commands or mint identities.
 Rejected: one service per domain; Redis as a second stateful service; advisory locks for leader election, which pin connections and fail behind transaction pooling; signing keys in every role.
 Detail: `architecture.md` section 3.1 and `design/backend.md` sections 3 and 7.

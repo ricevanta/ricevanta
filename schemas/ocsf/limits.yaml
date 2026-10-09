@@ -1,0 +1,22 @@
+# Maximum lengths of string fields and lists in Ricevanta events, rooted at the event.
+# Used by the CEL profile's static cost model (docs/specs/cel-profile.md section 3) and
+# enforced by the agent when it builds events; a cut sets is_truncated and
+# untruncated_size (docs/specs/ocsf-profile.md section 2).
+strings:
+  process.cmd_line: 32768
+  file.path: 4096
+  script.script_content: 32768           # first 32 KiB; metadata.is_truncated set when cut; export can be disabled per scope
+  data_security.pattern_match: 200       # DLP-02 redacted snippet
+objects:
+  unmapped: 32768                        # serialized size of the object; a cut sets metadata.is_truncated
+lists:
+  process.loaded_modules: 512
+  observables: 256
+  evidences: 64
+  match_evidence.offsets: 64
+  device.labels: 32
+  device.groups: 64
+  user.groups: 256
+variables:                               # CEL environment lists (cel-profile.md section 5)
+  match.rules: 64
+  match.regulations: 32

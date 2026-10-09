@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/exception.schema.json",
+  "title": "Exception",
+  "description": "An exemption that policies reference by name. Matches when its scope and condition hold; removes the referencing policy from the decision for that event and records an audit event. Validators must run with format assertion enabled so date-time is checked.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "ricevanta.io/v1alpha1" },
+    "kind": { "const": "Exception" },
+    "metadata": { "$ref": "policy.schema.json#/$defs/metadata" },
+    "spec": {
+      "type": "object",
+      "required": ["domain", "scope", "justification"],
+      "additionalProperties": false,
+      "properties": {
+        "domain": { "enum": ["mdm", "edr", "dlp", "lineage", "pki", "network"] },
+        "scope": { "$ref": "policy.schema.json#/$defs/scope" },
+        "condition": { "type": "string", "maxLength": 4096 },
+        "expires": { "type": "string", "format": "date-time" },
+        "justification": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "status": { "type": "object" }
+  }
+}

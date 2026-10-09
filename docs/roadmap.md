@@ -4,16 +4,16 @@ Refines blueprint section 10. Milestone numbers and their primary goals are unch
 
 | Release | Primary goal (blueprint) | Additions |
 |---|---|---|
-| v0.1.x | Repository, Rust agent, Go backend, Vue console, secure enrollment | Policy envelope, CEL profile and OCSF profile defined. Minimal issuing CA with agent enrollment and ACME renewal; device identity keys in software until v0.3.x. `ricevanta-updater` with release signing keys. Footprint benchmark and performance gate in CI from the first agent build. Personal developer accounts and test machines for all sensor work (`project.md`). |
-| v0.2.x | Device inventory and core MDM | Apple MDM server with APNs and DDM. Windows OMA-DM enrollment server. |
+| v0.1.x | Repository, Rust agent, Go backend, Vue console, secure enrollment | Policy envelope, CEL profile and OCSF profile defined. Minimal issuing CA with agent enrollment and ACME renewal; device identity keys in software until v0.3.x. `ricevanta-updater` with release signing keys. Platform preflight, acceptance traceability and the footprint gate start with the first agent build (`specs/platform-qualification.md`). Personal developer accounts and test machines for sensor work (`project.md`). MDM Vendor CSR Signing Certificate requested from Apple on the personal account, `mdmcert.download` as the fallback (verify). |
+| v0.2.x | Device inventory and core MDM | Apple MDM server with APNs and DDM, and the test push-certificate signing path (`project.md`). Windows OMA-DM enrollment server. |
 | v0.3.x | Built-in PKI | Offline root with the M-of-N ceremony, issuing CAs, ACME for MDM payloads and third-party clients, SCEP (RSA and ECDSA), external CA integration, hardware-backed keys on all three OSes. |
-| v0.4.x | EDR telemetry, detection, response | ES extension, ETW collectors, eBPF programs, Windows Event Log collection, first Windows driver build under test signing (alert-only allowed in this release). Raw-store benchmark on real telemetry decides keep ClickHouse or swap before v0.8.x. Company registered; Apple entitlement, EV certificate and Partner Center requests filed; minifilter altitude requested. |
-| v0.5.x | DLP classification and enforcement | Scanner helper, blocking on Windows driver, ES and Linux BPF LSM and fanotify, session clipboard helpers, browser extension for Chrome and Edge. Alert-only allowed in this release only where blocking is not yet passing. |
-| v0.6.x | Data lineage | Lineage graph. Browser extension for Firefox and Safari. |
+| v0.4.x | EDR telemetry, detection, response | ES extension, ETW collectors, eBPF programs, Windows Event Log collection, first Windows driver build under test signing (alert-only allowed in this release). Raw-store benchmark on real telemetry decides keep ClickHouse or swap before v0.8.x. Company registered; Apple entitlement, MDM vendor certificate, EV certificate and Partner Center requests filed; minifilter altitude requested. |
+| v0.5.x | DLP classification and enforcement | Scanner helper, blocking on Windows driver, ES and Linux BPF LSM and fanotify, session clipboard helpers, browser extension for Chrome and Edge. Content-analysis agent for Chrome, Edge and Firefox, clipboard owner-side mediation with the measured re-own interval. Alert-only is allowed in this development release only; the blocking mechanisms remain required for v1.0.0. |
+| v0.6.x | Data lineage | Lineage graph. Firefox extension for context, and the content-script gate with its bypass tests for Safari, Edge on Linux and Chrome without cloud management. |
 | v0.7.x | RADIUS and VPN | EAP-TLS and RadSec. FortiGate and Cisco ASA profiles tested against gateways. |
 | v0.8.x | Unified policies, rule adapters, SIEM | Sigma, YARA, Falco, Presidio-style, Gitleaks-style and osquery adapters. SIEM destinations. |
-| v0.9.x | Integration, compatibility, performance, hardening | Capability matrix acceptance tests pass on macOS ARM64, Windows x64 and Linux x64. Performance benchmarks published. Driver passes HLK and is submitted for WHCP certification. |
-| v1.0.0 | Complete release | Every feature domain, full support, three targets, production signing under the company. |
+| v0.9.x | Integration, compatibility, performance, hardening | Complete the blueprint traceability matrix, whole-product workflows, adversarial cases, recovery and resource gates on all eligible configurations of the three targets (`specs/platform-qualification.md`). Publish performance evidence. Driver passes HLK and is submitted for WHCP certification. |
+| v1.0.0 | Complete release | Every feature domain, full support, three targets, production signing and approved qualification evidence for each declared configuration; no unresolved required enforcement mechanism. |
 | v1.x | | Windows ARM64, Linux ARM64, macOS x64 where Apple still supports it (`platform-support.md`, targets). |
 | v2.0.0 | | Capabilities deferred because they cannot be tested on personal accounts (`platform-support.md`, deferred to v2.0.0). |
 
@@ -21,5 +21,7 @@ Ordering constraints behind the additions:
 
 - Enrollment (v0.1.x) needs device certificates before the full PKI (v0.3.x), so a minimal CA ships first.
 - EDR and DLP ship before the rule adapters (v0.8.x), so the policy envelope and event schema are defined in v0.1.x and later releases add fields instead of migrating.
-- Apple entitlements and the EV certificate have month-long lead times and bind to the company that files them, so the company is registered and the requests filed in v0.4.x, once the sensors work on personal setups.
+- Apple entitlements and the driver submission identity bind to the account that files them. The company and requests are part of v0.4.x; production sensor qualification depends on the grants and signatures, not an assumed approval duration.
 - Browser extension store publication has its own lead time, so the extension starts in v0.5.x.
+- The Apple MDM server (v0.2.x) needs a vendor-signed push certificate, so the vendor certificate is requested in v0.1.x on the personal account with `mdmcert.download` as the test fallback (verify); the production signing service waits for the company's certificate (v0.4.x).
+- Mechanism proofs start with their sensor milestones. v0.9.x integrates and repeats qualification; it is not the first check that a required OS or browser can enforce a decision.
