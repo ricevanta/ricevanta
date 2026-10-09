@@ -8,6 +8,7 @@ Register of decisions in force, grouped by domain. IDs are domain prefix plus se
 Decision: every blueprint feature ships with full support, including blocking enforcement, at v1.0.0 on the v1.0.0 targets. Reduced behaviour (alert-only, deferred) is permitted only inside a v0.x release and must name the release that completes it. The only exceptions are the capabilities listed under "Deferred to v2.0.0" in `platform-support.md`, which cannot be tested without a company account.
 Why: the blueprint states v1.0.0 is not an MVP; untestable work must not block the release on vendor timelines.
 Rejected: an MVP v1.0.0 with alert-only DLP on Windows and no browser extension.
+Detail: `platform-support.md`.
 
 ### SH-02. Policy envelope, CEL profile and OCSF profile defined first
 Decision: the policy envelope, a CEL subset profile and the OCSF profile are defined in v0.1.x. Both CEL runtimes (Go on the server, Rust on the agent) pass the `cel-spec` conformance suite for the profile in CI; policies outside the profile are refused.
@@ -18,11 +19,12 @@ Detail: `specs/policy-envelope.md`, `specs/cel-profile.md`, `specs/ocsf-profile.
 ### SH-03. Single organization per server
 Decision: v1.0.0 serves one organization per server. Tables carry an organization ID so multi-tenancy is a later addition, not a migration.
 Why: no requirement for multi-tenancy at v1.0.0.
+Rejected: multi-tenancy at v1.0.0, which no requirement asks for and which would add a tenant check to every table and query.
 
 ### SH-04. One repository, one release version
 Decision: one repository with `agent/`, `driver/`, `extension/`, `server/`, `console/`, `schemas/`, `rulepacks/`, `deploy/`, `tests/`, `docs/` and `instructions/`. Server, console, agent and extension share one SemVer version per release.
 Why: cross-component changes (policy envelope, agent API) land in one change and one test run.
-Rejected: the blueprint's `integrations/` directory; adapters are server modules and live with the server.
+Rejected: a separate `integrations/` directory for adapters; they are server modules and live with the server.
 Detail: `architecture.md` section 6.
 
 ## Platform (PF)
@@ -30,6 +32,7 @@ Detail: `architecture.md` section 6.
 ### PF-01. v1.0.0 targets
 Decision: macOS ARM64, Windows x64, Linux x64. Windows ARM64, Linux ARM64 and macOS x64 follow in v1.x; the design stays architecture-independent.
 Why: largest installed bases; separate driver signing and CI hardware for the others.
+Rejected: all six targets at v1.0.0, which needs separate driver signing and CI hardware per architecture.
 Detail: `platform-support.md`.
 
 ### PF-02. Modern OS support and qualification
@@ -41,24 +44,26 @@ Detail: `platform-support.md`.
 ### PF-03. Vendor programs held by the project
 Decision: development and testing on personal accounts; a company registered before sensor distribution holds the Apple team, the MDM Vendor CSR Signing Certificate, Partner Center account, EV certificate and the HLK lab for WHCP certification of the driver; all production binaries are signed under it and the production push-certificate signing service runs under its vendor certificate.
 Why: entitlements and driver signatures bind to one organization (C1), and WHCP submissions need a Partner Center account and HLK results (AG-01).
+Rejected: filing entitlements and driver submissions under a personal account, which cannot be transferred to the company.
 Detail: `project.md`.
 
 ### PF-04. Platform qualification is a release gate
 Decision: a finite required-unit manifest covers every eligible OS release and every blueprint feature across the declared configuration profiles; whole-product workflows, negative security cases, offline recovery, updates and resource budgets also pass. An unresolved required enforcement mechanism blocks release and cannot become an unsupported-feature exception.
-Why: a build or a notification does not prove complete endpoint protection.
+Why: a build or a notification does not prove complete endpoint protection, and Linux is many platforms (C12).
 Rejected: one smoke test per OS; support inferred from vendor API availability.
 Detail: `specs/platform-qualification.md`.
 
 ## Agent (AG)
 
 ### AG-01. Windows kernel component
-Decision: a kernel component with a file-system minifilter, process-creation callbacks that deny creation, and a WFP callout where user-mode WFP is insufficient; ETW stays the telemetry source and the driver carries authorization decisions and synchronous events only. Written in C, since `windows-drivers-rs` is not production-ready and lacks minifilter and WFP bindings, with tamper resistance through driver self-protection (`ObRegisterCallbacks`). The production driver is WHCP-certified through HLK testing; attestation and preproduction signing serve development only.
+Decision: a kernel component with a file-system minifilter, process-creation callbacks that deny creation, and a WFP callout where user-mode WFP is insufficient; ETW stays the telemetry source and the driver carries authorization decisions and synchronous events only. Written in C, since `windows-drivers-rs` describes itself as not production-ready and lacks minifilter and WFP bindings (verify), with tamper resistance through driver self-protection (`ObRegisterCallbacks`). The production driver is WHCP-certified through HLK testing; attestation and preproduction signing serve development only.
 Why: ETW cannot block (C3); Microsoft labels attestation signing testing-only and the Windows Driver Policy admits only WHCP-signed drivers (verify that attestation-signed drivers are blocked under enforcement).
 Rejected: alert-only DLP on Windows (SH-01); attestation-signed production drivers.
 
 ### AG-02. Scanner helper and memory metric
 Decision: content inspection runs in a separate helper process started on demand with a memory cap and stopped when idle. Idle RAM is the sum over all resident Ricevanta user-mode processes, including the Endpoint Security extension and session helpers, of the per-OS private footprint metric (`phys_footprint`, private working set, proportional set size); kernel pool and BPF maps are reported separately.
 Why: the 80 MB target cannot hold with rules, models and parsers resident (C4).
+Rejected: inspection inside the core process, which would keep rules, models and parsers resident.
 Detail: `design/agent.md` section 6.
 
 ### AG-03. Process topology and local IPC
@@ -117,11 +122,12 @@ Detail: `design/backend.md` section 2.
 Decision: single-event Sigma rules evaluate on the agent (Rust) over process, file, network, registry, Windows Event Log and Linux syscall logsources; correlation rules evaluate on the server (Go). Windows Event Log and PowerShell script-block collection are required telemetry, and Falco rules map through a second logsource mapping. Unsupported logsources or modifiers are listed in the console with the reason.
 Why: Sigma targets Sysmon and Windows Event Log fields, not OCSF; offline detection is required (C7).
 Rejected: server-only evaluation.
+Detail: `specs/ocsf-profile.md` section 5.
 
 ## DLP
 
 ### DLP-01. Browser extension and session helpers
-Decision: browser channels are gated at the browser's own hold point: the core serves one `content_analysis_sdk`-compatible local agent for Chrome (through Chrome Enterprise Core), Edge (Windows and macOS) and Firefox, and the managed extension's content script with a synchronous `webRequest` backstop gates Chrome without cloud management, Edge on Linux and Safari. Clipboard blocking is owner-side mediation: the session helper re-owns the clipboard on every change and answers each consumer request after the decision, the re-own interval is an OS limit with a measured bound, and Wayland is served through `ext-data-control-v1` where the compositor offers it. Cloud sync clients are the file channel through known sync folders.
+Decision: browser channels are gated at the browser's own hold point: the core serves one `content_analysis_sdk`-compatible local agent for Chrome (through Chrome Enterprise Core), Edge (Windows and macOS) and Firefox, and the managed extension's content script gates Chrome without cloud management, Edge on Linux and Safari, backed by synchronous `webRequest` on Chrome and Edge and `declarativeNetRequest` on Safari. Clipboard blocking is owner-side mediation: the session helper re-owns the clipboard on every change and answers each consumer request after the decision, the re-own interval is an OS limit with a measured bound, and Wayland is served through `ext-data-control-v1` or, on GNOME, a GNOME Shell extension that owns the selection inside Mutter. Cloud sync clients are the file channel through known sync folders.
 Why: browsers expose uploads, pastes and printing only through their own analysis hooks, and after the re-own the clipboard owner answers every consumer request (C5).
 Rejected: TLS interception, which contradicts the privacy principle and breaks pinning; clearing or replacing the clipboard after a change, which never mediates a request.
 Detail: `platform-support.md`, `design/agent.md` section 3, `specs/platform-qualification.md`.
@@ -129,6 +135,8 @@ Detail: `platform-support.md`, `design/agent.md` section 3, `specs/platform-qual
 ### DLP-02. Evidence
 Decision: a match stores the content hash, rule ID, byte offsets and a redacted snippet of at most 200 characters; the snippet can be disabled by policy. Raw user content is never stored; script content is exported under `specs/ocsf-profile.md` section 3 after the secret and identifier detectors redact it.
 Why: blueprint section 8 limits raw content collection; investigations need evidence.
+Rejected: storing the matched content for review, which blueprint section 8 forbids.
+Detail: `specs/ocsf-profile.md` section 3.
 
 ### DLP-03. Classification aligned with Vietnamese data protection law
 Decision: classification categories and rule packs carry an optional regulatory reference (regulation, article). The first packs implement Vietnamese personal identifiers and financial data as defined by Decree 13/2023 and the Personal Data Protection Law in force from 2026 (verify article numbering), distinguishing personal from sensitive personal data, with State Bank of Vietnam circular templates following after v1.0.0. Reports can group findings by regulation; the same field carries GDPR, PCI DSS and others later.
@@ -146,6 +154,7 @@ Detail: `design/backend.md` section 5.
 ### EV-02. OCSF version and extension
 Decision: OCSF 1.9.0 is the event schema; what each domain emits and what the `ricevanta` extension adds are in EV-03. The pinned version moves only at a minor release with a documented mapping.
 Why: agents, server and exporters must agree on one schema before EDR ships (C11).
+Rejected: ECS or a proprietary schema; the blueprint names OCSF as the canonical format.
 Detail: `specs/ocsf-profile.md`.
 
 ### EV-03. OCSF profile and extension
@@ -200,7 +209,7 @@ Detail: `design/pki.md`.
 
 ### RAD-01. Both RADIUS architectures
 Decision: certificate-derived identity authorization (the gateway validates the certificate, Ricevanta authorizes by SAN or DN identity against issued, unrevoked certificates and device compliance) and EAP-TLS termination, over UDP and RadSec. FortiGate SSL VPN and IKEv2 and Cisco ASA profiles are acceptance-tested against gateways. EAP-TLS is implemented in-project in Go, because no maintained Go library ships it.
-Why: FortiClient and Cisco Secure Client do not initiate EAP-TLS; EAP-TLS serves 802.1X and native OS clients (C6).
+Why: FortiClient and Cisco Secure Client do not initiate EAP-TLS (verify); EAP-TLS serves 802.1X and native OS clients (C6).
 Rejected: FreeRADIUS as the EAP server (GPL-2.0).
 Detail: `design/backend.md` section 2.
 
@@ -216,12 +225,13 @@ Detail: `design/backend.md` section 2.
 Decision: one permission per action, bundled into built-in and custom roles, assignable to users or directory groups, optionally scoped to device groups. Access policies name protected actions and an approver group; a protected action from the console, the API or GitOps becomes a pending request that a different account approves before dispatch, with targets frozen at request time and requester, approver and targets audited; wipe, response actions on more than 10 devices, rule-pack publish, CA key operations, weakening DLP and EDR policies and publishing ones with isolate, revoke or kill actions (`specs/policy-envelope.md` section 2.3) are protected by default. Single-administrator installations can disable approval policies and see a persistent warning; just-in-time role activation is not in v1.0.0.
 Why: a compromised or mistaken administrator is the most damaging failure; regulated customers require separation of duties (DLP-03).
 Rejected: RBAC and audit only; no protection against one compromised account.
+Detail: `specs/policy-envelope.md` section 2.3.
 
 ### BE-03. One server binary with roles
-Decision: `ricevanta-server` is a Go modular monolith that runs the roles `api`, `agent`, `device`, `radius` and `jobs` in one process by default and as separate deployments under Helm, with the console compiled into the binary. Private keys follow exposure: the master key and the signing key live in `api` and `jobs`, the issuing CA keys in `jobs` only, and the agent-facing `agent`, `device` and `radius` roles hold their TLS keys, role-scoped data keys and per-role database credentials that write only events, check-ins, results and request rows, which `jobs` treats as untrusted input and authorizes against protected records before issuance or dispatch. Jobs elect one leader per job through a lease row in PostgreSQL, and agent-facing handlers read no fleet-wide shared state per routine request.
+Decision: `ricevanta-server` is a Go modular monolith that runs the roles `api`, `agent`, `device`, `radius` and `jobs` in one process by default and as separate deployments under Helm, with the console compiled into the binary. Private keys follow exposure: the master key and the signing key live in `api` and `jobs`, the issuing CA keys in `jobs` only, and the agent-facing `agent`, `device` and `radius` roles hold their TLS keys, role-scoped data keys and per-role database credentials that write only events, check-ins, results, request rows and minted ACME nonces, which `jobs` treats as untrusted input and authorizes against protected records before issuance or dispatch. Jobs elect one leader per job through a lease row in PostgreSQL, and agent-facing handlers read no fleet-wide shared state per routine request.
 Why: self-hosters get one artifact and roles scale separately (blueprint section 5); a compromised exposed replica must not be able to sign commands or mint identities.
 Rejected: one service per domain; Redis as a second stateful service; advisory locks for leader election, which pin connections and fail behind transaction pooling; signing keys in every role.
-Detail: `architecture.md` section 3.1 and `design/backend.md` sections 3 and 7.
+Detail: `architecture.md` section 3.1 and `design/backend.md` sections 3 and 6.
 
 ### BE-04. Module boundaries
 Decision: modules `identity`, `authz`, `devices`, `mdm`, `policy`, `detection`, `dlp`, `lineage`, `pki`, `radius`, `events`, `audit`, `transport` and `platform`. Each owns one PostgreSQL schema that no other module reads or writes, exposes Go interfaces, publishes on an in-process bus, and coordinates across replicas only through PostgreSQL; an import-graph check in CI enforces the boundaries.

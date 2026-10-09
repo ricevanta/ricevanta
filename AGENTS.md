@@ -6,7 +6,7 @@ This file applies to every agent (Codex, Claude Code and others) and to people. 
 
 ## State
 
-Design phase. No application code. Work happens in `docs/`. Code directories are created when their design document exists.
+Design phase. No application code. Work happens in `docs/`; brand assets and their build script live in `branding/`. Code directories are created when their design document exists.
 
 ## Map
 
@@ -20,6 +20,7 @@ Design phase. No application code. Work happens in `docs/`. Code directories are
 | What code and rules may be used | `docs/licensing.md` |
 | When | `docs/roadmap.md` |
 | System design | `docs/architecture.md`, then `docs/design/<domain>.md` and `docs/specs/<name>.md` |
+| Brand identity and assets | `branding/BRAND_SPEC.md`, `branding/README.md` |
 
 | Doing | Read first |
 |---|---|
@@ -30,6 +31,6 @@ Design phase. No application code. Work happens in `docs/`. Code directories are
 
 ## Three rules for every task
 
-1. Scope: every blueprint feature ships with full support at v1.0.0 on macOS ARM64, Windows x64 and Linux x64 (`docs/platform-support.md` lists the two capabilities moved to v2.0.0). Never propose alert-only or deferred substitutes as the end state; never drop an OS limit silently.
+1. Scope: every blueprint feature ships with full support at v1.0.0 on macOS ARM64, Windows x64 and Linux x64 (`docs/platform-support.md` lists the two capabilities scheduled for v2.0.0). Never propose alert-only or deferred substitutes as the end state; never drop an OS limit silently.
 2. Documents describe the current state. No dates, no history, no stale statements; rewrite in place.
 3. End every task by stating what was verified and how. Report failed checks as failed.

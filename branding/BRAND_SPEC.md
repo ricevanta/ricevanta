@@ -1,17 +1,15 @@
-# Ricevanta — Logo, Visual Identity & Asset Implementation Specification
+# Ricevanta logo, visual identity and asset specification
 
-> **Status:** Symbol master, Be Vietnam Pro wordmark, lockups and exports are built. Owner sign-off on the final vector is pending.
-> **Owner:** Ricevanta project
 > **Audience:** Codex, Claude Code, design engineers, frontend agents, maintainers.
 > **Primary instruction:** **Implement the approved “RECOMMENDED” rice-ear logo with the refinement in §2. Do not propose or silently substitute a new logo.**
 
-## 0. Agent mission (read first)
+## 0. Purpose
 
-Recreate, refine, and deliver a production-quality, **emoji-first** visual identity for **Ricevanta**, an open-source, self-hosted unified endpoint security and management platform. Work from the **approved source board** in `reference/approved-concept-board.png` (the large **RECOMMENDED** hero mark). The vector master is `source/ricevanta-symbol-master.svg`, hand-fitted to the reference by overlay. Treat the raster moodboard as the primary *visual reference* and the master as the only editable vector source.
+This document defines the **emoji-first** visual identity of **Ricevanta**, an open-source, self-hosted unified endpoint security and management platform. The approved source board is `reference/approved-concept-board.png` (the large **RECOMMENDED** hero mark). The vector master is `source/ricevanta-symbol-master.svg`, hand-fitted to the reference by overlay. The raster moodboard is the primary *visual reference* and the master is the only editable vector source.
 
-**Success:** The mark is instantly recognizable at emoji/app-icon sizes, elegant at web sizes, and functions as a distinctive sign for a growing suite of endpoint and data-security products. The design should read as a rice ear under protection rather than a flower, shield, padlock, wheat ear, generic leaf, or diagram.
+**Success:** The mark is instantly recognizable at emoji/app-icon sizes, elegant at web sizes, and functions as a distinctive sign for a growing suite of endpoint and data-security products. The design reads as a rice ear under protection rather than a flower, shield, padlock, wheat ear, generic leaf, or diagram.
 
-**Deliver:** A vector source of truth, approved lockups and color variants, raster export sets, usage rules, reproducible build instructions, and automated checks. No need to build or rename any actual Ricevanta security product as part of this task.
+**Deliverables:** the vector sources of truth, approved lockups and color variants, raster export sets, usage rules, a reproducible build and automated checks (§8).
 
 ## 1. Brand fundamentals
 
@@ -26,9 +24,9 @@ Recreate, refine, and deliver a production-quality, **emoji-first** visual ident
 | Design approach | **Emoji-first, vector-first, seamless, compact, organic with disciplined geometry** |
 | Market | Global; origins in Vietnam visible through restrained colors and symbolism, not national flag imagery |
 
-**Platform context:** Ricevanta combines MDM, EDR, DLP, data lineage, certificate/PKI management, network/RADIUS/VPN authentication, unified policies, logging to external SIEMs, and administration. A single lightweight Rust endpoint agent connects to a Go backend with a Vue console, supporting Windows/macOS/Linux, x64/ARM64. The symbol represents their shared foundation. **Do not map one grain permanently to one individual module**; modules can grow/change without needing a rebrand.
+**Platform context:** Ricevanta combines MDM, EDR, DLP, data lineage, certificate/PKI management, network/RADIUS/VPN authentication, unified policies, logging to external SIEMs, and administration. A single lightweight Rust endpoint agent connects to a Go backend with a Vue console, supporting macOS on Apple silicon, Windows x64 and Linux x64 (`../docs/platform-support.md`). The symbol represents their shared foundation. **Do not map one grain permanently to one individual module**; modules can grow/change without needing a rebrand.
 
-## 2. Exact visual direction — what is approved
+## 2. Approved visual direction
 
 The approved mark is a **rice ear held by a protective arc**, with:
 
@@ -119,7 +117,7 @@ The brand palette is **not** a complete WCAG semantic UI palette. Agents must de
 - Use IDs with `rv-` prefixes where multiple assets may be embedded in one HTML page; avoid duplicate global ID conflicts. Only the master carries path IDs; generated SVGs carry none.
 - Provide `<title>` or appropriate ARIA labeling when a logo is the only accessible name; use `aria-hidden="true"` when adjacent text already names Ricevanta.
 - Do not use text converted into image data or SVG `<image href="data:...">`.
-- Use an SVG optimizer (e.g., SVGO) *after* checking that it preserves the paths, proportions, and palette.
+- Generated SVGs contain only the viewBox, label, title and filled paths; no optimizer pass is applied.
 
 ## 5. Typography and lockups
 
@@ -166,8 +164,8 @@ The symbol must look good **before** the wordmark. This is a brand constraint, n
 ### App tile rules
 
 - Square asset with **warm rice ivory** background for light icon, **deep indigo** background for dark icon.
-- Use proportional central icon, generous margins. Recommended artwork occupies around **70–80% tile height** and **55–70% tile width**, with optical corrections.
-- Tile corner radius may be 20–24% of tile width for design previews. For iOS/macOS icon upload pipelines, check platform requirements and avoid baking unwanted corner radius when the system masks the image itself.
+- Use proportional central icon, generous margins. Recommended artwork occupies around **70 to 80% tile height** and **48 to 55% tile width** (the mark is 0.69:1, so the height sets the width), with optical corrections.
+- Tile corner radius may be 20 to 24% of tile width for design previews. For iOS/macOS icon upload pipelines, check platform requirements and avoid baking unwanted corner radius when the system masks the image itself.
 - Provide both **opaque app-icon PNGs** and **transparent symbol PNGs**. Never mix those in naming.
 - PNGs must be rendered **from SVG**, never resized successively from a small PNG.
 - Add PWA `maskable` safe-zone variant as a separate deliverable; verify essential parts of mark lie inside maskable safe zone.
@@ -189,7 +187,7 @@ Examples of product labels:
 - Ricevanta PKI
 - Ricevanta Console
 
-Use product-specific **secondary pictograms** (device, data flow, identity, network, key/certificate, settings). Do not alter grain positions or invent distinct Ricevanta logos per module. Secondary product icons may share the parent palette, stroke philosophy and rounded geometry; they should remain visually separate from the **brand logo**.
+Use product-specific **secondary pictograms** (device, data flow, identity, network, key/certificate, settings). Do not alter grain positions or invent distinct Ricevanta logos per module. Secondary product icons may share the parent palette, stroke philosophy and rounded geometry; they remain visually separate from the **brand logo**.
 
 ## 8. Mandatory deliverables and recommended layout
 
@@ -232,7 +230,7 @@ branding/
     outline_wordmark.py
 ```
 
-`scripts/build.py` generates and validates everything under `dist/`. A 16 px micro variant does not exist; see §12.
+`scripts/build.py` generates and validates everything under `dist/`; §6 defines the micro variant it derives.
 
 ## 9. Web integration
 
@@ -254,7 +252,7 @@ Example HTML integration:
 
 ## 10. Review and acceptance criteria
 
-An agent's work is **not accepted** unless:
+The assets meet all of these criteria:
 
 1. **Fidelity**: side-by-side check against the selected RECOMMENDED hero mark; no drift into alternative logos.
 2. **Small sizes**: recognizable at 16, 24, 32, 64 px on actual light/dark UI backgrounds; no merged negative-space channels or disappearing core silhouette.
@@ -276,49 +274,14 @@ An agent's work is **not accepted** unless:
 - PNG sizes and alpha/opaque conventions match the file name's contract.
 - Pixel-data bounding box sits within intended safe area and is neither cropped nor excessively small.
 - Size-test contact sheet is generated automatically for human review.
-- Visual regression compares the committed vector exports against prior **approved vector baseline** (once one exists), not directly against generative moodboard pixels.
+- Visual regression compares generated vector exports against the committed vector baseline in `dist/svg/`, not directly against generative moodboard pixels.
 - If a test flags visual failures, fix the source SVG and regenerate *all* derivatives, instead of hand-editing exported PNGs.
 
-## 11. Implementation plan for coding/design agents
+## 11. Non-goals
 
-### Phase A — Audit
-
-1. Inspect `reference/approved-concept-board.png` and `source/ricevanta-symbol-master.svg`.
-2. Confirm that the reference is the large RECOMMENDED rice ear, not a lockup variant.
-3. Identify differences between the master and the concept art (arc taper, grain tips and tails, gaps, grain size, proportions) beyond the refinements listed in §2.
-4. Record those differences before modifying paths.
-
-### Phase B — Production master
-
-5. Refine SVG Béziers by hand in vector editor or code; avoid automated bitmap tracing as sole method.
-6. Normalize a clean viewBox and consistent negative space.
-7. Create full-color light, full-color dark, monochrome and inverted sources.
-8. Build wordmark using vetted open-source font and tune spacing/optical alignment.
-9. Produce horizontal, tagline and stacked lockups.
-
-### Phase C — App & web exports
-
-10. Make light/dark square app icons, PWA maskable and micro variant only if needed.
-11. Write a deterministic export script (version-controlled) that creates all PNGs, favicon and manifest.
-12. Build size-test and context previews: 16px favicon, 32px sidebar, GitHub avatar, README header, UI header, desktop dock/taskbar.
-
-### Phase D — Integration and QA
-
-13. Add reusable Vue component and CSS tokens without inlining different shapes per usage.
-14. Run automated SVG/PNG validation and visual checks.
-15. Show owner a side-by-side reference vs refined vector + 16px and 32px icon tests, **then ask for approval**.
-16. Only after sign-off, roll out replacement assets in website, docs, console, repositories and social image templates.
-
-### Agent instruction block (paste directly into a coding-agent task)
-
-> Implement the Ricevanta logo and branding defined in `BRAND_SPEC.md`. Use `reference/approved-concept-board.png` and its large **RECOMMENDED** rice-ear logo as the approved visual source, with `source/ricevanta-symbol-master.svg` as the editable vector master. Do not redesign the logo into a flower, shield or symmetrical arrangement. Produce a cleaned, production-ready vector master; verified color/mono/light/dark lockups; reproducible favicon/PWA/app exports; a reusable Vue logo component; a validation script; and visual previews at 16, 32, 64 and 256 px. Preserve the exact brand name, tagline and palette. Before replacing existing live assets, present a comparison showing fidelity, scale tests and documented deviations, and request owner approval.
-
-## 12. Non-goals and unresolved decisions
-
-- **Not a trademark clearance** or confirmation of domain / GitHub handle availability.
-- **Not an approved final production SVG** until the owner signs off on the master and its §2 refinements.
+- **Not a trademark clearance.** The domain and GitHub handle are project facts in `../docs/project.md`; clearance is an open item in `README.md`.
 - No font binaries are included; the outlined wordmark and tagline are the production type.
-- Actual product module pictograms are future work; the main symbol should not be altered to encode a fixed number of modules.
+- Product module pictograms are outside this specification; the main symbol is not altered to encode a fixed number of modules.
 - This spec does not dictate the entire application UI; it governs visual identity and implementation of brand assets.
 
 ---

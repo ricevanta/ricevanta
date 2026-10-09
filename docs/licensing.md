@@ -84,3 +84,13 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `crc32c` crate | Apache-2.0 or MIT (verify) | Spool record checksums |
 | ssdeep | GPL-2.0 | Not used |
 | W3C PROV-DM, OpenLineage | W3C document license; Apache-2.0 | Lineage vocabulary only |
+
+## Brand assets and build tools
+
+| Source | License | Use |
+|---|---|---|
+| Be Vietnam Pro | SIL OFL 1.1 | Outlined into the wordmark and tagline masters; the OFL exempts documents made with the font and no Reserved Font Name is declared; notice in `branding/source/OFL-BeVietnamPro.txt`; font binaries are not committed |
+| ImageMagick 7 with librsvg | ImageMagick License; librsvg LGPL-2.1-or-later (verify) | Build-time renderer for `branding/scripts/build.py`; not shipped |
+| Pillow | MIT-CMU (verify) | Build-time validation and ICO assembly; not shipped |
+| fonttools, uharfbuzz | MIT; Apache-2.0 (verify) | Build-time outlining in `branding/scripts/outline_wordmark.py`; not shipped |
+| `branding/reference/approved-concept-board.png` | AI-generated concept art; generating tool and its output terms not recorded (verify) | Visual reference only; not shipped |

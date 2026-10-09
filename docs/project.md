@@ -12,7 +12,7 @@
 
 ## Vendor programs and signing
 
-The project holds the Apple developer team, granted sensor entitlements and Windows driver submission accounts for the distributed packages (PF-03). Each self-hosted Apple MDM service needs its own Apple MDM Push Certificate, obtained at identity.apple.com from a signing request the project signs with its MDM Vendor CSR Signing Certificate; the project operates that signing service, designed with the MDM server, the one project-hosted step a self-hoster cannot remove, used at setup and at yearly renewal. The operator renews with the same Apple ID so the push topic and enrollments survive. Self-builders need their own applicable grants and signatures to provide the complete feature set.
+The project holds the Apple developer team, granted sensor entitlements and Windows driver submission accounts for the distributed packages (PF-03). Each self-hosted Apple MDM service needs its own Apple MDM Push Certificate, obtained at identity.apple.com from a signing request the project signs with its MDM Vendor CSR Signing Certificate; the project operates that signing service, designed with the MDM server, the one project-hosted step a self-hoster cannot remove, used at setup and at yearly renewal. The operator renews with the same Apple ID so the push topic and enrollments survive. The project's IANA Private Enterprise Number, requested in v0.1.x (`roadmap.md`), anchors the policy-signing extended key usage OID (`design/pki.md` section 4). Self-builders need their own applicable grants and signatures to provide the complete feature set.
 
 | Phase | Accounts |
 |---|---|

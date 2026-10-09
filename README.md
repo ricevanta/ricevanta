@@ -17,7 +17,8 @@ Status: design phase. No application code yet. The design lives in `docs/`:
 | `docs/roadmap.md` | Release milestones |
 | `docs/architecture.md` | System design: components, roles, protocols, keys, deployment |
 | `docs/design/<domain>.md` | Per-domain design: `agent.md`, `backend.md`, `pki.md`, `lineage.md` |
-| `docs/specs/<name>.md` | Policy envelope, CEL profile, OCSF profile; machine-readable files in `schemas/` |
+| `docs/specs/<name>.md` | Policy envelope, CEL profile, OCSF profile, platform qualification; machine-readable files in `schemas/` |
+| `branding/` | Brand identity (`BRAND_SPEC.md`), vector masters, build script and generated assets |
 
 Targets for v1.0.0: macOS on Apple silicon, Windows x64, Linux x64.
 

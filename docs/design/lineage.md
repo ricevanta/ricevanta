@@ -1,6 +1,6 @@
 # Lineage design
 
-How data lineage is stored and keyed: the graph model, the identities it keys on, how edges reach the server, where the graph lives, and how it is bounded. Confidence scoring, cross-device joins and the console's exploration views are open (`analysis.md` section 3) and belong in this file. Decision: LIN-01 in `decisions.md`.
+How data lineage is stored and keyed: the graph model, the identities it keys on, how edges reach the server, where the graph lives, and how it is bounded. Confidence scoring, cross-device joins and the console's exploration views are open (`../analysis.md` section 3) and belong in this file. Decision: LIN-01 in `../decisions.md`.
 
 ## 1. Model
 
@@ -23,8 +23,8 @@ A save-by-replacement on any OS creates a new file identity and is recorded as a
 
 ## 3. Transport and storage
 
-- Endpoint: `lineage.db` in SQLite (`design/agent.md` section 5), one node table with integer IDs and one edge table (source, target, type, confidence, evidence, time) indexed on (source, type) and (target, type). Path queries are recursive queries bounded by an explicit depth limit, which is also the cycle guard. Retention: edges older than the configured age (default 90 days) are deleted and the paths through them rolled up into summary edges between the surviving ends; summary edges age out at four times the edge age.
-- Upload: edges are events of the `io.ricevanta` lineage class in their own spool class, dropped after context and before detections (`design/agent.md` section 5), so the server receives lineage under the default telemetry profile without the raw events behind it.
+- Endpoint: `lineage.db` in SQLite (`agent.md` section 5), one node table with integer IDs and one edge table (source, target, type, confidence, evidence, time) indexed on (source, type) and (target, type). Path queries are recursive queries bounded by an explicit depth limit, which is also the cycle guard. Retention: edges older than the configured age (default 90 days) are deleted and the paths through them rolled up into summary edges between the surviving ends; summary edges age out at four times the edge age.
+- Upload: edges are `ricevanta/lineage_activity` events (`../specs/ocsf-profile.md` section 2) in their own spool class, dropped after context and before detections (`agent.md` section 5), so the server receives lineage under the default telemetry profile without the raw events behind it.
 - Server: the same edge model in the `lineage` schema in PostgreSQL, partitioned by month on edge time with a device index, so retention drops partitions; default server retention is 180 days for edges and the same four-times rule for summary edges. Path queries are recursive queries with the `CYCLE` clause. No graph database (section 4).
 - Fan-out control: a process that touches thousands of files (a backup, a build, an indexer, a browser over its lifetime) would make every file a descendant of every other through that process node. Reads link to a later write only within a window (default 10 minutes) and in order; degree is counted per process instance per window (default 1,000); above it, inheritance continues at reduced confidence and a detection is raised, never a silent drop, so a user cannot clear a classification by opening many files.
 

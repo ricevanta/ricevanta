@@ -22,7 +22,7 @@ The system view: which processes exist, how they talk, who holds which key, and 
 | `ricevanta-scan` | Endpoint, started on demand by the core | Rust | Reduced privilege, memory cap | Content inspection (AG-02) |
 | `ricevanta-session` | Endpoint, one per graphical login session | Rust | Logged-in user | Clipboard, user prompts, session context (DLP-01) |
 | `ricevanta-nmhost` | Endpoint, started by Chrome, Edge or Firefox | Rust | Logged-in user | Native messaging relay between the browser extension and the core |
-| Browser extension | Chrome, Edge, Firefox, Safari | TypeScript | Browser | Upload, paste and download decisions (DLP-01) |
+| Browser extension | Chrome, Edge, Firefox, Safari | TypeScript | Browser | Content-script gate with `webRequest` and `declarativeNetRequest` backstops, tab URL and user context (DLP-01); upload, paste, print and download decisions come from the core's content-analysis agent |
 
 The agent is one product with one installer, one identity and one update lifecycle. It is several processes because the operating systems require it (blueprint section 5).
 
@@ -44,13 +44,13 @@ The core owns the server connection, the device identity, the policy cache, the 
 
 | Role | Listeners | State and keys |
 |---|---|---|
-| `api` | HTTPS: console, `/api/v1`, embedded console assets; any certificate | Stateless; holds the master key and the policy and command signing key, and signs at creation |
+| `api` | HTTPS: console, `/api/v1`, embedded console assets; any certificate | Stateless; holds the master key and the policy and command signing key; signs bundles, rule packs and commands at creation, while `jobs` signs assignments and dispatch grants |
 | `agent` | HTTPS: `/agent/v1`; server certificate from the Ricevanta PKI, pinned by agents; TLS terminated by the server itself; a client certificate is requested on every connection and required on every path except enrollment; renewal accepts an expired, unrevoked certificate within the grace period | Holds long-poll connections; public keys only; PostgreSQL credentials that read bundles and commands and write only events, check-ins, command results, certificate and dispatch requests and minted ACME nonces |
-| `device` | HTTPS: Apple MDM, OMA-DM, SCEP and ACME for MDM payloads, network devices and third-party clients; publicly trusted or Ricevanta certificate; TLS terminated by the server itself | Stateless; its TLS key only; SCEP envelopes and certificate requests go to `jobs` through request rows |
+| `device` | HTTPS: Apple MDM, OMA-DM, SCEP and ACME for MDM payloads, network devices and third-party clients; publicly trusted or Ricevanta certificate; TLS terminated by the server itself | Stateless; its TLS key only; SCEP envelopes and certificate requests go to `jobs` through request rows; writes minted ACME nonces |
 | `radius` | UDP 1812 and 1813, RadSec TCP 2083 | EAP conversations live in the replica's memory; its TLS key and the per-gateway shared secrets under a role-scoped data key |
 | `jobs` | None | Schedulers, exporters, retention, directory sync, correlation, certificate issuance, APNs pushes; holds the master key, the issuing CA keys, the APNs push key and the signing key; one active leader per job through a lease row (`design/backend.md` section 3) |
 
-Key custody follows exposure: the agent-facing `agent`, `device` and `radius` roles never receive the master key or any CA or signing key, hold their TLS keys under role-scoped data keys, run with per-role PostgreSQL credentials, and cannot write bundle, command, approval or certificate rows. Certificate and dispatch request rows are untrusted input: `jobs` verifies protocol proof and reconstructs authorization from protected records before issuance or a fresh dispatch grant (`design/pki.md` section 3, `specs/policy-envelope.md` section 7, BE-03).
+Key custody follows exposure: the agent-facing `agent`, `device` and `radius` roles never receive the master key or any CA or signing key, hold their TLS keys under role-scoped data keys, run with per-role PostgreSQL credentials, and cannot write bundle, command, approval or certificate rows. Issuing CA keys are readable and unwrappable by `jobs` alone (`design/backend.md` section 6). Certificate and dispatch request rows are untrusted input: `jobs` verifies protocol proof and reconstructs authorization from protected records before issuance or a fresh dispatch grant (`design/pki.md` section 3, `specs/policy-envelope.md` section 7, BE-03).
 
 The `agent` and `device` roles terminate TLS in the server process: a client certificate does not survive an ingress that terminates TLS, and the agent pins the Ricevanta root CA. Ingress controllers in front of them run in TLS passthrough mode or as layer-4 load balancers.
 
@@ -64,7 +64,7 @@ Fourteen modules with schema ownership and an import-graph check (BE-04); conten
 
 | API | Path | Consumers | Authentication | Format |
 |---|---|---|---|---|
-| Administration | `/api/v1` | Console, CLI, GitOps, integrations | Browser session from OIDC, SAML or break-glass local login (BE-01), or a scoped API token | JSON, described by a hand-written OpenAPI 3.1 document in `schemas/openapi/` validated in CI |
+| Administration | `/api/v1` | Console, CLI, GitOps, integrations | Browser session from OIDC, SAML or break-glass local login (BE-01), or a scoped API token | JSON, described by a hand-written OpenAPI 3.1 document, validated in CI, that lives in `schemas/openapi/` from the first server build (v0.1.x) |
 | Agent | `/agent/v1` | `ricevanta-agent` | mTLS with the device identity certificate; enrollment token on `/agent/v1/enroll`; expired certificate accepted on `/agent/v1/acme` within the grace period | JSON; NDJSON batches for events, zstd-compressed; ACME for renewal |
 | Native device protocols | `/mdm/apple`, `/mdm/windows`, `/scep`, `/acme` | MDM clients, network equipment, third-party clients | Protocol-specific (`design/pki.md`, MDM-01) | Protocol-specific |
 
@@ -76,7 +76,7 @@ HTTPS with required mTLS, HTTP/2 preferred and HTTP/1.1 accepted, JSON bodies. N
 
 | Flow | Mechanism |
 |---|---|
-| Check-in | `POST /agent/v1/checkin` every 5 minutes (policy-tunable) with health, versions, the installed bundle sequence and inventory deltas; the check-in carries the journal report of `specs/policy-envelope.md` section 7, signed by the device identity key; the response carries the current assignment sequence and pending command count |
+| Check-in | `POST /agent/v1/checkin` every 5 minutes (policy-tunable) with health, versions, the installed assignment envelope (`specs/policy-envelope.md` section 6) and inventory deltas; the check-in carries the journal report of `specs/policy-envelope.md` section 7, signed by the device identity key; the response carries the current assignment sequence and pending command count |
 | Commands | `GET /agent/v1/commands` long-poll with a fresh `poll_nonce`; default hold 50 s, below a 60 s proxy idle timeout. `NOTIFY` wakes the replica. Every signed command is delivered under a `jobs`-signed dispatch grant bound to that device, poll nonce and command, which is the freshness guard, while the agent's journal is the replay guard; longer holds can exceed the grant budget and trigger an immediate fresh poll. Receipt, ordering, execution and reconciliation follow `specs/policy-envelope.md` section 7; results are posted individually and signed by the device identity key |
 | Policy | `GET /agent/v1/policy` with `If-None-Match`; the body is a signed bundle plus a signed per-device assignment binding device, scope, bundle hash and an organization-wide sequence; the agent refuses a bundle without a valid assignment for itself or with a sequence not above the installed one (`specs/policy-envelope.md` section 6) |
 | Events | `POST /agent/v1/events` with NDJSON OCSF batches, zstd, a batch ID for idempotent retry, at most 5 MB per request |
@@ -90,7 +90,7 @@ Compatibility window: the server serves `/agent/v1` to agents from the current m
 |---|---|---|---|
 | Root CA | Offline, M-of-N custodian quorum (PKI-01); its certificate is what agents pin | Issuing CA certificates | Everything that trusts the PKI |
 | Issuing CAs (device, server, network access) | `jobs` role: software key under envelope encryption, or PKCS#11 | Device identity, management and network-access certificates; server certificates for the `agent` and `device` roles; the policy signing certificate | Agents, MDM clients, VPN gateways, RADIUS |
-| Policy and command signing key (Ed25519, one per organization) | `api` and `jobs` roles, under envelope encryption; its public key is carried in a certificate from the issuing CA | Policy bundles, device assignments, rule packs, commands and dispatch grants, bound as specified in `specs/policy-envelope.md` sections 6 and 7 | Agents, against the pinned root and the CRL (`design/pki.md` section 4) |
+| Policy and command signing key (Ed25519, one per organization) | `api` and `jobs` roles, under envelope encryption; its public key is carried in a certificate from the issuing CA | Policy bundles, device assignments, rule packs, commands and dispatch grants, bound as specified in `specs/policy-envelope.md` sections 6 and 7 | Agents, against the pinned root, the device issuing CA, the policy-signing subject and extended key usage, and a fresh CRL (`design/pki.md` section 4) |
 | Release signing keys (Ed25519) | Project maintainers, offline root and successor keys; self-builders use their own | Release manifests, which carry an expiry, and packages | `ricevanta-updater`; both public keys are compiled in, a manifest signed by the successor retires the root |
 | Platform code-signing identities | The company (PF-03) | Binaries, system extensions, the WHCP submission of the driver | Operating systems |
 
@@ -101,7 +101,7 @@ For `/agent/v1`, TLS protects the transport and signatures bind policy, commands
 | Shape | Composition | Target |
 |---|---|---|
 | Docker Compose | `ricevanta-server` (all roles), PostgreSQL, optional ClickHouse profile, local blob volume | Evaluation and small installations, 2,000 endpoints (EV-01) |
-| Helm | Deployments per role group: `api` behind an ordinary ingress; `agent` and `device` behind an ingress in TLS passthrough mode or a layer-4 load balancer; `jobs` with no service; `radius` behind two `LoadBalancer` services, one UDP for 1812 and 1813 and one TCP for RadSec, because mixed-protocol services are not supported on every provider, each with `externalTrafficPolicy: Local` and client-IP affinity, and the external load balancer configured to hash on client IP as well, so the gateway's source address and EAP conversation stay on one replica; PostgreSQL external or through the CloudNativePG operator for evaluation, since the Bitnami images are no longer maintained for free use; ClickHouse external or as a single-replica StatefulSet; S3-compatible blob store | 20,000 endpoints (EV-01) |
+| Helm | Deployments per role group: `api` behind an ordinary ingress; `agent` and `device` behind an ingress in TLS passthrough mode or a layer-4 load balancer; `jobs` with no service; `radius` behind two `LoadBalancer` services, one UDP for 1812 and 1813 and one TCP for RadSec, because mixed-protocol services are not supported on every provider, each with `externalTrafficPolicy: Local` and client-IP affinity, and the external load balancer configured to hash on client IP as well, so the gateway's source address and EAP conversation stay on one replica; PostgreSQL external or through the CloudNativePG operator for evaluation, since the Bitnami images are not maintained for free use (verify); ClickHouse external or as a single-replica StatefulSet; S3-compatible blob store | 20,000 endpoints (EV-01) |
 
 High availability: `api`, `agent` and `device` are stateless and run two or more replicas; `jobs` runs replicas with per-job leader election; `radius` replicas each hold their own EAP state, and gateways are configured with a primary and a secondary server; PostgreSQL high availability is the operator's choice. Upgrades run `ricevanta-server migrate` before the new version serves; migrations are forward-only and compatible with the previous server version for a rolling upgrade.
 

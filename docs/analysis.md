@@ -22,7 +22,7 @@ On macOS, the required managed profiles, DDM, OS update management, remote lock 
 | Block removable media mount | Yes | Device install policy | Yes | udev, BPF LSM `sb_mount` |
 | Block network connection | Network Extension | WFP user mode | Yes | BPF cgroup and LSM hooks |
 
-ETW is telemetry only. Fanotify permission groups need CAP_SYS_ADMIN. BPF LSM needs build support and activation in the running kernel's LSM list; version and successful program attachment do not prove that a hook runs. The installer triggers each required denial probe before completing qualification. Resolved by AG-01 and PF-02; runtime checks are in `platform-support.md`.
+ETW is telemetry only. Fanotify permission groups need CAP_SYS_ADMIN. BPF LSM needs build support and activation in the running kernel's LSM list; version and successful program attachment do not prove that a hook runs. The installer triggers each required denial probe before completing preflight. Resolved by AG-01 and PF-02; runtime checks are in `platform-support.md`.
 
 ### C4. Memory target vs content inspection
 
@@ -95,12 +95,12 @@ To be settled in design documents with a stated default.
 - EDR: telemetry source list per OS and the default set; response action catalogue and authorization; threat intelligence feeds and licenses.
 - DLP: Vietnamese identifier validation rules (12-digit CCCD, 9-digit CMND, tax code, bank account patterns) and financial data types; fingerprinting method and partial-match threshold; Rust extraction libraries per document format.
 - Lineage: confidence scoring, cross-device joins, console exploration views (model, identities, storage and retention are settled by LIN-01).
-- PKI: certificate profiles and lifetimes, OCSP, CRL serving for non-agent consumers, external CA protocol.
+- PKI: certificate profiles and lifetimes, OCSP, CRL serving for non-agent consumers, external CA protocol; the policy-signing extended key usage OID under the project's IANA Private Enterprise Number.
 - RADIUS: accounting, CoA and disconnect, FortiGate and Cisco attribute profiles.
 - Events: export guarantees (classes and the extension are settled by EV-03).
 - Backend: audit log immutability.
 - Agent: the offline one-time uninstall code's derivation and lifetime.
-- DLP channels: the clipboard re-own interval per OS and its measured bound; the Safari content-script gate and its bypass tests; the connector agent registration on Chrome and Edge per OS.
+- DLP channels: the clipboard re-own interval per OS and its measured bound; the Safari content-script gate and its bypass tests; the connector agent registration on Chrome and Edge per OS; the hold point for newly written content, since no OS offers a permission event on write completion (next open, rename to the final name, or unmount); the macOS pasteboard pre-approval; the GNOME Shell extension's selection ownership.
 - Program: test lab (Apple silicon hardware for macOS CI), AI/NLP models.
 
 ## 4. Facts to verify
@@ -108,10 +108,10 @@ To be settled in design documents with a stated default.
 - The exact DDM update declarations and reporting supported on every eligible macOS release; qualification uses those declarations rather than legacy update-command fallbacks.
 - FortiClient and Cisco Secure Client EAP-TLS support; FortiOS SSL VPN deprecation status.
 - Whether attestation-signed drivers are blocked once the Windows Driver Policy enforces; Microsoft's pages name only WHCP-signed and allow-listed drivers.
-- `windows-drivers-rs` minifilter and WFP binding coverage and WHCP acceptance of Rust drivers; not production-ready as of its README.
+- `windows-drivers-rs` minifilter and WFP binding coverage and WHCP acceptance of Rust drivers; its README calls it not production-ready.
 - Firefox policy equivalent of Chrome's `NativeMessagingUserLevelHosts`; Safari native messaging from the sandboxed handler to the core's Mach service.
-- Edge's further connector setup (whether an Edge for Business sign-in is required); Firefox `ContentAnalysis` on macOS and Linux; Chromium's connector timeout; Edge's agent pinning equivalent of Chrome's `verification` keys; the CUPS spool as a print hold point on macOS.
-- macOS promised pasteboard data as the clipboard mediation point and whether the reader can be identified; Mutter support for `ext-data-control-v1`.
+- Edge's further connector setup (whether an Edge for Business sign-in is required); Firefox `ContentAnalysis` on macOS and Linux; Chromium's connector timeout; Edge's agent pinning equivalent of Chrome's `verification` keys; the read-open of the completed spool file as the print hold point on each OS; Safari's `declarativeNetRequest` coverage of request methods and body types.
+- macOS promised pasteboard data as the clipboard mediation point and whether the reader can be identified; whether a managed setting pre-approves an application's pasteboard reads under `NSPasteboard.accessBehavior`; Mutter's lack of `ext-data-control-v1` and the stability of `MetaSelection` across GNOME releases.
 - Whether Apple grants the MDM Vendor CSR Signing Certificate to an individual Developer Program account; `mdmcert.download` availability as the fallback signer.
 - `device-attest-01` draft status and whether a macOS daemon can obtain any platform attestation.
 - Licenses of TLSH and its Rust crate, `clickhouse-go` and the `crc32c` crate; ClickHouse's documented single-node minimum; reading the Linux inode generation from BPF per file system.
@@ -124,6 +124,7 @@ To be settled in design documents with a stated default.
 - Maintained OS releases, enrollment, vendor signing and kernel prerequisites: primary sources in `platform-support.md`.
 - Browser gating: [Chromium OnFileAttachedEnterpriseConnector](https://chromium.googlesource.com/chromium/src/+/main/components/policy/resources/templates/policy_definitions/Miscellaneous/OnFileAttachedEnterpriseConnector.yaml), [Edge OnFileAttachedEnterpriseConnector](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/onfileattachedenterpriseconnector), [Edge OnBulkDataEntryEnterpriseConnector](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/onbulkdataentryenterpriseconnector), [Firefox policy templates, ContentAnalysis](https://mozilla.github.io/policy-templates/#contentanalysis), [content_analysis_sdk](https://github.com/chromium/content_analysis_sdk), [Chrome webRequest](https://developer.chrome.com/docs/extensions/reference/api/webRequest), [Firefox onBeforeRequest](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/onBeforeRequest)
 - Clipboard mediation: [Windows clipboard operations](https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-operations), [GetOpenClipboardWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getopenclipboardwindow), [ext-data-control](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/336)
+- Safari and GNOME: [Safari web extension compatibility](https://developer.apple.com/documentation/safariservices/assessing-your-safari-web-extension-s-browser-compatibility), [NSPasteboard](https://developer.apple.com/documentation/appkit/nspasteboard), [Mutter meta-selection.h](https://gitlab.gnome.org/GNOME/mutter/-/blob/main/src/meta/meta-selection.h)
 - Apple MDM vendor certificate: [MDM Vendor CSR Signing Certificate](https://developer.apple.com/help/account/certificates/mdm-vendor-csr-signing-certificate/), [forum 800736](https://developer.apple.com/forums/thread/800736)
 - Endpoint Security entitlement: [Apple forums 743263](https://developer.apple.com/forums/thread/743263), [736042](https://developer.apple.com/forums/thread/736042)
 - Windows driver signing: [Driver signing offerings](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/driver-signing-offerings), [ELAM submission](https://learn.microsoft.com/et-ee/windows-hardware/drivers/install/elam-driver-submission), [Protecting anti-malware services](https://learn.microsoft.com/en-us/windows/desktop/Services/protecting-anti-malware-services-)
@@ -132,5 +133,5 @@ To be settled in design documents with a stated default.
 - CEL in Rust: [FOSDEM 2026](https://fosdem.org/2026/schedule/event/rust-cel), [cel-cxx](https://docs.rs/crate/cel-cxx/latest), [cel-rust](https://github.com/cel-rust/cel-rust)
 - FortiGate: [FortiOS 7.4 RADIUS certificate auth](https://docs.fortinet.com/document/fortigate/7.4.0/new-features/471933), [FortiOS 8.0 IKEv2 EAP-TLS](https://docs.fortinet.com/document/fortigate/8.0.0/administration-guide/726232), [IKEv2 RADIUS tip](https://community.fortinet.com/fortigate-3/technical-tip-ikev2-dialup-ipsec-tunnel-with-radius-server-authentication-and-forticlient-93597)
 - Linux: [BPF LSM](https://docs.kernel.org/bpf/prog_lsm.html), [LSM activation](https://docs.kernel.org/admin-guide/LSM/index.html), [fanotify_init](https://man7.org/linux/man-pages/man2/fanotify_init.2.html), [fanotify(7)](https://man7.org/linux/man-pages/man7/fanotify.7.html).
-- OCSF: [Ocsf.Schema 1.9.0](https://www.nuget.org/packages/Ocsf.Schema), [Tenzir OCSF versions](https://docs.tenzir.com/reference/ocsf)
+- OCSF: [OCSF schema releases](https://github.com/ocsf/ocsf-schema/releases), [Ocsf.Schema 1.9.0](https://www.nuget.org/packages/Ocsf.Schema), [Tenzir OCSF versions](https://docs.tenzir.com/reference/ocsf)
 - windows-drivers-rs: [The Register](https://theregister.com/2025/09/04/rust_windows_drivers)

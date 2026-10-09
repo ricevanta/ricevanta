@@ -7,9 +7,12 @@ Run from anywhere: python3 branding/scripts/build.py
 Requires ImageMagick 7 with the librsvg delegate (`magick`) and Pillow.
 Never edit files under dist/ by hand; change the master and rerun.
 """
-import json, re, subprocess, xml.etree.ElementTree as ET
+import json, re, subprocess, sys, xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
+
+if sys.flags.optimize:
+    sys.exit('run without -O: the validation uses assert')
 
 ROOT = Path(__file__).resolve().parents[1]
 MASTER = ROOT / 'source/ricevanta-symbol-master.svg'
@@ -64,7 +67,7 @@ PNG_OPTS = ['-define', 'png:exclude-chunk=date,time']  # keep PNG bytes reproduc
 
 
 def write(name, text):
-    (SVG / name).write_text(text)
+    (SVG / name).write_text(text, encoding='utf-8', newline='\n')
 
 
 def paths(fills, ind='  ', geom=None):
@@ -174,7 +177,7 @@ def main():
     for px in (192, 512):
         render(SVG / 'appicon-light.svg', px, WEB / f'android-chrome-{px}x{px}.png')
         render(SVG / 'appicon-maskable.svg', px, WEB / f'maskable-{px}x{px}.png', bg=IVORY)
-    (WEB / 'favicon.svg').write_text((SVG / 'favicon.svg').read_text())
+    (WEB / 'favicon.svg').write_text((SVG / 'favicon.svg').read_text(encoding='utf-8'), encoding='utf-8', newline='\n')
     render(SVG / 'favicon.svg', 48, WEB / '_48.png')
     # Each ICO frame is rendered from the SVG at its own size, never downscaled from a larger raster.
     subprocess.run(['magick', str(WEB / 'favicon-16x16.png'), str(WEB / 'favicon-32x32.png'), str(WEB / '_48.png'),
@@ -184,7 +187,7 @@ def main():
     icons += [{'src': f'/brand/maskable-{p}x{p}.png', 'sizes': f'{p}x{p}', 'type': 'image/png', 'purpose': 'maskable'} for p in (192, 512)]
     (WEB / 'site.webmanifest').write_text(json.dumps({
         'name': 'Ricevanta', 'short_name': 'Ricevanta', 'description': 'Open-source endpoint security and management',
-        'start_url': '/', 'display': 'standalone', 'background_color': IVORY, 'theme_color': IND, 'icons': icons}, indent=2) + '\n')
+        'start_url': '/', 'display': 'standalone', 'background_color': IVORY, 'theme_color': IND, 'icons': icons}, indent=2) + '\n', encoding='utf-8', newline='\n')
     size_test()
     validate()
 

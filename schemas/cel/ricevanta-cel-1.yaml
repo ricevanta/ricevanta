@@ -8,6 +8,11 @@ cel_go_version: v0.32.0
 
 types: [bool, int, double, string, list, map, null, timestamp, duration]
 excluded_types: [uint, bytes, proto, enum, wrapper, optional]
+literals: [decimal_int, hex_int, double, quoted_string, raw_string, list, map]
+excluded_literals: [uint_suffix, bytes, triple_quoted_string]
+comments: forbidden
+map_key_type: string
+in_on_map: tests_keys
 
 operators: ["!", "-", "*", "/", "%", "+", "<", "<=", ">", ">=", "==", "!=", in, "&&", "||", "?:", ".", "[]"]
 mixed_numeric: forbidden         # int and double never compared or combined without conversion
@@ -45,6 +50,8 @@ normalization:
 semantics:
   overflow: error
   division_by_zero: error
+  remainder_by_zero: error
+  size: code_points
   string_order: code_point
   now: injected_variable
   time_fields: timestamp_with_raw_ms_sibling

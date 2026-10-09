@@ -14,6 +14,8 @@ from fontTools.pens.transformPen import TransformPen
 from fontTools.pens.boundsPen import BoundsPen
 
 ROOT = Path(__file__).resolve().parents[1]
+if len(sys.argv) != 2:
+    sys.exit(__doc__)
 FONTS = Path(sys.argv[1])
 
 
@@ -36,7 +38,7 @@ def outline(font_file, text, tracking_em, out, label):
     x0, y0, x1, y1 = bounds.bounds
     out.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{x0:.0f} {y0:.0f} {x1 - x0:.0f} {y1 - y0:.0f}" '
                    f'data-font="Be Vietnam Pro" data-cap-height="{tt["OS/2"].sCapHeight}" role="img" aria-label="{label}">'
-                   f'<title>{label}</title>\n  <path id="text" fill="#173B54" d="{pen.getCommands()}"/>\n</svg>\n')
+                   f'<title>{label}</title>\n  <path id="text" fill="#173B54" d="{pen.getCommands()}"/>\n</svg>\n', encoding='utf-8', newline='\n')
 
 
 outline(FONTS / 'BeVietnamPro-ExtraBold.ttf', 'Ricevanta', -0.025, ROOT / 'source/ricevanta-wordmark-master.svg', 'Ricevanta')

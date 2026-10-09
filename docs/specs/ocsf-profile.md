@@ -35,7 +35,7 @@ Deprecated classes (`security_finding`, `config_state`, `account_change`, `user_
 
 ## 2. The `ricevanta` extension
 
-Declared in `schemas/ocsf/extensions/ricevanta/extension.json`. OCSF assigns extension uids by registration in the schema repository's `extensions.md`; the project files that registration before v1.0.0, and until then development builds use uid 999 (`dev`), which the registry reserves for that purpose (verify). Extension class uids are `uid × 100000 + category × 1000 + class`.
+Declared in `schemas/ocsf/extensions/ricevanta/extension.json`; its `dictionary.json`, `events/` and `objects/` are written from the table below in v0.1.x. OCSF assigns extension uids by registration in the schema repository's `extensions.md`; the project files that registration before v1.0.0, and until then development builds use uid 999 (`dev`), which the registry reserves for that purpose (verify). Extension class uids are `uid × 100000 + category × 1000 + class`.
 
 | Addition | Kind | Content |
 |---|---|---|
@@ -56,7 +56,7 @@ Every event, from agent or server:
 
 - `metadata.version` is `1.9.0`; `metadata.product` is `{ name: Ricevanta, vendor_name: Ricevanta, version: <release> }`; `metadata.profiles` lists the profiles applied (`host` on every agent event; `security_control` on findings that carry a decision); `metadata.extensions` lists `ricevanta` and, where used, `win`, `linux`, `macos`.
 - `metadata.uid` is a UUIDv7 minted where the event is created; `metadata.correlation_uid` links the events behind one detection or one DLP decision; `metadata.policy_bundle` names the bundle in force.
-- `time` is epoch milliseconds from the agent's clock; the server adds `metadata.logged_time` at receipt (`architecture.md` section 7); `metadata.original_time` carries the OS timestamp where it differs.
+- `time` is epoch milliseconds from the agent's clock; the server adds `metadata.logged_time` at receipt (`../architecture.md` section 7); `metadata.original_time` carries the OS timestamp where it differs.
 - `device.uid` is the device record uid; `device.hostname`, `device.os`, `device.type_id` are filled from inventory on the agent.
 - `type_uid` is `class_uid × 100 + activity_id`; `severity_id` is set by the emitting policy or `1` (informational) for telemetry.
 - Raw user content never appears: DLP evidence follows DLP-02 with the redacted snippet in `data_security.pattern_match` when the policy allows it and hash, rule and offsets in `match_evidence`.
@@ -64,19 +64,19 @@ Every event, from agent or server:
 - `unmapped` holds OS fields the profile does not map, capped at 32 KiB per event with the core `metadata.is_truncated` and `metadata.untruncated_size` set when cut (verify both exist on `metadata` in 1.9.0); the profile grows by mapping fields out of `unmapped`, never by emitting them raw.
 - `confidence_score` on the base event carries the policy's detector confidence (blueprint section 4).
 
-The agent uploads NDJSON, one event per line, in zstd-compressed batches with a batch id (`architecture.md` section 3.4). Server-side events enter the same pipeline.
+The agent uploads NDJSON, one event per line, in zstd-compressed batches with a batch id (`../architecture.md` section 3.4). Server-side events enter the same pipeline.
 
 ## 4. Telemetry profiles
 
-The telemetry profiles of EV-01 select classes: the default profile sends findings (2002, 2003, 2004, 2006), remediation outcomes, lineage, agent health, inventory, configuration state, the events any correlation trigger in the scope names, and bounded context, that is the process tree and the file, network and registry events within the window before and after each finding (default 60 s); the full profile sends everything the sensors produce. The spool classes in `design/agent.md` section 5 map onto these.
+The telemetry profiles of EV-01 select classes: the default profile sends findings (2002, 2003, 2004, 2006), remediation outcomes, lineage, agent health, inventory, configuration state, the events any correlation trigger in the scope names, and bounded context, that is the process tree and the file, network and registry events within the window before and after each finding (default 60 s); the full profile sends everything the sensors produce. The spool classes in `../design/agent.md` section 5 map onto these.
 
 ## 5. Sigma and Falco logsource mapping
 
-EDR-01 evaluates Sigma on the agent. The mapping from Sigma logsources and field names to OCSF classes and attributes lives in `schemas/ocsf/sigma-logsources.yaml`, one entry per `product`, `category` and `service` triple, listing the OCSF class and the field map (for example `Image` to `process.file.path`, `CommandLine` to `process.cmd_line`, `ParentImage` to `process.parent_process.file.path`). Falco has a second file for its syscall fields. A Sigma rule whose logsource or modifier has no entry is reported with the reason, never silently dropped.
+EDR-01 evaluates Sigma on the agent. The mapping from Sigma logsources and field names to OCSF classes and attributes is written with the EDR design in v0.4.x (`../roadmap.md`) and lives in `schemas/ocsf/sigma-logsources.yaml`, one entry per `product`, `category` and `service` triple, listing the OCSF class and the field map (for example `Image` to `process.file.path`, `CommandLine` to `process.cmd_line`, `ParentImage` to `process.parent_process.file.path`). Falco has a second file for its syscall fields. A Sigma rule whose logsource or modifier has no entry is reported with the reason, never silently dropped.
 
 ## 6. Validation
 
-- The schema is compiled from the pinned 1.9.0 release plus the extension with `ocsf-schema-compiler` in CI; the compiled export is committed under `schemas/ocsf/compiled/` so builds are reproducible.
+- The schema is compiled from the pinned 1.9.0 release plus the extension with `ocsf-schema-compiler` in CI; the CI job added in v0.1.x commits the compiled export under `schemas/ocsf/compiled/` so builds are reproducible.
 - Go types are generated from the compiled export; the agent's Rust types are generated in-project from the same export, since no Rust crate is known to track 1.9.0 (verify).
 - A fixture set of one event per class and activity is validated against the compiled schema in CI with an event validator chosen in v0.1.x (`ocsf-validator` checks schema sources, not events; candidates are `ocsf-toolkit` and a JSON Schema derived from the export, verify); every mapping change adds a fixture.
 - Events that fail validation at ingest are stored in a quarantine table with the error and counted in a metric; they are never dropped silently.
@@ -95,4 +95,4 @@ Dependencies: OCSF schema 1.9.0 and `ocsf-schema-compiler` (Apache-2.0), the `wi
 
 Limits: the `data_classification` profile holds classifier results only, so regulation references need the extension; `auth_protocol_id` has no EAP-TLS value, so the string field disambiguates; the examples repository's mappings target older schema versions and are guidance only.
 
-Alternatives considered: ECS or a proprietary schema (rejected by the blueprint: OCSF is the canonical format); emitting PKI events as `authentication` with a `certificate` object (rejected: issuance is not authentication, and the activity ids do not fit); carrying lineage inside `detection_finding.evidences` (rejected: edges are not findings and would inflate the finding store); a self-assigned extension uid (rejected: the registry assigns uids and 985 to 998 are taken by other vendors).
+Alternatives considered: ECS or a proprietary schema (rejected by the blueprint: OCSF is the canonical format); emitting PKI events as `authentication` with a `certificate` object (rejected: issuance is not authentication, and the activity ids do not fit); carrying lineage inside `detection_finding.evidences` (rejected: edges are not findings and would inflate the finding store); a self-assigned extension uid (rejected: the registry assigns uids and 985 to 998 are taken by other vendors, verify).
