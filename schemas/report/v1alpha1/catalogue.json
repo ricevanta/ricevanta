@@ -1,0 +1,238 @@
+{
+  "format_version": 1,
+  "revision": 1,
+  "sources": [
+    {
+      "id": "agents.health",
+      "owner": "events",
+      "read_permission": "events.health.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "component", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Reporting core or component id."},
+        {"name": "cpu_percent", "type": "number", "nullable": false, "filterable": true, "groupable": false, "operators": ["eq", "in", "not_in", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct", "sum", "min", "max", "avg", "p50", "p95"], "description": "CPU percentage from the owning sampler."},
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "rss_bytes", "type": "integer", "nullable": false, "filterable": true, "groupable": false, "operators": ["eq", "in", "not_in", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct", "sum", "min", "max", "avg", "p50", "p95"], "description": "Resident memory in bytes."},
+        {"name": "spool_bytes", "type": "integer", "nullable": false, "filterable": true, "groupable": false, "operators": ["eq", "in", "not_in", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct", "sum", "min", "max", "avg", "p50", "p95"], "description": "Used spool bytes."},
+        {"name": "within_budget", "type": "boolean", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "exists"], "aggregations": ["count_distinct"], "description": "Sampler assessment against AG-09 budgets."}
+      ]
+    },
+    {
+      "id": "agents.versions",
+      "owner": "devices",
+      "read_permission": "mdm.versions.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "observed_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "component", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Core or component id."},
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "observed_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Inventory observation time in UTC."},
+        {"name": "os", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Platform family.", "values": ["macos", "windows", "linux"]},
+        {"name": "update_state", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized component update state.", "values": ["current", "pending", "running", "failed", "unknown"]},
+        {"name": "version", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Observed component version."}
+      ]
+    },
+    {
+      "id": "audit.events",
+      "owner": "audit",
+      "read_permission": "audit.events.read",
+      "scope": "organization",
+      "footprint": "organization",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "action", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Administrative action identifier."},
+        {"name": "actor_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable actor uid."},
+        {"name": "event_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable audit event uid."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "result", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized audit outcome.", "values": ["success", "failure", "denied"]},
+        {"name": "target_type", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Target resource kind."},
+        {"name": "target_uid", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable target uid, if any; organization permission still required."}
+      ]
+    },
+    {
+      "id": "devices",
+      "owner": "devices",
+      "read_permission": "mdm.devices.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "observed_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "hostname", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Device hostname."},
+        {"name": "lifecycle", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Device lifecycle.", "values": ["pending", "active", "suspended", "retired"]},
+        {"name": "observed_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Inventory observation time in UTC."},
+        {"name": "os", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Qualified platform family.", "values": ["macos", "windows", "linux"]},
+        {"name": "os_version", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Reported OS version."},
+        {"name": "owner_uid", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable linked owner uid, when present."},
+        {"name": "ownership", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Ownership classification.", "values": ["corporate", "personal", "unknown"]}
+      ]
+    },
+    {
+      "id": "devices.software",
+      "owner": "mdm",
+      "read_permission": "mdm.inventory.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "observed_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "installed_at", "type": "timestamp", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Known installation time."},
+        {"name": "name", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Installed software name."},
+        {"name": "observed_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Inventory observation time in UTC."},
+        {"name": "publisher", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Reported publisher."},
+        {"name": "software_id", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Owning module package identifier."},
+        {"name": "version", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Installed software version."}
+      ]
+    },
+    {
+      "id": "dlp.findings",
+      "owner": "dlp",
+      "read_permission": "dlp.findings.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "action", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Policy decision; no claim of successful enforcement.", "values": ["allow", "monitor", "warn", "block"]},
+        {"name": "channel", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Channel identifier from the owning module."},
+        {"name": "classification", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Classification category id."},
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "finding_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable finding uid."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "reference", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Category reference, never matched content."},
+        {"name": "severity", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized finding severity.", "values": ["informational", "low", "medium", "high", "critical"]}
+      ]
+    },
+    {
+      "id": "edr.alerts",
+      "owner": "detection",
+      "read_permission": "edr.alerts.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "alert_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable alert uid."},
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "rule", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable rule reference."},
+        {"name": "severity", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized alert severity.", "values": ["informational", "low", "medium", "high", "critical"]},
+        {"name": "status", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized workflow status.", "values": ["open", "investigating", "resolved", "dismissed"]},
+        {"name": "tactic", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "ATT&CK tactic id; one row per alert and tactic/technique pair."},
+        {"name": "technique", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "ATT&CK technique id; count_distinct alert_uid counts alerts across mappings."}
+      ]
+    },
+    {
+      "id": "edr.response_actions",
+      "owner": "detection",
+      "read_permission": "edr.response.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "action", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Command kind from the response action contract."},
+        {"name": "action_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable response action uid."},
+        {"name": "actor_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable requesting operator uid."},
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "outcome", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized response outcome.", "values": ["pending", "running", "succeeded", "failed", "cancelled", "expired"]}
+      ]
+    },
+    {
+      "id": "lineage.edges",
+      "owner": "lineage",
+      "read_permission": "lineage.edges.read",
+      "scope": "device_group",
+      "footprint": "lineage_endpoints",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "confidence", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Owning module confidence band.", "values": ["low", "medium", "high"]},
+        {"name": "edge_type", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Owning module edge kind."},
+        {"name": "edge_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable edge uid."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "provenance", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Evidence provenance, not a proof of observation.", "values": ["observed", "inferred"]},
+        {"name": "source_device_uid", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable source device uid."},
+        {"name": "source_entity_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable source entity uid."},
+        {"name": "target_device_uid", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable target device uid."},
+        {"name": "target_entity_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable target entity uid."}
+      ]
+    },
+    {
+      "id": "mdm.compliance",
+      "owner": "mdm",
+      "read_permission": "mdm.compliance.read",
+      "scope": "device_group",
+      "footprint": "devices",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "baseline", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Baseline resource name."},
+        {"name": "device_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid."},
+        {"name": "item", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Baseline item id."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "required", "type": "boolean", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "exists"], "aggregations": ["count_distinct"], "description": "Whether the baseline requires this item."},
+        {"name": "severity", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Baseline item severity.", "values": ["informational", "low", "medium", "high", "critical"]},
+        {"name": "status", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized check result; unknown never counts as pass.", "values": ["pass", "fail", "unknown", "not_applicable"]}
+      ]
+    },
+    {
+      "id": "pki.certificates",
+      "owner": "pki",
+      "read_permission": "pki.certificates.read",
+      "scope": "device_group",
+      "footprint": "certificate_profile",
+      "conditional_reads": [{"condition": "infrastructure_certificate", "permission": "pki.infrastructure.read", "scope": "organization"}],
+      "time_field": "issued_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "certificate_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable certificate uid."},
+        {"name": "device_uid", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable device uid for a device profile."},
+        {"name": "expires_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Certificate expiry time."},
+        {"name": "issued_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Certificate issuance time."},
+        {"name": "issuer", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Issuer identifier."},
+        {"name": "profile", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Authoritative certificate profile id."},
+        {"name": "profile_class", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Authoritative profile class, never caller classification.", "values": ["device", "infrastructure"]},
+        {"name": "status", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Normalized certificate status.", "values": ["valid", "expired", "revoked"]}
+      ]
+    },
+    {
+      "id": "radius.authentications",
+      "owner": "radius",
+      "read_permission": "radius.authentications.read",
+      "scope": "device_group",
+      "footprint": "radius_attribution",
+      "conditional_reads": [],
+      "time_field": "occurred_at",
+      "row_aggregations": ["count"],
+      "fields": [
+        {"name": "authentication_uid", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Immutable authentication uid."},
+        {"name": "device_uid", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Authoritatively bound device uid, when provable."},
+        {"name": "gateway", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Gateway id."},
+        {"name": "occurred_at", "type": "timestamp", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "gte", "lte", "between", "exists"], "aggregations": ["count_distinct"], "description": "Server-normalized event time in UTC."},
+        {"name": "profile", "type": "string", "nullable": true, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Resolved network profile id."},
+        {"name": "reason", "type": "string", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "prefix", "exists"], "aggregations": ["count_distinct"], "description": "Normalized reason code, never credential material."},
+        {"name": "result", "type": "enum", "nullable": false, "filterable": true, "groupable": true, "operators": ["eq", "in", "not_in", "exists"], "aggregations": ["count_distinct"], "description": "Authentication result.", "values": ["accept", "reject"]}
+      ]
+    }
+  ]
+}

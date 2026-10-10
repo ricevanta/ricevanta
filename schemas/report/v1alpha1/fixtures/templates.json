@@ -1,0 +1,334 @@
+[
+  {
+    "id": "source-agents-health", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-agents-versions", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.versions", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-audit-events", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "audit.events", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-devices", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "devices", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-devices-software", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "devices.software", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-dlp-findings", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-edr-alerts", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "edr.alerts", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-edr-response-actions", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "edr.response_actions", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-lineage-edges", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "lineage.edges", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-mdm-compliance", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "mdm.compliance", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-pki-certificates", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "pki.certificates", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "source-radius-authentications", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "radius.authentications", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "dlp-category", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "dlp-findings-by-category"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"time": {"param": "period"}, "device_groups": {"param": "groups"}}, "measures": [{"name": "rows", "fn": "count"}]}, {"name": "by_category", "source": "dlp.findings", "filter": {"severity": {"in": {"param": "severities"}}, "channel": {"prefix": {"param": "channel"}}}, "group_by": ["classification", "channel"], "measures": [{"name": "findings", "fn": "count"}, {"name": "devices", "fn": "count_distinct", "field": "device_uid"}], "order_by": [{"field": "findings", "desc": true}], "limit": 100}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}, {"type": "heading", "text": {"en": "DLP findings", "vi": "Phát hiện DLP"}}, {"type": "chart", "chart": "stacked_bar", "dataset": "by_category", "x": "classification", "y": "findings", "series": "channel"}, {"type": "table", "dataset": "by_category", "columns": ["classification", "channel", "findings", "devices"]}, {"type": "text", "text": {"en": "Monitor decisions are included.\nNo snippets.", "vi": "Gồm quyết định giám sát.\nKhông có trích đoạn."}}], "parameters": [{"name": "period", "type": "time_range", "default": "last_30d"}, {"name": "groups", "type": "device_groups", "default": "all"}, {"name": "severities", "type": "enum_list", "field": "dlp.findings/severity", "default": ["high", "critical"]}, {"name": "channel", "type": "string", "default": "browser"}]}}
+  },
+  {
+    "id": "chart-bar", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "group_by": ["component"]}], "layout": [{"type": "chart", "chart": "bar", "dataset": "totals", "x": "component", "y": "rows"}]}}
+  },
+  {
+    "id": "chart-line", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "group_by": ["occurred_at"]}], "layout": [{"type": "chart", "chart": "line", "dataset": "totals", "x": "occurred_at", "y": "rows"}]}}
+  },
+  {
+    "id": "chart-area", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "group_by": ["occurred_at"]}], "layout": [{"type": "chart", "chart": "area", "dataset": "totals", "x": "occurred_at", "y": "rows"}]}}
+  },
+  {
+    "id": "chart-pie", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "group_by": ["component"]}], "layout": [{"type": "chart", "chart": "pie", "dataset": "totals", "x": "component", "y": "rows"}]}}
+  },
+  {
+    "id": "chart-heatmap", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "group_by": ["component", "within_budget"]}], "layout": [{"type": "chart", "chart": "heatmap", "dataset": "totals", "x": "component", "y": "rows", "series": "within_budget"}]}}
+  },
+  {
+    "id": "operator-eq", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"eq": 1}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "operator-in", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"in": [1, 2]}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "operator-not-in", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"not_in": [1, 2]}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "operator-gte", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"gte": 0}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "operator-lte", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"lte": 100}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "operator-between", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"between": [0, 100]}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "operator-exists", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"exists": true}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "aggregate-sum", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "sum", "field": "rss_bytes"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "aggregate-min", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "min", "field": "rss_bytes"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "aggregate-max", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "max", "field": "rss_bytes"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "aggregate-avg", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "avg", "field": "rss_bytes"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "aggregate-p50", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "p50", "field": "rss_bytes"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "aggregate-p95", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {}, "measures": [{"name": "rows", "fn": "p95", "field": "rss_bytes"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "required-runtime-values", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"occurred_at": {"between": {"param": "period"}}, "device_groups": {"param": "groups"}, "severity": {"not_in": {"param": "severities"}}, "channel": {"param": "channel"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "period", "type": "time_range"}, {"name": "groups", "type": "device_groups"}, {"name": "severities", "type": "enum_list", "field": "dlp.findings/severity"}, {"name": "channel", "type": "string"}]}}
+  },
+  {
+    "id": "absolute-range", "structural": true, "accepted": true, "sentinel": "", "path": "", "rule": "",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"time": {"start": "2024-02-29T00:00:00Z", "end": "2024-03-01T00:00:00Z"}, "device_groups": ["lab"], "channel": "browser"}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "missing-vi", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/title/vi", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "extra-locale", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/title/fr", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện", "fr": "Rapport"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-root", "structural": false, "accepted": false, "sentinel": "ErrEnvelope", "path": "/sql", "rule": "envelope",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}, "sql": "select *"}
+  },
+  {
+    "id": "wrong-kind", "structural": false, "accepted": false, "sentinel": "ErrEnvelope", "path": "/kind", "rule": "envelope",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "Policy", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "bad-identifier-lf", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/name", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals\n", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "count-forbidden-field", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/measures/0/field", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count", "field": "device_uid"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "limit-zero", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/limit", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "limit": 0}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "limit-over", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/limit", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "limit": 10001}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-operator", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"regex": ".*"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "two-operators", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"eq": "a", "prefix": "a"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-source", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/source", "rule": "reference",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "unknown", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-field", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/secret", "rule": "reference",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"secret": {"eq": "x"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-param", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/channel/param", "rule": "reference",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"param": "absent"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "wrong-enum", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/severity/eq", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"eq": "urgent"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "bad-operator-type", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/severity", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"prefix": "hi"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "mixed-enum-list", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/severity/in/1", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"in": ["high", 1]}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "sum-string", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/measures/0/fn", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "sum", "field": "channel"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "sort-hidden-field", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/order_by/0/field", "rule": "output",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "order_by": [{"field": "severity"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "alias-collision", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/measures/0/name", "rule": "output",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "severity", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-layout-dataset", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/layout/0/dataset", "rule": "reference",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "absent", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "unknown-layout-measure", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/layout/0/measure", "rule": "output",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "absent", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "grouped-kpi", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/layout/0/dataset", "rule": "output",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}], "group_by": ["severity"]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "cross-source-enum", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/severity/in", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"in": {"param": "s"}}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "s", "type": "enum_list", "field": "edr.alerts/severity", "default": ["high"]}]}}
+  },
+  {
+    "id": "string-param-enum", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/severity", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"param": "s"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "s", "type": "string", "default": "high"}]}}
+  },
+  {
+    "id": "unused-bad-default", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/parameters/0/default/0", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "s", "type": "enum_list", "field": "dlp.findings/severity", "default": ["urgent"]}]}}
+  },
+  {
+    "id": "invalid-calendar", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/time/start", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"time": {"start": "2023-02-29T00:00:00Z", "end": "2023-03-01T00:00:00Z"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "equal-range", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/time/end", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"time": {"start": "2024-03-01T00:00:00Z", "end": "2024-03-01T00:00:00Z"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "reversed-between", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/rss_bytes/between/1", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "agents.health", "filter": {"rss_bytes": {"between": [2, 1]}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "duplicate-dataset", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/1/name", "rule": "unique",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}, {"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "duplicate-before-reference", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/1/name", "rule": "unique",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "unknown", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}, {"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "schema-before-unique", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/title/vi", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}, {"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "envelope-before-schema", "structural": false, "accepted": false, "sentinel": "ErrEnvelope", "path": "/apiVersion", "rule": "envelope",
+    "document": {"apiVersion": "wrong", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"regex": ".*"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "reference-before-compatibility", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/filter/secret", "rule": "reference",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"secret": "x"}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "s", "type": "enum_list", "field": "dlp.findings/severity", "default": ["urgent"]}]}}
+  },
+  {
+    "id": "compatibility-before-output", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/datasets/0/measures/0/fn", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "sum", "field": "channel"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "absent", "label": {"en": "Count", "vi": "Số lượng"}}]}}
+  },
+  {
+    "id": "reference-mixed-operator", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/eq", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"eq": "browser", "param": "p"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-mixed-invalid-param", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/eq", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"eq": "browser", "param": 3}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-extra-key", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/z", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"param": "p", "z": true}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-param-type", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/param", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"param": 3}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-param-name", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/param", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"param": "p\n"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-operand-missing-param", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/eq/param", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"eq": {}}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-operand-mixed-selector", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/eq/eq", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"eq": {"param": "p", "eq": "browser"}}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-list-missing-param", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/severity/in/param", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"in": {}}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-list-param-type", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/severity/not_in/param", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"severity": {"not_in": {"param": []}}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-time-mixed-range", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/time/end", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"time": {"param": "p", "start": "2024-01-01T00:00:00Z", "end": "2024-02-01T00:00:00Z"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-groups-missing-param", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/device_groups/param", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"device_groups": {}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-exists-forbidden", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/exists", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"exists": {"param": "p"}}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "condition-empty-object", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "reference-mixed-unknown-operator", "structural": false, "accepted": false, "sentinel": "ErrSchema", "path": "/spec/datasets/0/filter/channel/regex", "rule": "schema",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {"channel": {"param": "p", "regex": ".*"}}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "p", "type": "string"}]}}
+  },
+  {
+    "id": "enum-field-not-enum-no-default", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/parameters/0/field", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "values", "type": "enum_list", "field": "dlp.findings/channel"}]}}
+  },
+  {
+    "id": "enum-field-not-enum-with-default", "structural": true, "accepted": false, "sentinel": "ErrSemantic", "path": "/spec/parameters/0/field", "rule": "compatibility",
+    "document": {"apiVersion": "ricevanta.io/v1alpha1", "kind": "ReportTemplate", "metadata": {"name": "sample"}, "spec": {"title": {"en": "Findings", "vi": "Phát hiện"}, "datasets": [{"name": "totals", "source": "dlp.findings", "filter": {}, "measures": [{"name": "rows", "fn": "count"}]}], "layout": [{"type": "kpi", "dataset": "totals", "measure": "rows", "label": {"en": "Count", "vi": "Số lượng"}}], "parameters": [{"name": "values", "type": "enum_list", "field": "dlp.findings/channel", "default": ["browser"]}]}}
+  }
+]

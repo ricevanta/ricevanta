@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/report/v1alpha1/catalogue.schema.json",
+  "title": "Report source catalogue",
+  "description": "Catalogue integrity and exact permission bindings require offline semantic checks; this file does not grant access.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "revision",
+    "sources"
+  ],
+  "properties": {
+    "format_version": {
+      "const": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/sourceEntry"
+      }
+    }
+  },
+  "$defs": {
+    "sourceEntry": {"type": "object", "additionalProperties": false, "required": ["id", "owner", "read_permission", "scope", "footprint", "conditional_reads", "time_field", "row_aggregations", "fields"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$(?![\\s\\S])"}, "owner": {"enum": ["devices", "mdm", "detection", "dlp", "lineage", "pki", "radius", "events", "audit"]}, "read_permission": {"type": "string", "minLength": 1, "maxLength": 98, "pattern": "^[a-z][a-z0-9_]{0,31}\\.[a-z][a-z0-9_]{0,31}\\.read$(?![\\s\\S])"}, "scope": {"enum": ["device_group", "organization"]}, "footprint": {"enum": ["devices", "lineage_endpoints", "certificate_profile", "radius_attribution", "organization"]}, "conditional_reads": {"type": "array", "minItems": 0, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["condition", "permission", "scope"], "properties": {"condition": {"const": "infrastructure_certificate"}, "permission": {"const": "pki.infrastructure.read"}, "scope": {"const": "organization"}}}, "uniqueItems": true}, "time_field": {"type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[a-z][a-z0-9_]{0,31}$(?![\\s\\S])"}, "row_aggregations": {"const": ["count"]}, "fields": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/field"}}}},
+    "field": {"type": "object", "additionalProperties": false, "required": ["name", "type", "nullable", "filterable", "groupable", "operators", "aggregations", "description"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[a-z][a-z0-9_]{0,31}$(?![\\s\\S])"}, "type": {"enum": ["string", "enum", "boolean", "integer", "number", "timestamp"]}, "nullable": {"type": "boolean"}, "filterable": {"type": "boolean"}, "groupable": {"type": "boolean"}, "operators": {"type": "array", "minItems": 0, "maxItems": 8, "items": {"enum": ["between", "eq", "exists", "gte", "in", "lte", "not_in", "prefix"]}, "uniqueItems": true}, "aggregations": {"type": "array", "minItems": 0, "maxItems": 7, "items": {"enum": ["count_distinct", "sum", "min", "max", "avg", "p50", "p95"]}, "uniqueItems": true}, "values": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\x00-\\x1f\\x7f]*$(?![\\s\\S])"}, "uniqueItems": true}, "description": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\x00-\\x1f\\x7f]*$(?![\\s\\S])"}}, "allOf": [{"if": {"properties": {"type": {"const": "string"}}}, "then": {"properties": {"operators": {"items": {"enum": ["eq", "in", "not_in", "prefix", "exists"]}}, "aggregations": {"items": {"enum": ["count_distinct"]}}}}}, {"if": {"properties": {"type": {"const": "enum"}}}, "then": {"properties": {"operators": {"items": {"enum": ["eq", "in", "not_in", "exists"]}}, "aggregations": {"items": {"enum": ["count_distinct"]}}}}}, {"if": {"properties": {"type": {"const": "boolean"}}}, "then": {"properties": {"operators": {"items": {"enum": ["eq", "exists"]}}, "aggregations": {"items": {"enum": ["count_distinct"]}}}}}, {"if": {"properties": {"type": {"const": "integer"}}}, "then": {"properties": {"operators": {"items": {"enum": ["eq", "in", "not_in", "gte", "lte", "between", "exists"]}}, "aggregations": {"items": {"enum": ["count_distinct", "sum", "min", "max", "avg", "p50", "p95"]}}}}}, {"if": {"properties": {"type": {"const": "number"}}}, "then": {"properties": {"operators": {"items": {"enum": ["eq", "in", "not_in", "gte", "lte", "between", "exists"]}}, "aggregations": {"items": {"enum": ["count_distinct", "sum", "min", "max", "avg", "p50", "p95"]}}}}}, {"if": {"properties": {"type": {"const": "timestamp"}}}, "then": {"properties": {"operators": {"items": {"enum": ["eq", "gte", "lte", "between", "exists"]}}, "aggregations": {"items": {"enum": ["count_distinct"]}}}}}, {"if": {"properties": {"type": {"const": "enum"}}}, "then": {"required": ["values"]}, "else": {"not": {"required": ["values"]}}}, {"if": {"properties": {"filterable": {"const": true}}}, "then": {"properties": {"operators": {"minItems": 1}}}, "else": {"properties": {"operators": {"maxItems": 0}}}}]}
+  }
+}
