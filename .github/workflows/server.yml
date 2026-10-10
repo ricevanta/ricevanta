@@ -85,7 +85,8 @@ jobs:
               {"package":"./internal/policy/celdecl","target":"FuzzParse"},
               {"package":"./internal/policy/celdecl","target":"FuzzLoad"},
               {"package":"./internal/authz/catalogue","target":"FuzzValidateName"},
-              {"package":"./internal/authz/catalogue","target":"FuzzParse"}
+              {"package":"./internal/authz/catalogue","target":"FuzzParse"},
+              {"package":"./internal/extensions/manifest","target":"FuzzValidate"}
             ]
         run: |
           python3 - <<'PY'

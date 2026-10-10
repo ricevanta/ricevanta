@@ -28,6 +28,7 @@ go test -count=1 ./internal/policy/celdecl -fuzz=FuzzParse -fuzztime=60s -parall
 go test -count=1 ./internal/policy/celdecl -fuzz=FuzzLoad -fuzztime=60s -parallel=2
 go test -count=1 ./internal/authz/catalogue -fuzz=FuzzValidateName -fuzztime=60s -parallel=2
 go test -count=1 ./internal/authz/catalogue -fuzz=FuzzParse -fuzztime=60s -parallel=2
+go test -count=1 ./internal/extensions/manifest -fuzz=FuzzValidate -fuzztime=60s -parallel=2
 ```
 
 Keep the single target list in `.github/workflows/server.yml` aligned with these commands. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.

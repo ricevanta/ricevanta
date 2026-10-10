@@ -12,5 +12,4 @@ Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unre
 - [ ] Verify the remaining platform and dependency claims in `docs/analysis.md` section 4 and establish the required device and gateway test lab.
 - [ ] Bound concurrent body decoding in the ingest handler: one key-dense 64 MiB batch costs about 18.5 million allocations and 250 MB of live heap in `server/internal/events/body`, so request concurrency and process memory need a measured limit before the handler ships (EV-09).
 - [ ] Run a periodic permission coverage refresh under `docs/specs/permission-catalogue.md` section 7: review all documents added, removed or changed since the last confirmed refresh, record permission bindings or reasoned exemptions, regenerate source digests, require both validation modes to pass and obtain independent confirmation.
-
-- [ ] Independently review `docs/specs/extension-manifest.md`, `docs/plans/extension-manifest.md` and the manifest schemas/fixtures, then implement the decoded Go validator; YAML/archive loading and stateful extension admission remain separate slices (EXT-08).
+- [ ] Implement the extension manifest loader (token-aware YAML check on DSSE-verified bytes, single decode, archive extraction) and stateful admission on top of `server/internal/extensions/manifest` (EXT-08).

@@ -43,8 +43,8 @@ A publisher may add a Sigstore bundle or SLSA (Supply-chain Levels for Software 
 ### 2.2 Install flow
 
 1. The package arrives by console upload, `/api/v1`, GitOps or the index.
-2. The bounded reader opens the archive and verifies the exact `extension.yaml` bytes through DSSE against a currently authorized trust-list key before decoding the YAML payload once and validating the manifest.
-3. The signature verifies against the trust list, and the id matches the key's prefixes.
+2. The bounded reader opens the archive and reads the exact `extension.yaml` and `envelope.json` bytes within the archive and payload limits.
+3. The server selects a currently authorized, non-revoked trust-list key and verifies the DSSE envelope with the expected type `dsse.TypeExtensionManifest`, requiring the verified payload to equal the archive's exact `extension.yaml` bytes before any YAML token scan, decoding or validation. It decodes that verified YAML payload once and validates the manifest under [the manifest contract](../specs/extension-manifest.md), then checks that `metadata.publisher.key` equals `sha256:` plus the lowercase SHA-256 of the verifying key's 32 raw public bytes and that `metadata.id` matches that key's authorized prefixes at a DNS-label boundary. The claimed fingerprint and DSSE `KeyID` do not establish authority; `KeyID` is only a hint under [the DSSE profile](../specs/dsse-envelope.md).
 4. Every file hash and size matches `files[]`.
 5. Every interface version in `spec.requires` is one the server serves (section 8); the global id ownership and immutable `(id, version)` rules pass.
 6. Each component validates against its kind: content against its existing schema, an adapter against the adapter schema and selected browser registration (section 7), a console module's entry and slots, a connector's contract names. The server cannot compile WebAssembly, because Go cannot host `wasmtime` without cgo; it checks the component binary's size and declared interface, and the agent's linker enforces imports (`../specs/extension-agent-runtime.md` section 1).

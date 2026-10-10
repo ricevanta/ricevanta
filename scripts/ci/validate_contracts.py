@@ -13,6 +13,7 @@ DIRECTORIES = (
     "schemas/events/v1",
     "schemas/cel/v1",
     "schemas/agent/spool/v1",
+    "schemas/extension/v1alpha1",
 )
 # These files describe the event protocol rather than fixture instances.
 NON_FIXTURES = {
@@ -32,6 +33,9 @@ CONTRACTS = (
     ("schemas/cel/v1/declarations.schema.json", "schemas/cel/v1/fixtures.json"),
     ("schemas/agent/spool/v1/fixture.schema.json", "schemas/agent/spool/v1/fixtures.json"),
     ("schemas/agent/spool/v1/fixture.schema.json", "schemas/agent/spool/v1/schema-cases.json"),
+    ("schemas/extension/v1alpha1/manifest.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
+    ("schemas/extension/v1alpha1/fixtures.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
+    ("schemas/extension/v1alpha1/loader-vectors.schema.json", "schemas/extension/v1alpha1/loader-vectors.json"),
 )
 
 
@@ -49,7 +53,10 @@ def manifest_path(fixture, reference):
 
 def instances(schema, fixture, data):
     """Yield label, instance and expected schema validity, not semantic validity."""
-    if schema.endswith("/envelope.schema.json"):
+    if schema == "schemas/extension/v1alpha1/manifest.schema.json":
+        for case in data["cases"]:
+            yield case["name"], case["manifest"], case["schema_valid"]
+    elif schema.endswith("/envelope.schema.json"):
         # Negative DSSE vectors include parse and cryptographic failures. Their
         # semantic expectations belong to Go tests, not JSON Schema validation.
         for case in data["positive"]:
