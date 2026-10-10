@@ -1,0 +1,2282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/export/v1alpha1/export-destination.json",
+  "title": "ExportDestination",
+  "description": "Authoring contract only. See docs/specs/export-destination-schema.md. No secret values, authority, connection or delivery validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "ricevanta.io/v1alpha1"
+    },
+    "kind": {
+      "const": "ExportDestination"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/spec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?![\\s\\S])"
+    },
+    "secretRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?![\\s\\S])",
+      "description": "Opaque server-held secret name in the current organization; never a value, URI, file, environment variable or JSON key path."
+    },
+    "endpoint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*|\\[(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::|::[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::|[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::)\\])(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?(?:/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127})*/?(?![\\s\\S])"
+    },
+    "broker": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 320,
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*|\\[(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::|::[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::|[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::)\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])(?![\\s\\S])"
+    },
+    "class": {
+      "enum": [
+        "api_activity",
+        "application_lifecycle",
+        "authentication",
+        "authorize_session",
+        "base_event",
+        "clipboard_activity",
+        "compliance_finding",
+        "data_security_finding",
+        "detection_finding",
+        "device_config_state_change",
+        "dns_activity",
+        "entity_management",
+        "event_log_actvity",
+        "evidence_info",
+        "file_activity",
+        "file_remediation_activity",
+        "http_activity",
+        "inventory_info",
+        "kernel_extension_activity",
+        "memory_activity",
+        "module_activity",
+        "network_activity",
+        "network_remediation_activity",
+        "peripheral_activity",
+        "process_activity",
+        "process_remediation_activity",
+        "remediation_activity",
+        "ricevanta/agent_health_activity",
+        "ricevanta/certificate_lifecycle_activity",
+        "ricevanta/device_management_activity",
+        "ricevanta/lineage_activity",
+        "ricevanta/pipeline_activity",
+        "ricevanta/policy_activity",
+        "role_management",
+        "scheduled_job_activity",
+        "script_activity",
+        "software_info",
+        "user_management",
+        "vulnerability_finding",
+        "win/registry_key_activity",
+        "win/registry_value_activity",
+        "win/windows_service_activity"
+      ]
+    },
+    "duration": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4,
+      "pattern": "^(?:[1-9]|[1-9][0-9]|[12][0-9]{2}|300)s(?![\\s\\S])"
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*(?![\\s\\S])"
+    },
+    "region": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*(?![\\s\\S])"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "labels": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 63
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 4096
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "caRef": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "pinSha256": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "clientCertificateRef": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?![\\s\\S])"
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "insecureSkipVerify"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "caRef",
+              "pinSha256"
+            ]
+          }
+        }
+      ]
+    },
+    "filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/class"
+          },
+          "minItems": 0,
+          "maxItems": 42,
+          "uniqueItems": true
+        },
+        "minSeverity": {
+          "enum": [
+            "unknown",
+            "informational",
+            "low",
+            "medium",
+            "high",
+            "critical",
+            "fatal",
+            "other"
+          ]
+        },
+        "deviceGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "agent",
+              "server",
+              "extension"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 4096
+        }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "drop": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*){0,15}(?![\\s\\S])",
+            "not": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "metadata",
+                    "metadata.uid",
+                    "metadata.version",
+                    "class_uid",
+                    "time"
+                  ]
+                },
+                {
+                  "pattern": "^(?:metadata\\.(?:uid|version)|class_uid|time)\\."
+                }
+              ]
+            }
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      }
+    },
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxEvents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 67108864
+        },
+        "maxDelay": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "elasticsearch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "enum": [
+            "api_key",
+            "basic",
+            "mtls"
+          ]
+        },
+        "namespace": {
+          "$ref": "#/$defs/name"
+        }
+      },
+      "required": [
+        "auth"
+      ]
+    },
+    "opensearch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "enum": [
+            "basic",
+            "mtls",
+            "sigv4"
+          ]
+        },
+        "namespace": {
+          "$ref": "#/$defs/name"
+        },
+        "region": {
+          "$ref": "#/$defs/region"
+        },
+        "service": {
+          "enum": [
+            "es",
+            "aoss"
+          ]
+        },
+        "credentialSource": {
+          "enum": [
+            "secret",
+            "workload"
+          ]
+        }
+      },
+      "required": [
+        "auth"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "auth": {
+                "const": "sigv4"
+              }
+            },
+            "required": [
+              "auth"
+            ]
+          },
+          "then": {
+            "required": [
+              "region",
+              "service",
+              "credentialSource"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "region"
+                  ]
+                },
+                {
+                  "required": [
+                    "service"
+                  ]
+                },
+                {
+                  "required": [
+                    "credentialSource"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "splunk_hec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "event",
+            "raw"
+          ]
+        },
+        "sourcetype": {
+          "$ref": "#/$defs/token"
+        },
+        "index": {
+          "$ref": "#/$defs/token"
+        },
+        "requireAck": {
+          "type": "boolean"
+        }
+      }
+    },
+    "syslog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "tls",
+            "udp"
+          ]
+        },
+        "facility": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "maxMessageBytes": {
+          "type": "integer",
+          "minimum": 480,
+          "maximum": 1048576
+        }
+      },
+      "required": [
+        "transport"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "transport": {
+                "const": "udp"
+              }
+            },
+            "required": [
+              "transport"
+            ]
+          },
+          "then": {
+            "properties": {
+              "maxMessageBytes": {
+                "maximum": 1180
+              }
+            }
+          }
+        }
+      ]
+    },
+    "otlp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "grpc",
+            "http"
+          ]
+        },
+        "body": {
+          "enum": [
+            "map",
+            "json_string"
+          ]
+        },
+        "auth": {
+          "enum": [
+            "mtls",
+            "bearer",
+            "headers"
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 16,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^(?!grpc-)[a-z][a-z0-9-]*(?![\\s\\S])",
+            "not": {
+              "enum": [
+                "host",
+                "connection",
+                "content-length",
+                "content-type",
+                "transfer-encoding",
+                "te",
+                "trailer",
+                "upgrade",
+                "keep-alive",
+                "proxy-authorization",
+                "proxy-authenticate",
+                "content-encoding",
+                "accept-encoding",
+                "grpc-encoding",
+                "grpc-accept-encoding",
+                "user-agent"
+              ]
+            }
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/secretRef"
+          }
+        }
+      },
+      "required": [
+        "auth"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "auth": {
+                "const": "headers"
+              }
+            },
+            "required": [
+              "auth"
+            ]
+          },
+          "then": {
+            "required": [
+              "headers"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "headers"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "loki": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "enum": [
+            "basic",
+            "bearer"
+          ]
+        },
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])"
+        },
+        "timestamp": {
+          "enum": [
+            "metadata.logged_time",
+            "time"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ocsf_category",
+              "os"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "maxLineBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        }
+      },
+      "required": [
+        "auth"
+      ]
+    },
+    "sentinel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cloud": {
+          "enum": [
+            "public",
+            "usgovernment",
+            "china"
+          ]
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 36,
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])"
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 36,
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])"
+        },
+        "dcrImmutableId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 36,
+          "pattern": "^dcr-[0-9a-f]{32}(?![\\s\\S])"
+        },
+        "auth": {
+          "enum": [
+            "certificate",
+            "client_secret"
+          ]
+        }
+      },
+      "required": [
+        "cloud",
+        "tenantId",
+        "clientId",
+        "dcrImmutableId",
+        "auth"
+      ]
+    },
+    "kafka": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brokers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/broker"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "auth": {
+          "enum": [
+            "mtls",
+            "scram_sha_256",
+            "scram_sha_512",
+            "plain",
+            "oauthbearer"
+          ]
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 249,
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\\.(?:\\{category\\}|\\{class\\}))?(?![\\s\\S])"
+        },
+        "key": {
+          "enum": [
+            "device.uid",
+            "metadata.uid"
+          ]
+        },
+        "compression": {
+          "enum": [
+            "zstd",
+            "lz4",
+            "snappy",
+            "gzip"
+          ]
+        }
+      },
+      "required": [
+        "brokers",
+        "auth"
+      ]
+    },
+    "s3": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](?![\\s\\S])",
+          "allOf": [
+            {
+              "not": {
+                "pattern": "\\.\\."
+              }
+            },
+            {
+              "not": {
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?![\\s\\S])"
+              }
+            }
+          ]
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 256,
+              "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,62})(?:/[A-Za-z0-9_-][A-Za-z0-9._-]{0,62})*(?![\\s\\S])"
+            }
+          ]
+        },
+        "region": {
+          "$ref": "#/$defs/region"
+        },
+        "auth": {
+          "enum": [
+            "access_key",
+            "workload"
+          ]
+        },
+        "forcePathStyle": {
+          "type": "boolean"
+        },
+        "encryption": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "none",
+                "sse_s3",
+                "sse_kms"
+              ]
+            },
+            "kmsKeyId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_-]*(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "sse_kms"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              },
+              "then": {
+                "required": [
+                  "kmsKeyId"
+                ]
+              },
+              "else": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "kmsKeyId"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "bucket",
+        "region",
+        "auth"
+      ]
+    },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "registrationRef": {
+          "$ref": "#/$defs/name"
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        }
+      },
+      "required": [
+        "registrationRef"
+      ]
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "elasticsearch",
+            "opensearch",
+            "splunk_hec",
+            "syslog",
+            "otlp",
+            "loki",
+            "sentinel",
+            "kafka",
+            "s3",
+            "connector"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/endpoint"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^(?:tls|udp)://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*|\\[(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::|::[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::|[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::)\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])(?![\\s\\S])"
+            }
+          ]
+        },
+        "credentialRef": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        },
+        "filter": {
+          "$ref": "#/$defs/filter"
+        },
+        "projection": {
+          "$ref": "#/$defs/projection"
+        },
+        "repeats": {
+          "enum": [
+            "first_and_summary",
+            "all"
+          ]
+        },
+        "audit": {
+          "type": "boolean"
+        },
+        "archive": {
+          "type": "boolean"
+        },
+        "batch": {
+          "$ref": "#/$defs/batch"
+        },
+        "inflight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "elasticsearch": {
+          "$ref": "#/$defs/elasticsearch"
+        },
+        "opensearch": {
+          "$ref": "#/$defs/opensearch"
+        },
+        "splunk_hec": {
+          "$ref": "#/$defs/splunk_hec"
+        },
+        "syslog": {
+          "$ref": "#/$defs/syslog"
+        },
+        "otlp": {
+          "$ref": "#/$defs/otlp"
+        },
+        "loki": {
+          "$ref": "#/$defs/loki"
+        },
+        "sentinel": {
+          "$ref": "#/$defs/sentinel"
+        },
+        "kafka": {
+          "$ref": "#/$defs/kafka"
+        },
+        "s3": {
+          "$ref": "#/$defs/s3"
+        },
+        "connector": {
+          "$ref": "#/$defs/connector"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "elasticsearch"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "elasticsearch",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              },
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "opensearch"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "opensearch",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              },
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "splunk_hec"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "splunk_hec",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              },
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "syslog"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "syslog",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "otlp"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "otlp",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              },
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "loki"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "loki",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              },
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "sentinel"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "sentinel",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              },
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "kafka"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "kafka"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "allOf": [
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "endpoint"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "properties": {
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "s3"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "s3",
+              "endpoint"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "connector"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "endpoint": {
+                "$ref": "#/$defs/endpoint"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "connector"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "connector"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "elasticsearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "opensearch"
+                  ]
+                },
+                {
+                  "required": [
+                    "splunk_hec"
+                  ]
+                },
+                {
+                  "required": [
+                    "syslog"
+                  ]
+                },
+                {
+                  "required": [
+                    "otlp"
+                  ]
+                },
+                {
+                  "required": [
+                    "loki"
+                  ]
+                },
+                {
+                  "required": [
+                    "sentinel"
+                  ]
+                },
+                {
+                  "required": [
+                    "kafka"
+                  ]
+                },
+                {
+                  "required": [
+                    "s3"
+                  ]
+                }
+              ]
+            },
+            "allOf": [
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "endpoint"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "credentialRef"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "tls"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "properties": {
+              "archive": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "elasticsearch": {
+                "properties": {
+                  "auth": {
+                    "const": "mtls"
+                  }
+                },
+                "required": [
+                  "auth"
+                ]
+              }
+            },
+            "required": [
+              "elasticsearch"
+            ]
+          },
+          "then": {
+            "required": [
+              "tls"
+            ],
+            "properties": {
+              "tls": {
+                "required": [
+                  "clientCertificateRef"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "opensearch": {
+                "properties": {
+                  "auth": {
+                    "const": "mtls"
+                  }
+                },
+                "required": [
+                  "auth"
+                ]
+              }
+            },
+            "required": [
+              "opensearch"
+            ]
+          },
+          "then": {
+            "required": [
+              "tls"
+            ],
+            "properties": {
+              "tls": {
+                "required": [
+                  "clientCertificateRef"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "otlp": {
+                "properties": {
+                  "auth": {
+                    "const": "mtls"
+                  }
+                },
+                "required": [
+                  "auth"
+                ]
+              }
+            },
+            "required": [
+              "otlp"
+            ]
+          },
+          "then": {
+            "required": [
+              "tls"
+            ],
+            "properties": {
+              "tls": {
+                "required": [
+                  "clientCertificateRef"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kafka": {
+                "properties": {
+                  "auth": {
+                    "const": "mtls"
+                  }
+                },
+                "required": [
+                  "auth"
+                ]
+              }
+            },
+            "required": [
+              "kafka"
+            ]
+          },
+          "then": {
+            "required": [
+              "tls"
+            ],
+            "properties": {
+              "tls": {
+                "required": [
+                  "clientCertificateRef"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "splunk_hec"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "loki"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "sentinel"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "elasticsearch"
+            ],
+            "properties": {
+              "elasticsearch": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "enum": [
+                      "api_key",
+                      "basic"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "opensearch"
+            ],
+            "properties": {
+              "opensearch": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "enum": [
+                      "basic"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "otlp"
+            ],
+            "properties": {
+              "otlp": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "enum": [
+                      "bearer"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kafka"
+            ],
+            "properties": {
+              "kafka": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "enum": [
+                      "scram_sha_256",
+                      "scram_sha_512",
+                      "plain",
+                      "oauthbearer"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "s3"
+            ],
+            "properties": {
+              "s3": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "enum": [
+                      "access_key"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "opensearch"
+            ],
+            "properties": {
+              "opensearch": {
+                "required": [
+                  "credentialSource"
+                ],
+                "properties": {
+                  "credentialSource": {
+                    "const": "secret"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credentialRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "s3"
+            ],
+            "properties": {
+              "s3": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "const": "workload"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "opensearch"
+            ],
+            "properties": {
+              "opensearch": {
+                "required": [
+                  "credentialSource"
+                ],
+                "properties": {
+                  "credentialSource": {
+                    "const": "workload"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "otlp"
+            ],
+            "properties": {
+              "otlp": {
+                "required": [
+                  "auth"
+                ],
+                "properties": {
+                  "auth": {
+                    "const": "headers"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "syslog"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "credentialRef"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "syslog"
+            ],
+            "properties": {
+              "syslog": {
+                "required": [
+                  "transport"
+                ],
+                "properties": {
+                  "transport": {
+                    "const": "tls"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "endpoint": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "pattern": "^tls://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*|\\[(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::|::[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::|[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::)\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])(?![\\s\\S])"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "syslog"
+            ],
+            "properties": {
+              "syslog": {
+                "required": [
+                  "transport"
+                ],
+                "properties": {
+                  "transport": {
+                    "const": "udp"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "endpoint": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "pattern": "^udp://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*|\\[(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::|::[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::|[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}:[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::[0-9a-f]{1,4}|[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::)\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])(?![\\s\\S])"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "tls"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "sentinel"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "batch": {
+                "properties": {
+                  "maxBytes": {
+                    "maximum": 1000000
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

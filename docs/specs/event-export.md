@@ -4,40 +4,9 @@ The `ExportDestination` resource and one adapter per export destination: protoco
 
 ## 1. `ExportDestination`
 
-A GitOps kind under `apiVersion: ricevanta.io/v1alpha1` (`policy-envelope.md` sections 1 and 8), also written through `/api/v1`; its required JSON Schema, `schemas/export/v1alpha1/export-destination.json`, is absent and blocks destination validation (`../analysis.md` section 3).
+A GitOps kind under `apiVersion: ricevanta.io/v1alpha1` (`policy-envelope.md` sections 1 and 8), also written through `/api/v1`. [The ExportDestination schema spec](export-destination-schema.md) owns the resource example, typed adapter blocks, secret-reference grammar, selection, repeats, bounds and decoded Go validation contract. Machine-readable schema and fixtures: `schemas/export/v1alpha1/`. Implementation: [the schema plan](../plans/export-destination-schema.md), subject to independent review (EV-10).
 
-```yaml
-apiVersion: ricevanta.io/v1alpha1
-kind: ExportDestination
-metadata:
-  name: soc-splunk
-spec:
-  type: splunk_hec          # elasticsearch, opensearch, splunk_hec, syslog, otlp, loki, sentinel, kafka, s3, connector
-  enabled: true
-  endpoint: https://splunk.example.com:8088
-  credentialRef: soc-splunk-token       # a server-held secret (design/backend.md section 6); values never appear in YAML
-  tls: { caRef: soc-ca, pinSha256: null, clientCertificateRef: null, serverName: splunk.example.com }
-  filter:
-    classes: [detection_finding, data_security_finding, authentication]   # empty selects every class
-    minSeverity: informational
-    deviceGroups: []                    # empty selects every group
-    origins: [agent, server, extension]
-    condition: ""                       # optional ricevanta-cel-1 expression over the event
-  projection: { drop: [unmapped] }
-  repeats: first_and_summary            # or: all
-  audit: false                          # also receive audit records and checkpoints
-  archive: false                        # s3 only: archive partitions before retention drops them
-  batch: { maxEvents: 1000, maxBytes: 1048576, maxDelay: 5s }
-  inflight: 2
-  splunk_hec: { mode: event, sourcetype: "ricevanta:ocsf", index: security, requireAck: true }
-```
-
-Rules:
-
-- The projection cannot remove `metadata.uid`, `metadata.version`, `class_uid` or `time`, which every adapter needs for identity and time.
-- `repeats: first_and_summary` (default) exports the first occurrence and the agent's summary of a repeated finding and suppresses findings the server marked `repeat_of` (`../design/events.md` section 3.3); `all` exports every stored finding.
-- Creating, enabling, disabling and deleting a destination, changing its filter or projection in either direction, changing its endpoint or credentials, and any change to a destination with `audit: true` or `archive: true` are protected actions (BE-02). A new, enabled or widened destination, or one whose projection drops fewer fields, streams events to a host the administrator chooses, and a deleted, disabled, narrowed or more heavily projected one silences the SIEM, so a compromised administrator needs a second account for either.
-- Validation refuses unknown class names, a condition outside the CEL profile or over its cost limit, and a type block that does not match `type`.
+Creating, enabling, disabling and deleting a destination, changing its filter or projection in either direction, changing its endpoint or credentials, and any change to a destination with `audit: true` or `archive: true` are protected actions (BE-02). A new, enabled or widened destination, or one whose projection drops fewer fields, streams events to a host the administrator chooses. A deleted, disabled, narrowed or more heavily projected destination silences the SIEM. Both changes require approval under the configured access policy. Structural validation does not replace CEL admission, reference resolution or authorization.
 
 ## 2. Common adapter rules
 

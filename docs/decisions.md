@@ -316,6 +316,12 @@ Why: resource bounds and unambiguous bindings stop malformed batches from bypass
 Rejected: whole-output decompression, concatenated frames, permissive JSON extraction and whole-batch rejection for event binding faults, which weaken bounds or prevent per-event quarantine.
 Detail: [event batch body spec](specs/event-batch-body.md), [implementation plan](plans/event-batch-body.md) and `schemas/events/v1/fixtures/body.json`.
 
+### EV-10. ExportDestination authoring validation
+Decision: ExportDestination uses a closed JSON Schema with one typed block per adapter, reference-only credential fields and bounded selection, projection, repeats and batch settings. A standard-library-only Go validator checks decoded JSON and shares positive and negative fixtures with the Python design validator; validation supplies no runtime authority.
+Why: typed configuration catches misspelled parameters and inline credential carriers without coupling offline checks to secret access or delivery (analysis section 3).
+Rejected: a Go JSON Schema runtime dependency for this bounded resource; permissive parameter maps and validation that contacts destinations, which add dependency or authority without proving delivery.
+Detail: [schema spec](specs/export-destination-schema.md) and [implementation plan](plans/export-destination-schema.md).
+
 ## Policy (POL)
 
 ### POL-01. CEL runtimes

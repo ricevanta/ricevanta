@@ -1,0 +1,2594 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "valid-elasticsearch",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-elasticsearch"
+        },
+        "spec": {
+          "type": "elasticsearch",
+          "elasticsearch": {
+            "auth": "api_key"
+          },
+          "endpoint": "https://elasticsearch.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-opensearch",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-opensearch"
+        },
+        "spec": {
+          "type": "opensearch",
+          "opensearch": {
+            "auth": "basic"
+          },
+          "endpoint": "https://opensearch.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-splunk-hec",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-syslog",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-syslog"
+        },
+        "spec": {
+          "type": "syslog",
+          "syslog": {
+            "transport": "tls"
+          },
+          "endpoint": "tls://syslog.example:6514"
+        }
+      }
+    },
+    {
+      "id": "valid-otlp",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "bearer"
+          },
+          "endpoint": "https://otlp.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-loki",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-loki"
+        },
+        "spec": {
+          "type": "loki",
+          "loki": {
+            "auth": "bearer"
+          },
+          "endpoint": "https://loki.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-sentinel",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-sentinel"
+        },
+        "spec": {
+          "type": "sentinel",
+          "sentinel": {
+            "cloud": "public",
+            "tenantId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "dcrImmutableId": "dcr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "auth": "certificate"
+          },
+          "endpoint": "https://sentinel.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-s3",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key"
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-connector",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-connector"
+        },
+        "spec": {
+          "type": "connector",
+          "connector": {
+            "registrationRef": "soc-connector"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-elasticsearch-mtls",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-elasticsearch"
+        },
+        "spec": {
+          "type": "elasticsearch",
+          "elasticsearch": {
+            "auth": "mtls"
+          },
+          "endpoint": "https://elasticsearch.example",
+          "tls": {
+            "clientCertificateRef": "client-cert"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-opensearch-mtls",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-opensearch"
+        },
+        "spec": {
+          "type": "opensearch",
+          "opensearch": {
+            "auth": "mtls"
+          },
+          "endpoint": "https://opensearch.example",
+          "tls": {
+            "clientCertificateRef": "client-cert"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-otlp-mtls",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "mtls"
+          },
+          "endpoint": "https://otlp.example",
+          "tls": {
+            "clientCertificateRef": "client-cert"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-mtls",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "mtls"
+          },
+          "tls": {
+            "clientCertificateRef": "client-cert"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-sigv4-secret",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-opensearch"
+        },
+        "spec": {
+          "type": "opensearch",
+          "opensearch": {
+            "auth": "sigv4",
+            "credentialSource": "secret",
+            "region": "us-east-1",
+            "service": "aoss"
+          },
+          "endpoint": "https://opensearch.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-sigv4-workload",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-opensearch"
+        },
+        "spec": {
+          "type": "opensearch",
+          "opensearch": {
+            "auth": "sigv4",
+            "credentialSource": "workload",
+            "region": "us-east-1",
+            "service": "aoss"
+          },
+          "endpoint": "https://opensearch.example"
+        }
+      }
+    },
+    {
+      "id": "valid-otlp-headers",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "headers",
+            "headers": {
+              "authorization": "otlp-token",
+              "x-api-key": "collector-key"
+            }
+          },
+          "endpoint": "https://otlp.example"
+        }
+      }
+    },
+    {
+      "id": "valid-syslog-udp",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-syslog"
+        },
+        "spec": {
+          "type": "syslog",
+          "syslog": {
+            "transport": "udp",
+            "maxMessageBytes": 1180
+          },
+          "endpoint": "udp://[2001:db8::1]:514"
+        }
+      }
+    },
+    {
+      "id": "valid-s3-workload",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "workload",
+            "prefix": ""
+          },
+          "endpoint": "https://s3.example"
+        }
+      }
+    },
+    {
+      "id": "valid-s3-kms",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key",
+            "prefix": "soc/evidence",
+            "encryption": {
+              "mode": "sse_kms",
+              "kmsKeyId": "alias/events"
+            }
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-selection",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "filter": {
+            "classes": [
+              "api_activity",
+              "application_lifecycle",
+              "authentication",
+              "authorize_session",
+              "base_event",
+              "clipboard_activity",
+              "compliance_finding",
+              "data_security_finding",
+              "detection_finding",
+              "device_config_state_change",
+              "dns_activity",
+              "entity_management",
+              "event_log_actvity",
+              "evidence_info",
+              "file_activity",
+              "file_remediation_activity",
+              "http_activity",
+              "inventory_info",
+              "kernel_extension_activity",
+              "memory_activity",
+              "module_activity",
+              "network_activity",
+              "network_remediation_activity",
+              "peripheral_activity",
+              "process_activity",
+              "process_remediation_activity",
+              "remediation_activity",
+              "ricevanta/agent_health_activity",
+              "ricevanta/certificate_lifecycle_activity",
+              "ricevanta/device_management_activity",
+              "ricevanta/lineage_activity",
+              "ricevanta/pipeline_activity",
+              "ricevanta/policy_activity",
+              "role_management",
+              "scheduled_job_activity",
+              "script_activity",
+              "software_info",
+              "user_management",
+              "vulnerability_finding",
+              "win/registry_key_activity",
+              "win/registry_value_activity",
+              "win/windows_service_activity"
+            ],
+            "origins": [
+              "agent",
+              "server",
+              "extension"
+            ],
+            "deviceGroups": [
+              "engineering"
+            ],
+            "minSeverity": "informational",
+            "condition": ""
+          },
+          "projection": {
+            "drop": [
+              "unmapped",
+              "script.script_content"
+            ]
+          },
+          "repeats": "all",
+          "audit": true,
+          "enabled": false,
+          "batch": {
+            "maxEvents": 10000,
+            "maxBytes": 67108864,
+            "maxDelay": "300s"
+          },
+          "inflight": 16
+        }
+      }
+    },
+    {
+      "id": "valid-bounds-low",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxEvents": 1,
+            "maxBytes": 1024,
+            "maxDelay": "1s"
+          },
+          "inflight": 1,
+          "filter": {
+            "classes": [],
+            "deviceGroups": []
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-https-ipv6",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://[::1]:65535/proxy/v1/",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-system-trust",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": {}
+        }
+      }
+    },
+    {
+      "id": "valid-pin",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": {
+            "pinSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverName": "splunk.example"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-sentinel-cap",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-sentinel"
+        },
+        "spec": {
+          "type": "sentinel",
+          "sentinel": {
+            "cloud": "public",
+            "tenantId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "dcrImmutableId": "dcr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "auth": "certificate"
+          },
+          "endpoint": "https://sentinel.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxBytes": 1000000
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-s3-archive",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key"
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential",
+          "archive": true,
+          "audit": true
+        }
+      }
+    },
+    {
+      "id": "invalid-kind",
+      "valid": false,
+      "error": "ErrResource",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Policy",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-name-newline",
+      "valid": false,
+      "error": "ErrResource",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc\n"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-status",
+      "valid": false,
+      "error": "ErrResource",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        },
+        "status": {}
+      }
+    },
+    {
+      "id": "invalid-unknown-root",
+      "valid": false,
+      "error": "ErrResource",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        },
+        "password": "CANARY_NOT_A_SECRET"
+      }
+    },
+    {
+      "id": "invalid-unknown-spec",
+      "valid": false,
+      "error": "ErrAdapter",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "password": "CANARY_NOT_A_SECRET"
+        }
+      }
+    },
+    {
+      "id": "invalid-unknown-adapter",
+      "valid": false,
+      "error": "ErrAdapter",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "http",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-wrong-block",
+      "valid": false,
+      "error": "ErrAdapter",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-secret-uri",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "env://TOKEN"
+        }
+      }
+    },
+    {
+      "id": "invalid-secret-newline",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc\n"
+        }
+      }
+    },
+    {
+      "id": "invalid-secret-object",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": {
+            "value": "CANARY_NOT_A_SECRET"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-userinfo",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://token@host.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-query",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://host.example?token=CANARY",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-http",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "http://host.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-newline",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://host.example\n",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-port-zero",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://host.example:0",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-port-overflow",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://host.example:65536",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-fragment",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://host.example/#token",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-escape",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://host.example/%2e%2e",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-endpoint-ipv6",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://[1:2:3]",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-tls-null",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": null
+        }
+      }
+    },
+    {
+      "id": "invalid-tls-insecure",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": {
+            "insecureSkipVerify": true
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-tls-both",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": {
+            "caRef": "ca",
+            "pinSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-pin-upper",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": {
+            "pinSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-unknown-class",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "filter": {
+            "classes": [
+              "raw"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-class-alias",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "filter": {
+            "classes": [
+              "lineage_activity"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-class-duplicate",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "filter": {
+            "classes": [
+              "authentication",
+              "authentication"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-origins-empty",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "filter": {
+            "origins": []
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-repeat-unknown",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "repeats": "summary"
+        }
+      }
+    },
+    {
+      "id": "invalid-repeat-null",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "repeats": null
+        }
+      }
+    },
+    {
+      "id": "invalid-projection-parent",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "projection": {
+            "drop": [
+              "metadata"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-projection-uid",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "projection": {
+            "drop": [
+              "metadata.uid"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-projection-child",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "projection": {
+            "drop": [
+              "time.seconds"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-projection-wildcard",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "projection": {
+            "drop": [
+              "metadata.*"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-projection-case",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "projection": {
+            "drop": [
+              "Metadata.uid"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-batch-zero",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxEvents": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-batch-over",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxEvents": 10001
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-batch-fraction",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxEvents": 1.5
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-batch-bool",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxEvents": true
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-bytes-low",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxBytes": 1023
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-bytes-high",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxBytes": 67108865
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-delay-zero",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxDelay": "0s"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-delay-high",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxDelay": "301s"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-delay-alias",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxDelay": "1m"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-inflight-zero",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "inflight": 0
+        }
+      }
+    },
+    {
+      "id": "invalid-inflight-high",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "inflight": 17
+        }
+      }
+    },
+    {
+      "id": "invalid-adapter-unknown-field",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {
+            "token": "CANARY_NOT_A_SECRET"
+          },
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-ack-null",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {
+            "requireAck": null
+          },
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-archive-other",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "archive": true
+        }
+      }
+    },
+    {
+      "id": "invalid-missing-block",
+      "valid": false,
+      "error": "ErrAdapter",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-missing-credential",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-sentinel-cap",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-sentinel"
+        },
+        "spec": {
+          "type": "sentinel",
+          "sentinel": {
+            "cloud": "public",
+            "tenantId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "dcrImmutableId": "dcr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "auth": "certificate"
+          },
+          "endpoint": "https://sentinel.example",
+          "credentialRef": "soc-credential",
+          "batch": {
+            "maxBytes": 1000001
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-udp-tls",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-syslog"
+        },
+        "spec": {
+          "type": "syslog",
+          "syslog": {
+            "transport": "udp"
+          },
+          "endpoint": "udp://host:514",
+          "tls": {}
+        }
+      }
+    },
+    {
+      "id": "invalid-udp-size",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-syslog"
+        },
+        "spec": {
+          "type": "syslog",
+          "syslog": {
+            "transport": "udp",
+            "maxMessageBytes": 1181
+          },
+          "endpoint": "tls://syslog.example:6514"
+        }
+      }
+    },
+    {
+      "id": "invalid-syslog-scheme",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-syslog"
+        },
+        "spec": {
+          "type": "syslog",
+          "syslog": {
+            "transport": "tls"
+          },
+          "endpoint": "udp://host:514"
+        }
+      }
+    },
+    {
+      "id": "invalid-kafka-endpoint",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain"
+          },
+          "credentialRef": "soc-credential",
+          "endpoint": "https://broker.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-kafka-broker",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:0"
+            ],
+            "auth": "plain"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-kafka-topic",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain",
+            "topic": "events.{device}"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-opensearch-sigv4",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-opensearch"
+        },
+        "spec": {
+          "type": "opensearch",
+          "opensearch": {
+            "auth": "sigv4"
+          },
+          "endpoint": "https://opensearch.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-loki-label",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-loki"
+        },
+        "spec": {
+          "type": "loki",
+          "loki": {
+            "auth": "bearer",
+            "labels": [
+              "device_uid"
+            ]
+          },
+          "endpoint": "https://loki.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-s3-kms",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key",
+            "encryption": {
+              "mode": "sse_kms"
+            }
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-s3-prefix",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key",
+            "prefix": "../audit"
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-s3-workload-ref",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "workload"
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-mtls-cert",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-elasticsearch"
+        },
+        "spec": {
+          "type": "elasticsearch",
+          "elasticsearch": {
+            "auth": "mtls"
+          },
+          "endpoint": "https://elasticsearch.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-connector-override",
+      "valid": false,
+      "error": "ErrCombination",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-connector"
+        },
+        "spec": {
+          "type": "connector",
+          "connector": {
+            "registrationRef": "soc-connector"
+          },
+          "endpoint": "https://attacker.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-header-transport",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "headers",
+            "headers": {
+              "host": "host-secret"
+            }
+          },
+          "endpoint": "https://otlp.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-header-inline",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "headers",
+            "headers": {
+              "authorization": "Bearer CANARY"
+            }
+          },
+          "endpoint": "https://otlp.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-resource-before-adapter",
+      "valid": false,
+      "error": "ErrResource",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Policy",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "http",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-adapter-before-common",
+      "valid": false,
+      "error": "ErrAdapter",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "http",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "repeats": "bad"
+        }
+      }
+    },
+    {
+      "id": "invalid-common-before-parameters",
+      "valid": false,
+      "error": "ErrCommon",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {
+            "mode": "bad"
+          },
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "repeats": "bad"
+        }
+      }
+    },
+    {
+      "id": "invalid-parameters-before-combination",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {
+            "mode": "bad"
+          },
+          "endpoint": "https://splunk-hec.example"
+        }
+      }
+    },
+    {
+      "id": "valid-elasticsearch-basic",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-elasticsearch"
+        },
+        "spec": {
+          "type": "elasticsearch",
+          "elasticsearch": {
+            "auth": "basic",
+            "namespace": "security"
+          },
+          "endpoint": "https://elasticsearch.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-splunk-raw-noack",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {
+            "mode": "raw",
+            "requireAck": false
+          },
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-otlp-http-string",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "bearer",
+            "transport": "http",
+            "body": "json_string"
+          },
+          "endpoint": "https://otlp.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-loki-basic",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-loki"
+        },
+        "spec": {
+          "type": "loki",
+          "loki": {
+            "auth": "basic",
+            "tenant": "soc",
+            "timestamp": "time",
+            "labels": [
+              "ocsf_category",
+              "os"
+            ],
+            "maxLineBytes": 262144
+          },
+          "endpoint": "https://loki.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-scram-sha-256",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "scram_sha_256"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-scram-sha-512",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "scram_sha_512"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-oauthbearer",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "oauthbearer"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-lz4",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain",
+            "compression": "lz4",
+            "key": "metadata.uid",
+            "topic": "ricevanta.ocsf.{class}"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-snappy",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain",
+            "compression": "snappy",
+            "key": "metadata.uid",
+            "topic": "ricevanta.ocsf.{class}"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-gzip",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain",
+            "compression": "gzip",
+            "key": "metadata.uid",
+            "topic": "ricevanta.ocsf.{class}"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-kafka-category",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-kafka"
+        },
+        "spec": {
+          "type": "kafka",
+          "kafka": {
+            "brokers": [
+              "broker.example:9093"
+            ],
+            "auth": "plain",
+            "topic": "ricevanta.ocsf.{category}"
+          },
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-sentinel-public",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-sentinel"
+        },
+        "spec": {
+          "type": "sentinel",
+          "sentinel": {
+            "cloud": "public",
+            "tenantId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "dcrImmutableId": "dcr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "auth": "client_secret"
+          },
+          "endpoint": "https://sentinel.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-sentinel-usgovernment",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-sentinel"
+        },
+        "spec": {
+          "type": "sentinel",
+          "sentinel": {
+            "cloud": "usgovernment",
+            "tenantId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "dcrImmutableId": "dcr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "auth": "client_secret"
+          },
+          "endpoint": "https://sentinel.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-sentinel-china",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-sentinel"
+        },
+        "spec": {
+          "type": "sentinel",
+          "sentinel": {
+            "cloud": "china",
+            "tenantId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "dcrImmutableId": "dcr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "auth": "client_secret"
+          },
+          "endpoint": "https://sentinel.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-s3-none",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key",
+            "encryption": {
+              "mode": "none"
+            },
+            "forcePathStyle": true
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-s3-sse-s3",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-s3"
+        },
+        "spec": {
+          "type": "s3",
+          "s3": {
+            "bucket": "ricevanta-events",
+            "region": "us-east-1",
+            "auth": "access_key",
+            "encryption": {
+              "mode": "sse_s3"
+            },
+            "forcePathStyle": true
+          },
+          "endpoint": "https://s3.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "valid-ca-client-cert",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "soc-credential",
+          "tls": {
+            "caRef": "private-ca",
+            "clientCertificateRef": "client-cert"
+          }
+        }
+      }
+    },
+    {
+      "id": "valid-reference-one",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "a"
+        }
+      }
+    },
+    {
+      "id": "valid-reference-max",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-splunk-hec"
+        },
+        "spec": {
+          "type": "splunk_hec",
+          "splunk_hec": {},
+          "endpoint": "https://splunk-hec.example",
+          "credentialRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "valid-connector-timeout-max",
+      "valid": true,
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-connector"
+        },
+        "spec": {
+          "type": "connector",
+          "connector": {
+            "registrationRef": "soc-connector",
+            "timeout": "300s"
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-loki-tenant-colon",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-loki"
+        },
+        "spec": {
+          "type": "loki",
+          "loki": {
+            "auth": "basic",
+            "tenant": "soc:other",
+            "timestamp": "time",
+            "labels": [
+              "ocsf_category",
+              "os"
+            ],
+            "maxLineBytes": 262144
+          },
+          "endpoint": "https://loki.example",
+          "credentialRef": "soc-credential"
+        }
+      }
+    },
+    {
+      "id": "invalid-header-grpc-timeout",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "headers",
+            "headers": {
+              "grpc-timeout": "soc-header"
+            },
+            "transport": "grpc"
+          },
+          "endpoint": "https://otlp.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-header-grpc-message-type",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "headers",
+            "headers": {
+              "grpc-message-type": "soc-header"
+            },
+            "transport": "grpc"
+          },
+          "endpoint": "https://otlp.example"
+        }
+      }
+    },
+    {
+      "id": "invalid-header-grpc-future",
+      "valid": false,
+      "error": "ErrParameters",
+      "resource": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "ExportDestination",
+        "metadata": {
+          "name": "soc-otlp"
+        },
+        "spec": {
+          "type": "otlp",
+          "otlp": {
+            "auth": "headers",
+            "headers": {
+              "grpc-future": "soc-header"
+            },
+            "transport": "grpc"
+          },
+          "endpoint": "https://otlp.example"
+        }
+      }
+    }
+  ]
+}
