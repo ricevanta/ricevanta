@@ -1,20 +1,22 @@
 {
   "documents": [
-    {"path": "docs/design/agent.md","sha256": "a0530f93c0c742ac49a4cb41f887103014a92abe6f083a50e37fbc4a1b544b6f"},
+    {"path": "docs/design/agent.md","sha256": "daf098694f5381bfbff846f596cf3698bf4a8ebc65fe6c3affd41c61ba9b4ba9"},
     {"path": "docs/design/backend.md","sha256": "f59b5b221dd66c9497fb775bca6321523d4a48f9ec5ef587ea75040a4109e42b"},
     {"path": "docs/design/console.md","sha256": "2b081a9959d4ebf28bd4ece3d7769dd65efd202aa2d573cdd31f53bf0d92432c"},
     {"path": "docs/design/dlp.md","sha256": "13900406d2557b08be2801a8e6869022fd0847c23426cea56e667f3c3ca397b2"},
     {"path": "docs/design/edr.md","sha256": "a3cd155f6c258c96e5d1e8dedb24bbd7da1bf9e966b1a7dbd060240c1c06d69c"},
-    {"path": "docs/design/events.md","sha256": "2be4a17175aa56b1c562dfdab32bdca9d0aa1cdff8ddc59603b6169c47b427f2"},
+    {"path": "docs/design/events.md","sha256": "f67c347a2f8081f7d225ad7469e94e3709b58f9286889fef124ce121be60f2a3"},
     {"path": "docs/design/extensions.md","sha256": "609650c712162fd04ae5c909076f5c749d538953054ced1399344674000a8376"},
     {"path": "docs/design/lineage.md","sha256": "635501efcf5b45a5e82ecf64bf0e1a690a81029065be86d73774f97d9face6e4"},
     {"path": "docs/design/mdm.md","sha256": "e68f5674df5e976f34fb397434d642b70599d558ae0f36b54c23cd5714212517"},
     {"path": "docs/design/pki.md","sha256": "5178e0a1ca76ddc069ea740f12e298af911852b4afedaea936c6127181beba03"},
     {"path": "docs/design/policy.md","sha256": "3911b7428db76943a67f2bb57234078f4b23b94b41cc5b814c1fcc60e32fa31d"},
     {"path": "docs/design/radius.md","sha256": "6779a4d41c06299bea892231f798dc95906c2c5ec1a1e752419d41f5d600437b"},
+    {"path": "docs/specs/agent-spool-format.md","sha256": "720935f5bc1808f939735a6eb9b780f26a05dcebbe73b4ac270d531942778c3f"},
     {"path": "docs/specs/authority-journal-protocol.md","sha256": "4a10048ee0339f107f47aa968d20af935fb8583457494bcb294ef4f695c4059e"},
     {"path": "docs/specs/baseline.md","sha256": "3a04c6ea2f54f03093c3e5424eeeb26b98693e2c0b6f55a93ccda610495ffafc"},
-    {"path": "docs/specs/cel-profile.md","sha256": "a46ac0d8e2a07631507a798c133312e6ef180b1b65e1b47e1c81816e5157fd26"},
+    {"path": "docs/specs/cel-declarations.md","sha256": "1c3bc140c80dd4327dcc8c76a581f2c9a2cf3746e43fc7c59d6f256515ccb975"},
+    {"path": "docs/specs/cel-profile.md","sha256": "dacbe8cf0e55f37c95230d1642fe98ab5f1f827d7cc7e8140b47bbc264d1a178"},
     {"path": "docs/specs/core-primitives.md","sha256": "44bd77ed337a940247df5a11ed2eb9968c5ab42d62f74f898ed741cadddfeaed"},
     {"path": "docs/specs/dlp-detectors.md","sha256": "2d3cbd96c44cdee51b159a2995dafe6f1ff22ba20e85e346def6fbfb7f82bd1a"},
     {"path": "docs/specs/dsse-envelope.md","sha256": "40a32d77db146445e7ff83959ea49aa7ec0e7c692b3ea655c0dcc2cc5a0aee56"},
@@ -28,7 +30,7 @@
     {"path": "docs/specs/mdm-evidence-recovery.md","sha256": "28b6f1ebfbe5aaf58769804f90a88bbd27e9f86c190f55cbae180ed30596490f"},
     {"path": "docs/specs/network-transition-qualification.md","sha256": "ef4cd560cd914eca3c4f2675e0b4321c97d62596400ef15c894c8d2ebc6d947e"},
     {"path": "docs/specs/ocsf-profile.md","sha256": "9999f41cb1dd612d36104861e7231e203f39adfe4b57bdecbd6bb20a881c3699"},
-    {"path": "docs/specs/permission-catalogue.md","sha256": "07559287b7c94905c5b58d9c16c8940d6a7e30efd76dcd2b98640c8474f1f2b2"},
+    {"path": "docs/specs/permission-catalogue.md","sha256": "312dfc6857cd91684faa9bd76d463e466e74590440c99e32c925a25bf971583f"},
     {"path": "docs/specs/platform-qualification.md","sha256": "fe66604509c01c16db2322691ef221ac8549247aa1d2d83da3c3abbb6745ef0d"},
     {"path": "docs/specs/policy-envelope.md","sha256": "4d8132212cc5f694585132bce3b60fce26f47edc207869d2db2828e1c875f6c8"},
     {"path": "docs/specs/radius-gateway-profiles.md","sha256": "6a84b7a631ca22c2a81e6fbd7371ff5cc271bd9be25d90217457e3b2d0c42a13"},
@@ -91,6 +93,11 @@
     {"id": "external-portals","source": "docs/design/mdm.md#9.4","authority": "Apple portal renewal and vendor CSR signing require the external account or signing key. Ricevanta CSR creation, certificate upload and topic replacement retain separate permissions."},
     {"id": "qualification","source": "docs/specs/platform-qualification.md#5","authority": "Lab execution, retained qualification evidence and independent reviewer decisions are development/release activities, not console administration permissions."},
     {"id": "automatic-policy","source": "docs/design/policy.md#2.4","authority": "Compiled policy actions, inventory changes and directory sync use their constrained protocol authority; manual writes, governed-pack re-enable and approvals retain catalogue requirements."},
-    {"id": "external-ca","source": "docs/design/extensions.md#6.2","authority": "An external CA performs its own issuance or revocation under its authority. Ricevanta reconciliation uses pki.external_issuance.reconcile and device or infrastructure certificate revocation keeps its separate immediate permission."}
+    {"id": "external-ca","source": "docs/design/extensions.md#6.2","authority": "An external CA performs its own issuance or revocation under its authority. Ricevanta reconciliation uses pki.external_issuance.reconcile and device or infrastructure certificate revocation keeps its separate immediate permission."},
+    {"id": "spool-codec","source": "docs/specs/agent-spool-format.md#6","authority": "Encoding and scanning borrowed segment bytes are file-free library calls, not console or administrative API actions. The codec grants no file access, truncation, upload or acknowledgement authority; native durability and the spool manager remain separate gates."},
+    {"id": "spool-manager-recovery","source": "docs/design/agent.md#5","authority": "Startup recovery uses the local core spool manager under exclusive segment ownership. Only TailIssue permits truncation to valid_len under exclusive ownership; native durability must be established before resuming at next_sequence. Fatal errors permit no truncation. This automatic local process grants no operator permission."},
+    {"id": "spool-pipeline-recovery","source": "docs/design/events.md#2.3","authority": "Sequence assignment and startup segment recovery use the local core pipeline authority, not an operator endpoint. Recovery results do not authorize remote repair or bypass the spool manager ownership and durability gates."},
+    {"id": "cel-declaration-loader","source": "docs/specs/cel-declarations.md#8","authority": "Declaration parsing, loading and environment lookup are bounded in-process metadata operations, not administrative actions. Catalogue revisions require development and release review. Policy edits, import and publication retain their catalogue permissions, approval and signing checks; the loader grants no publication authority."},
+    {"id": "cel-compiler-environment","source": "docs/specs/cel-profile.md#5","authority": "Declaration and certificate-evidence checks run inside compilation and admission under existing policy and gateway authorization. They add no operator action or permission to override failed evidence checks. Policy publication and gateway or scope writes retain their catalogue permissions and consumer gates."}
   ]
 }

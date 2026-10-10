@@ -210,11 +210,44 @@ Stages 3 through 6 implement this particular schema in Go, not a general JSON Sc
 
 [`fixtures/catalogues.json`](../../schemas/permissions/v1/fixtures/catalogues.json) wraps valid and invalid fragments, expected schema acceptance and the first Go sentinel. `wire_hex` cases represent invalid bytes without making the fixture file invalid JSON. [`fixtures/names.json`](../../schemas/permissions/v1/fixtures/names.json) uses the named active-and-retired fragment and records separate grammar and lookup outcomes. Empty expected error means success. The [fixture schema](../../schemas/permissions/v1/fixtures.schema.json) validates both wrappers; a JSON Schema validator checks each decoded fragment independently, including intentional failures. It does not claim to evaluate Go sentinels.
 
-`fixtures/coverage.json` records each swept action's source section and exact text anchor, semantic selector, permission, owner, scope, approval rule, exact catalogue note, composed permissions and checks. `requires` lists unconditional extra permissions; alternatives and data-dependent reads remain in `checks` and section 3. The pinned validator compares owner and note exactly and checks bindings, derived protection/approval, active role grants, referenced names, source anchors inside their named sections and the ASCII-sorted, duplicate-free source inventory against every `docs/design/*.md` and `docs/specs/*.md`. SHA-256 digests bind the reviewed source bytes; any added, removed or changed document fails until an independent coverage review updates the manifest. Digests detect an unreviewed change, not semantic completeness. The console operation extraction, fixed-name check and manual full-source sweep remain required. Exemptions name subject-owned, protocol, automatic and out-of-band actions with their separate authority.
+`fixtures/coverage.json` records each swept action's source section and exact text anchor, semantic selector, permission, owner, scope, approval rule, exact catalogue note, composed permissions and checks. `requires` lists unconditional extra permissions; alternatives and data-dependent reads remain in `checks` and section 3. Exemptions name subject-owned, protocol, automatic and out-of-band actions with their separate authority.
+
+Validation has two modes. The default `python server/internal/authz/catalogue/schema_test.py` checks schemas, fixtures and catalogue bindings, including exact owner/note, derived protection/approval, active role grants, composed names and fixed names, without reading design or spec documents or comparing their digests. Go package tests also have no document-content or digest dependency and never invoke the Python source check. They retain catalogue parsing, fixture contracts and canonical-to-embedded byte equality. These checks cannot establish prose coverage.
+
+The separate design-CI command `python server/internal/authz/catalogue/schema_test.py --check-sources` runs the default checks plus source-section anchors, console operation extraction, source-reference resolution and the ASCII-sorted, duplicate-free inventory of every `docs/design/*.md` and `docs/specs/*.md`. SHA-256 digests bind exact reviewed source bytes, including this spec. Added, removed or changed documents fail this mode only. The command is read-only and reports affected paths. The implementation plan assigns it to `.github/workflows/design.yml`; server CI uses only the default mode. Digests detect changed bytes, not semantic completeness, so a manual full-source sweep remains required.
+
+Before regenerating, review every added document and every changed section against the pinned source bytes for operator actions, including indirect mutations. For removed documents, trace each action and exemption to its current authority or resolve its removal explicitly. Add exact permission bindings or a reasoned exemption before replacing the pins. If the pinned bytes cannot be recovered for comparison, review the complete document. An independent reviewer must confirm the action/exemption decisions and source inventory. A successful hash refresh alone is never review evidence.
+
+After that source review, run this regeneration command from the repository root. It replaces only `documents`; it cannot generate or approve actions or exemptions. Run it after all spec edits, then run both validation modes. Any further source edit requires the same review and regeneration loop.
+
+```sh
+python - <<'PYCODE'
+import hashlib
+import json
+from pathlib import Path
+
+path = Path('schemas/permissions/v1/fixtures/coverage.json')
+manifest = json.loads(path.read_text())
+sources = sorted([*Path('docs/design').glob('*.md'),
+                  *Path('docs/specs').glob('*.md')])
+manifest['documents'] = [
+    {'path': source.as_posix(),
+     'sha256': hashlib.sha256(source.read_bytes()).hexdigest()}
+    for source in sources
+]
+blocks = []
+for key, rows in manifest.items():
+    encoded = ',\n'.join(
+        '    ' + json.dumps(row, separators=(',', ': ')) for row in rows
+    )
+    blocks.append('  ' + json.dumps(key) + ': [\n' + encoded + '\n  ]')
+path.write_text('{\n' + ',\n'.join(blocks) + '\n}\n')
+PYCODE
+```
 
 Trust-list coverage checks exact selectors, not just the `updateTrustList` base operation. Each of the five revocation selectors in section 4 and `updateTrustList#trust-change` must bind exclusively to its named permission with the required rule, protection and approval; the trust-change branch remains `extensions.trust.update` with `always` / `access_policy`. Reject bare, generic, unknown, missing, duplicate or misbound trust-list selectors. [`fixtures/revocations.json`](../../schemas/permissions/v1/fixtures/revocations.json), validated by the fixture schema, supplies standalone three-entry fragments and expected `coverage_valid` results for this branch check. Every fragment must pass the catalogue schema; coverage rejection is separate from parser rejection. These fixtures check metadata bindings, not runtime dependency evaluation.
 
-Coverage mutation tests remove each required entry, remove or rename its exact selector, change its owner/note/scope/rule/protection/approval/grant/status, and remove a composed permission. Each must fail for that defect. Also reject missing source anchors, stale digests and added or removed source files. Retirement vectors cover a pinned policy in another group, an unpinned dependency, unresolved targets and changed dependencies before commit. Quarantine vectors cover device-binding mismatch and stale validation; export vectors cover missing audit/evidence reads, partial device scope and changed projection; endorsement-key vectors cover missing affected-group access. These consumer vectors specify future authorization tests; the metadata validator checks their bindings and cannot execute a consumer that does not exist.
+Coverage mutation tests remove each required entry, remove or rename its exact selector, change its owner/note/scope/rule/protection/approval/grant/status, and remove a composed permission. Each must fail for that defect. In design-source mode, also reject missing source anchors, stale digests and added or removed source files. In temporary copies, prove that an unrelated prose edit, source addition or source removal leaves default validation and Go tests passing while design-source validation fails. Catalogue binding mutations must fail default validation; embedded-byte mutations must still fail Go tests. Retirement vectors cover a pinned policy in another group, an unpinned dependency, unresolved targets and changed dependencies before commit. Quarantine vectors cover device-binding mismatch and stale validation; export vectors cover missing audit/evidence reads, partial device scope and changed projection; endorsement-key vectors cover missing affected-group access. These consumer vectors specify future authorization tests; the metadata validator checks their bindings and cannot execute a consumer that does not exist.
 
 Required Go vectors include all shipped cases and these generated boundaries:
 
@@ -226,7 +259,7 @@ Required Go vectors include all shipped cases and these generated boundaries:
 - Duplicate root and nested keys, escaped duplicate keys, case aliases, lone surrogates, invalid UTF-8, BOM, trailing scalar/object, truncation and empty input. A valid surrogate pair in metadata reaches `ErrEntry` for non-ASCII, not `ErrJSON`.
 - Every adjacent phase pair combined, including an invalid later name with an earlier bad scope, bad entry plus duplicate name, and duplicate name plus unsorted entries. Assert exactly one matching sentinel and nil output on parse failure.
 - Lookup precedence on nil and zero catalogues; syntax before unavailable; unavailable before unknown; active success, retired failure and unknown failure. Input and returned-slice mutation, concurrent reads and exact JSON copies.
-- Byte drift, missing canonical file, accidental removal of a permanent tombstone, changed meaning under an existing name, coverage of every console operation selector, swept action contract and the fixed seven names. Lifecycle compatibility compares the proposed catalogue with the reviewed base revision, not just itself.
+- Byte drift, missing canonical file, accidental removal of a permanent tombstone, changed meaning under an existing name, swept action contracts and the fixed seven names without opening source documents. Console operation extraction and source freshness belong to the separate design-source check. Lifecycle compatibility compares the proposed catalogue with the reviewed base revision, not just itself.
 
 `FuzzValidateName` feeds arbitrary strings and checks equivalence with an independent byte-grammar oracle. `FuzzParse` feeds bounded arbitrary bytes; successful results must preserve exact bytes, pass lookup for every active entry and return the retirement sentinel for each tombstone. Reparse returned bytes and compare metadata and revision. Error paths return nil and one sentinel. Seed both targets with all fixtures, decoded wire bytes and generated boundaries.
 
@@ -253,6 +286,8 @@ The cost is a large explicit inventory, a copied embedded file and manual Go/sch
 Dependencies are Go 1.27.1 only at runtime and Python `jsonschema==4.25.1` for design validation. The installed tools also include Rust 1.99.0 with cargo 1.99.0, Node 24.21.0 and pnpm 11.18.0; this slice invokes none of them in production. No Go dependency or licensing change is needed. Cryptography 50.0.0 is installed but unused.
 
 [JSON Schema 2020-12](https://json-schema.org/draft/2020-12/json-schema-core) supplies the schema vocabulary. Permission grammar, byte bounds, error ordering and approval metadata are Ricevanta contracts, not standard claims. First-party sources confirm the Go behavior cited above; this spec introduces no unconfirmed platform claim marked `verify`.
+
+Rejected freshness rule: checking document digests in Go tests or the default server validator couples package correctness to unrelated prose edits and repeatedly blocks parallel design work. Dropping digest checks entirely loses the source-review gate; design CI retains it separately.
 
 Rejected alternatives: generated Go literals need a generator; runtime catalogue loading enlarges the authority surface; permission discovery from route names misses GitOps and indirect weakening; generic `write` or wildcard permissions hide distinct commands; expanding every action into a new module conflicts with BE-04; implementing access-policy evaluation here would depend on unresolved BE-12 guarantees.
 
