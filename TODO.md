@@ -11,3 +11,5 @@ Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unre
 - [ ] Complete the certificate-profile fields left open by `docs/specs/network-transition-qualification.md`, publish its typed records and fixtures, then qualify renewal, accounting, session control, CoA and custody recovery on every required gateway unit.
 - [ ] Verify the remaining platform and dependency claims in `docs/analysis.md` section 4 and establish the required device and gateway test lab.
 - [ ] Bound concurrent body decoding in the ingest handler: one key-dense 64 MiB batch costs about 18.5 million allocations and 250 MB of live heap in `server/internal/events/body`, so request concurrency and process memory need a measured limit before the handler ships (EV-09).
+
+- [ ] Implement the isolated Go permission catalogue library from the reviewed spec, plan and fixtures in `docs/plans/permission-catalogue.md` before role and API consumers.

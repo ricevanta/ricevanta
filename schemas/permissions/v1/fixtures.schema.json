@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/permissions/v1/fixtures.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id","error"],
+            "properties": {
+              "id": {"type": "string","minLength": 1,"maxLength": 100,"pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"},
+              "catalogue": {},
+              "schema_valid": {"type": "boolean"},
+              "wire_hex": {"type": "string","pattern": "^([0-9a-f]{2})*$"},
+              "error": {
+                "enum": [
+                  "",
+                  "ErrLimit",
+                  "ErrJSON",
+                  "ErrShape",
+                  "ErrVersion",
+                  "ErrNameFormat",
+                  "ErrEntry",
+                  "ErrDuplicate",
+                  "ErrOrder",
+                  "ErrRevision",
+                  "ErrUnknownPermission",
+                  "ErrRetiredPermission"
+                ]
+              }
+            },
+            "oneOf": [
+              {"required": ["catalogue","schema_valid"],"not": {"required": ["wire_hex"]}},
+              {"required": ["wire_hex"],"not": {"anyOf": [{"required": ["catalogue"]},{"required": ["schema_valid"]}]}}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalogue_case","cases"],
+      "properties": {
+        "catalogue_case": {"type": "string","minLength": 1,"maxLength": 100,"pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"},
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id","name","validate_error","lookup_error"],
+            "properties": {
+              "id": {"type": "string","minLength": 1,"maxLength": 100,"pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"},
+              "name": {"type": "string"},
+              "validate_error": {"enum": ["","ErrNameFormat"]},
+              "lookup_error": {"enum": ["","ErrNameFormat","ErrUnknownPermission","ErrRetiredPermission"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revocation_cases"
+      ],
+      "properties": {
+        "revocation_cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "catalogue",
+              "coverage_valid"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"
+              },
+              "catalogue": {
+                "type": "object"
+              },
+              "coverage_valid": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

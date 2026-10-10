@@ -500,6 +500,12 @@ Why: database rollback must not revive revoked identities, reuse spent authoriza
 Rejected: floors collected from returning devices; elapsed restore timers; a database or operator-selected head as proof of current authority.
 Detail: `design/backend.md` section 6.1, `design/pki.md` section 4 and `specs/policy-envelope.md` sections 6 and 7.
 
+### BE-14. Permission catalogue
+Decision: a versioned JSON catalogue under `schemas/permissions/v1/` defines exact permission names, scope kinds, grant kinds and approval metadata; the Go `authz/catalogue` library embeds an identical copy guarded by a byte drift test, rejects unknown or retired names, and keeps permanent retirement tombstones.
+Why: console, API and GitOps consumers need one explicit inventory without giving runtime data authority to redefine permissions.
+Rejected: generated Go literals add a generator, runtime loading admits replacement metadata, and wildcard permissions obscure distinct actions.
+Detail: [Permission catalogue](specs/permission-catalogue.md) and [implementation plan](plans/permission-catalogue.md).
+
 ## Extensions (EXT)
 
 ### EXT-01. Extension model and kinds

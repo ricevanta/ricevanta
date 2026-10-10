@@ -1,0 +1,26 @@
+{
+  "catalogue_case": "active-and-retired",
+  "cases": [
+    {"id": "active","name": "dlp.evidence.read","validate_error": "","lookup_error": ""},
+    {"id": "retired","name": "dlp.evidence.update","validate_error": "","lookup_error": "ErrRetiredPermission"},
+    {"id": "unknown","name": "mdm.devices.read","validate_error": "","lookup_error": "ErrUnknownPermission"},
+    {"id": "unknown-namespace","name": "alien.devices.read","validate_error": "","lookup_error": "ErrUnknownPermission"},
+    {"id": "unknown-verb","name": "dlp.evidence.unknown","validate_error": "","lookup_error": "ErrUnknownPermission"},
+    {"id": "empty","name": "","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "two","name": "edr.scan","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "four","name": "a.b.c.d","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "uppercase","name": "Dlp.evidence.read","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "wildcard","name": "dlp.evidence.*","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "space","name": " dlp.evidence.read","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "newline","name": "dlp.evidence.read\n","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "unicode","name": "dlp.\u00e9vidence.read","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "hyphen","name": "dlp.evidence.read-all","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "digit-first","name": "1.a.b","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "empty-token","name": "dlp..read","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "nul","name": "dlp.evidence.read\u0000","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "token-33","name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.b.c","validate_error": "ErrNameFormat","lookup_error": "ErrNameFormat"},
+    {"id": "max-length","name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.cccccccccccccccccccccccccccccccc","validate_error": "","lookup_error": "ErrUnknownPermission"},
+    {"id": "min-length","name": "a.b.c","validate_error": "","lookup_error": "ErrUnknownPermission"},
+    {"id": "underscore","name": "a.b_c.d_1","validate_error": "","lookup_error": "ErrUnknownPermission"}
+  ]
+}

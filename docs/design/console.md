@@ -75,6 +75,8 @@ The API tokens view lists the operator's tokens with name, the first characters 
 
 ## 3. Authorization in the UI
 
+The [permission catalogue](../specs/permission-catalogue.md) owns exact names, scope kinds, operation mappings and approval metadata; its [implementation plan](../plans/permission-catalogue.md) defines the isolated Go library. Catalogue lookup does not authorize a request.
+
 ### 3.1 Permission-aware views
 
 `getSession` returns the operator, the effective permissions as `{ name, scope }` pairs (scope `all` or a list of device groups; every name has the form `<module>.<resource>.<verb>`, for example `dlp.evidence.read`), the CSRF token, locale, server version, timeouts, the configured recovery quorum and whether configurable approval policies are disabled. The router hides navigation entries and blocks routes whose read permission is missing; action controls the operator cannot use stay visible but disabled with the missing permission named. That is presentation only: every request is authorized by the server (BE-05), a `permission_denied` problem renders the same "not permitted" state, and fields an operator may not read are omitted by the server, never hidden by the client. A DLP finding read without `dlp.evidence.read` arrives without its snippet.
@@ -195,7 +197,7 @@ Each area lists its views, the data it reads, its actions and the OpenAPI operat
 ### 5.15 Extensions
 
 - Views: installed packages with id, version, publisher name and fingerprint, SPDX license, kinds, components, grant generation and status; install from upload, URL or the index, showing manifest, signature result, file hashes, interface versions, the license and the requested capabilities per component (`extensions.md` section 2.2); trust list with keys, id prefixes and revocations; browser registrations; console module slots; connector registrations with contract versions and health; per-device component health from degraded modules; index settings.
-- Actions: install, upgrade, enable, grant (P); disable or uninstall (P when an enforcing policy or a qualified adapter depends on the component); add a revocation (never held); other trust-list changes (P); browser-registration changes (P).
+- Actions: install, upgrade, enable, grant (P); disable or uninstall (P when an enforcing policy or a qualified adapter depends on the component); add a publisher-key revocation (never held); add an id or version revocation (P when an enforcing policy or a qualified adapter depends on the id or version); other trust-list changes (P); browser-registration changes (P).
 - Operations: `listExtensions`, `uploadExtension`, `installExtension`, `updateExtensionGrants`, `setExtensionEnabled`, `uninstallExtension`, `getTrustList`, `updateTrustList`, `listBrowserRegistrations`, `listConnectors`, `createExtensionBridgeBinding` (first-party host only). Modules use only the reviewed safe-operation catalogue in `extensions.md` section 5.3; token creation, approval decisions and authority administration are excluded even when the operator holds those permissions.
 
 ### 5.16 Events and export

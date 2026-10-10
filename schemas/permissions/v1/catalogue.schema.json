@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/permissions/v1/catalogue.schema.json",
+  "title": "Permission catalogue v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version","revision","permissions"],
+  "properties": {
+    "format_version": {"const": 1},
+    "revision": {"type": "integer","minimum": 1,"maximum": 4294967295},
+    "permissions": {"type": "array","minItems": 1,"maxItems": 2048,"items": {"$ref": "#/$defs/permission"}}
+  },
+  "$defs": {
+    "name": {"type": "string","minLength": 5,"maxLength": 98,"pattern": "^[a-z][a-z0-9_]{0,31}\\.[a-z][a-z0-9_]{0,31}\\.[a-z][a-z0-9_]{0,31}$(?![\\s\\S])"},
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name","owner","scope","protection","approval","rule","grant","status","introduced","uses","source","note"],
+      "properties": {
+        "name": {"$ref": "#/$defs/name"},
+        "owner": {"enum": ["audit","authz","detection","devices","dlp","events","extensions","identity","lineage","mdm","pki","platform","policy","radius"]},
+        "scope": {"enum": ["organization","device_group"]},
+        "protection": {"enum": ["none","always","conditional"]},
+        "approval": {"enum": ["none","access_policy","identity_authority"]},
+        "rule": {
+          "enum": [
+            "always",
+            "audit_retention",
+            "child_union",
+            "destination_change",
+            "extension_dependency",
+            "fleet_gt_10",
+            "gateway_widen",
+            "grant_sensitive",
+            "group_change",
+            "hold_narrow",
+            "identity_authority",
+            "none",
+            "policy_change",
+            "published_content"
+          ]
+        },
+        "grant": {"enum": ["role","direct","connector"]},
+        "status": {"enum": ["active","retired"]},
+        "introduced": {"type": "integer","minimum": 1,"maximum": 4294967295},
+        "retired_in": {"type": "integer","minimum": 2,"maximum": 4294967295},
+        "uses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string","minLength": 1,"maxLength": 160,"pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"}
+        },
+        "source": {"type": "string","minLength": 1,"maxLength": 160,"pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"},
+        "note": {"type": "string","minLength": 1,"maxLength": 512,"pattern": "^[\\x20-\\x7e]+$(?![\\s\\S])"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "retired"}}},"then": {"required": ["retired_in"]},"else": {"not": {"required": ["retired_in"]}}},
+        {"if": {"properties": {"rule": {"const": "none"}}},"then": {"properties": {"protection": {"const": "none"},"approval": {"const": "none"}}}},
+        {"if": {"properties": {"rule": {"const": "always"}}},"then": {"properties": {"protection": {"const": "always"},"approval": {"const": "access_policy"}}}},
+        {
+          "if": {"properties": {"rule": {"const": "identity_authority"}}},
+          "then": {"properties": {"protection": {"const": "always"},"approval": {"const": "identity_authority"}}}
+        },
+        {
+          "if": {"properties": {"rule": {"not": {"enum": ["none","always","identity_authority"]}}}},
+          "then": {"properties": {"protection": {"const": "conditional"},"approval": {"const": "access_policy"}}}
+        },
+        {
+          "if": {"properties": {"name": {"const": "identity.authority.approve"}}},
+          "then": {"properties": {"grant": {"const": "direct"}}},
+          "else": {
+            "if": {"properties": {"name": {"const": "extensions.ca_callback.complete"}}},
+            "then": {"properties": {"grant": {"const": "connector"}}},
+            "else": {"properties": {"grant": {"const": "role"}}}
+          }
+        },
+        {
+          "properties": {
+            "name": {
+              "pattern": "^(audit|authz|dlp|edr|events|extensions|identity|lineage|mdm|pki|platform|policy|radius)\\.[a-z][a-z0-9_]{0,31}\\.(advance|approve|assign|backfill|cancel|capture|collect|complete|confirm|create|delete|diagnose|disable|disconnect|enable|execute|export|import|install|isolate_host|key_operation|kill_and_ban|kill_process|lock|manage|message|override|pause|pin|preflight|promote|publish|quarantine_file|read|reclassify|reconcile|reject|release|remove|replace|replace_factor|replay|reset|restart|restore_file|resume|retire|revoke|rotate|run|run_script|scan|script|shutdown|simulate|suspend|test|transfer|unban|uninstall|unisolate_host|unpin|update|update_os|upgrade|upload|validate|wipe|withdraw)$"
+            }
+          }
+        },
+        {"if": {"properties": {"name": {"pattern": "^audit\\."}}},"then": {"properties": {"owner": {"enum": ["audit"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^authz\\."}}},"then": {"properties": {"owner": {"enum": ["authz"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^dlp\\."}}},"then": {"properties": {"owner": {"enum": ["dlp"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^edr\\."}}},"then": {"properties": {"owner": {"enum": ["detection"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^events\\."}}},"then": {"properties": {"owner": {"enum": ["events"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^extensions\\."}}},"then": {"properties": {"owner": {"enum": ["extensions"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^identity\\."}}},"then": {"properties": {"owner": {"enum": ["identity"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^lineage\\."}}},"then": {"properties": {"owner": {"enum": ["lineage"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^mdm\\."}}},"then": {"properties": {"owner": {"enum": ["devices","mdm"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^pki\\."}}},"then": {"properties": {"owner": {"enum": ["pki"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^platform\\."}}},"then": {"properties": {"owner": {"enum": ["platform"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^policy\\."}}},"then": {"properties": {"owner": {"enum": ["policy"]}}}},
+        {"if": {"properties": {"name": {"pattern": "^radius\\."}}},"then": {"properties": {"owner": {"enum": ["radius"]}}}}
+      ]
+    }
+  }
+}
