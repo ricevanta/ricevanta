@@ -169,16 +169,6 @@ Trade-offs: callers retain the input while reading borrowed records; a future bo
 
 Alternatives considered: a file-owning writer couples the first slice to unproved sync and crash ordering; a record vector copies or allocates per record; serde-based tests add dependencies only to load fixtures; accepting sequence gaps contradicts the Go descriptor invariant; silently truncating an unsupported version risks losing readable data after an update; cargo-fuzz adds a separate toolchain and does not replace the stable cross-platform checks. The selected choices reject those costs for this slice.
 
-## 8. Unresolved questions and review focus
+## 8. Later gates
 
-The byte/API choices are complete proposals, pending independent approval. Review these questions before implementation:
-
-- Does `agent/crates/spool` as a leaf workspace member fit the core events dependency better than embedding the codec in the future core crate?
-- Does the explicit reserved zero byte and little-endian layout fit interoperability better than native struct serialization?
-- Does the 1 MiB opaque payload ceiling fit the server contract better than unbounded records or JSON validation inside the codec?
-- Does the borrowed, file-free API fit the first slice better than a file-owning writer whose native durability contract is unresolved?
-- Is refusing oversized lengths and checksum-valid sequence gaps preferable to truncating them and hiding unsupported framing or sequence defects?
-- Is stable std-only mutation testing sufficient for this bounded codec, with coverage-guided cargo-fuzz reserved for a separate expansion?
-- Can the selected dependency closure and CI pins pass the plan's license and target checks without changing the reviewed contract?
-
-Review focus: class parity with Go; every byte offset and endian rule; unchecked offset/sequence arithmetic; no output mutation on encode failure; tail versus fatal-error precedence; no suffix salvage; header-only and exhausted-stream behavior; borrowed lifetime and constant auxiliary memory; fixture independence; and the separation of framing from authenticity, OCSF validity and native durability.
+The codec is file-free. Native durable sync on each operating system, the file-owning spool manager with exclusive ownership and crash ordering, sealing and zstd compression, upload and acknowledgement, and spool caps remain separate slices. Coverage-guided fuzzing with cargo-fuzz requires its own reviewed setup and does not replace the stable cross-platform checks.

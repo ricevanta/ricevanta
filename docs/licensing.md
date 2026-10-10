@@ -144,7 +144,9 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `sevenz-rust2` | Apache-2.0 | 7z extraction |
 | `chardetng`, `encoding_rs` | Apache-2.0 OR MIT; (Apache-2.0 OR MIT) AND BSD-3-Clause | Text encoding detection and decoding |
 | TLSH and `tlsh2` | TLSH "Apache OR BSD" per its LICENSE file; `tlsh2` Apache-2.0 OR BSD-3-Clause, pure Rust | Content similarity in `ricevanta-scan` |
-| `crc32c` crate | Apache-2.0 or MIT | Spool record checksums |
+| [`crc32c` 0.6.8](https://docs.rs/crate/crc32c/0.6.8/source/Cargo.toml) | MIT OR Apache-2.0 | Spool record checksums; exact registry README grants either license (no standalone LICENSE files); default features; retain upstream license and copyright notices in distributions |
+| `rustc_version` 0.4.1 | MIT OR Apache-2.0 | `crc32c` build dependency; registry release LICENSE-MIT and LICENSE-APACHE inspected; retain both notices |
+| `semver` 1.0.27 | MIT OR Apache-2.0 | `rustc_version` dependency with default `std` feature; registry release LICENSE-MIT and LICENSE-APACHE inspected; retain both notices |
 | ssdeep | GPL-2.0 | Not used |
 | W3C PROV-DM, OpenLineage | W3C document license; Apache-2.0 | Lineage vocabulary only |
 
@@ -155,6 +157,9 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | Python `jsonschema`, `referencing`, PyYAML | MIT; MIT; MIT | Design CI validates JSON Schema and policy examples with local reference resolution; not shipped |
 | Python `rfc3339-validator`, `six` | MIT; MIT | Design CI checks exception expiry timestamps; not shipped |
 | GitHub Actions `checkout`, `setup-python`, `setup-go` | MIT; MIT; MIT | Design and server CI checkout and language setup; pinned by commit |
+| [Rust 1.99.0 toolchain and standard library](https://github.com/rust-lang/rust/tree/1.99.0) | MIT OR Apache-2.0; bundled components carry their own notices | Builds and tests the agent; retain installed toolchain license notices; not redistributed by this slice |
+| [Python 3.13.7](https://github.com/python/cpython/blob/v3.13.7/LICENSE) | PSF-2.0 and incorporated-software terms | Fixture generation and CI build tool; not shipped; retain upstream LICENSE and incorporated-software notices if redistributed |
+| [GitHub Actions `cache` v6.1.0](https://github.com/actions/cache/tree/55cc8345863c7cc4c66a329aec7e433d2d1c52a9) | MIT; bundled dependencies MIT, ISC, Apache-2.0 and 0BSD | CI registry cache only; exact-commit LICENSE, .licenses/NOTICE and all 44 .licenses/**/*.dep.yml records inspected; retain those notices with any redistribution. Records labeled "other": @actions/http-client 4.0.1 MIT, concat-map 0.0.1 MIT, @protobuf-ts/runtime 2.11.1 Apache-2.0 |
 | Go 1.27.1 toolchain and standard library | BSD-3-Clause | Builds and tests the server; the standard library supplies its runtime and library code |
 | Be Vietnam Pro | SIL OFL 1.1 | Outlined into the wordmark and tagline masters, and bundled as WOFF2 subsets in the console build with the OFL notice beside the files, which OFL 1.1 permits; no Reserved Font Name is declared; notice in `branding/source/OFL-BeVietnamPro.txt`; font binaries are not committed |
 | ImageMagick 7 with librsvg | ImageMagick License; librsvg LGPL-2.1-or-later (verify) | Build-time renderer for `branding/scripts/build.py`; not shipped |
