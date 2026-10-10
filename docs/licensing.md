@@ -82,7 +82,7 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `aho-corasick` crate | Unlicense OR MIT | Matcher prefilter, keyword and deny-list passes |
 | `postcard` | MIT or Apache-2.0 | Agent local IPC serialization |
 | zstd and the `zstd` Rust crate | BSD-3-Clause; crate MIT | Event spool and upload compression |
-| `klauspost/compress` | BSD-3-Clause | Server zstd decompression, pure Go |
+| [`github.com/klauspost/compress` v1.20.1](https://github.com/klauspost/compress/blob/v1.20.1/LICENSE) | BSD-3-Clause for zstd; module also contains Apache-2.0 and MIT paths | Server zstd decompression, pure Go; exact EV-09 pin; retain applicable copyright and license notices in source/binary distribution and include in the release SBOM |
 | `cel-go` | Apache-2.0 | Server CEL evaluation |
 | `pgx` | MIT | Server PostgreSQL driver |
 | `go-oidc`, `go-ldap` | Apache-2.0; MIT | Administrator login, directory sync |

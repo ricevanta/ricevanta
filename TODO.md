@@ -10,3 +10,4 @@ Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unre
 - [ ] Publish the missing machine-readable contracts and positive and negative fixtures listed in `docs/analysis.md` section 3 before implementing their consumers.
 - [ ] Complete the certificate-profile fields left open by `docs/specs/network-transition-qualification.md`, publish its typed records and fixtures, then qualify renewal, accounting, session control, CoA and custody recovery on every required gateway unit.
 - [ ] Verify the remaining platform and dependency claims in `docs/analysis.md` section 4 and establish the required device and gateway test lab.
+- [ ] Independently review `docs/specs/event-batch-body.md`, `docs/plans/event-batch-body.md` and the body fixtures, then implement the bounded Go decoder with separate Sol medium ownership and Sol xhigh code review (EV-09).

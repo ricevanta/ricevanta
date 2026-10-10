@@ -304,6 +304,12 @@ Why: bounded parsing and one representation prevent ambiguous batch routing and 
 Rejected: JSON descriptors, permissive header lists and trusting either copy on mismatch, which add representations or admit conflicting metadata.
 Detail: `specs/event-upload-wire.md` and `schemas/events/v1/`.
 
+### EV-09. Bounded event batch body decoding
+Decision: the internal Go body decoder accepts one checksummed, sized zstd frame using `github.com/klauspost/compress/zstd` v1.20.1, bounded input, window and streamed output. Actual line count must match the descriptor; strict identity extraction and positional sequences yield per-line quarantine results only after batch integrity passes.
+Why: resource bounds and unambiguous bindings stop malformed batches from bypassing admission while preserving good events beside a failing event (EV-03).
+Rejected: whole-output decompression, concatenated frames, permissive JSON extraction and whole-batch rejection for event binding faults, which weaken bounds or prevent per-event quarantine.
+Detail: [event batch body spec](specs/event-batch-body.md), [implementation plan](plans/event-batch-body.md) and `schemas/events/v1/fixtures/body.json`.
+
 ## Policy (POL)
 
 ### POL-01. CEL runtimes

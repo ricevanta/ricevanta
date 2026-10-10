@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/events/v1/body-fixture.schema.json",
+  "title": "Event batch body fixtures",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "reference_encoder",
+    "record_template",
+    "cases"
+  ],
+  "properties": {
+    "kind": {
+      "const": "body"
+    },
+    "reference_encoder": {
+      "const": "zstd-cli-1.5.7"
+    },
+    "record_template": {
+      "type": "string",
+      "const": "{\"metadata\":{\"uid\":\"017f22e2-79b0-7cc3-98c4-dc0c0c07398f\",\"sequence\":SEQUENCE},\"device\":{\"uid\":\"device-a\"}}"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "descriptor",
+          "authenticated_device",
+          "plain",
+          "encoder",
+          "mutations",
+          "body_parts",
+          "body_bytes",
+          "body_sha256",
+          "plain_bytes",
+          "plain_sha256",
+          "expected"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9.-]+$"
+          },
+          "descriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "class",
+              "epoch",
+              "segment",
+              "first",
+              "last",
+              "count"
+            ],
+            "properties": {
+              "class": {
+                "enum": [
+                  "raw",
+                  "context",
+                  "lineage",
+                  "findings",
+                  "audit"
+                ]
+              },
+              "epoch": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              "segment": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              "first": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              "last": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              "count": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              }
+            }
+          },
+          "authenticated_device": {
+            "type": "string",
+            "minLength": 1
+          },
+          "plain": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "literal_base64"
+                ],
+                "properties": {
+                  "literal_base64": {
+                    "type": "string",
+                    "contentEncoding": "base64",
+                    "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "records"
+                ],
+                "properties": {
+                  "records": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "count",
+                      "first"
+                    ],
+                    "properties": {
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10001
+                      },
+                      "first": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]{0,19})$"
+                      },
+                      "line_bytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1048578
+                      },
+                      "total_bytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 67108865
+                      },
+                      "extra_last_spaces": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1
+                      }
+                    },
+                    "not": {
+                      "required": [
+                        "line_bytes",
+                        "total_bytes"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "encoder": {
+            "enum": [
+              "zstd",
+              "raw"
+            ]
+          },
+          "mutations": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "offset",
+                "delete",
+                "insert_base64"
+              ],
+              "properties": {
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 5000001
+                },
+                "delete": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 5000001
+                },
+                "insert_base64": {
+                  "type": "string",
+                  "contentEncoding": "base64",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                }
+              }
+            }
+          },
+          "body_parts": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "base64",
+                "repeat"
+              ],
+              "properties": {
+                "base64": {
+                  "type": "string",
+                  "contentEncoding": "base64",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                },
+                "repeat": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5000001
+                }
+              }
+            }
+          },
+          "body_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000001
+          },
+          "body_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "plain_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 67108865
+          },
+          "plain_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "batch_error",
+              "status",
+              "lines"
+            ],
+            "properties": {
+              "batch_error": {
+                "enum": [
+                  null,
+                  "body.ErrCompressedLimit",
+                  "body.ErrFrame",
+                  "body.ErrChecksumRequired",
+                  "body.ErrContentSizeRequired",
+                  "body.ErrDecodedLimit",
+                  "body.ErrWindowLimit",
+                  "body.ErrTrailingData",
+                  "body.ErrContentSize",
+                  "body.ErrChecksum",
+                  "body.ErrLineLimit",
+                  "body.ErrLineCountLimit",
+                  "body.ErrLineFraming",
+                  "body.ErrRecordCount"
+                ]
+              },
+              "status": {
+                "enum": [
+                  null,
+                  400,
+                  413
+                ]
+              },
+              "lines": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 10000,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "count",
+                    "error",
+                    "cause",
+                    "device_mismatch"
+                  ],
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "error": {
+                      "enum": [
+                        null,
+                        "body.ErrJSON",
+                        "body.ErrJSONKeys",
+                        "body.ErrFields",
+                        "body.ErrEventID",
+                        "body.ErrSequenceRange",
+                        "body.ErrSequencePosition",
+                        "body.ErrDeviceBinding"
+                      ]
+                    },
+                    "cause": {
+                      "enum": [
+                        null,
+                        "eventid.ErrFormat",
+                        "eventid.ErrNonCanonical",
+                        "eventid.ErrVersion",
+                        "eventid.ErrVariant"
+                      ]
+                    },
+                    "device_mismatch": {
+                      "type": "boolean"
+                    },
+                    "event_uid": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "sequence_first": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]{0,19})$"
+                    },
+                    "device_uid": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "error": {
+                            "type": "null"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "event_uid",
+                          "sequence_first",
+                          "device_uid"
+                        ],
+                        "properties": {
+                          "cause": {
+                            "type": "null"
+                          },
+                          "device_mismatch": {
+                            "const": false
+                          }
+                        }
+                      },
+                      "else": {
+                        "not": {
+                          "anyOf": [
+                            {
+                              "required": [
+                                "event_uid"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "sequence_first"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "device_uid"
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "error": {
+                            "const": "body.ErrEventID"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "cause": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "else": {
+                        "properties": {
+                          "cause": {
+                            "type": "null"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "batch_error": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "status": {
+                      "type": "null"
+                    },
+                    "lines": {
+                      "minItems": 1
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "lines": {
+                      "maxItems": 0
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "batch_error": {
+                      "enum": [
+                        "body.ErrCompressedLimit",
+                        "body.ErrDecodedLimit",
+                        "body.ErrWindowLimit",
+                        "body.ErrLineLimit",
+                        "body.ErrLineCountLimit"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "status": {
+                      "const": 413
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        null,
+                        400
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
