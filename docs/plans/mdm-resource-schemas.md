@@ -60,10 +60,10 @@ Do not modify another path without a reviewed scope amendment. No package initia
 
 **Produces:** Verification evidence and an independently reviewed contract ready for the Go consumer. This task authors no schemas or fixtures.
 
-- [ ] Run `python schemas/policy/v1alpha1/validate.py` and `python schemas/policy/v1alpha1/test_validate.py`. Require PASS, 23 schemas, five resource kinds and both structural and full fixture agreement.
-- [ ] Inspect all 17 item annotations, every SoftwarePackage matrix row and group selector operator. Check the manifest and expected-errors index against fixture inventory.
-- [ ] Recompute every fixture outcome with a separate temporary script that imports no validator helpers. Check the four exact budget vectors and generated settings/root cap boundaries, including multibyte strings and control escapes. Record both command results and every discrepancy.
-- [ ] Obtain independent Sol xhigh approval of the spec, plan, schemas, fixtures and Python checks. Include malformed local references, manifest omissions, privileged kinds, unsigned exceptions and combined defects. Resolve contract defects through the designer and confirm fixes independently before Task 2.
+- [x] Run `python schemas/policy/v1alpha1/validate.py` and `python schemas/policy/v1alpha1/test_validate.py`. Require PASS, 23 schemas, five resource kinds and both structural and full fixture agreement.
+- [x] Inspect all 17 item annotations, every SoftwarePackage matrix row and group selector operator. Check the manifest and expected-errors index against fixture inventory.
+- [x] Recompute every fixture outcome with a separate temporary script that imports no validator helpers. Check the four exact budget vectors and generated settings/root cap boundaries, including multibyte strings and control escapes. Record both command results and every discrepancy.
+- [x] Obtain independent Sol xhigh approval of the spec, plan, schemas, fixtures and Python checks. Include malformed local references, manifest omissions, privileged kinds, unsigned exceptions and combined defects. Resolve contract defects through the designer and confirm fixes independently before Task 2.
 
 ### Task 2: Go decoded-resource validator
 
@@ -71,14 +71,14 @@ Do not modify another path without a reviewed scope amendment. No package initia
 
 **Produces:** Exact `Validate(map[string]any) (Result, error)`, Result, Error and five sentinels from the spec. Private helpers belong in the five implementation files in the ownership table. No Go module or public service changes.
 
-- [ ] Write `TestValidateFixtures`, `TestValidateErrorPrecedence`, `TestValidateInputDomain`, `TestValidateBudgetBoundaries`, `TestValidateClassification`, `TestValidateNoMutation`, `TestValidateNoAliases`, `TestValidateConcurrent`, `TestErrorRedaction` and `TestFixtureDrift`. Use errors.Is and errors.As, assert zero Result for every rejection, input-order ApplyItemIDs for success and nil when absent.
-- [ ] Include tests for nil map, nil typed collections, unsupported ints/json.Number/structs/custom marshalers, NaN/infinity, unsafe integers, invalid UTF-8, cycles, shared subtrees, negative zero and fractional values. Nil map is an envelope failure, nil slice is not an array in the decoded domain and must be ErrInput; no custom marshaler method may run. Test zero and maximum counts plus Unicode scalar/byte differences.
-- [ ] Run `cd server && go test ./internal/mdm/resourcevalidate` and record the expected missing Validate/types failure. Do not implement before observing it.
-- [ ] Implement bounded input traversal and budget accounting first, then the envelope and per-resource checks. Return redacted *Error values with sentinel causes. Use explicit switches for discriminators and small rule helpers, not reflection-based serialization, schema retrieval or a generic schema interpreter. Type assertions cannot panic. Keep returned slices detached from input.
-- [ ] Mirror required/unknown-field and branch rules with deterministic location ordering. Apply semantic rule groups only after all structural checks pass. Classification comes from a closed kind table, never from input annotations. Preserve query, polkit and directive text as input without executing or normalizing it.
-- [ ] Add `FuzzValidate` and `FuzzBudget` exactly as specified, with fixtures and all combined-defect cases as seeds. Use a simple independent charge oracle in budget_test.go. Test that a larger budget failure wins over an invalid kind and a structural error wins over a duplicate id.
-- [ ] Run `cd server && go test ./internal/mdm/resourcevalidate` and require PASS. Run `python schemas/policy/v1alpha1/validate.py` from the root; both languages must agree on every fixture. No difference may be resolved by changing only the manifest expectation without checking the spec.
-- [ ] Obtain independent Sol xhigh code review with an adversarial pass over all new Go/Python code and schemas. Resolve defects through the implementer; independent fix confirmation gates Task 3.
+- [x] Write `TestValidateFixtures`, `TestValidateErrorPrecedence`, `TestValidateInputDomain`, `TestValidateBudgetBoundaries`, `TestValidateClassification`, `TestValidateNoMutation`, `TestValidateNoAliases`, `TestValidateConcurrent`, `TestErrorRedaction` and `TestFixtureDrift`. Use errors.Is and errors.As, assert zero Result for every rejection, input-order ApplyItemIDs for success and nil when absent.
+- [x] Include tests for nil map, nil typed collections, unsupported ints/json.Number/structs/custom marshalers, NaN/infinity, unsafe integers, invalid UTF-8, cycles, shared subtrees, negative zero and fractional values. Nil map is an envelope failure, nil slice is not an array in the decoded domain and must be ErrInput; no custom marshaler method may run. Test zero and maximum counts plus Unicode scalar/byte differences.
+- [x] Run `cd server && go test ./internal/mdm/resourcevalidate` and record the expected missing Validate/types failure. Do not implement before observing it.
+- [x] Implement bounded input traversal and budget accounting first, then the envelope and per-resource checks. Return redacted *Error values with sentinel causes. Use explicit switches for discriminators and small rule helpers, not reflection-based serialization, schema retrieval or a generic schema interpreter. Type assertions cannot panic. Keep returned slices detached from input.
+- [x] Mirror required/unknown-field and branch rules with deterministic location ordering. Apply semantic rule groups only after all structural checks pass. Classification comes from a closed kind table, never from input annotations. Preserve query, polkit and directive text as input without executing or normalizing it.
+- [x] Add `FuzzValidate` and `FuzzBudget` exactly as specified, with fixtures and all combined-defect cases as seeds. Use a simple independent charge oracle in budget_test.go. Test that a larger budget failure wins over an invalid kind and a structural error wins over a duplicate id.
+- [x] Run `cd server && go test ./internal/mdm/resourcevalidate` and require PASS. Run `python schemas/policy/v1alpha1/validate.py` from the root; both languages must agree on every fixture. No difference may be resolved by changing only the manifest expectation without checking the spec.
+- [x] Obtain independent Sol xhigh code review with an adversarial pass over all new Go/Python code and schemas. Resolve defects through the implementer; independent fix confirmation gates Task 3.
 
 ### Task 3: Drift hardening and whole-slice verification
 
@@ -86,11 +86,11 @@ Do not modify another path without a reviewed scope amendment. No package initia
 
 **Produces:** A complete checked corpus, meaningful regression tests and verification evidence. This task changes only owned Go test paths. A shared schema or fixture coverage gap returns to the designer for a reviewed contract correction.
 
-- [ ] Write failing regression tests for any uncovered Review focus condition. Add Go fixture completeness tests that fail after removing a branch's only positive fixture or its paired negative. Manifest records identify files, so coverage expectations live in explicit test tables keyed by kind/platform/source branch rather than an undocumented filename convention.
-- [ ] Run `python schemas/policy/v1alpha1/test_validate.py` and `cd server && go test ./internal/mdm/resourcevalidate` to observe each new regression before filling the coverage gap. Require intended failures, then obtain a reviewed design correction for corpus gaps and require PASS.
-- [ ] Exercise deliberate schema/Go drift in temporary copies: weaken a protected annotation, accept an unknown field, remove an OS branch and change a numeric boundary. Require at least one corresponding test failure for each mutation, restore the original files and rerun ordinary checks. Do not leave mutation scripts in the repository.
-- [ ] Run every Final verification command below and inspect the complete diff. Passing pure-library tests establishes portable input validation only, not native support on macOS ARM64, Windows x64 or Linux x64.
-- [ ] Obtain a whole-slice independent Sol xhigh review including schema/Python/Go agreement, ownership, native blockers and error precedence. Require independent confirmation of fixes and fresh checks for changed paths. The primary agent handles any integration and Git workflow after acceptance.
+- [x] Write failing regression tests for any uncovered Review focus condition. Add Go fixture completeness tests that fail after removing a branch's only positive fixture or its paired negative. Manifest records identify files, so coverage expectations live in explicit test tables keyed by kind/platform/source branch rather than an undocumented filename convention.
+- [x] Run `python schemas/policy/v1alpha1/test_validate.py` and `cd server && go test ./internal/mdm/resourcevalidate` to observe each new regression before filling the coverage gap. Require intended failures, then obtain a reviewed design correction for corpus gaps and require PASS.
+- [x] Exercise deliberate schema/Go drift in temporary copies: weaken a protected annotation, accept an unknown field, remove an OS branch and change a numeric boundary. Require at least one corresponding test failure for each mutation, restore the original files and rerun ordinary checks. Do not leave mutation scripts in the repository.
+- [x] Run every Final verification command below and inspect the complete diff. Passing pure-library tests establishes portable input validation only, not native support on macOS ARM64, Windows x64 or Linux x64.
+- [x] Obtain a whole-slice independent Sol xhigh review including schema/Python/Go agreement, ownership, native blockers and error precedence. Require independent confirmation of fixes and fresh checks for changed paths. The primary agent handles any integration and Git workflow after acceptance.
 
 ## Final verification
 

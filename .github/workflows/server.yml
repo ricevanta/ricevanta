@@ -9,6 +9,7 @@ on:
       - 'schemas/events/**'
       - 'schemas/cel/**'
       - 'schemas/export/**'
+      - 'schemas/policy/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   pull_request:
@@ -18,6 +19,7 @@ on:
       - 'schemas/events/**'
       - 'schemas/cel/**'
       - 'schemas/export/**'
+      - 'schemas/policy/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   workflow_dispatch:
@@ -103,7 +105,9 @@ jobs:
               {"package":"./internal/authz/catalogue","target":"FuzzParse"},
               {"package":"./internal/extensions/manifest","target":"FuzzValidate"},
               {"package":"./internal/events/exportdest","target":"FuzzValidate"},
-              {"package":"./internal/events/exportdest","target":"FuzzDecoded"}
+              {"package":"./internal/events/exportdest","target":"FuzzDecoded"},
+              {"package":"./internal/mdm/resourcevalidate","target":"FuzzValidate"},
+              {"package":"./internal/mdm/resourcevalidate","target":"FuzzBudget"}
             ]
         run: |
           python3 - <<'PY'
