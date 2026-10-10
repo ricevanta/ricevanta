@@ -81,7 +81,57 @@ def instances(schema, fixture, data):
         yield fixture, data, True
 
 
-def main():
+def check_key_admission_coverage(data):
+    """Check the reviewed recipe inventory and classes, not curve arithmetic."""
+    p = 2**255 - 19
+    order = 2**252 + 27742317777372353535851937790883648493
+    required = {}
+
+    def require(kind, recipe, expected):
+        required[(kind, json.dumps(recipe, sort_keys=True))] = expected
+
+    for length in (0, 1, 31, 33, 64):
+        require("length", {"length": length}, "ErrLength")
+    for multiple in range(8):
+        require("torsion", {"multiple": multiple}, "ErrSmallOrder")
+    for y in (1, p - 1):
+        require("y-sign", {"y": str(y), "sign": 1}, "ErrNonCanonical")
+    for y in range(p, p + 19):
+        for sign in (0, 1):
+            require("y-sign", {"y": str(y), "sign": sign}, "ErrNonCanonical")
+    for y in (2, 7, 8):
+        for sign in (0, 1):
+            require("y-sign", {"y": str(y), "sign": sign}, "ErrPoint")
+    for scalar in (1, 2, order - 1):
+        require("base", {"scalar": str(scalar)}, "accept")
+    for scalar in (1, 2):
+        for multiple in range(1, 8):
+            require("mixed", {"scalar": str(scalar), "multiple": multiple}, "ErrMixedOrder")
+    for seed in (
+        "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+        "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
+        "00" * 32,
+        "ff" * 32,
+    ):
+        require("seed", {"seed_hex": seed}, "accept")
+    names = set()
+    recipes = set()
+    for row in data["vectors"]:
+        if row["name"] in names:
+            raise ValueError("key admission: duplicate name: " + row["name"])
+        names.add(row["name"])
+        key = (row["kind"], json.dumps(row["recipe"], sort_keys=True))
+        if key in recipes:
+            raise ValueError("key admission: duplicate recipe: " + row["name"])
+        recipes.add(key)
+        if key not in required or row["expected"] != required[key]:
+            raise ValueError("key admission: unexpected recipe or class: " + row["name"])
+    missing = required.keys() - recipes
+    if missing:
+        raise ValueError(f"key admission: missing recipes: {sorted(missing)}")
+
+
+def main(key_admission_path=None):
     listed = {schema for schema, _ in CONTRACTS}
     discovered = {
         str(path.relative_to(ROOT))
@@ -117,7 +167,11 @@ def main():
             raise ValueError(f"{schema}: expected Draft 2020-12")
         Draft202012Validator.check_schema(definition)
         validator = Draft202012Validator(definition)
-        cases = list(instances(schema, fixture, load(ROOT / fixture)))
+        path = ROOT / fixture
+        if fixture.endswith("/key-admission-vectors.json") and key_admission_path is not None:
+            path = Path(key_admission_path)
+        data = load(path)
+        cases = list(instances(schema, fixture, data))
         if not cases:
             raise ValueError(f"{fixture}: empty fixture suite")
         for label, instance, expected in cases:
@@ -128,6 +182,8 @@ def main():
                 detail = errors[0].message if errors else "expected an invalid instance"
                 raise ValueError(f"{schema} <- {fixture}/{label}: {detail}")
             count += 1
+        if fixture.endswith("/key-admission-vectors.json"):
+            check_key_admission_coverage(data)
     print(f"Contract validation passed: {len(listed)} schemas, {len(CONTRACTS)} pairs, {count} instances")
 
 

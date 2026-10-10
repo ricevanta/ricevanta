@@ -48,7 +48,7 @@
 - Consumes arbitrary raw key bytes, including nil.
 - Produces `Validate([]byte) error` and the five exact sentinels from spec section 2. No point type or arithmetic helper is exported.
 
-- [ ] **Step 1: Write failing tests and the independent oracle.**
+- [x] **Step 1: Write failing tests and the independent oracle.**
 
 Add `TestValidateVectors`, `TestVectorRecipes`, `TestValidatePrecedence`, `TestValidateBoundaries`, `TestValidateInputOwnership`, `TestValidateConcurrent` and `FuzzValidate`. Load the shared fixture relative to the test source, using `runtime.Caller`; fail if absent or if a row is not executed. Check its format, unique names and known outcome names. Decode hex strictly. Reconstruct all recipes, including seed keys with `crypto/ed25519.NewKeyFromSeed`.
 
@@ -56,7 +56,7 @@ For every row, assert nil only for `accept`; otherwise assert `errors.Is` agains
 
 Keep a test-only affine oracle in `oracle_test.go`, with independently expressed inversion, decoding and group addition. Do not import production point helpers into the oracle. Reconstruct T, prove `[8]T == O` and `[4]T != O`, and enumerate all fourteen permissive torsion encodings. Confirm each occurs in the corpus and fails admission. All 38 y-overflow encodings must be present. Use the oracle for recipe reconstruction and the success invariant of `FuzzValidate`.
 
-- [ ] **Step 2: Run and record the expected failure.**
+- [x] **Step 2: Run and record the expected failure.**
 
 ```sh
 cd server && go test -count=1 ./internal/signing/ed25519key
@@ -64,11 +64,11 @@ cd server && go test -count=1 ./internal/signing/ed25519key
 
 Expected: compilation fails because `Validate` and its sentinels are absent. Do not create a passing stub first.
 
-- [ ] **Step 3: Implement the exact API and arithmetic.**
+- [x] **Step 3: Implement the exact API and arithmetic.**
 
 Implement spec sections 2 and 3. Reject length before decoding or input-sized allocation; copy 32 bytes before extracting sign. Use canonical y bounds, checked inverse and square root, signed-zero rejection, `[8]A` and integer `[L]A` in that order. Use complete extended-coordinate addition with modular reduction and a checked projective identity predicate. Keep every mutable receiver private to the call. Do not add signature or private-key arithmetic.
 
-- [ ] **Step 4: Run focused checks.**
+- [x] **Step 4: Run focused checks.**
 
 ```sh
 cd server && gofmt -w internal/signing/ed25519key/*.go
@@ -91,7 +91,7 @@ Run each command from the repository root. Require exit 0 and PASS, including or
 - Consumes `ed25519key.Validate([]byte) error` from Task 1.
 - Produces unchanged `dsse.Verify` API, `Verified{}` on every error and the mapped `ErrPublicKey` behavior in spec section 4.
 
-- [ ] **Step 1: Write the failing DSSE regressions.**
+- [x] **Step 1: Write the failing DSSE regressions.**
 
 Update the `ErrPublicKey` message assertion in `dsse_test.go`'s `TestPayloadTypes` to expect `dsse invalid public key`.
 
@@ -101,7 +101,7 @@ For every rejected corpus key, supply a well-formed envelope with a 64-byte inva
 
 Construct combined-defect tests for every DSSE stage before public-key validation, using its existing helpers for size boundaries. Repeat small-order, noncanonical, off-curve and mixed-order keys with malformed JSON, signature count, type, hint, payload and signature encoding defects. A short signature wins with `ErrSignature`; a correctly sized bad signature loses with `ErrPublicKey`. Reorder root and signature members to prove identical errors. Every failure has zero output. Extend `FuzzVerify` seeds with every rejected key and test the key-admission invariant on success.
 
-- [ ] **Step 2: Run and record the regression failure.**
+- [x] **Step 2: Run and record the regression failure.**
 
 ```sh
 cd server && go test -count=1 ./internal/signing/dsse -run '^(TestPayloadTypes|TestVerify(RejectsIdentityForgery|KeyAdmissionVectors|KeyAdmissionPrecedence))$'
@@ -109,11 +109,11 @@ cd server && go test -count=1 ./internal/signing/dsse -run '^(TestPayloadTypes|T
 
 Expected: `TestPayloadTypes` fails on the sentinel message; the identity envelope succeeds or a bad key yields `ErrSignature` instead of `ErrPublicKey`. Record the message failure and the admission regression behavior, not an unrelated test setup failure.
 
-- [ ] **Step 3: Integrate the validator.**
+- [x] **Step 3: Integrate the validator.**
 
 Replace only the length check after `parseEnvelope` with the validator call. Map every failure to `ErrPublicKey`, without wrapping the validator error. Set the sentinel message to `dsse invalid public key`. Keep parsing order, PAE, hints, signing and signature verification unchanged. Add a concise API comment pointing admission callers to the shared validator without claiming that successful verification grants trust.
 
-- [ ] **Step 4: Run focused verification.**
+- [x] **Step 4: Run focused verification.**
 
 ```sh
 cd server && gofmt -w internal/signing/dsse/*.go
@@ -140,7 +140,7 @@ These paths belong to the separate implementer, not the document author. Add no 
 - Consumes both completed Go packages and the schema/corpus.
 - Produces deterministic schema-check failures and CI coverage; no new product API.
 
-- [ ] **Step 1: Add and run failing checker tests.**
+- [x] **Step 1: Add and run failing checker tests.**
 
 Make the checker test validate temporary copies with an extra property, malformed hex, missing field, unknown result, duplicate name, missing torsion row, missing y-overflow row and changed expected class. Require failure for each mutation and success for the exact corpus. Give the shared checker a testable path input without changing its existing root command behavior.
 
@@ -150,7 +150,7 @@ Make the checker test validate temporary copies with an extra property, malforme
 
 Expected: failure because the checker does not reject all mutations. Retain schema validation and implement the corpus coverage checks. Arithmetic acceptance remains exercised by the independent Go oracle and both design scripts; JSON Schema alone cannot prove it.
 
-- [ ] **Step 2: Wire CI and run light local checks.**
+- [x] **Step 2: Wire CI and run light local checks.**
 
 Add `./internal/signing/ed25519key` / `FuzzValidate` to the workflow's existing target list, with exact target anchoring and the existing failure-corpus upload. Keep the instruction list aligned. Add benchmark cases without a pass/fail latency threshold; performance qualification belongs to the first consumer.
 
@@ -164,7 +164,7 @@ cd server && go test -count=1 ./internal/signing/ed25519key ./internal/signing/d
 
 Require exit 0, no formatting output and PASS. Benchmark execution stays in CI with `cd server && go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key`; report time and allocations without inventing a consumer budget.
 
-- [ ] **Step 3: Obtain final review and read CI evidence.**
+- [x] **Step 3: Obtain final review and read CI evidence.**
 
 The independent Astra xhigh reviewer, `gpt-6-astra`, `xhigh`, attacks the full slice against every Review focus item and spec section 5 and confirms code fixes. Check the parallel loader's merged contract for compatible raw-key validation, DSSE precedence and bounded candidate handling. An unavailable loader branch does not authorize implementing it or claiming it is covered. Record that integration question separately.
 
@@ -179,8 +179,8 @@ Require the design and server workflows on the exact integration head, including
 
 ## Final verification
 
-- [ ] `git diff --check` reports no whitespace errors; the primary inspects the full diff and required check results.
-- [ ] Spec and plan remain at most 400 lines each. Check touched documents for em dashes, dates, history wording and stale length-only claims.
-- [ ] Every corpus row, combined defect, ownership boundary and Review focus item maps to a passing test or an explicit future consumer gate.
-- [ ] Independent Astra xhigh review and fix confirmation approve the final code, including public arithmetic, error precedence and no returned authority on failure.
-- [ ] Report exact commands and failed or skipped checks. Leave absent consumer work and unresolved questions in their own slices; do not remove the whole admission obligation because only DSSE is implemented.
+- [x] `git diff --check` reports no whitespace errors; the primary inspects the full diff and required check results.
+- [x] Spec and plan remain at most 400 lines each. Check touched documents for em dashes, dates, history wording and stale length-only claims.
+- [x] Every corpus row, combined defect, ownership boundary and Review focus item maps to a passing test or an explicit future consumer gate.
+- [x] Independent Astra xhigh review and fix confirmation approve the final code, including public arithmetic, error precedence and no returned authority on failure.
+- [x] Report exact commands and failed or skipped checks. Leave absent consumer work and unresolved questions in their own slices; do not remove the whole admission obligation because only DSSE is implemented.

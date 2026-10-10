@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+
+	"github.com/ricevanta/ricevanta/server/internal/signing/ed25519key"
 )
 
 type PayloadType string
@@ -48,7 +50,7 @@ var (
 	ErrPayloadTooLarge  = errors.New("dsse payload too large")
 	ErrBase64           = errors.New("dsse base64 format")
 	ErrSignature        = errors.New("dsse invalid signature")
-	ErrPublicKey        = errors.New("dsse public key length")
+	ErrPublicKey        = errors.New("dsse invalid public key")
 	ErrPrivateKey       = errors.New("dsse private key format")
 )
 
@@ -81,13 +83,14 @@ func Sign(payloadType PayloadType, payload []byte, certificateSHA256 [32]byte, p
 }
 
 // Verify checks caller intent and the signature under the supplied key.
+// Admission callers should use ed25519key.Validate before storing raw keys.
 // Callers must authorize that key separately. KeyID is an unauthenticated hint.
 func Verify(envelope []byte, expectedType PayloadType, publicKey ed25519.PublicKey) (Verified, error) {
 	p, e := parseEnvelope(envelope, expectedType)
 	if e != nil {
 		return Verified{}, e
 	}
-	if len(publicKey) != ed25519.PublicKeySize {
+	if ed25519key.Validate(publicKey) != nil {
 		return Verified{}, ErrPublicKey
 	}
 	if !ed25519.Verify(publicKey, pae(p.typ, p.payload), p.signature) {

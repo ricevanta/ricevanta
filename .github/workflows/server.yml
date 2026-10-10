@@ -77,6 +77,8 @@ jobs:
         run: go test -count=1 ./...
       - name: Test with race detector
         run: go test -race -count=1 ./...
+      - name: Benchmark key admission
+        run: go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
       - name: Vet
         run: go vet ./...
 
@@ -95,6 +97,7 @@ jobs:
               {"package":"./internal/events/eventid","target":"FuzzParse"},
               {"package":"./internal/events/batch","target":"FuzzDescriptor"},
               {"package":"./internal/signing/dsse","target":"FuzzVerify"},
+              {"package":"./internal/signing/ed25519key","target":"FuzzValidate"},
               {"package":"./internal/events/wire","target":"FuzzParseHeader"},
               {"package":"./internal/events/wire","target":"FuzzDecode"},
               {"package":"./internal/events/body","target":"FuzzExtractLine"},

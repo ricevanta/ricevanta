@@ -174,7 +174,7 @@ The future admission path is bounded byte loading, authorized DSSE verification 
 | Database writer without signing keys | Cannot manufacture a structurally valid document that itself grants execution | Can replace rows with other valid documents; rechecking signed bytes, independent authority and tombstones must reject substitution or revival |
 | Server restored from backup | Deterministic validation does not silently rewrite ids, versions or fingerprints | Old revoked bytes remain structurally valid; the restore stays sealed until journal, key custody, ownership, revocation and permanent tombstones reconcile |
 
-A fingerprint is only a digest commitment. Trust-list key admission must reject non-canonical and small-order Ed25519 public keys before DSSE verification can be treated as authentication; the open key-admission task in `TODO.md` blocks that consumer. This manifest validator neither accepts a public key nor repairs that gap.
+A fingerprint is only a digest commitment. Trust-list key admission must call the shared [Ed25519 key admission](ed25519-key-admission.md) validator, which rejects non-canonical, small-order and mixed-order public keys, before DSSE verification can be treated as authentication. This manifest validator neither accepts a public key nor repairs that gap.
 
 ## 8. Fixtures, boundaries and fuzzing
 

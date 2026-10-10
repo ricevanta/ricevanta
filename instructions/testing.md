@@ -19,7 +19,8 @@ The following commands are the CI fuzz target list. Each target gets one matrix 
 ```sh
 go test -count=1 ./internal/events/eventid -fuzz=FuzzParse -fuzztime=60s -parallel=2
 go test -count=1 ./internal/events/batch -fuzz=FuzzDescriptor -fuzztime=60s -parallel=2
-go test -count=1 ./internal/signing/dsse -fuzz=FuzzVerify -fuzztime=60s -parallel=2
+go test -count=1 ./internal/signing/dsse -fuzz='^FuzzVerify$' -fuzztime=60s -parallel=2
+go test -count=1 ./internal/signing/ed25519key -fuzz='^FuzzValidate$' -fuzztime=60s -parallel=2
 go test -count=1 ./internal/events/wire -fuzz=FuzzParseHeader -fuzztime=60s -parallel=2
 go test -count=1 ./internal/events/wire -fuzz=FuzzDecode -fuzztime=60s -parallel=2
 go test -count=1 ./internal/events/body -fuzz=FuzzExtractLine -fuzztime=60s -parallel=2
@@ -36,6 +37,14 @@ go test -count=1 ./internal/mdm/resourcevalidate -fuzz=FuzzBudget -fuzztime=60s 
 ```
 
 Keep the single target list in `.github/workflows/server.yml` aligned with these commands. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
+
+CI reports key-admission time and allocations without a pass/fail latency threshold:
+
+```sh
+go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
+```
+
+The first consumer owns performance qualification and its request and candidate bounds.
 
 Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in CI on the pushed `wip/**` branch. Browser checks start with the first reviewed console slice; no browser test suite exists yet.
 

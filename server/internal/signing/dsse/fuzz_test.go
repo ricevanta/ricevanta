@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/ricevanta/ricevanta/server/internal/signing/ed25519key"
 )
 
 func FuzzVerify(f *testing.F) {
@@ -21,6 +23,11 @@ func FuzzVerify(f *testing.F) {
 	for _, v := range c.Negative {
 		if v.Recipe == nil {
 			f.Add(unhex(f, v.Envelope), v.Type, unhex(f, v.Public))
+		}
+	}
+	for _, v := range admissionVectors(f) {
+		if v.Expected != "accept" {
+			f.Add(admissionEnvelope(TypeCommand, nil, bytes.Repeat([]byte{255}, 64)), string(TypeCommand), unhex(f, v.Public))
 		}
 	}
 	f.Fuzz(func(t *testing.T, envelope []byte, expected string, key []byte) {
@@ -53,6 +60,9 @@ func checkVerifyInvariants(t *testing.T, envelope []byte, expected string, key [
 			t.Fatal("error must match exactly one sentinel")
 		}
 		return
+	}
+	if ed25519key.Validate(key) != nil {
+		t.Fatal("success with inadmissible key")
 	}
 	allowed := false
 	for _, suffix := range []string{"bundle-manifest+json", "assignment+json", "rulepack-manifest+json", "command+json", "command-dispatch-grant+json", "compliance-statement+json", "intel-delta+json", "release+json", "extension-manifest+yaml", "extension-index+json", "escrow-ack+json", "escrow-retirement-authorization+json"} {

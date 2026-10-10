@@ -31,7 +31,7 @@ func TestPayloadTypes(t *testing.T) {
 		_, e := Sign(PayloadType(s), nil, [32]byte{}, nil)
 		checkError(t, e, ErrPayloadType)
 	}
-	messages := map[string]string{"ErrEnvelopeTooLarge": "dsse envelope too large", "ErrEnvelope": "dsse envelope format", "ErrSignatureCount": "dsse signature count", "ErrPayloadType": "dsse unsupported payload type", "ErrTypeMismatch": "dsse unexpected payload type", "ErrKeyID": "dsse keyid format", "ErrPayloadTooLarge": "dsse payload too large", "ErrBase64": "dsse base64 format", "ErrSignature": "dsse invalid signature", "ErrPublicKey": "dsse public key length", "ErrPrivateKey": "dsse private key format"}
+	messages := map[string]string{"ErrEnvelopeTooLarge": "dsse envelope too large", "ErrEnvelope": "dsse envelope format", "ErrSignatureCount": "dsse signature count", "ErrPayloadType": "dsse unsupported payload type", "ErrTypeMismatch": "dsse unexpected payload type", "ErrKeyID": "dsse keyid format", "ErrPayloadTooLarge": "dsse payload too large", "ErrBase64": "dsse base64 format", "ErrSignature": "dsse invalid signature", "ErrPublicKey": "dsse invalid public key", "ErrPrivateKey": "dsse private key format"}
 	for n, e := range sentinels() {
 		if e.Error() != messages[n] {
 			t.Fatal("sentinel message differs")

@@ -73,7 +73,9 @@ jobs:
           python schemas/policy/v1alpha1/validate.py
           python schemas/policy/v1alpha1/test_validate.py
       - name: Validate fixture contracts
-        run: python scripts/ci/validate_contracts.py
+        run: |
+          python scripts/ci/validate_contracts.py
+          python scripts/ci/test_key_admission_contract.py
       - name: Validate ExportDestination schemas and examples
         run: |
           python schemas/export/v1alpha1/validate.py
