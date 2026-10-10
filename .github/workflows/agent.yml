@@ -6,11 +6,17 @@ on:
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
+      - 'server/internal/events/wire/**'
+      - 'server/internal/events/body/**'
+      - 'schemas/events/v1/**'
       - '.github/workflows/agent.yml'
   pull_request:
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
+      - 'server/internal/events/wire/**'
+      - 'server/internal/events/body/**'
+      - 'schemas/events/v1/**'
       - '.github/workflows/agent.yml'
   workflow_dispatch:
 
@@ -22,7 +28,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.paths.outputs.native }}
+      interop: ${{ steps.paths.outputs.interop }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Detect changed paths
+        id: paths
+        shell: bash
+        run: |
+          python - <<'PYDETECT'
+          import json, os, re, subprocess
+
+          def git(*args, **kwargs):
+              return subprocess.run(['git', *args], check=True, stdout=subprocess.PIPE, **kwargs).stdout
+
+          def ensure(sha):
+              if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha):
+                  raise ValueError('invalid comparison SHA')
+              probe = subprocess.run(['git', 'cat-file', '-e', sha + '^{commit}'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+              if probe.returncode:
+                  git('fetch', '--no-tags', '--depth=1', 'origin', sha)
+                  git('cat-file', '-e', sha + '^{commit}')
+              return sha
+
+          event = json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))
+          name = os.environ['GITHUB_EVENT_NAME']
+          if name == 'workflow_dispatch':
+              native, interop = True, False
+          else:
+              if name == 'pull_request':
+                  base = ensure(event['pull_request']['base']['sha'])
+                  head = ensure(event['pull_request']['head']['sha'])
+                  base = git('merge-base', base, head).decode('ascii').strip()
+                  if not re.fullmatch(r'[0-9a-f]{40}', base):
+                      raise ValueError('invalid merge base')
+              elif name == 'push':
+                  head = ensure(event['after'])
+                  before = event['before']
+                  if before == '0' * 40:
+                      base = git('hash-object', '-t', 'tree', '--stdin', input=b'').decode('ascii').strip()
+                  else:
+                      base = ensure(before)
+              else:
+                  raise ValueError('unsupported event')
+              paths = git('diff', '--name-only', '--no-renames', '-z', base, head, '--').split(b'\0')
+              native = any(p.startswith((b'agent/', b'schemas/agent/')) or p == b'.github/workflows/agent.yml' for p in paths)
+              interop = any(p.startswith((b'agent/crates/batch/', b'agent/crates/spool/', b'server/internal/events/wire/', b'server/internal/events/body/', b'schemas/events/v1/')) for p in paths)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'native={str(native).lower()}\ninterop={str(interop).lower()}\n')
+          PYDETECT
   validate:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     defaults:
@@ -72,27 +136,120 @@ jobs:
           key: agent-cargo-target-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
       - name: Check locked dependency pins
         run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
           cargo metadata --locked --format-version 1 | python -c '
           import json, sys
           data = json.load(sys.stdin)
-          expected = {("ricevanta-spool", "0.1.0"), ("crc32c", "0.6.8"), ("rustc_version", "0.4.1"), ("semver", "1.0.27")}
+          expected = {("cc", "1.4.5"), ("cfg-if", "1.0.4"), ("crc32c", "0.6.8"), ("find-msvc-tools", "0.1.12"), ("getrandom", "0.4.3"), ("jobserver", "0.1.35"), ("libc", "0.2.189"), ("pkg-config", "0.3.34"), ("r-efi", "6.0.0"), ("ricevanta-batch", "0.1.0"), ("ricevanta-spool", "0.1.0"), ("rustc_version", "0.4.1"), ("semver", "1.0.27"), ("shlex", "2.0.1"), ("zstd", "0.13.3"), ("zstd-safe", "7.2.2"), ("zstd-sys", "2.0.16+zstd.1.5.7")}
           actual = {(p["name"], p["version"]) for p in data["packages"]}
-          assert actual == expected and len(data["packages"]) == len(expected), "unexpected dependency closure"
+          assert actual == expected and len(data["packages"]) == 17, "unexpected dependency closure"
           print("Locked dependency pins verified")
           '
       - name: Check fixture drift
         run: python tools/generate-spool-fixtures.py --check
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
+          cargo fmt --all -- --check
+      - name: Record Unix C compiler
+        if: runner.os != 'Windows'
+        run: ${CC:-cc} --version
+      - name: Record MSVC compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw "MSVC installation missing" }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          cmd /c "`"$vcvars`" && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
+          }
+          if ($LASTEXITCODE -ne 0) { throw "MSVC environment failed" }
+          $source = Join-Path $env:RUNNER_TEMP 'ricevanta-compiler.c'
+          $object = Join-Path $env:RUNNER_TEMP 'ricevanta-compiler.obj'
+          Set-Content -Path $source -Value 'int ricevanta_compiler_probe(void) { return 0; }'
+          (Get-Command cl.exe).Source
+          & cl.exe /Bv /c $source "/Fo$object"
+          if ($LASTEXITCODE -ne 0) { throw "MSVC qualification failed" }
       - name: Clippy
         env:
           CARGO_NET_OFFLINE: 'true'
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+          CC_ENABLE_DEBUG_OUTPUT: '1'
+        run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
+          cargo clippy --locked --workspace --all-targets -vv -- -D warnings
       - name: Test
         env:
           CARGO_NET_OFFLINE: 'true'
-        run: cargo test --locked --workspace
+          CC_ENABLE_DEBUG_OUTPUT: '1'
+        run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
+          cargo test --locked --workspace
       - name: Extended recovery property test
         env:
           CARGO_NET_OFFLINE: 'true'
-        run: cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+        run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+      - name: Extended seal property test
+        env:
+          CARGO_NET_OFFLINE: 'true'
+        run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact
+
+  rustinterop:
+    needs: changes
+    if: needs.changes.outputs.interop == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: true
+          cache-dependency-path: server/go.sum
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
+      - name: Install Rust and check native host
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+          test "$(rustc +1.99.0 -vV | sed -n 's/^release: //p')" = '1.99.0'
+          test "$(rustc +1.99.0 -vV | sed -n 's/^host: //p')" = 'x86_64-unknown-linux-gnu'
+          test "${{ runner.arch }}" = 'X64'
+          cc --version
+          echo "CARGO_TARGET_DIR=${{ runner.temp }}/ricevanta-batch-target" >> "$GITHUB_ENV"
+      - name: Build live writer
+        working-directory: agent
+        env:
+          CC_ENABLE_DEBUG_OUTPUT: '1'
+        run: |
+          unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
+          cargo build --locked -p ricevanta-batch --example seal-vector -vv
+          vector="$CARGO_TARGET_DIR/debug/examples/seal-vector"
+          test "${vector:0:1}" = '/'
+          test -x "$vector"
+          echo "RICEVANTA_BATCH_VECTOR=$vector" >> "$GITHUB_ENV"
+      - name: Live Go decoder conformance
+        working-directory: server
+        run: go test -v -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1
+      - name: Live Go decoder conformance with race detector
+        working-directory: server
+        run: go test -v -race -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1
