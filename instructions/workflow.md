@@ -7,7 +7,7 @@
 3. Define each code slice in a design and implementation plan that name its boundaries, contracts and required checks. Someone who did not write the design must approve both before implementation starts.
 4. Do not implement production consumers that assume an unresolved native, platform or security guarantee. Explicitly isolated qualification harnesses and prototypes may proceed to resolve a gate, but they cannot claim the missing guarantee until the required evidence passes review.
 5. Add a dependency to `docs/licensing.md` before code relies on it. Add a vendor program or signing requirement to `docs/project.md` before work relies on it.
-6. Follow the language and testing instructions for the component. Go guidance begins with the first server packages. Rust and Vue guidance waits for their first reviewed code slices; do not create placeholder files.
+6. Follow the language and testing instructions for the component. Go guidance begins with the first server packages. Rust guidance is in `instructions/rust.md` for the spool format slice; Vue guidance waits for its first reviewed code slice.
 
 ## Design rules
 

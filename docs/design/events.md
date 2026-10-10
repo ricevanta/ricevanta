@@ -49,6 +49,8 @@ A detector that fires repeatedly on the same object would flood every store. The
 
 ### 2.3 Spool record format
 
+[The agent spool format spec](../specs/agent-spool-format.md) owns the exact v1 bytes, Rust API, error precedence and recovery fixtures. Its library reports a validated prefix without file access; native durable sync and physical recovery remain separate gates.
+
 Each class directory holds append-only segment files (`agent.md` section 5). A segment starts with a 32-byte header: magic `RVSP`, format version (u16), spool class (u8), stream epoch (u64, random, created when the spool is initialized), segment id (u64, monotonic per class) and first sequence (u64). Each record is:
 
 | Field | Size | Content |
@@ -58,7 +60,7 @@ Each class directory holds append-only segment files (`agent.md` section 5). A s
 | Sequence | u64 | Per-class sequence, contiguous within the stream epoch, also written to `metadata.sequence` |
 | Payload | Length bytes | The OCSF event as UTF-8 JSON, without a line terminator |
 
-The sequence is assigned at append. On start the core truncates each active segment at its first record whose length runs past the end of the file or whose checksum fails, and resumes the class sequence after the last good record. A reinstall or re-enrollment that loses the spool creates a new stream epoch, so the server starts new per-class streams instead of reporting a gap. The format version is read by the next agent release, so an updated core uploads the segments its predecessor wrote.
+The sequence is assigned at append. On start the core follows [the spool spec's recovery and error precedence](../specs/agent-spool-format.md#4-recovery-and-error-precedence). Only a returned `TailIssue` permits the spool manager to truncate to `valid_len`, under exclusive ownership and with native durability established before resuming at `next_sequence`. Fatal errors permit no truncation. A reinstall or re-enrollment that loses the spool creates a new stream epoch, so the server starts new per-class streams instead of reporting a gap. The format version is read by the next agent release, so an updated core uploads the segments its predecessor wrote.
 
 ### 2.4 Sealing, upload and acknowledgement
 

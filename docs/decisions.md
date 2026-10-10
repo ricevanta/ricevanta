@@ -116,6 +116,12 @@ Why: targets are measured, not assumed (blueprint section 7), and a reload that 
 Rejected: measuring only in the v0.9.x performance milestone; regressions would accumulate unnoticed for eight releases.
 Detail: `design/agent.md` section 7.
 
+### AG-10. Spool format library
+Decision: the first Rust slice is `ricevanta-spool` in `agent/crates/spool`, a file-free v1 byte codec with borrowed prefix recovery, strict header and sequence checks, a 1 MiB payload ceiling, shared fixtures and stable deterministic mutation tests.
+Why: exact bytes and recovery errors can be tested on all three target OS/architecture pairs without assuming native durable sync or a complete spool manager.
+Rejected: a file-owning writer before native crash ordering is qualified; silent truncation of unsupported headers or checksum-valid sequence gaps, which hides incompatible data or stream defects.
+Detail: [spool format spec](specs/agent-spool-format.md) and [implementation plan](plans/agent-spool-format.md).
+
 ## MDM
 
 ### MDM-01. Native MDM servers

@@ -1,0 +1,1687 @@
+{
+  "format": "ricevanta-spool-v1",
+  "fixtures": [
+    {
+      "id": "class-1",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "class-2",
+      "segment_hex": "525653500100020001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 2,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "class-3",
+      "segment_hex": "525653500100030001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 3,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "class-4",
+      "segment_hex": "525653500100040001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 4,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "class-5",
+      "segment_hex": "525653500100050001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 5,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "header-only",
+      "segment_hex": "5256535001000100010000000000000000000000000000002900000000000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [],
+        "valid_len": 32,
+        "next_sequence": "41",
+        "tail": null
+      }
+    },
+    {
+      "id": "zero-counters",
+      "segment_hex": "5256535001000100010000000000000000000000000000000000000000000000020000001357c73b00000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "0"
+        },
+        "records": [
+          {
+            "sequence": "0",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "1",
+        "tail": null
+      }
+    },
+    {
+      "id": "empty-payload",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000000000000eeae2f8a2900000000000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": ""
+          }
+        ],
+        "valid_len": 48,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "opaque-binary",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000004000000b93ffb9c290000000000000000ff0d0a",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "00ff0d0a"
+          }
+        ],
+        "valid_len": 52,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "asymmetric-integers",
+      "segment_hex": "5256535001000400080706050403020188776655443322119887766554433221030000000bc9b47e9887766554433221616263",
+      "expected": {
+        "header": {
+          "class_id": 4,
+          "stream_epoch": "72623859790382856",
+          "segment_id": "1234605616436508552",
+          "first_sequence": "2392048381845735320"
+        },
+        "records": [
+          {
+            "sequence": "2392048381845735320",
+            "payload_hex": "616263"
+          }
+        ],
+        "valid_len": 51,
+        "next_sequence": "2392048381845735321",
+        "tail": null
+      }
+    },
+    {
+      "id": "max-header-and-sequence",
+      "segment_hex": "5256535001000500ffffffffffffffffffffffffffffffffffffffffffffffff01000000f77a33beffffffffffffffff78",
+      "expected": {
+        "header": {
+          "class_id": 5,
+          "stream_epoch": "18446744073709551615",
+          "segment_id": "18446744073709551615",
+          "first_sequence": "18446744073709551615"
+        },
+        "records": [
+          {
+            "sequence": "18446744073709551615",
+            "payload_hex": "78"
+          }
+        ],
+        "valid_len": 49,
+        "next_sequence": null,
+        "tail": null
+      }
+    },
+    {
+      "id": "max-header-only",
+      "segment_hex": "5256535001000500ffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expected": {
+        "header": {
+          "class_id": 5,
+          "stream_epoch": "18446744073709551615",
+          "segment_id": "18446744073709551615",
+          "first_sequence": "18446744073709551615"
+        },
+        "records": [],
+        "valid_len": 32,
+        "next_sequence": "18446744073709551615",
+        "tail": null
+      }
+    },
+    {
+      "id": "sequence-max-pair",
+      "segment_hex": "525653500100010001000000000000000000000000000000feffffffffffffff010000001cb0e122feffffffffffffff6101000000a0958fc5ffffffffffffffff62",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "18446744073709551614"
+        },
+        "records": [
+          {
+            "sequence": "18446744073709551614",
+            "payload_hex": "61"
+          },
+          {
+            "sequence": "18446744073709551615",
+            "payload_hex": "62"
+          }
+        ],
+        "valid_len": 66,
+        "next_sequence": null,
+        "tail": null
+      }
+    },
+    {
+      "id": "final-cut-00",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": null
+      }
+    },
+    {
+      "id": "final-cut-01",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d07",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-02",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d0700",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-03",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-04",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d07000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-05",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-06",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2b",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-07",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-08",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc061",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-09",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-10",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a00",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-11",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a0000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-12",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-13",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a00000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-14",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a0000000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-15",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-16",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a00000000000000",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-17",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-18",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b22",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-19",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b2278",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-20",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b227822",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-21",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b2278223a",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-22",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b2278223a31",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "final-cut-23",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007b2278223a317d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          },
+          {
+            "sequence": "42",
+            "payload_hex": "7b2278223a317d"
+          }
+        ],
+        "valid_len": 73,
+        "next_sequence": "43",
+        "tail": null
+      }
+    },
+    {
+      "id": "header-cut-00",
+      "segment_hex": "",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 0
+        }
+      }
+    },
+    {
+      "id": "header-cut-01",
+      "segment_hex": "52",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 1
+        }
+      }
+    },
+    {
+      "id": "header-cut-02",
+      "segment_hex": "5256",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 2
+        }
+      }
+    },
+    {
+      "id": "header-cut-03",
+      "segment_hex": "525653",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 3
+        }
+      }
+    },
+    {
+      "id": "header-cut-04",
+      "segment_hex": "52565350",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 4
+        }
+      }
+    },
+    {
+      "id": "header-cut-05",
+      "segment_hex": "5256535001",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 5
+        }
+      }
+    },
+    {
+      "id": "header-cut-06",
+      "segment_hex": "525653500100",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 6
+        }
+      }
+    },
+    {
+      "id": "header-cut-07",
+      "segment_hex": "52565350010001",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 7
+        }
+      }
+    },
+    {
+      "id": "header-cut-08",
+      "segment_hex": "5256535001000100",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 8
+        }
+      }
+    },
+    {
+      "id": "header-cut-09",
+      "segment_hex": "525653500100010001",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 9
+        }
+      }
+    },
+    {
+      "id": "header-cut-10",
+      "segment_hex": "52565350010001000100",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 10
+        }
+      }
+    },
+    {
+      "id": "header-cut-11",
+      "segment_hex": "5256535001000100010000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 11
+        }
+      }
+    },
+    {
+      "id": "header-cut-12",
+      "segment_hex": "525653500100010001000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 12
+        }
+      }
+    },
+    {
+      "id": "header-cut-13",
+      "segment_hex": "52565350010001000100000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 13
+        }
+      }
+    },
+    {
+      "id": "header-cut-14",
+      "segment_hex": "5256535001000100010000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 14
+        }
+      }
+    },
+    {
+      "id": "header-cut-15",
+      "segment_hex": "525653500100010001000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 15
+        }
+      }
+    },
+    {
+      "id": "header-cut-16",
+      "segment_hex": "52565350010001000100000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 16
+        }
+      }
+    },
+    {
+      "id": "header-cut-17",
+      "segment_hex": "5256535001000100010000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 17
+        }
+      }
+    },
+    {
+      "id": "header-cut-18",
+      "segment_hex": "525653500100010001000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 18
+        }
+      }
+    },
+    {
+      "id": "header-cut-19",
+      "segment_hex": "52565350010001000100000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 19
+        }
+      }
+    },
+    {
+      "id": "header-cut-20",
+      "segment_hex": "5256535001000100010000000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 20
+        }
+      }
+    },
+    {
+      "id": "header-cut-21",
+      "segment_hex": "525653500100010001000000000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 21
+        }
+      }
+    },
+    {
+      "id": "header-cut-22",
+      "segment_hex": "52565350010001000100000000000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 22
+        }
+      }
+    },
+    {
+      "id": "header-cut-23",
+      "segment_hex": "5256535001000100010000000000000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 23
+        }
+      }
+    },
+    {
+      "id": "header-cut-24",
+      "segment_hex": "525653500100010001000000000000000000000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 24
+        }
+      }
+    },
+    {
+      "id": "header-cut-25",
+      "segment_hex": "52565350010001000100000000000000000000000000000029",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 25
+        }
+      }
+    },
+    {
+      "id": "header-cut-26",
+      "segment_hex": "5256535001000100010000000000000000000000000000002900",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 26
+        }
+      }
+    },
+    {
+      "id": "header-cut-27",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 27
+        }
+      }
+    },
+    {
+      "id": "header-cut-28",
+      "segment_hex": "52565350010001000100000000000000000000000000000029000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 28
+        }
+      }
+    },
+    {
+      "id": "header-cut-29",
+      "segment_hex": "5256535001000100010000000000000000000000000000002900000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 29
+        }
+      }
+    },
+    {
+      "id": "header-cut-30",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 30
+        }
+      }
+    },
+    {
+      "id": "header-cut-31",
+      "segment_hex": "52565350010001000100000000000000000000000000000029000000000000",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 31
+        }
+      }
+    },
+    {
+      "id": "bad-magic",
+      "segment_hex": "5856535001000100010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Magic"
+        }
+      }
+    },
+    {
+      "id": "version-0",
+      "segment_hex": "5256535000000100010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Version",
+          "found": 0
+        }
+      }
+    },
+    {
+      "id": "version-2",
+      "segment_hex": "5256535002000100010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Version",
+          "found": 2
+        }
+      }
+    },
+    {
+      "id": "version-65535",
+      "segment_hex": "52565350ffff0100010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Version",
+          "found": 65535
+        }
+      }
+    },
+    {
+      "id": "unknown-class-0",
+      "segment_hex": "5256535001000000010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Class",
+          "found": 0
+        }
+      }
+    },
+    {
+      "id": "unknown-class-6",
+      "segment_hex": "5256535001000600010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Class",
+          "found": 6
+        }
+      }
+    },
+    {
+      "id": "unknown-class-255",
+      "segment_hex": "525653500100ff00010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Class",
+          "found": 255
+        }
+      }
+    },
+    {
+      "id": "reserved",
+      "segment_hex": "5256535001000101010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Reserved",
+          "found": 1
+        }
+      }
+    },
+    {
+      "id": "zero-epoch",
+      "segment_hex": "5256535001000100000000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "StreamEpoch"
+        }
+      }
+    },
+    {
+      "id": "oversize-1048577-incomplete",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d01001000",
+      "expected": {
+        "error": {
+          "kind": "PayloadTooLarge",
+          "length": 1048577
+        }
+      }
+    },
+    {
+      "id": "oversize-4294967295-incomplete",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7dffffffff",
+      "expected": {
+        "error": {
+          "kind": "PayloadTooLarge",
+          "length": 4294967295
+        }
+      }
+    },
+    {
+      "id": "bad-final-checksum",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008d2bc0612a000000000000007b2278223a317d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "bad-interior-with-valid-suffix",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008d2bc0612a000000000000007b2278223a317d02000000ca9c8c3b2b000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "bad-final-sequence",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612b000000000000007b2278223a317d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "bad-final-payload",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d070000008c2bc0612a000000000000007a2278223a317d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "bad-first-checksum",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000001dcca829000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [],
+        "valid_len": 32,
+        "next_sequence": "41",
+        "tail": {
+          "offset": 32,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "sequence-gap",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000ca9c8c3b2b000000000000007b7d",
+      "expected": {
+        "error": {
+          "kind": "Sequence",
+          "offset": 50,
+          "expected": "42",
+          "found": "43"
+        }
+      }
+    },
+    {
+      "id": "sequence-duplicate",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000711dcca829000000000000007b7d",
+      "expected": {
+        "error": {
+          "kind": "Sequence",
+          "offset": 50,
+          "expected": "42",
+          "found": "41"
+        }
+      }
+    },
+    {
+      "id": "sequence-reversed",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000d4669a6328000000000000007b7d",
+      "expected": {
+        "error": {
+          "kind": "Sequence",
+          "offset": 50,
+          "expected": "42",
+          "found": "40"
+        }
+      }
+    },
+    {
+      "id": "first-sequence-mismatch",
+      "segment_hex": "5256535001000100010000000000000000000000000000002900000000000000020000006fe7daf02a000000000000007b7d",
+      "expected": {
+        "error": {
+          "kind": "Sequence",
+          "offset": 32,
+          "expected": "41",
+          "found": "42"
+        }
+      }
+    },
+    {
+      "id": "wrap-after-max",
+      "segment_hex": "525653500100010001000000000000000000000000000000ffffffffffffffff01000000f77a33beffffffffffffffff78010000006164a440000000000000000078",
+      "expected": {
+        "error": {
+          "kind": "Sequence",
+          "offset": 49,
+          "expected": null,
+          "found": "0"
+        }
+      }
+    },
+    {
+      "id": "partial-after-max",
+      "segment_hex": "525653500100010001000000000000000000000000000000ffffffffffffffff01000000f77a33beffffffffffffffff7801",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "18446744073709551615"
+        },
+        "records": [
+          {
+            "sequence": "18446744073709551615",
+            "payload_hex": "78"
+          }
+        ],
+        "valid_len": 49,
+        "next_sequence": null,
+        "tail": {
+          "offset": 49,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "checksum-before-exhaustion",
+      "segment_hex": "525653500100010001000000000000000000000000000000ffffffffffffffff01000000f77a33beffffffffffffffff78010000000064a440000000000000000078",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "18446744073709551615"
+        },
+        "records": [
+          {
+            "sequence": "18446744073709551615",
+            "payload_hex": "78"
+          }
+        ],
+        "valid_len": 49,
+        "next_sequence": null,
+        "tail": {
+          "offset": 49,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "short-before-magic",
+      "segment_hex": "58585858585858585858585858585858585858585858585858585858585858",
+      "expected": {
+        "error": {
+          "kind": "HeaderTooShort",
+          "actual": 31
+        }
+      }
+    },
+    {
+      "id": "magic-before-version",
+      "segment_hex": "5856535002000100010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Magic"
+        }
+      }
+    },
+    {
+      "id": "version-before-class",
+      "segment_hex": "5256535002000000010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Version",
+          "found": 2
+        }
+      }
+    },
+    {
+      "id": "class-before-reserved",
+      "segment_hex": "5256535001000001010000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Class",
+          "found": 0
+        }
+      }
+    },
+    {
+      "id": "reserved-before-epoch",
+      "segment_hex": "5256535001000101000000000000000000000000000000002900000000000000",
+      "expected": {
+        "error": {
+          "kind": "Reserved",
+          "found": 1
+        }
+      }
+    },
+    {
+      "id": "epoch-before-bad-record",
+      "segment_hex": "5256535001000100000000000000000000000000000000002900000000000000ffffffff",
+      "expected": {
+        "error": {
+          "kind": "StreamEpoch"
+        }
+      }
+    },
+    {
+      "id": "incomplete-before-checksum",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d07000000002bc0612a000000000000007b2278223a31",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "checksum-before-gap",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000009c8c3b2b000000000000007b7d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "gap-before-later-checksum",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000ca9c8c3b2b000000000000007b7d02000000009c8c3b2b000000000000007b7d",
+      "expected": {
+        "error": {
+          "kind": "Sequence",
+          "offset": 50,
+          "expected": "42",
+          "found": "43"
+        }
+      }
+    },
+    {
+      "id": "length-small-checksum-fails",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d010000008c2bc0612a000000000000007b2278223a317d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    },
+    {
+      "id": "length-in-range-past-end",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d000010008c2bc0612a000000000000007b2278223a317d",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Incomplete"
+        }
+      }
+    },
+    {
+      "id": "checksum-stops-before-hostile-suffix",
+      "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000009c8c3b2b000000000000007b7dffffffff",
+      "expected": {
+        "header": {
+          "class_id": 1,
+          "stream_epoch": "1",
+          "segment_id": "0",
+          "first_sequence": "41"
+        },
+        "records": [
+          {
+            "sequence": "41",
+            "payload_hex": "7b7d"
+          }
+        ],
+        "valid_len": 50,
+        "next_sequence": "42",
+        "tail": {
+          "offset": 50,
+          "kind": "Checksum"
+        }
+      }
+    }
+  ]
+}

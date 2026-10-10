@@ -1,0 +1,317 @@
+{
+  "schema": "fixture.schema.json",
+  "cases": [
+    {
+      "id": "segment-hex-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d\n",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "payload-hex-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d\n"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "epoch-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1\n",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "zero-epoch-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "0\n",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "segment-id-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0\n",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "first-sequence-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0",
+                "first_sequence": "41\n"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "record-sequence-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41\n",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "next-sequence-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42\n",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-id-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "class-1\n",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d",
+            "expected": {
+              "header": {
+                "class_id": 1,
+                "stream_epoch": "1",
+                "segment_id": "0",
+                "first_sequence": "41"
+              },
+              "records": [
+                {
+                  "sequence": "41",
+                  "payload_hex": "7b7d"
+                }
+              ],
+              "valid_len": 50,
+              "next_sequence": "42",
+              "tail": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "error-expected-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "sequence-gap",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000ca9c8c3b2b000000000000007b7d",
+            "expected": {
+              "error": {
+                "kind": "Sequence",
+                "offset": 50,
+                "expected": "42\n",
+                "found": "43"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "error-found-trailing-newline",
+      "valid": false,
+      "instance": {
+        "format": "ricevanta-spool-v1",
+        "fixtures": [
+          {
+            "id": "sequence-gap",
+            "segment_hex": "525653500100010001000000000000000000000000000000290000000000000002000000711dcca829000000000000007b7d02000000ca9c8c3b2b000000000000007b7d",
+            "expected": {
+              "error": {
+                "kind": "Sequence",
+                "offset": 50,
+                "expected": "42",
+                "found": "43\n"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

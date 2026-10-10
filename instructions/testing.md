@@ -27,4 +27,26 @@ Run those commands from `server/`. Commit useful minimized inputs to the target'
 
 The initial server packages have pure unit and fuzz tests. They do not establish PostgreSQL, network, process, operating-system or platform support. Add integration and platform checks with the first code that crosses those boundaries, following its reviewed design and the qualification gates in `docs/specs/platform-qualification.md`.
 
+## Rust agent
+
+The first Rust slice follows [instructions/rust.md](rust.md) and [the spool implementation plan](../docs/plans/agent-spool-format.md). Run fixture drift checks from the repository root:
+
+```sh
+python agent/tools/generate-spool-fixtures.py --check
+```
+
+Run the Rust checks from `agent/`:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+cargo tree --locked --edges normal,build,dev
+```
+
+The ordinary suite runs every shared fixture and the deterministic `fuzz_recover` target. The ignored extended target runs before review; report its seed, case count, elapsed time and result. The plan fixes both budgets and mutation invariants. Tests match error variants and fields, check combined defects and use an independent CRC oracle. A failed check stays failed in the report.
+
+CI runs fixture regeneration, fmt, Clippy and ordinary tests natively on macOS ARM64, Windows x64 and Linux x64 with the exact Rust pin. These checks establish portable codec behavior, not file permissions, power-loss durability, sensors, resource budgets or full platform support. Add native integration checks only with their reviewed slice and [platform qualification](../docs/specs/platform-qualification.md).
+
 No releasable binary exists, so the repository has no binary, installer, container or upgrade test yet.
