@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "ricevanta-dsse-vectors-v1"
+    },
+    "keys": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seed_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "id",
+          "seed_hex",
+          "public_key_hex"
+        ]
+      }
+    },
+    "positive": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "payload_type": {
+            "type": "string"
+          },
+          "payload_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "keyid": {
+            "type": "string"
+          },
+          "pae_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "signature_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "canonical_envelope_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "envelope_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "envelope_sha256_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "style": {
+            "enum": [
+              "canonical",
+              "whitespace",
+              "reordered",
+              "escaped"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "key",
+          "payload_type",
+          "payload_hex",
+          "keyid",
+          "pae_hex",
+          "signature_hex",
+          "canonical_envelope_hex",
+          "envelope_hex",
+          "envelope_sha256_hex",
+          "style"
+        ]
+      }
+    },
+    "negative": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "expected_type": {
+            "type": "string"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "expected_error": {
+            "enum": [
+              "ErrEnvelopeTooLarge",
+              "ErrEnvelope",
+              "ErrSignatureCount",
+              "ErrPayloadType",
+              "ErrTypeMismatch",
+              "ErrKeyID",
+              "ErrPayloadTooLarge",
+              "ErrBase64",
+              "ErrSignature",
+              "ErrPublicKey",
+              "ErrPrivateKey"
+            ]
+          },
+          "envelope_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "envelope_recipe": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "prefix_hex": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+              },
+              "repeat_hex": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})+(?![\\s\\S])"
+              },
+              "repeat_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 25165825
+              },
+              "suffix_hex": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "prefix_hex",
+              "repeat_hex",
+              "repeat_count",
+              "suffix_hex"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "expected_type",
+          "public_key_hex",
+          "expected_error"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "envelope_hex"
+            ]
+          },
+          {
+            "required": [
+              "envelope_recipe"
+            ]
+          }
+        ]
+      }
+    },
+    "sign_negative": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "payload_type": {
+            "type": "string"
+          },
+          "payload_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "payload_recipe": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "prefix_hex": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+              },
+              "repeat_hex": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})+(?![\\s\\S])"
+              },
+              "repeat_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 25165825
+              },
+              "suffix_hex": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "prefix_hex",
+              "repeat_hex",
+              "repeat_count",
+              "suffix_hex"
+            ]
+          },
+          "private_key_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*(?![\\s\\S])"
+          },
+          "expected_error": {
+            "enum": [
+              "ErrEnvelopeTooLarge",
+              "ErrEnvelope",
+              "ErrSignatureCount",
+              "ErrPayloadType",
+              "ErrTypeMismatch",
+              "ErrKeyID",
+              "ErrPayloadTooLarge",
+              "ErrBase64",
+              "ErrSignature",
+              "ErrPublicKey",
+              "ErrPrivateKey"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "payload_type",
+          "private_key_hex",
+          "expected_error"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "payload_hex"
+            ]
+          },
+          {
+            "required": [
+              "payload_recipe"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "format",
+    "keys",
+    "positive",
+    "negative",
+    "sign_negative"
+  ]
+}

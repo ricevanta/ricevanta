@@ -2,6 +2,7 @@
 
 Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unresolved contracts and source checks are recorded in `docs/analysis.md`.
 
+- [ ] Review and implement the shared DSSE primitive under `docs/specs/dsse-envelope.md` and `docs/plans/dsse-envelope.md`, using `schemas/dsse/v1/` vectors (SH-05).
 - [ ] Specify and prove a cross-store authority gate or recipient fence, then complete the typed audit records and replay model, authority-domain reducers and dependency closures, database DDL and grants, signed external-action evidence, executable model and crash fixtures required by `docs/specs/authority-journal-protocol.md` (BE-12).
 - [ ] Qualify the endpoint candidates in `docs/specs/endpoint-mechanism-research.md`, and find supported macOS mechanisms for the macOS 15 exact-byte file gate, identity-bound termination and script descendant containment.
 - [ ] Qualify Apple declarative-status freshness and the Windows escrow transaction in `docs/specs/mdm-evidence-recovery.md`; specify a jobs-only escrow-acknowledgement key, a Linux all-writer exclusion or atomic compare-delete primitive, and an Apple FileVault protocol guarantee or trust-boundary redesign before destructive actions.

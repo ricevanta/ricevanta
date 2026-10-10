@@ -28,6 +28,12 @@ Why: cross-component changes (policy envelope, agent API, extension interfaces) 
 Rejected: a separate `integrations/` directory for rule and destination adapters, since they are server modules and live with the server; a separate repository for first-party extensions, which would test the extension interfaces apart from their first users.
 Detail: `architecture.md` section 6.
 
+### SH-05. Shared DSSE envelope profile
+Decision: one standard-library-only Go primitive signs and verifies the Ricevanta DSSE profile with Ed25519, a closed payload-type list, strict envelope fields, standard padded base64 and exactly one signature. Signers emit canonical bytes; envelope hashes bind exact received bytes, and certificate fingerprints remain hints without authority.
+Why: policy and extension consumers need identical Go and Rust byte contracts, and dispatch grants must bind the exact command envelope delivered to the agent.
+Rejected: per-module parsers, hashes of re-encoded envelopes and accept-any-signature recovery checks, which permit parser disagreements, byte substitution or quorum weakening.
+Detail: [DSSE envelope spec](specs/dsse-envelope.md) and [implementation plan](plans/dsse-envelope.md).
+
 ## Platform (PF)
 
 ### PF-01. v1.0.0 targets

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "payloadType": {
+      "enum": [
+        "application/vnd.ricevanta.bundle-manifest+json",
+        "application/vnd.ricevanta.assignment+json",
+        "application/vnd.ricevanta.rulepack-manifest+json",
+        "application/vnd.ricevanta.command+json",
+        "application/vnd.ricevanta.command-dispatch-grant+json",
+        "application/vnd.ricevanta.compliance-statement+json",
+        "application/vnd.ricevanta.intel-delta+json",
+        "application/vnd.ricevanta.release+json",
+        "application/vnd.ricevanta.extension-manifest+yaml",
+        "application/vnd.ricevanta.extension-index+json",
+        "application/vnd.ricevanta.escrow-ack+json",
+        "application/vnd.ricevanta.escrow-retirement-authorization+json"
+      ]
+    },
+    "payload": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])",
+      "maxLength": 22369624
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "keyid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+          },
+          "sig": {
+            "type": "string",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])",
+            "minLength": 88,
+            "maxLength": 88
+          }
+        },
+        "required": [
+          "keyid",
+          "sig"
+        ]
+      }
+    }
+  },
+  "required": [
+    "payloadType",
+    "payload",
+    "signatures"
+  ]
+}
