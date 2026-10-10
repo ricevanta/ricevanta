@@ -99,7 +99,7 @@ Ingestion runs in the `events` module on the `agent` role (BE-03), writes only w
 
 The device uid comes from the mTLS certificate cache (`backend.md` section 3). Limits, each answered with `400` or `413` and a metric: request body 5 MB compressed; decompression streamed with a 64 MiB ceiling, so a zstd bomb fails early; 10,000 lines per batch; 1 MiB per line. A batch from a device in update-only mode gets `403` with `update_only`.
 
-[The event batch body spec](../specs/event-batch-body.md) fixes the decoder API, exact byte and window limits, frame and line rules, error precedence and fixtures (EV-09). Its implementation requires independent design review; full ingestion remains gated separately.
+[The event batch body spec](../specs/event-batch-body.md) fixes the decoder API, exact byte and window limits, frame and line rules, error precedence and fixtures (EV-09). `server/internal/events/body` implements it; full ingestion remains gated separately.
 
 ### 3.2 Validation and binding
 

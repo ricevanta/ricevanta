@@ -19,6 +19,8 @@ go test ./internal/events/batch -fuzz=FuzzDescriptor -fuzztime=5s -parallel=2
 go test ./internal/signing/dsse -fuzz=FuzzVerify -fuzztime=5s -parallel=2
 go test ./internal/events/wire -fuzz=FuzzParseHeader -fuzztime=5s -parallel=2
 go test ./internal/events/wire -fuzz=FuzzDecode -fuzztime=5s -parallel=2
+go test ./internal/events/body -fuzz=FuzzExtractLine -fuzztime=5s -parallel=2
+go test ./internal/events/body -fuzz=FuzzDecode -fuzztime=5s -parallel=2
 ```
 
 Run those commands from `server/`. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result. Ordinary continuous integration runs each fuzz target's seed corpus through `go test`; it does not run timed fuzzing.
