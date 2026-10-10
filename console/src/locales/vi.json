@@ -1,0 +1,37 @@
+{
+  "app": {
+    "name": "Ricevanta",
+    "skip": "Chuyển đến nội dung",
+    "logo": "Ricevanta"
+  },
+  "nav": {
+    "label": "Điều hướng chính",
+    "home": "Trang chủ"
+  },
+  "preferences": {
+    "language": "Ngôn ngữ",
+    "theme": "Giao diện",
+    "density": "Mật độ",
+    "english": "English",
+    "vietnamese": "Tiếng Việt",
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Hệ thống",
+    "comfortable": "Thoải mái",
+    "compact": "Gọn"
+  },
+  "home": {
+    "title": "Trang chủ",
+    "disconnected": "Các dịch vụ máy chủ chưa được kết nối."
+  },
+  "notFound": {
+    "title": "Không tìm thấy trang",
+    "message": "Trang được yêu cầu không khả dụng.",
+    "home": "Về trang chủ"
+  },
+  "errors": {
+    "title": "Không thể hiển thị bảng điều khiển",
+    "message": "Tải lại trang để thử lại.",
+    "reload": "Tải lại"
+  }
+}

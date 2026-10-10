@@ -1,0 +1,55 @@
+{
+  "name": "@ricevanta/console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.21.0",
+    "pnpm": "11.18.0"
+  },
+  "packageManager": "pnpm@11.18.0",
+  "scripts": {
+    "test:unit": "vitest run --project unit",
+    "test:component": "pnpm generate && vitest run --project component",
+    "format:check": "prettier . --check",
+    "typecheck": "node scripts/check-toolchain.ts && pnpm generate && node scripts/check-toolchain.ts && vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.tools.json && vue-tsc --noEmit -p tsconfig.test.json && node scripts/check-negative.ts",
+    "lint": "eslint . --max-warnings 0 && pnpm check:source",
+    "audit:deps": "node scripts/audit-deps.ts",
+    "generate": "node scripts/generate-tokens.ts && node scripts/prepare-assets.ts",
+    "check:source": "node scripts/check-source.ts",
+    "build": "pnpm check:source && pnpm generate && vite build && node scripts/audit-dist.ts && node scripts/compress.ts",
+    "check:reproducible": "node scripts/check-reproducible.ts",
+    "test:csp": "playwright test --config playwright.config.ts",
+    "test:fuzz": "CONSOLE_FUZZ=1 vitest run --project unit tests/unit/fuzz.test.ts"
+  },
+  "dependencies": {
+    "vue": "3.5.43",
+    "vue-router": "5.0.3",
+    "pinia": "3.0.4",
+    "vue-i18n": "11.4.12",
+    "@fontsource/be-vietnam-pro": "5.3.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.2",
+    "@vitejs/plugin-vue": "6.0.9",
+    "typescript": "5.9.3",
+    "vue-tsc": "3.1.0",
+    "@types/node": "24.10.1",
+    "@vue/compiler-sfc": "3.5.43",
+    "@intlify/unplugin-vue-i18n": "11.2.5",
+    "@intlify/message-compiler": "11.4.12",
+    "eslint": "9.39.1",
+    "@eslint/js": "9.39.1",
+    "eslint-plugin-vue": "10.11.1",
+    "vue-eslint-parser": "10.3.0",
+    "typescript-eslint": "8.66.0",
+    "prettier": "3.6.2",
+    "vitest": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
+    "@vue/test-utils": "2.4.6",
+    "@playwright/test": "1.59.1",
+    "playwright": "1.59.1",
+    "playwright-core": "1.59.1",
+    "@axe-core/playwright": "4.11.0"
+  }
+}

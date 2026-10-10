@@ -1,0 +1,37 @@
+{
+  "app": {
+    "name": "Ricevanta",
+    "skip": "Skip to content",
+    "logo": "Ricevanta"
+  },
+  "nav": {
+    "label": "Primary navigation",
+    "home": "Home"
+  },
+  "preferences": {
+    "language": "Language",
+    "theme": "Theme",
+    "density": "Density",
+    "english": "English",
+    "vietnamese": "Tiếng Việt",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "comfortable": "Comfortable",
+    "compact": "Compact"
+  },
+  "home": {
+    "title": "Home",
+    "disconnected": "Backend services are not connected."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "message": "The requested page is unavailable.",
+    "home": "Go to Home"
+  },
+  "errors": {
+    "title": "Unable to display the console",
+    "message": "Reload the page to try again.",
+    "reload": "Reload"
+  }
+}

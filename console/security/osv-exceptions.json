@@ -1,0 +1,15 @@
+[
+  {
+    "advisoryId": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "version": "3.0.3",
+    "dependencyPath": [
+      { "package": "@intlify/unplugin-vue-i18n", "version": "11.2.5" },
+      { "package": "fast-glob", "version": "3.3.3" },
+      { "package": "micromatch", "version": "4.0.8" },
+      { "package": "braces", "version": "3.0.3" }
+    ],
+    "untrustedInputRationale": "Only repository-controlled build patterns for src/locales/en.json and src/locales/vi.json reach braces through the Intlify plugin. No request, endpoint data, uploaded catalogue, environment value or external configuration supplies patterns. This path runs only during the build and is absent from shipped assets. Changes to build patterns require review; untrusted pull-request code has no trusted build privileges.",
+    "removeWhen": "Remove when a published fixed braces release at least 1,440 minutes old can be locked through a compatible upstream dependency, when this dependency path disappears or changes, or when OSV no longer reports the advisory. Remove and block acceptance before any untrusted pattern input or runtime use is introduced; a changed path needs fresh review."
+  }
+]

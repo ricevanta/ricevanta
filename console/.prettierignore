@@ -1,0 +1,12 @@
+node_modules
+dist
+src/generated
+public/brand
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+tests/fixtures
+public/assets
+
+.vite

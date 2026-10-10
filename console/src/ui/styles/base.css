@@ -1,0 +1,116 @@
+:root {
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  color: var(--rv-color-text);
+  background: var(--rv-color-page);
+  color-scheme: light;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme='system'] {
+    color-scheme: dark;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+a {
+  color: var(--rv-color-action);
+  min-height: 24px;
+  display: inline-block;
+}
+:focus-visible {
+  outline: var(--rv-focus-width) solid var(--rv-color-focus);
+  outline-offset: var(--rv-focus-offset);
+}
+h1:focus {
+  outline: var(--rv-focus-width) solid var(--rv-color-focus);
+}
+.shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rv-space-4);
+  padding: var(--rv-space-4);
+  background: var(--rv-color-surface);
+  border-bottom: 1px solid var(--rv-color-border);
+}
+.preferences {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rv-space-3);
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rv-space-1);
+}
+select,
+button {
+  font: inherit;
+  min-height: var(--rv-control-height);
+  max-width: 100%;
+  border: 1px solid var(--rv-color-border);
+  border-radius: var(--rv-radius-small);
+  color: var(--rv-color-text);
+  background: var(--rv-color-surface);
+  padding: 0 var(--rv-space-2);
+}
+button {
+  color: var(--rv-color-on-action);
+  background: var(--rv-color-action);
+}
+main {
+  max-width: 100%;
+  padding: var(--rv-space-5);
+  overflow-wrap: anywhere;
+}
+.logo {
+  display: inline-flex;
+}
+.logo img {
+  object-fit: contain;
+}
+.logo-dark {
+  display: none;
+}
+[data-theme='dark'] .logo-light {
+  display: none;
+}
+[data-theme='dark'] .logo-dark {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme='system'] .logo-light {
+    display: none;
+  }
+  [data-theme='system'] .logo-dark {
+    display: block;
+  }
+}
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: var(--rv-space-3);
+  background: var(--rv-color-surface);
+  padding: var(--rv-space-2);
+}
+.skip-link:focus {
+  top: var(--rv-space-3);
+}
+code {
+  font-family: ui-monospace, monospace;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    animation: none;
+    transition: none;
+  }
+}

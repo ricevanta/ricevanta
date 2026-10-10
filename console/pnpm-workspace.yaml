@@ -1,0 +1,16 @@
+saveExact: true
+engineStrict: true
+strictPeerDependencies: true
+autoInstallPeers: false
+ignoreScripts: true
+verifyDepsBeforeRun: error
+supportedArchitectures:
+  os:
+    - linux
+    - darwin
+    - win32
+  cpu:
+    - x64
+    - arm64
+  libc:
+    - glibc
