@@ -1,0 +1,978 @@
+{
+  "format_version": 1,
+  "profile": {
+    "id": "ricevanta-cel-1",
+    "version": 1
+  },
+  "declaration_version": 1,
+  "ocsf_version": "1.9.0",
+  "objects": {
+    "device": {
+      "doc": "Managed device projection.",
+      "fields": {
+        "uid": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Device record identity."
+        },
+        "name": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Device display name."
+        },
+        "os": {
+          "type": {
+            "kind": "map",
+            "key": "string",
+            "value": {
+              "kind": "json"
+            },
+            "max_entries": 1024
+          },
+          "presence": "required",
+          "doc": "OCSF operating-system object."
+        },
+        "labels": {
+          "type": {
+            "kind": "list",
+            "element": {
+              "kind": "string",
+              "max_length": 4096
+            },
+            "max_items": 32
+          },
+          "presence": "required",
+          "doc": "Device labels."
+        },
+        "groups": {
+          "type": {
+            "kind": "list",
+            "element": {
+              "kind": "string",
+              "max_length": 4096
+            },
+            "max_items": 64
+          },
+          "presence": "required",
+          "doc": "Device group identities."
+        },
+        "state": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Device lifecycle state."
+        },
+        "compliant": {
+          "type": {
+            "kind": "bool"
+          },
+          "presence": "required",
+          "doc": "Compliance result from the authority defined by the CEL profile."
+        },
+        "compliance": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Compliance state.",
+          "values": [
+            "compliant",
+            "grace",
+            "noncompliant",
+            "unknown"
+          ]
+        },
+        "compliance_time": {
+          "type": {
+            "kind": "timestamp"
+          },
+          "presence": "required",
+          "doc": "Time the compliance state was entered."
+        },
+        "compliance_time_ms": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Raw compliance time in epoch milliseconds."
+        }
+      }
+    },
+    "user": {
+      "doc": "User projection; absent in system context.",
+      "fields": {
+        "uid": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Principal identity."
+        },
+        "name": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Principal display name."
+        },
+        "groups": {
+          "type": {
+            "kind": "list",
+            "element": {
+              "kind": "string",
+              "max_length": 4096
+            },
+            "max_items": 256
+          },
+          "presence": "required",
+          "doc": "User group identities."
+        },
+        "source": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "network",
+          "doc": "Network identity binding source.",
+          "values": [
+            "certificate",
+            "device_link"
+          ]
+        }
+      }
+    },
+    "session": {
+      "doc": "DLP session projection.",
+      "fields": {
+        "uid": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Session identity."
+        },
+        "user": {
+          "type": {
+            "kind": "object",
+            "name": "user"
+          },
+          "presence": "optional",
+          "doc": "Session user."
+        },
+        "interactive": {
+          "type": {
+            "kind": "bool"
+          },
+          "presence": "required",
+          "doc": "Whether the session is interactive."
+        },
+        "remote": {
+          "type": {
+            "kind": "bool"
+          },
+          "presence": "required",
+          "doc": "Whether the session is remote."
+        }
+      }
+    },
+    "rule_identity": {
+      "doc": "Immutable detector rule identity.",
+      "fields": {
+        "pack": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Rule-pack identity."
+        },
+        "version": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Immutable pack version."
+        },
+        "pack_digest": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "SHA-256 of the exact pack manifest payload."
+        },
+        "rule_key": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Pack-local rule identity."
+        }
+      }
+    },
+    "category": {
+      "doc": "Category confidence and distinct count.",
+      "fields": {
+        "id": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Category identity."
+        },
+        "confidence": {
+          "type": {
+            "kind": "double"
+          },
+          "presence": "required",
+          "doc": "Category confidence."
+        },
+        "count": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Distinct values or records."
+        }
+      }
+    },
+    "inherited": {
+      "doc": "Durable sensitivity-floor source.",
+      "fields": {
+        "revision": {
+          "type": {
+            "kind": "map",
+            "key": "string",
+            "value": {
+              "kind": "json"
+            },
+            "max_entries": 1024
+          },
+          "presence": "optional",
+          "doc": "Source revision identity from the lineage schema."
+        },
+        "content_hash": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Source content hash when known."
+        }
+      }
+    },
+    "match": {
+      "doc": "DLP detector results.",
+      "fields": {
+        "classification": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Effective classification label."
+        },
+        "confidence": {
+          "type": {
+            "kind": "double"
+          },
+          "presence": "required",
+          "doc": "Highest category confidence."
+        },
+        "rules": {
+          "type": {
+            "kind": "list",
+            "element": {
+              "kind": "object",
+              "name": "rule_identity"
+            },
+            "max_items": 64
+          },
+          "presence": "required",
+          "doc": "Immutable deciding rule identities."
+        },
+        "reference": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Classification reference text."
+        },
+        "count": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Distinct deciding-category values or records."
+        },
+        "categories": {
+          "type": {
+            "kind": "list",
+            "element": {
+              "kind": "object",
+              "name": "category"
+            },
+            "max_items": 256
+          },
+          "presence": "required",
+          "doc": "Category results; consumer admission waits for the OCSF limit entry."
+        },
+        "coverage": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Content coverage.",
+          "values": [
+            "complete",
+            "truncated",
+            "encrypted",
+            "corrupt",
+            "unsupported",
+            "pending_ocr"
+          ]
+        },
+        "inherited": {
+          "type": {
+            "kind": "object",
+            "name": "inherited"
+          },
+          "presence": "optional",
+          "doc": "Present when a durable sensitivity floor applies."
+        },
+        "type_mismatch": {
+          "type": {
+            "kind": "bool"
+          },
+          "presence": "required",
+          "doc": "Detected type disagrees with the claimed type."
+        }
+      }
+    },
+    "removable": {
+      "doc": "Removable device projection.",
+      "fields": {
+        "vendor_id": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Vendor identifier text."
+        },
+        "product_id": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Product identifier text."
+        },
+        "serial": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Media serial text."
+        },
+        "encrypted": {
+          "type": {
+            "kind": "bool"
+          },
+          "presence": "optional",
+          "doc": "Verified encryption state."
+        }
+      }
+    },
+    "account": {
+      "doc": "Sync client account binding.",
+      "fields": {
+        "account": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Client account identity."
+        },
+        "tenant": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Client tenant identity."
+        }
+      }
+    },
+    "destination": {
+      "doc": "DLP transfer destination.",
+      "fields": {
+        "kind": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Destination kind.",
+          "values": [
+            "removable",
+            "cloud_sync",
+            "browser",
+            "network",
+            "clipboard"
+          ]
+        },
+        "host": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Destination host."
+        },
+        "managed": {
+          "type": {
+            "kind": "bool"
+          },
+          "presence": "required",
+          "doc": "Whether the destination has verified managed status."
+        },
+        "app": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Destination application identity."
+        },
+        "device": {
+          "type": {
+            "kind": "object",
+            "name": "removable"
+          },
+          "presence": "optional",
+          "doc": "Removable media only."
+        },
+        "account": {
+          "type": {
+            "kind": "object",
+            "name": "account"
+          },
+          "presence": "optional",
+          "doc": "Sync client account and tenant."
+        }
+      }
+    },
+    "activity": {
+      "doc": "Per-user classified-transfer counters.",
+      "fields": {
+        "removable_bytes_1h": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Counter for the interval named by the field."
+        },
+        "removable_files_1h": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Counter for the interval named by the field."
+        },
+        "uploads_10m": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Counter for the interval named by the field."
+        },
+        "upload_bytes_10m": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Counter for the interval named by the field."
+        },
+        "blocked_10m": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "required",
+          "doc": "Counter for the interval named by the field."
+        }
+      }
+    },
+    "certificate": {
+      "doc": "Network certificate evidence.",
+      "fields": {
+        "identity": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Network identity."
+        },
+        "kind": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Certificate kind."
+        },
+        "profile": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Certificate profile."
+        },
+        "binding": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Evidence binding.",
+          "values": [
+            "exact",
+            "identity_only"
+          ]
+        },
+        "serial": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        },
+        "fingerprint": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        },
+        "issuer": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        },
+        "not_before": {
+          "type": {
+            "kind": "timestamp"
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        },
+        "not_after": {
+          "type": {
+            "kind": "timestamp"
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        },
+        "not_before_ms": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        },
+        "not_after_ms": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "exact",
+          "doc": "Exact-generation certificate evidence."
+        }
+      }
+    },
+    "gateway": {
+      "doc": "RADIUS gateway projection.",
+      "fields": {
+        "name": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Gateway name."
+        },
+        "profile": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Qualified gateway profile."
+        },
+        "labels": {
+          "type": {
+            "kind": "list",
+            "element": {
+              "kind": "string",
+              "max_length": 4096
+            },
+            "max_items": 32
+          },
+          "presence": "required",
+          "doc": "Gateway labels."
+        }
+      }
+    },
+    "access": {
+      "doc": "Network access request.",
+      "fields": {
+        "method": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Authentication method.",
+          "values": [
+            "eap_tls",
+            "certificate_derived"
+          ]
+        },
+        "medium": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Access medium.",
+          "values": [
+            "vpn",
+            "wired",
+            "wireless"
+          ]
+        },
+        "ssid": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Wireless SSID."
+        },
+        "nas_port_type": {
+          "type": {
+            "kind": "int"
+          },
+          "presence": "optional",
+          "doc": "Numeric NAS port type."
+        },
+        "calling_station": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Calling station identifier."
+        },
+        "tls_version": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "optional",
+          "doc": "Authenticated TLS version."
+        }
+      }
+    },
+    "item": {
+      "doc": "MDM exception item.",
+      "fields": {
+        "baseline": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Baseline identity."
+        },
+        "id": {
+          "type": {
+            "kind": "string",
+            "max_length": 4096
+          },
+          "presence": "required",
+          "doc": "Baseline item identity."
+        }
+      }
+    }
+  },
+  "variables": {
+    "device": {
+      "type": {
+        "kind": "object",
+        "name": "device"
+      },
+      "presence": "required",
+      "doc": "Managed device projection."
+    },
+    "user": {
+      "type": {
+        "kind": "object",
+        "name": "user"
+      },
+      "presence": "optional",
+      "doc": "User projection; absent in system context."
+    },
+    "session": {
+      "type": {
+        "kind": "object",
+        "name": "session"
+      },
+      "presence": "optional",
+      "doc": "DLP session projection."
+    },
+    "match": {
+      "type": {
+        "kind": "object",
+        "name": "match"
+      },
+      "presence": "required",
+      "doc": "DLP detector results."
+    },
+    "destination": {
+      "type": {
+        "kind": "object",
+        "name": "destination"
+      },
+      "presence": "required",
+      "doc": "DLP transfer destination."
+    },
+    "activity": {
+      "type": {
+        "kind": "object",
+        "name": "activity"
+      },
+      "presence": "required",
+      "doc": "Per-user classified-transfer counters."
+    },
+    "certificate": {
+      "type": {
+        "kind": "object",
+        "name": "certificate"
+      },
+      "presence": "required",
+      "doc": "Network certificate evidence."
+    },
+    "gateway": {
+      "type": {
+        "kind": "object",
+        "name": "gateway"
+      },
+      "presence": "required",
+      "doc": "RADIUS gateway projection."
+    },
+    "access": {
+      "type": {
+        "kind": "object",
+        "name": "access"
+      },
+      "presence": "required",
+      "doc": "Network access request."
+    },
+    "item": {
+      "type": {
+        "kind": "object",
+        "name": "item"
+      },
+      "presence": "required",
+      "doc": "MDM exception item."
+    },
+    "event": {
+      "type": {
+        "kind": "map",
+        "key": "string",
+        "value": {
+          "kind": "json"
+        },
+        "max_entries": 1024
+      },
+      "presence": "required",
+      "doc": "OCSF trigger event; resolve fields from the trigger class."
+    },
+    "state": {
+      "type": {
+        "kind": "map",
+        "key": "string",
+        "value": {
+          "kind": "json"
+        },
+        "max_entries": 1024
+      },
+      "presence": "required",
+      "doc": "Current MDM configuration; resolve fields from the baseline kind."
+    },
+    "rows": {
+      "type": {
+        "kind": "list",
+        "element": {
+          "kind": "map",
+          "key": "string",
+          "value": {
+            "kind": "json"
+          },
+          "max_entries": 1024
+        },
+        "max_items": 10001
+      },
+      "presence": "required",
+      "doc": "Query or collector rows; resolve columns from the result schema."
+    },
+    "now": {
+      "type": {
+        "kind": "timestamp"
+      },
+      "presence": "required",
+      "doc": "Event time, or evaluation time for desired state."
+    }
+  },
+  "domains": {
+    "edr": {
+      "condition": [
+        "device",
+        "event",
+        "now",
+        "user"
+      ],
+      "exception": [
+        "device",
+        "event",
+        "now",
+        "user"
+      ]
+    },
+    "dlp": {
+      "condition": [
+        "activity",
+        "destination",
+        "device",
+        "event",
+        "match",
+        "now",
+        "session",
+        "user"
+      ],
+      "exception": [
+        "activity",
+        "destination",
+        "device",
+        "event",
+        "match",
+        "now",
+        "session",
+        "user"
+      ]
+    },
+    "lineage": {
+      "condition": [
+        "device",
+        "event",
+        "now",
+        "user"
+      ],
+      "exception": [
+        "device",
+        "event",
+        "now",
+        "user"
+      ]
+    },
+    "pki": {
+      "condition": [
+        "device",
+        "event",
+        "now",
+        "user"
+      ],
+      "exception": [
+        "device",
+        "event",
+        "now",
+        "user"
+      ]
+    },
+    "network": {
+      "condition": [
+        "access",
+        "certificate",
+        "device",
+        "event",
+        "gateway",
+        "now",
+        "user"
+      ],
+      "exception": [
+        "access",
+        "certificate",
+        "device",
+        "event",
+        "gateway",
+        "now",
+        "user"
+      ]
+    },
+    "mdm": {
+      "condition": [
+        "device",
+        "now",
+        "state",
+        "user"
+      ],
+      "query": [
+        "device",
+        "now",
+        "rows",
+        "state",
+        "user"
+      ],
+      "collector": [
+        "device",
+        "now",
+        "rows",
+        "state",
+        "user"
+      ],
+      "exception": [
+        "device",
+        "item",
+        "now",
+        "state",
+        "user"
+      ]
+    }
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "schema": "declarations.schema.json",
+  "cases": [
+    {
+      "file": "fixtures/valid.json",
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "file": "fixtures/unknown_member.json",
+      "schema_valid": false,
+      "error": "ErrShape"
+    },
+    {
+      "file": "fixtures/profile.json",
+      "schema_valid": false,
+      "error": "ErrProfile"
+    },
+    {
+      "file": "fixtures/version.json",
+      "schema_valid": false,
+      "error": "ErrVersion"
+    },
+    {
+      "file": "fixtures/ocsf.json",
+      "schema_valid": false,
+      "error": "ErrOCSF"
+    },
+    {
+      "file": "fixtures/optional_type.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/message_type.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/uint_type.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/bytes_type.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/map_key.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/null_type_value.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/missing_bound.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/zero_bound.json",
+      "schema_valid": false,
+      "error": "ErrLimit"
+    },
+    {
+      "file": "fixtures/large_bound.json",
+      "schema_valid": false,
+      "error": "ErrLimit"
+    },
+    {
+      "file": "fixtures/long_doc.json",
+      "schema_valid": false,
+      "error": "ErrLimit"
+    },
+    {
+      "file": "fixtures/bad_name.json",
+      "schema_valid": false,
+      "error": "ErrName"
+    },
+    {
+      "file": "fixtures/unknown_reference.json",
+      "schema_valid": true,
+      "error": "ErrReference"
+    },
+    {
+      "file": "fixtures/cycle.json",
+      "schema_valid": true,
+      "error": "ErrCycle"
+    },
+    {
+      "file": "fixtures/bad_domain_reference.json",
+      "schema_valid": true,
+      "error": "ErrReference"
+    },
+    {
+      "file": "fixtures/duplicate_variable.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/unsorted_variables.json",
+      "schema_valid": true,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/wrong_domain.json",
+      "schema_valid": true,
+      "error": "ErrCatalogue"
+    },
+    {
+      "file": "fixtures/weaken_exact.json",
+      "schema_valid": true,
+      "error": "ErrCatalogue"
+    },
+    {
+      "file": "fixtures/changed_doc.json",
+      "schema_valid": true,
+      "error": "ErrCatalogue"
+    },
+    {
+      "file": "fixtures/null_primitive.json",
+      "schema_valid": true,
+      "error": "ErrCatalogue"
+    },
+    {
+      "file": "fixtures/duration_primitive.json",
+      "schema_valid": true,
+      "error": "ErrCatalogue"
+    },
+    {
+      "file": "fixtures/version_and_type.json",
+      "schema_valid": false,
+      "error": "ErrVersion"
+    },
+    {
+      "file": "fixtures/type_and_reference.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/reference_and_cycle.json",
+      "schema_valid": true,
+      "error": "ErrReference"
+    },
+    {
+      "file": "fixtures/limit_and_profile.json",
+      "schema_valid": false,
+      "error": "ErrProfile"
+    },
+    {
+      "file": "fixtures/duplicate_key.json",
+      "schema_valid": true,
+      "error": "ErrDuplicateKey"
+    },
+    {
+      "file": "fixtures/valid_reordered.json",
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "file": "fixtures/mdm_missing_query.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/edr_query.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/dlp_query.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/lineage_query.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/pki_query.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/network_query.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/mdm_missing_collector.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/edr_collector.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/dlp_collector.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/lineage_collector.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/pki_collector.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/network_collector.json",
+      "schema_valid": false,
+      "error": "ErrDomain"
+    },
+    {
+      "file": "fixtures/variable_presence_network.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/variable_presence_exact.json",
+      "schema_valid": false,
+      "error": "ErrType"
+    },
+    {
+      "file": "fixtures/entry_doc_trailing_newline.json",
+      "schema_valid": false,
+      "error": "ErrShape"
+    },
+    {
+      "file": "fixtures/object_doc_trailing_newline.json",
+      "schema_valid": false,
+      "error": "ErrShape"
+    }
+  ]
+}

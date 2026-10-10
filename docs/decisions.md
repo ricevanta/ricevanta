@@ -360,6 +360,12 @@ Why: the blob store and registry rows are not trust anchors, and bundles redistr
 Rejected: trusting the stored archive hash alone, which a database write could change; one license per pack, which misses Sigma rules that declare their own license.
 Detail: `design/policy.md` section 6.
 
+### POL-08. CEL declaration catalogue
+Decision: `variables.json` uses a bounded, versioned JSON type grammar with closed record shapes and explicit presence rules; each supported version tuple identifies one immutable complete catalogue. A standard-library Go loader rejects malformed declarations, unresolved references, cycles and same-version catalogue changes before any consumer uses them.
+Why: the CEL declaration gap in analysis section 3 leaves the compiler, editor and agent without one machine-readable environment and permits type or evidence drift.
+Rejected: protobuf declaration JSON, which couples the format to excluded CEL message types; unrestricted dynamic maps and additive same-version declarations, which lose field checks and fixed compatibility.
+Detail: [CEL declarations](specs/cel-declarations.md) and [implementation plan](plans/cel-declarations.md).
+
 ## Lineage (LIN)
 
 ### LIN-01. Graph model and storage

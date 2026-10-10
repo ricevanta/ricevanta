@@ -1,0 +1,605 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/cel/v1/declarations.schema.json",
+  "type": "object",
+  "properties": {
+    "format_version": {
+      "const": 1
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "const": "ricevanta-cel-1"
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "declaration_version": {
+      "const": 1
+    },
+    "ocsf_version": {
+      "const": "1.9.0"
+    },
+    "objects": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,63}$",
+        "not": {
+          "pattern": "[^a-z0-9_]"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "doc": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "not": {
+              "pattern": "[\\u0000-\\u001f\\u007f]"
+            }
+          },
+          "fields": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 64,
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "not": {
+                "pattern": "[^a-z0-9_]"
+              }
+            },
+            "additionalProperties": {
+              "$ref": "#/$defs/entry"
+            }
+          }
+        },
+        "required": [
+          "doc",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "variables": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,63}$",
+        "not": {
+          "pattern": "[^a-z0-9_]"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entry",
+        "properties": {
+          "presence": {
+            "enum": [
+              "required",
+              "optional"
+            ]
+          }
+        }
+      }
+    },
+    "domains": {
+      "type": "object",
+      "properties": {
+        "mdm": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "exception": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "query": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "collector": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            }
+          },
+          "required": [
+            "condition",
+            "exception",
+            "query",
+            "collector"
+          ],
+          "additionalProperties": false
+        },
+        "edr": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "exception": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            }
+          },
+          "required": [
+            "condition",
+            "exception"
+          ],
+          "additionalProperties": false
+        },
+        "dlp": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "exception": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            }
+          },
+          "required": [
+            "condition",
+            "exception"
+          ],
+          "additionalProperties": false
+        },
+        "lineage": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "exception": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            }
+          },
+          "required": [
+            "condition",
+            "exception"
+          ],
+          "additionalProperties": false
+        },
+        "pki": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "exception": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            }
+          },
+          "required": [
+            "condition",
+            "exception"
+          ],
+          "additionalProperties": false
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            },
+            "exception": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "pattern": "[^a-z0-9_]"
+                }
+              }
+            }
+          },
+          "required": [
+            "condition",
+            "exception"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "mdm",
+        "edr",
+        "dlp",
+        "lineage",
+        "pki",
+        "network"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "format_version",
+    "profile",
+    "declaration_version",
+    "ocsf_version",
+    "objects",
+    "variables",
+    "domains"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "type": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "bool"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "int"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "double"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "null"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "timestamp"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "duration"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "json"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "string"
+            },
+            "max_length": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32768
+            }
+          },
+          "required": [
+            "kind",
+            "max_length"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "list"
+            },
+            "element": {
+              "$ref": "#/$defs/type"
+            },
+            "max_items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          "required": [
+            "kind",
+            "element",
+            "max_items"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "map"
+            },
+            "key": {
+              "const": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/type"
+            },
+            "max_entries": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "key",
+            "value",
+            "max_entries"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "object"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "not": {
+                "pattern": "[^a-z0-9_]"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/type"
+        },
+        "presence": {
+          "enum": [
+            "required",
+            "optional",
+            "network",
+            "exact"
+          ]
+        },
+        "doc": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "not": {
+            "pattern": "[\\u0000-\\u001f\\u007f]"
+          }
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "required": [
+        "type",
+        "presence",
+        "doc"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "values"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": {
+                "properties": {
+                  "kind": {
+                    "const": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
