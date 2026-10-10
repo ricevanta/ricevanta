@@ -154,7 +154,8 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 |---|---|---|
 | Python `jsonschema`, `referencing`, PyYAML | MIT; MIT; MIT | Design CI validates JSON Schema and policy examples with local reference resolution; not shipped |
 | Python `rfc3339-validator`, `six` | MIT; MIT | Design CI checks exception expiry timestamps; not shipped |
-| GitHub Actions `checkout`, `setup-python` | MIT; MIT | Design CI checkout, Python setup and dependency cache; pinned by commit |
+| GitHub Actions `checkout`, `setup-python`, `setup-go` | MIT; MIT; MIT | Design and server CI checkout and language setup; pinned by commit |
+| Go 1.27.1 toolchain and standard library | BSD-3-Clause | Builds and tests the server; the standard library supplies its runtime and library code |
 | Be Vietnam Pro | SIL OFL 1.1 | Outlined into the wordmark and tagline masters, and bundled as WOFF2 subsets in the console build with the OFL notice beside the files, which OFL 1.1 permits; no Reserved Font Name is declared; notice in `branding/source/OFL-BeVietnamPro.txt`; font binaries are not committed |
 | ImageMagick 7 with librsvg | ImageMagick License; librsvg LGPL-2.1-or-later (verify) | Build-time renderer for `branding/scripts/build.py`; not shipped |
 | Pillow | MIT-CMU (verify) | Build-time validation and ICO assembly; not shipped |

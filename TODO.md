@@ -2,10 +2,10 @@
 
 Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unresolved contracts and source checks are recorded in `docs/analysis.md`.
 
-- [ ] Specify and independently review the authority-journal records, storage and database fences, recovery quorum, publication barrier and crash fixtures (BE-12).
-- [ ] Establish and qualify exact-byte file mediation, clipboard read mediation, browser persistent-channel gating, quarantine transactions, macOS process termination and script descendant containment.
-- [ ] Settle native MDM evidence freshness, disk-lock and escrow transactions, and their replay and crash fixtures before implementing compliance or destructive actions.
-- [ ] Qualify console-module network isolation, loaded-asset binding and the isolated inventory-query worker on every required platform.
+- [ ] Specify and prove a cross-store authority gate or recipient fence, then complete the typed audit records and replay model, authority-domain reducers and dependency closures, database DDL and grants, signed external-action evidence, executable model and crash fixtures required by `docs/specs/authority-journal-protocol.md` (BE-12).
+- [ ] Qualify the endpoint candidates in `docs/specs/endpoint-mechanism-research.md`, and find supported macOS mechanisms for the macOS 15 exact-byte file gate, identity-bound termination and script descendant containment.
+- [ ] Qualify Apple declarative-status freshness and the Windows escrow transaction in `docs/specs/mdm-evidence-recovery.md`; specify a jobs-only escrow-acknowledgement key, a Linux all-writer exclusion or atomic compare-delete primitive, and an Apple FileVault protocol guarantee or trust-boundary redesign before destructive actions.
+- [ ] Decide whether to adopt the single-capsule console model in `docs/specs/isolation-qualification.md`; prove exact document binding and browser egress before enabling it, and prove native path, memory and cleanup bounds for the isolated inventory-query worker on every required platform.
 - [ ] Publish the missing machine-readable contracts and positive and negative fixtures listed in `docs/analysis.md` section 3 before implementing their consumers.
-- [ ] Complete the remaining certificate profiles and gateway transition contracts, then qualify renewal overlap, revocation, accounting recovery and CoA attribute removal.
+- [ ] Complete the certificate-profile fields left open by `docs/specs/network-transition-qualification.md`, publish its typed records and fixtures, then qualify renewal, accounting, session control, CoA and custody recovery on every required gateway unit.
 - [ ] Verify the remaining platform and dependency claims in `docs/analysis.md` section 4 and establish the required device and gateway test lab.

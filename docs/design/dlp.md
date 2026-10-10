@@ -206,9 +206,9 @@ The file gate has one acceptance contract for removable media, cloud sync folder
 3. Release succeeds only if the bytes at the destination still match that tuple. A concurrent truncate, write, replacement or mapping fault keeps the object dirty and causes a new scan or the policy fail mode. A cached verdict never authorizes a later generation.
 4. A create or write to removable media or a network share holds newly produced bytes locally until that contract permits release. Classification inferred from the writer's lineage may deny early, but it cannot authorize unscanned bytes.
 
-The existing OS hooks do not yet implement that contract. Endpoint Security has authorization events for open and mapping but no selected mechanism that contains reads from an already open descriptor after a later write. A Windows minifilter can observe read, write and section creation, and Linux Security Module hooks can recheck descriptor reads and new mappings, but neither platform design specifies an immutable staging transaction or the treatment of mappings that already exist. Close-after-write followed by a held next open therefore remains useful telemetry, not proof of prevention. Deleting a blocked file after a removable write or scanning typed network-share content after close is remediation and is not a supported block.
+The existing OS hooks do not yet implement that contract. `../specs/endpoint-mechanism-research.md` records staging candidates for a Windows minifilter, Linux FUSE and macOS FSKit passthrough. None has native test evidence or proves exclusion of retained descriptors and mappings. FSKit passthrough starts at macOS 26 and supplies no candidate for macOS 15, which remains in the required support window. Close-after-write followed by a held next open therefore remains useful telemetry, not proof of prevention. Deleting a blocked file after a removable write or scanning typed network-share content after close is remediation and is not a supported block.
 
-Full file-channel blocking remains a v1.0.0 release blocker. The platform design must choose and qualify a staging or read and mapping mediation mechanism on each OS. Qualification must include descriptors and mappings opened before the writer, concurrent writes and truncates, direct I/O, a writer that never closes, an unmount or device removal during a verdict, and byte substitution between scan and release (`../specs/platform-qualification.md` section 5). No `Unsupported` result or alert-only fallback satisfies SH-01.
+Full file-channel blocking remains a v1.0.0 release blocker. The platform design must choose and qualify a staging or read and mapping mediation mechanism on each OS. Qualification must include descriptors and mappings opened before the writer, concurrent writes and truncates, direct I/O, a writer that never closes, an unmount or device removal during a verdict, and byte substitution between scan and release (`../specs/platform-qualification.md` section 5 and `../specs/endpoint-mechanism-research.md` section 2). No `Unsupported` result or alert-only fallback satisfies SH-01.
 
 ### 6.5 Channels decided elsewhere
 
@@ -262,6 +262,7 @@ DLP adds to the idle core only the compiled channel tables (counted in the polic
 | Safari content-script gate and bypass tests | Section 6.5; exact-transfer mediation remains a release blocker |
 | Connector agent registration on Chrome and Edge per OS | Section 6.5 |
 | Hold point for newly written content | Section 6.4 defines the exact-byte contract; platform mechanisms remain release blockers |
+| Endpoint mechanism candidates | `../specs/endpoint-mechanism-research.md`; research only, with no native qualification results |
 | macOS pasteboard pre-approval | Section 6.5: none exists, an OS limit |
 | GNOME Shell extension selection ownership | Section 6.5 |
 

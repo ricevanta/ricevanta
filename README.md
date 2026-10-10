@@ -7,7 +7,7 @@
 
 Ricevanta is a free, open-source, self-hosted endpoint security and management platform built around one lightweight agent: device management (MDM), endpoint detection and response (EDR), data loss prevention (DLP), data lineage, PKI, RADIUS network access, unified policies and SIEM export. One agent, one platform, one device identity, no device-count limits, no paid tiers.
 
-Status: design phase. No application code yet. The design lives in `docs/`:
+Status: early implementation. Each code slice starts from an independently reviewed design and implementation plan. The repository contains initial Go server libraries, but no releasable binary, Rust agent or Vue console. Unresolved native and platform gates still block their dependent code.
 
 | File | Content |
 |---|---|
@@ -24,6 +24,17 @@ Status: design phase. No application code yet. The design lives in `docs/`:
 | `branding/` | Brand identity (`BRAND_SPEC.md`), vector masters, build script and generated assets |
 
 Targets for v1.0.0: macOS on Apple silicon, Windows x64, Linux x64.
+
+Go development starts in `server/`. Read `instructions/go.md` and `instructions/testing.md`, then run the required checks from that directory:
+
+```sh
+gofmt -w .
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+`instructions/release.md` records the current release gate. Rust and Vue instructions will be added with their first reviewed code slices.
 
 Official sensor binaries (macOS Endpoint Security extension, Windows kernel driver) are signed by the project because Apple and Microsoft tie those signatures to one organization. Self-built sensors run without the features that need them.
 

@@ -6,7 +6,7 @@ This file applies to every agent (Codex, Claude Code and others) and to people. 
 
 ## State
 
-Design phase. No application code. Work happens in `docs/`; brand assets and their build script live in `branding/`. Code directories are created when their design document exists.
+Implementation proceeds in reviewed slices. Each slice needs an independently reviewed design and implementation plan before code starts. Unresolved native, platform and security gates remain implementation blockers for the code that depends on them. The repository contains initial Go server libraries, but no releasable binary, Rust agent or Vue console. Brand assets and their build script remain in `branding/`.
 
 ## Map
 
@@ -21,6 +21,7 @@ Design phase. No application code. Work happens in `docs/`; brand assets and the
 | When | `docs/roadmap.md` |
 | What is in hand right now | `TODO.md` (short-term tasks; a task leaves when committed) |
 | System design | `docs/architecture.md`, then `docs/design/<domain>.md` and `docs/specs/<name>.md` |
+| Implementation plans | `docs/plans/<name>.md` |
 | Brand identity and assets | `branding/BRAND_SPEC.md`, `branding/README.md` |
 
 | Doing | Read first |

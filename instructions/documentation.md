@@ -17,6 +17,7 @@ Applies to `docs/`, `instructions/` and the root guide files.
 | System design | `docs/architecture.md` |
 | Per-domain design and domain-specific rules | `docs/design/<domain>.md` |
 | Schemas and protocols | `docs/specs/<name>.md`; machine-readable files in `schemas/` |
+| Implementation plans | `docs/plans/<name>.md` |
 | How to work | `instructions/<topic>.md` |
 
 Create a directory with its first real file. No placeholders.

@@ -1,13 +1,13 @@
 # How work proceeds
 
-## Design phase (current)
+## Design and implementation (current)
 
 1. Read `docs/blueprint.md`, `docs/decisions.md` and the domain's design file if it exists.
-2. Write or update the document where `instructions/documentation.md` says it lives.
-3. If the work changes a decision, rewrite the entry in `docs/decisions.md` in the same change.
-4. A new dependency gets a row in `docs/licensing.md`; a new vendor program or signing requirement goes into `docs/project.md`; both before anything relies on them.
-
-No application code in this phase. Language and testing instructions (`instructions/rust.md`, `go.md`, `vue.md`, `testing.md`, `release.md`) are written when the first code directory is created, not before.
+2. Write or update the document where `instructions/documentation.md` says it lives. If the work changes a decision, rewrite the entry in `docs/decisions.md` in the same change.
+3. Define each code slice in a design and implementation plan that name its boundaries, contracts and required checks. Someone who did not write the design must approve both before implementation starts.
+4. Do not implement production consumers that assume an unresolved native, platform or security guarantee. Explicitly isolated qualification harnesses and prototypes may proceed to resolve a gate, but they cannot claim the missing guarantee until the required evidence passes review.
+5. Add a dependency to `docs/licensing.md` before code relies on it. Add a vendor program or signing requirement to `docs/project.md` before work relies on it.
+6. Follow the language and testing instructions for the component. Go guidance begins with the first server packages. Rust and Vue guidance waits for their first reviewed code slices; do not create placeholder files.
 
 ## Design rules
 

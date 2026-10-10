@@ -4,7 +4,7 @@
 
 **Slogan:** One Agent. Unified Protection. Open to Everyone.
 
-**Status:** Planning and architecture design  
+**Status:** Early implementation in independently reviewed slices<br>
 **Target:** v1.0.0, first complete, production-ready release  
 **License:** Apache-2.0  
 **Development:** Open-source, community-driven, self-hosted
@@ -556,7 +556,7 @@ Before v1.0.0, each functional module must have an end-to-end, documented, teste
 
 ## 11. Repository structure
 
-[Architecture section 6](architecture.md#6-repository-layout) defines the planned repository layout (SH-04). Rule and destination adapters live with their owning server or agent modules; browser adapters and other first-party extensions live in `extensions/`. Code directories are created with their first real implementation after the relevant design exists; the current repository remains in the design phase.
+[Architecture section 6](architecture.md#6-repository-layout) defines the repository layout (SH-04). Rule and destination adapters live with their owning server or agent modules; browser adapters and other first-party extensions live in `extensions/`. Code directories are created with their first real implementation after the relevant design and implementation plan pass independent review. The server directory contains initial Go event libraries, but the repository has no releasable binary, Rust agent or Vue console.
 
 ---
 
