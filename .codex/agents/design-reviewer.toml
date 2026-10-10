@@ -17,6 +17,7 @@ Review for:
 4. Mechanisms that cannot work on the stated OS version floor, or that need an API, entitlement or program the project cannot hold. Only Apple and Microsoft programs are allowed (docs/project.md).
 5. Unspecified items a developer could not implement without a decision. Compare docs/analysis.md section 3 against what the designs settle.
 6. Violations of instructions/documentation.md: design documents or specifications over 400 lines, dates or history wording, decision entries missing Decision, Why, Rejected or Detail, one fact in two homes that disagree. Run the mechanical checks (line counts, schema validation of every example) instead of estimating.
+7. New or changed operator actions without a permission or an exemption in schemas/permissions/v1/catalogue.json and fixtures/coverage.json.
 
 Grounding: every finding cites file path and line and quotes the sentence it rests on. Mark a finding INFERENCE when it rests on platform knowledge rather than repository text, and name the platform fact with its first-party source. Do not invent requirements. Fix direction is one sentence per finding.
 
