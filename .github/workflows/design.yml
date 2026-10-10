@@ -1,0 +1,72 @@
+name: Design checks
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'schemas/**'
+      - 'instructions/**'
+      - '.codex/agents/**'
+      - '.claude/agents/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.github/workflows/design.yml'
+      - '.github/requirements-design.txt'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'schemas/**'
+      - 'instructions/**'
+      - '.codex/agents/**'
+      - '.claude/agents/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.github/workflows/design.yml'
+      - '.github/requirements-design.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: .github/requirements-design.txt
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+      - name: Validate policy schemas and examples
+        run: |
+          python schemas/policy/v1alpha1/validate.py
+          python schemas/policy/v1alpha1/test_validate.py
+      - name: Check document limits and agent definitions
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+
+          oversized = []
+          for directory in ('docs/design', 'docs/specs'):
+              for path in pathlib.Path(directory).glob('*.md'):
+                  count = len(path.read_text().splitlines())
+                  if count > 400:
+                      oversized.append(f'{path}: {count} lines (limit 400)')
+          if oversized:
+              raise SystemExit('\n'.join(oversized))
+          for path in pathlib.Path('.codex/agents').glob('*.toml'):
+              tomllib.loads(path.read_text())
+          print('Design/spec line limits and agent TOML syntax passed')
+          PY

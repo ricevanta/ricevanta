@@ -30,6 +30,17 @@ Design phase. No application code. Work happens in `docs/`; brand assets and the
 | Reviewing, committing, reporting a task | `instructions/workflow.md` |
 | Work in one domain (mdm, edr, dlp, lineage, pki, radius, policy, events, console, agent, backend, extensions) | This file, `docs/design/<domain>.md`, that domain's section of `docs/decisions.md`. Nothing else is required. |
 
+## AI agent definitions
+
+| Tool | Where | Agents |
+|---|---|---|
+| Claude Code | `.claude/agents/` | `designer` (Fable for architecture and security, Opus for other design and research) |
+| Codex | `.codex/agents/` | `design_reviewer` (Sol xhigh, read-only), `implementer` (Sol medium), `code_reviewer` (Sol xhigh, read-only, including adversarial review) |
+
+Claude Code handles design and research only. Sol xhigh reviews designs; Sol medium improves designs in a separate general-purpose worker, with an independent reviewer. Sol xhigh reviews code, including the adversarial pass, and Sol medium implements code. Agents may use subagents and general-purpose agents; there is no separate researcher role. Set the model and effort explicitly on every dispatch: `gpt-5.6-sol` at `medium` for design, planning and implementation, `gpt-5.6-sol` at `xhigh` for every review and fix confirmation, and `gpt-6-luna` at `low` for exploration and mechanical work. Map Sonnet delegation to Sol medium while preserving ownership. Give each worker owned paths and use separate worktrees for concurrent edits. A reviewer never implements what they review. The primary agent handles Git operations under `instructions/workflow.md`; subagents never commit or push.
+
+Track the agent definitions listed above under `.claude/agents/` and `.codex/agents/`. Keep other local tool settings ignored.
+
 ## Three rules for every task
 
 1. Scope: every blueprint feature ships with full support at v1.0.0 on macOS ARM64, Windows x64 and Linux x64 (`docs/platform-support.md` lists the two capabilities scheduled for v2.0.0). Never propose alert-only or deferred substitutes as the end state; never drop an OS limit silently.

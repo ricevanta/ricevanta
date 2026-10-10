@@ -25,9 +25,10 @@ No application code in this phase. Language and testing instructions (`instructi
 
 ## Commits and pushing
 
-- Commit only when asked. Each commit is one reviewable change with a subject that states the change and a body that states why. No tool attribution lines.
+- The primary agent may commit completed work locally without asking again. Each commit is one reviewable change with a subject that states the change and a body that states why. No tool attribution lines. Subagents leave Git operations to the primary agent.
 - Every commit is signed off: `git commit -s` (Developer Certificate of Origin, see `CONTRIBUTING.md`).
-- Never push on your own. Commits stay local until the owner has reviewed `git log` and the diffs and said to push. Before that review, local history may be rewritten (squash, reorder, reword) so that the pushed sequence is clean to follow. After a push, history is not rewritten.
+- The primary agent may push without another permission request after the required checks and independent reviews pass. Before every push, remind the owner that unpushed commits must be reviewed and squashed into fewer coherent commits where appropriate. Inspect the full unpushed log and diff, combine fixups and work-in-progress commits, and preserve separate changes when that helps review. Rewrite only unpushed history; never rewrite published commits.
+- Use CI to verify pushed changes. Keep CI scoped to affected files, cancel superseded runs, and cache dependencies when a cache saves work. Run cheap local checks before pushing and avoid repeated pushes solely to discover checks that can run locally.
 - Branch before committing to `master` once more than one person works on the repository.
 
 ## Reporting
