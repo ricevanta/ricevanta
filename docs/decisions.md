@@ -518,6 +518,12 @@ Why: database rollback must not revive revoked identities, reuse spent authoriza
 Rejected: floors collected from returning devices; elapsed restore timers; a database or operator-selected head as proof of current authority.
 Detail: `design/backend.md` section 6.1, `design/pki.md` section 4 and `specs/policy-envelope.md` sections 6 and 7.
 
+### BE-13. Console foundation boundary and browser gate
+Decision: the first console code slice is a static Vue shell under `console/`, with generated brand tokens, precompiled English and Vietnamese catalogues, exact toolchain and dependency pins, and an enforcing production CSP test with Trusted Types negative controls in Chromium, Firefox and WebKit; frames and workers remain denied until reviewed consumers exist.
+Why: the foundation can prove its own build and browser boundary without inventing the absent identity, API and change-stream contracts.
+Rejected: mock authenticated state and a permissive development-server smoke test, which establish neither backend authority nor production CSP enforcement.
+Detail: [console foundation spec](specs/console-foundation.md) and [implementation plan](plans/console-foundation.md).
+
 ### BE-14. Permission catalogue
 Decision: a versioned JSON catalogue under `schemas/permissions/v1/` defines exact permission names, scope kinds, grant kinds and approval metadata; the Go `authz/catalogue` library embeds an identical copy guarded by a byte drift test, rejects unknown or retired names, and keeps permanent retirement tombstones.
 Why: console, API and GitOps consumers need one explicit inventory without giving runtime data authority to redefine permissions.

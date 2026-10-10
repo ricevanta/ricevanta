@@ -80,3 +80,30 @@ The ordinary suite runs every shared fixture and the deterministic `fuzz_recover
 CI runs fixture regeneration, fmt, Clippy, ordinary tests and the extended property test natively on macOS ARM64, Windows x64 and Linux x64 with the exact Rust pin. These checks establish portable codec behavior, not file permissions, power-loss durability, sensors, resource budgets or full platform support. Add native integration checks only with their reviewed slice and [platform qualification](../docs/specs/platform-qualification.md).
 
 No releasable binary exists, so the repository has no binary, installer, container or upgrade test yet.
+
+## Console
+
+The console foundation uses [Vue instructions](vue.md) and [the foundation spec](../docs/specs/console-foundation.md). Run from `console/` with the pinned Node and pnpm:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm audit:deps
+pnpm test:unit
+pnpm exec playwright install --with-deps chromium firefox webkit
+pnpm test:component
+pnpm build
+pnpm check:reproducible
+pnpm test:csp
+pnpm test:fuzz
+```
+
+Type checking includes application, tooling and test projects. Lint includes catalogue key, syntax, plural and source-usage validation. Unit tests cover pure contracts and validator failures. Component tests use Vitest's Playwright provider; their development server does not establish production CSP compatibility.
+
+`test:csp` serves built `dist/` through the static header harness and runs Chromium, Firefox and WebKit with Trusted Types enforced. It checks the exact response header, fails normal cases on every CSP violation, and separately proves blocked operations with negative controls and policy-free controls. Missing browser enforcement or missing violation events fail the check; never skip them or weaken CSP. Record the actual browser versions and revisions.
+
+`test:fuzz` runs 10,000 seeded cases per foundation property target. Save minimized failures in the console fixture corpus. CI must run the seed fixtures in ordinary unit tests; the bounded run is required before review. Frozen install, type check, lint, formatting, dependency audit, unit tests, component tests, build, reproducibility and the CSP gate must run in `.github/workflows/console.yml`.
+
+Two clean builds must have identical sorted path/SHA-256 manifests. Report measured Brotli budgets, asset checks and font notices. Dependency changes also require a resolved-license review and OSV scan under the implementation plan. These checks qualify only the static foundation in the tested engines; login, sessions, CSRF, change streams, Go serving, extension isolation and the full supported browser/OS matrix require their own tests.

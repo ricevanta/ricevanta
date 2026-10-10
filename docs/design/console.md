@@ -6,6 +6,8 @@ The console runs in the operator's browser and adds nothing to the agent's footp
 
 ## 1. Application structure
 
+The [console foundation spec](../specs/console-foundation.md) and [implementation plan](../plans/console-foundation.md) define the first code slice, exact pins, generated tokens, catalogue validation and built-output CSP tests. Its foundation header specializes section 6.1 with frames and workers denied until reviewed consumers exist; API generation, authentication and live data remain dependent slices. Work follows [Vue instructions](../../instructions/vue.md).
+
 ### 1.1 Stack
 
 | Concern | Choice | License |
