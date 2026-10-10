@@ -72,6 +72,10 @@ Create directories only with real files:
 
 Do not create `src/api/` or empty feature folders. Use `@/` only for `src/`; tooling imports explicit relative paths. Keep Node types in a tooling TypeScript project, DOM types in the application project, and test globals out of application types.
 
+Set `skipLibCheck: true` in all three TypeScript projects. Keep every other compiler and template strictness flag in [Vue instructions](../../instructions/vue.md). The pinned `unplugin` 2.3.11 declarations import `@farmfe/core`, `@rspack/core`, `rollup`, `unloader` and `webpack`, which this Vite console does not install; `webpack-virtual-modules` 0.6.2 also imports `webpack`. Those imports cause six TS2307 errors. The `vue-eslint-parser` 10.2.0 declarations also lack `eslint-scope` types and define literal interfaces whose `regex?: undefined` or `bigint?: undefined` conflicts with their base under `exactOptionalPropertyTypes`. Skipping declaration checking avoids these dependency-internal errors while Ricevanta source, tools and tests remain strictly checked. Imported types still participate in checking project uses; this setting does not validate the declarations themselves.
+
+Because `skipLibCheck` applies to every declaration file, forbid authored or generated project `.d.ts`, `.d.mts` and `.d.cts` files anywhere under `console/`, except `src/env.d.ts`. That file contains exactly `/// <reference types="vite/client" />` followed by LF, with no project declarations or augmentations. Define project types in checked `.ts` modules. Before generation and compiler runs, `scripts/check-toolchain.ts` inventories project files, rejects other declaration files or changed env content, and verifies every Ricevanta source, tool, configuration and test file belongs to a compiler project or the separately compiled negative-fixture harness. JavaScript configuration and helpers use `allowJs: true` and `checkJs: true`. Dependency, build-output and report directories are not project inputs; no authored source may live there to bypass checks. Repeat the declaration check after generation to catch generated declarations. Compile-negative fixtures use the same strictness flags and must fail on the intended project diagnostic.
+
 ## 3. Build and output contract
 
 `pnpm build` validates source inputs, generates assets, runs `vite build`, audits output and precompresses it. Pin Vite `base: '/'`, target `es2022`, `assetsInlineLimit: 0`, `cssCodeSplit: true`, `manifest: true`, `sourcemap: false`, and `modulePreload.polyfill: false`. Root hosting is the only deployment shape in this slice. Use runtime-only Vue and one deduplicated Vue runtime; disable Options API and production devtools flags. Precompile all single-file component templates.
@@ -168,6 +172,7 @@ The pure tooling API is `validateCatalogues(en: Uint8Array, vi: Uint8Array, used
 
 | Test group | Required cases |
 |---|---|
+| Type boundary | All strictness flags retained with `skipLibCheck: true`; application, tool, JavaScript configuration and test errors still reject; unchecked indexed access and invalid template props reject; missing compiler coverage rejects; extra project declaration files and additions to the exact env reference reject, including generated declarations |
 | Tokens | All mappings, theme precedence, repeat generation, malformed and duplicate rows, renamed heading, missing source, contrast, exact brand copies |
 | Catalogues | Equal leaf sets and placeholder sets; syntax compile of every leaf; missing/extra/unused key; duplicate property; prototype keys; malformed UTF-8; size/depth boundaries; prohibited markup; all phase-precedence pairs above |
 | Plurals | `0 -> 0`, `-0 -> 0`, `1 -> 1`, `2 -> 2`, `9007199254740991 -> 2`; `-1`, `0.5`, `NaN`, infinities, `9007199254740992` throw `RangeError`; render counts 0, 1, 2, 10 in both locales |
@@ -220,6 +225,8 @@ Benefits: backend-independent work establishes reproducible assets, translated n
 Trade-offs: parsing narrow Markdown tables couples the build to documented headings; a format change fails visibly. Exact pins and three engines require maintenance. The source checks are conservative and restrict otherwise valid Vue patterns. Allowing same-origin scripts avoids nonce generation in a static shell but trusts every executable asset on that origin.
 
 Alternatives rejected: Nuxt/SSR adds a runtime the Go deployment does not need; hash routing conflicts with the settled history-mode design; JSON runtime catalogues retain parsing/compiler paths; browser plural categories make count selection engine-dependent; hand-copied palette constants drift; a permissive dev-server test proves no production CSP guarantee; a default Trusted Types policy masks unsafe sinks. Full UI libraries wait for their first real component rather than entering this slice unused.
+
+For declaration checking, installing unused bundler type packages as devDependencies adds dependency and license obligations without a console consumer and does not fix incompatible parser declarations. Ambient stub modules replace missing contracts with invented or unchecked types. Patching dependencies creates a private declaration maintenance burden. Reject all three; use `skipLibCheck: true` with the project declaration ban and compiler coverage checks in section 2. The trade-off is that dependency declaration defects are not checked; strict project checks and runtime tests remain required.
 
 Unresolved questions, with the working choice fixed above:
 
