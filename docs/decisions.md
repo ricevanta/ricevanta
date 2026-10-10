@@ -122,6 +122,12 @@ Why: exact bytes and recovery errors can be tested on all three target OS/archit
 Rejected: a file-owning writer before native crash ordering is qualified; silent truncation of unsupported headers or checksum-valid sequence gaps, which hides incompatible data or stream defects.
 Detail: [spool format spec](specs/agent-spool-format.md) and [implementation plan](plans/agent-spool-format.md).
 
+### AG-11. Sealed batch writer
+Decision: `ricevanta-batch` in `agent/crates/batch` converts one complete spool segment into the EV-08 header and descriptor plus one EV-09 zstd frame, using the pinned zstd binding, NDJSON-inclusive agent limits and live Go decoder conformance tests.
+Why: the second Rust slice needs exact server-compatible bytes without assuming native file durability, upload or retry behavior.
+Rejected: sealing recovered prefixes, record-limit overshoot and codec-only round trips, which can hide lost records, oversized bodies or cross-language disagreement.
+Detail: [batch writer spec](specs/agent-batch-writer.md) and [implementation plan](plans/agent-batch-writer.md).
+
 ## MDM
 
 ### MDM-01. Native MDM servers
