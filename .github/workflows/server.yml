@@ -8,6 +8,7 @@ on:
       - 'schemas/dsse/**'
       - 'schemas/events/**'
       - 'schemas/cel/**'
+      - 'schemas/export/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'schemas/dsse/**'
       - 'schemas/events/**'
       - 'schemas/cel/**'
+      - 'schemas/export/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   workflow_dispatch:
@@ -43,6 +45,19 @@ jobs:
           go-version-file: server/go.mod
           cache: true
           cache-dependency-path: server/go.sum
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: .github/requirements-design.txt
+      - name: Install validation dependencies
+        working-directory: .
+        run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+      - name: Validate ExportDestination schemas and examples
+        working-directory: .
+        run: |
+          python schemas/export/v1alpha1/validate.py
+          python schemas/export/v1alpha1/test_validate.py
       - name: Check formatting
         run: |
           unformatted="$(gofmt -l .)"
@@ -86,7 +101,9 @@ jobs:
               {"package":"./internal/policy/celdecl","target":"FuzzLoad"},
               {"package":"./internal/authz/catalogue","target":"FuzzValidateName"},
               {"package":"./internal/authz/catalogue","target":"FuzzParse"},
-              {"package":"./internal/extensions/manifest","target":"FuzzValidate"}
+              {"package":"./internal/extensions/manifest","target":"FuzzValidate"},
+              {"package":"./internal/events/exportdest","target":"FuzzValidate"},
+              {"package":"./internal/events/exportdest","target":"FuzzDecoded"}
             ]
         run: |
           python3 - <<'PY'

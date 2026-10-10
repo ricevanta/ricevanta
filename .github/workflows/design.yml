@@ -74,6 +74,10 @@ jobs:
           python schemas/policy/v1alpha1/test_validate.py
       - name: Validate fixture contracts
         run: python scripts/ci/validate_contracts.py
+      - name: Validate ExportDestination schemas and examples
+        run: |
+          python schemas/export/v1alpha1/validate.py
+          python schemas/export/v1alpha1/test_validate.py
       - name: Check document limits and agent definitions
         run: |
           python - <<'PY'
@@ -86,6 +90,10 @@ jobs:
                   count = len(path.read_text().splitlines())
                   if count > 400:
                       oversized.append(f'{path}: {count} lines (limit 400)')
+          plan = pathlib.Path('docs/plans/export-destination-schema.md')
+          count = len(plan.read_text().splitlines())
+          if count > 400:
+              oversized.append(f'{plan}: {count} lines (limit 400)')
           if oversized:
               raise SystemExit('\n'.join(oversized))
           for path in pathlib.Path('.codex/agents').glob('*.toml'):
