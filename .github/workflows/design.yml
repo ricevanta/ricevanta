@@ -80,6 +80,10 @@ jobs:
         run: |
           python schemas/export/v1alpha1/validate.py
           python schemas/export/v1alpha1/test_validate.py
+      - name: Validate ReportTemplate schemas and examples
+        run: |
+          python schemas/report/v1alpha1/validate.py
+          python schemas/report/v1alpha1/test_validate.py
       - name: Check document limits and agent definitions
         run: |
           python - <<'PY'
