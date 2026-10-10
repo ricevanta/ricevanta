@@ -1,0 +1,23 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Exception",
+  "metadata": {
+    "name": "temporary-access"
+  },
+  "spec": {
+    "domain": "dlp",
+    "scope": {
+      "include": [
+        {
+          "devices": {
+            "names": [
+              "device-01"
+            ]
+          }
+        }
+      ]
+    },
+    "justification": "Time-bounded access",
+    "expires": "2027-01-31T00:00:00Z"
+  }
+}

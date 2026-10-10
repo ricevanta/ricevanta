@@ -4,7 +4,7 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 
 ## Rules
 
-- GPL code is never linked into Ricevanta. A GPL program may run only as a separately distributed optional process after legal review.
+- GPL code is never linked into Ricevanta and no GPL program ships with it; GPL tools appear only as lab test fixtures.
 - The project's own eBPF programs are dual-licensed MIT and GPL-2.0, because the kernel accepts BPF LSM programs and GPL-only helpers only from GPL-compatible programs. They are separate objects loaded into the kernel, not linked into the agent, and the agent stays Apache-2.0.
 - Reference projects are for learning; copying code requires a row in the table and attribution in `NOTICE`.
 - Rule packs carry their own license record, author fields and signature from the first pack. Rule licenses are tracked separately from application code.
@@ -17,20 +17,21 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | Source | License | Use |
 |---|---|---|
 | Sigma rules (SigmaHQ) | DRL 1.1 | Allowed with author attribution in match output and redistributed rules |
-| Sigma tooling, pySigma | MIT (verify) | Reference only; Python |
+| Sigma tooling: pySigma, sigma-cli | LGPL-2.1 | Reference only; neither run nor linked; Python |
+| Sigma specification | Public domain per the repository LICENSE (verify full text) | Rule semantics the adapter and evaluator implement in-project |
 | YARA-X | BSD-3-Clause | Rust library, linkable |
 | Community YARA rules | Varies per repository; some non-commercial | Per-pack license record required |
-| Magika | Apache-2.0 (verify model weight terms) | Linkable; ONNX runtime adds size |
-| Presidio | MIT | Port recognizer patterns, not code; Python |
+| Magika repository and `standard_v3_3` model | Repository Apache-2.0; the model directory has no license file of its own (verify the weights) | Model run on `tract-onnx` in `ricevanta-scan`; not shipped until the weight terms are confirmed |
+| Presidio (`data-privacy-stack/presidio`, moved from `microsoft/presidio`) | MIT | Port recognizer patterns, not code; Python |
 | Gitleaks | MIT | Patterns reusable with attribution; Go |
 | detect-secrets | Apache-2.0 | Patterns reusable |
 | Apache Tika | Apache-2.0 | Optional server-side only; Java |
-| osquery | Apache-2.0 or GPL-2.0 dual | Reference; not bundled |
+| osquery | Apache-2.0 OR GPL-2.0-only | Not bundled; its `specs/*.table` files generate the inventory table map at build time under the Apache-2.0 option |
 | Fleet | MIT, except `ee/` under a source-available license | Only non-`ee/` code; verify each file |
 | NanoMDM, MicroMDM | MIT | Design and code reusable |
 | Munki | Apache-2.0 | Reference |
 | step-ca | Apache-2.0 | Go code reusable |
-| `layeh/radius` | MPL-2.0 | Linkable; modified files stay MPL |
+| `layeh/radius` | MPL-2.0 | Packet codec and dictionaries only; untagged and without recent maintenance, pinned commit; modified files stay MPL |
 | FreeRADIUS | GPL-2.0 | Not used |
 | Wazuh | GPL-2.0 with exceptions | Reference only |
 | Santa | Apache-2.0 | Design reusable; Objective-C and Swift |
@@ -40,11 +41,28 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `radius-eap` (Ctere1 fork) | MIT | Seed for the in-project EAP-TLS state machine, pinned commit |
 | Fleet `server/mdm/microsoft` | MIT (outside `ee/`) | MS-MDE2 and SyncML code reusable; verify each file |
 | Falco rules | Apache-2.0 | Reusable through logsource mapping |
-| MITRE ATT&CK | MITRE terms, free with attribution notice | Include the notice |
+| MITRE ATT&CK and `attack-stix-data` | ATT&CK Terms of Use: non-exclusive, royalty-free license for research, development and commercial purposes; every copy reproduces MITRE's copyright designation and the license | Enterprise STIX data bundled with the server; the notice "© <year of the bundled data> The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation." in `NOTICE`, the coverage view and exported layers |
+| ATT&CK Navigator | Apache-2.0 | Layer file format for the coverage export; not bundled |
+| STIX 2.1, TAXII 2.1 (OASIS Standards) | OASIS IPR policy of the CTI TC (verify mode) | Formats implemented in-project; no library |
+| MISP feed format | MISP is AGPL-3.0 | Format parsed in-project; no MISP code used or linked |
 | OCSF schema, `ocsf-schema-compiler`, `ocsf-validator` | Apache-2.0 | Event format and its CI tooling |
 | cel-spec and its conformance suite | Apache-2.0 | Language definition and the profile's CI gate |
 | DSSE specification | Apache-2.0 | Bundle and command signature envelope |
 | CIS Benchmarks | Not freely redistributable | Not bundled; baselines are authored in-project |
+| CIS Controls | CC BY-NC-ND 4.0 (verify) | Safeguard identifiers in baseline references only |
+| macOS Security Compliance Project (mSCP) | CC BY 4.0 (verify the license file) | Baseline item content with attribution in `io.ricevanta.baselines` |
+| DISA STIGs | US government work; distribution statement per STIG (verify) | Baseline item content and rule identifiers |
+| `apple/device-management` schema repository | MIT (verify) | Source for validation schemas of `apple.declaration` and `apple.profile` items |
+| Homebrew | BSD-2-Clause (verify) | Optional macOS package source, invoked as a separate program, not bundled |
+| winget-cli | MIT (verify) | Optional Windows package source, invoked, not bundled |
+| KMFDDM | MIT | Reference only; not used |
+| UnRAR | Freeware license that forbids RAR-compatible archivers; not open source | Not used; RAR archives are `unsupported` |
+| MuPDF | AGPL-3.0 | Not used |
+| `ocrs` model weights | CC-BY-SA-4.0 | Not used |
+| `content_analysis_sdk` | BSD-3-Clause | Protocol of the core's local content-analysis agent |
+| hostapd, wpa_supplicant | BSD-3-Clause (verify) | Test fixtures for 802.1X and EAP-TLS interoperability; not shipped |
+| strongSwan | GPL-2.0 | Lab-only IKEv2 EAP-TLS test client run as a separate process; never linked or distributed |
+| Grafana Loki | AGPL-3.0 (`clients/` carries an Apache-2.0 license file, verify per file) | Export destination only; no Loki package is imported |
 
 ## Libraries named in the architecture
 
@@ -59,7 +77,9 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `windows-rs` | MIT or Apache-2.0 | Windows API, ETW, CNG and TPM bindings |
 | `tss-esapi` | Apache-2.0 or MIT (verify) | Linux TPM 2.0 bindings |
 | tpm2-tss | BSD-2-Clause | Linux TPM 2.0 stack, dynamically linked |
-| `cel` (cel-rust) | MIT | Agent CEL evaluation |
+| `cel` (cel-rust) | MIT | Agent CEL evaluation; second parse in `ricevanta-rulec` |
+| `regex` crate | MIT OR Apache-2.0 | Scanner detectors, matcher regular expressions, dictionaries, `ricevanta-rulec` |
+| `aho-corasick` crate | Unlicense OR MIT | Matcher prefilter, keyword and deny-list passes |
 | `postcard` | MIT or Apache-2.0 | Agent local IPC serialization |
 | zstd and the `zstd` Rust crate | BSD-3-Clause; crate MIT | Event spool and upload compression |
 | `klauspost/compress` | BSD-3-Clause | Server zstd decompression, pure Go |
@@ -70,9 +90,30 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | SAML library | Verify | Chosen in `design/backend.md` after an activity check; `crewjam/saml` is BSD-2-Clause but stale |
 | `minio-go` | Apache-2.0 | S3-compatible blob store client |
 | `opensearch-go`, `go-elasticsearch` | Apache-2.0 | Export destination clients; the Elasticsearch client stays Apache-2.0 whatever the server license |
-| Vue 3, Vite, Pinia, Vue Router, `vue-i18n`, Element Plus | MIT | Console; PrimeVue 5 is excluded, its license is not MIT |
-| Apache ECharts | Apache-2.0 (verify) | Console charts |
-| Vitest, Playwright | MIT; Apache-2.0 | Console tests |
+| `franz-go` | BSD-3-Clause | Kafka export destination client, pure Go |
+| `go.opentelemetry.io/proto/otlp` | Apache-2.0 | OTLP log export messages |
+| `grpc-go` | Apache-2.0 | OTLP/gRPC export transport |
+| `protobuf-go` | BSD-3-Clause | OTLP message encoding |
+| `azure-sdk-for-go` `azlogs`, `azidentity` | MIT | Microsoft Sentinel Logs Ingestion API client and Entra authentication |
+| `aws-sdk-go-v2` | Apache-2.0 (verify) | Signature Version 4 credentials for Amazon OpenSearch Service through the `opensearch-go` signer |
+| `maxminddb-golang` | ISC (verify) | Optional geolocation from an operator-supplied MaxMind DB-format file; no database is bundled |
+| tpm2-pkcs11 | BSD-2-Clause (verify) | Linux system package providing the TPM network-access key to NetworkManager; not bundled |
+| Go `crypto/hpke` | BSD-3-Clause | Sealing gateway secrets to the `radius` role, if the pinned Go release ships it (verify); otherwise RFC 9180 base mode in-project over `crypto/ecdh`, `crypto/hkdf` and `crypto/cipher` |
+| libsystemd (sd-journal) | LGPL-2.1-or-later | Loaded at run time on Linux to read the journal; not shipped and not statically linked |
+| Vue 3, Vite, Pinia, Vue Router, `vue-i18n`, `@intlify/unplugin-vue-i18n` | MIT | Console framework, build, state, routing, strings; PrimeVue 5 is excluded, its license requires a license key and forbids redistribution without an OEM license |
+| Apache ECharts | Apache-2.0 | Console charts, used without `vue-echarts` (BE-08) |
+| Vitest, `@vue/test-utils`, Playwright | MIT; MIT; Apache-2.0 | Console tests |
+| `openapi-typescript`, `openapi-fetch` | MIT | Console API types and typed client generated from `schemas/openapi/` |
+| Reka UI | MIT | Console UI primitives under in-house components |
+| TanStack Table, TanStack Virtual (`@tanstack/vue-table`, `@tanstack/vue-virtual`) | MIT | Console data grid |
+| Cytoscape.js, `cytoscape-dagre`, `dagre` | MIT | Console lineage graph |
+| CodeMirror 6 (`@codemirror/*`, including `lang-yaml`, `lint`, `autocomplete`, `merge`) | MIT | Console policy editor |
+| `yaml` (eemeli) | ISC | Console YAML parsing with source ranges |
+| Ajv | MIT | Console JSON Schema 2020-12 validators, generated at build time in standalone mode |
+| axe-core, `@axe-core/playwright` | MPL-2.0 | Console accessibility tests only; never shipped |
+| pnpm | MIT | Console package manager; build tool, not shipped |
+| TypeScript, `vue-tsc`, ESLint, `eslint-plugin-vue` | Apache-2.0; MIT; MIT; MIT (verify all) | Console type checking and lint; build tools, not shipped |
+| `rsc.io/qr` | BSD-3-Clause | Server-rendered QR codes for break-glass TOTP enrollment |
 | PostgreSQL | PostgreSQL License | System of record |
 | CloudNativePG | Apache-2.0 | PostgreSQL operator in the Helm chart |
 | Prometheus Go client, OpenTelemetry Go SDK | Apache-2.0 | Server metrics and traces |
@@ -83,10 +124,27 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | `wasmtime`, `wasmtime-wasi`, Cranelift | Apache-2.0 per the repository; LLVM exception, verify | `ricevanta-ext` WebAssembly runtime and compiler (EXT-03) |
 | `wit-bindgen` | Apache-2.0 per the repository; LLVM exception, verify | Guest bindings in the extension SDK; host bindings come from `wasmtime::component::bindgen!` |
 | `wasm-tools` | Apache-2.0 per the repository; LLVM exception, verify | SDK packaging: component and WIT validation; build tool, not shipped in the agent |
-| `@module-federation/vite` | MIT | Console code splitting for first-party code only, if used; never for third-party console modules (EXT-04) |
 | `blake3` crate | CC0-1.0, Apache-2.0 or Apache-2.0 with LLVM exception | Content identity |
-| TLSH and its Rust crate | Apache-2.0 (verify both) | Content similarity |
-| `crc32c` crate | Apache-2.0 or MIT (verify) | Spool record checksums |
+| `infer` | MIT | Scanner magic-number detection |
+| `tract-onnx` | MIT OR Apache-2.0 | Magika inference in the scanner |
+| `pdfium-render`; PDFium | MIT OR Apache-2.0; BSD-3-Clause | PDF text and page rendering in the scanner |
+| `zip`, `quick-xml` | MIT; MIT | OOXML and ODF extraction |
+| `calamine` | MIT | Spreadsheet extraction |
+| `cfb` | MIT | OLE compound files: legacy Office, Outlook msg |
+| `rtf-parser` | MIT | RTF extraction |
+| `html5ever` | MIT OR Apache-2.0 | HTML extraction |
+| `mail-parser` | Apache-2.0 OR MIT | eml and mbox extraction |
+| `msg_parser` | MIT | Outlook msg extraction |
+| Tesseract with `tessdata_fast` `vie` and `eng` | Apache-2.0; models Apache-2.0 (verify) | OCR in the scanner |
+| Leptonica | BSD-2-Clause (verify) | Tesseract image library |
+| `tesseract-rs` | MIT | Builds and binds Tesseract and Leptonica |
+| `tar`, `flate2` | MIT OR Apache-2.0 | Archive extraction |
+| `bzip2` crate and libbzip2 | MIT OR Apache-2.0; libbzip2 license (verify) | Archive extraction |
+| `liblzma` crate and XZ Utils liblzma | MIT OR Apache-2.0; liblzma license (verify) | Archive extraction |
+| `sevenz-rust2` | Apache-2.0 | 7z extraction |
+| `chardetng`, `encoding_rs` | Apache-2.0 OR MIT; (Apache-2.0 OR MIT) AND BSD-3-Clause | Text encoding detection and decoding |
+| TLSH and `tlsh2` | TLSH "Apache OR BSD" per its LICENSE file; `tlsh2` Apache-2.0 OR BSD-3-Clause, pure Rust | Content similarity in `ricevanta-scan` |
+| `crc32c` crate | Apache-2.0 or MIT | Spool record checksums |
 | ssdeep | GPL-2.0 | Not used |
 | W3C PROV-DM, OpenLineage | W3C document license; Apache-2.0 | Lineage vocabulary only |
 
@@ -94,7 +152,10 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 
 | Source | License | Use |
 |---|---|---|
-| Be Vietnam Pro | SIL OFL 1.1 | Outlined into the wordmark and tagline masters; the OFL exempts documents made with the font and no Reserved Font Name is declared; notice in `branding/source/OFL-BeVietnamPro.txt`; font binaries are not committed |
+| Python `jsonschema`, `referencing`, PyYAML | MIT; MIT; MIT | Design CI validates JSON Schema and policy examples with local reference resolution; not shipped |
+| Python `rfc3339-validator`, `six` | MIT; MIT | Design CI checks exception expiry timestamps; not shipped |
+| GitHub Actions `checkout`, `setup-python` | MIT; MIT | Design CI checkout, Python setup and dependency cache; pinned by commit |
+| Be Vietnam Pro | SIL OFL 1.1 | Outlined into the wordmark and tagline masters, and bundled as WOFF2 subsets in the console build with the OFL notice beside the files, which OFL 1.1 permits; no Reserved Font Name is declared; notice in `branding/source/OFL-BeVietnamPro.txt`; font binaries are not committed |
 | ImageMagick 7 with librsvg | ImageMagick License; librsvg LGPL-2.1-or-later (verify) | Build-time renderer for `branding/scripts/build.py`; not shipped |
 | Pillow | MIT-CMU (verify) | Build-time validation and ICO assembly; not shipped |
 | fonttools, uharfbuzz | MIT; Apache-2.0 (verify) | Build-time outlining in `branding/scripts/outline_wordmark.py`; not shipped |

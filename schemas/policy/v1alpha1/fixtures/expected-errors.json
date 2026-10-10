@@ -1,0 +1,49 @@
+{
+  "extension-detector.json": [
+    "spec",
+    "detectors",
+    0,
+    "ref"
+  ],
+  "extension-parser.json": [
+    "spec",
+    "parsers",
+    0,
+    "ref"
+  ],
+  "reference.json": [
+    "spec",
+    "reference"
+  ],
+  "network-fail.json": [
+    "spec",
+    "enforcement",
+    "fail"
+  ],
+  "exception-expiry.json": [
+    "spec",
+    "expires"
+  ],
+  "extension-detector-newline.json": [
+    "spec",
+    "detectors",
+    0,
+    "ref"
+  ],
+  "extension-parser-newline.json": [
+    "spec",
+    "parsers",
+    0,
+    "ref"
+  ],
+  "parser-mime-newline.json": [
+    "spec",
+    "parsers",
+    0,
+    "mime"
+  ],
+  "exception-expiry-newline.json": [
+    "spec",
+    "expires"
+  ]
+}

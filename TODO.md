@@ -1,12 +1,11 @@
 # Short-term work
 
-Near-term tasks in order. One line each; a task leaves the list when it is committed. Milestones stay in `docs/roadmap.md`; this file holds only what is in hand now.
+Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unresolved contracts and source checks are recorded in `docs/analysis.md`.
 
-## In progress
-
-- [ ] Owner review of the extension design: `docs/design/extensions.md`, `docs/specs/extension-agent-runtime.md`, EXT-01 to EXT-07 and the rewritten SH-04, BE-02, BE-04 and DLP-01 in `docs/decisions.md`.
-
-## Next
-
-- [ ] Remaining domain design documents: `docs/design/mdm.md`, `edr.md`, `dlp.md`, `radius.md`, `policy.md`, `events.md`, `console.md`.
-- [ ] Owner review of all design documents before the first code directory is created.
+- [ ] Specify and independently review the authority-journal records, storage and database fences, recovery quorum, publication barrier and crash fixtures (BE-12).
+- [ ] Establish and qualify exact-byte file mediation, clipboard read mediation, browser persistent-channel gating, quarantine transactions, macOS process termination and script descendant containment.
+- [ ] Settle native MDM evidence freshness, disk-lock and escrow transactions, and their replay and crash fixtures before implementing compliance or destructive actions.
+- [ ] Qualify console-module network isolation, loaded-asset binding and the isolated inventory-query worker on every required platform.
+- [ ] Publish the missing machine-readable contracts and positive and negative fixtures listed in `docs/analysis.md` section 3 before implementing their consumers.
+- [ ] Complete the remaining certificate profiles and gateway transition contracts, then qualify renewal overlap, revocation, accounting recovery and CoA attribute removal.
+- [ ] Verify the remaining platform and dependency claims in `docs/analysis.md` section 4 and establish the required device and gateway test lab.

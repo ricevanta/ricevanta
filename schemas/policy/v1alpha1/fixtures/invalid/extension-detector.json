@@ -1,0 +1,36 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Policy",
+  "metadata": {
+    "name": "fixture"
+  },
+  "spec": {
+    "domain": "dlp",
+    "scope": {
+      "include": [
+        {
+          "devices": {
+            "names": [
+              "device-01"
+            ]
+          }
+        }
+      ]
+    },
+    "trigger": {
+      "events": [
+        "file_activity.create"
+      ]
+    },
+    "actions": [
+      {
+        "type": "block"
+      }
+    ],
+    "detectors": [
+      {
+        "ref": "ext/com.example.classifier/"
+      }
+    ]
+  }
+}

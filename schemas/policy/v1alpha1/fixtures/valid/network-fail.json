@@ -1,0 +1,34 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Policy",
+  "metadata": {
+    "name": "fixture"
+  },
+  "spec": {
+    "domain": "network",
+    "scope": {
+      "include": [
+        {
+          "devices": {
+            "names": [
+              "device-01"
+            ]
+          }
+        }
+      ]
+    },
+    "trigger": {
+      "events": [
+        "file_activity.create"
+      ]
+    },
+    "actions": [
+      {
+        "type": "reject"
+      }
+    ],
+    "enforcement": {
+      "fail": "closed"
+    }
+  }
+}
