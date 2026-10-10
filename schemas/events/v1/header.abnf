@@ -1,0 +1,16 @@
+; Event upload v1 field value, after HTTP outer whitespace removal.
+; Literals use ASCII byte values, so key and class case is exact.
+; Semantic limits: epoch 1..18446744073709551615; other uint64 fields
+; 0..18446744073709551615; count 1..10000; contiguous sequence range.
+; Maximum 139 bytes; exactly one field value; no whitespace or commas.
+header = %x76.3D.31 %x3B.63.6C.61.73.73.3D class
+         %x3B.65.70.6F.63.68.3D positive
+         %x3B.73.65.67.6D.65.6E.74.3D unsigned
+         %x3B.66.69.72.73.74.3D unsigned
+         %x3B.6C.61.73.74.3D unsigned
+         %x3B.63.6F.75.6E.74.3D positive
+class = %x72.61.77 / %x63.6F.6E.74.65.78.74 / %x6C.69.6E.65.61.67.65
+        / %x66.69.6E.64.69.6E.67.73 / %x61.75.64.69.74
+unsigned = %x30 / positive
+positive = %x31-39 *19DIGIT
+DIGIT = %x30-39

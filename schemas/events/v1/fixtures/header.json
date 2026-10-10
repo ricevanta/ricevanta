@@ -1,0 +1,405 @@
+{
+  "kind": "header",
+  "cases": [
+    {
+      "name": "valid-raw",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-context",
+      "header_values": [
+        "v=1;class=context;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "context",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-lineage",
+      "header_values": [
+        "v=1;class=lineage;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "lineage",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-findings",
+      "header_values": [
+        "v=1;class=findings;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "findings",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-audit",
+      "header_values": [
+        "v=1;class=audit;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "audit",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "max-u64",
+      "header_values": [
+        "v=1;class=raw;epoch=18446744073709551615;segment=18446744073709551615;first=18446744073709551615;last=18446744073709551615;count=1"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "raw",
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "18446744073709551615",
+        "last": "18446744073709551615",
+        "count": "1"
+      }
+    },
+    {
+      "name": "max-count",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=5;last=10004;count=10000"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "5",
+        "last": "10004",
+        "count": "10000"
+      }
+    },
+    {
+      "name": "max-header",
+      "header_values": [
+        "v=1;class=findings;epoch=18446744073709551615;segment=18446744073709551615;first=18446744073709541616;last=18446744073709551615;count=10000"
+      ],
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "findings",
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "18446744073709541616",
+        "last": "18446744073709551615",
+        "count": "10000"
+      }
+    },
+    {
+      "name": "missing",
+      "header_values": [],
+      "expected_error": "wire.ErrHeaderCount"
+    },
+    {
+      "name": "repeated",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1",
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderCount"
+    },
+    {
+      "name": "empty",
+      "header_values": [
+        ""
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "oversize",
+      "header_values": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "expected_error": "wire.ErrHeaderSize"
+    },
+    {
+      "name": "limit-syntax",
+      "header_values": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "count-before-size",
+      "header_values": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderCount"
+    },
+    {
+      "name": "leading-space",
+      "header_values": [
+        " v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "trailing-tab",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1\t"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "internal-space",
+      "header_values": [
+        "v=1; class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "upper-key",
+      "header_values": [
+        "v=1;Class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "upper-class",
+      "header_values": [
+        "v=1;class=RAW;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "comma",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1,v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "extra",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1;device=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "missing-key",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "duplicate-key",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;first=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "reordered",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;last=0;first=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "quoted",
+      "header_values": [
+        "v=1;class=\"raw\";epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "nul",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1\u0000"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "crlf",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1\r\n"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "unicode",
+      "header_values": [
+        "v=1;class=r\u00e4w;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "empty-token",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count="
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "sign",
+      "header_values": [
+        "v=1;class=raw;epoch=+1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "hex",
+      "header_values": [
+        "v=1;class=raw;epoch=0x1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "exponent",
+      "header_values": [
+        "v=1;class=raw;epoch=1e0;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "leading-zero",
+      "header_values": [
+        "v=1;class=raw;epoch=01;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "u64-overflow",
+      "header_values": [
+        "v=1;class=raw;epoch=18446744073709551616;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "u32-overflow",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=4294967296"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "version-overflow",
+      "header_values": [
+        "v=256;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "overflow-before-version",
+      "header_values": [
+        "v=2;class=raw;epoch=18446744073709551616;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "version-0",
+      "header_values": [
+        "v=0;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "version-2",
+      "header_values": [
+        "v=2;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "version-255",
+      "header_values": [
+        "v=255;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "unknown-class",
+      "header_values": [
+        "v=1;class=other;epoch=0;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "batch.ErrClass"
+    },
+    {
+      "name": "zero-epoch",
+      "header_values": [
+        "v=1;class=raw;epoch=0;segment=0;first=0;last=0;count=0"
+      ],
+      "expected_error": "batch.ErrStreamEpoch"
+    },
+    {
+      "name": "zero-count",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=5;last=0;count=0"
+      ],
+      "expected_error": "batch.ErrRecordCount"
+    },
+    {
+      "name": "count-10001",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=10001"
+      ],
+      "expected_error": "batch.ErrRecordCount"
+    },
+    {
+      "name": "u32-max",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=4294967295"
+      ],
+      "expected_error": "batch.ErrRecordCount"
+    },
+    {
+      "name": "reverse",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=18446744073709551615;last=0;count=1"
+      ],
+      "expected_error": "batch.ErrSequenceRange"
+    },
+    {
+      "name": "count-mismatch",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=18446744073709551615;last=18446744073709551615;count=2"
+      ],
+      "expected_error": "batch.ErrSequenceCount"
+    },
+    {
+      "name": "version-before-class",
+      "header_values": [
+        "v=2;class=other;epoch=0;segment=0;first=0;last=0;count=1"
+      ],
+      "expected_error": "wire.ErrVersion"
+    }
+  ]
+}

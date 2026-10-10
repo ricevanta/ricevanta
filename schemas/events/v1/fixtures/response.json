@@ -1,0 +1,568 @@
+{
+  "kind": "response",
+  "cases": [
+    {
+      "name": "stored",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "duplicate",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "duplicate",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "all-uid-skips",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 0,
+        "quarantined": 0
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "all-quarantined",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 0,
+        "quarantined": 1
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "max-id",
+      "status": 200,
+      "body": {
+        "batch_id": "18446744073709551615-findings-18446744073709551615",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "request_descriptor": {
+        "class": "findings",
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "400",
+      "status": 400,
+      "body": {
+        "error": "malformed_batch"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null
+    },
+    {
+      "name": "413",
+      "status": 413,
+      "body": {
+        "error": "batch_too_large"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null
+    },
+    {
+      "name": "403",
+      "status": 403,
+      "body": {
+        "error": "update_only"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null
+    },
+    {
+      "name": "429",
+      "status": 429,
+      "body": {
+        "error": "rate_limited"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "retry_after": "5"
+    },
+    {
+      "name": "503",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "retry_after": "5"
+    },
+    {
+      "name": "retry-upper-bound",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "retry_after": "60"
+    },
+    {
+      "name": "negative",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": -1,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "fraction",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 0.5,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "string-count",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": "1",
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "count-overflow",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 10001
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "unknown-key",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0,
+        "device": "x"
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "unknown-result",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "queued",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "missing-key",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "leading-zero-id",
+      "status": 200,
+      "body": {
+        "batch_id": "01-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "overflow-id",
+      "status": 200,
+      "body": {
+        "batch_id": "18446744073709551616-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "zero-epoch-id",
+      "status": 200,
+      "body": {
+        "batch_id": "0-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "newline-id",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0\n",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "boolean-count",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": true,
+        "quarantined": 0
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "unknown-error",
+      "status": 200,
+      "body": {
+        "error": "internal_details"
+      },
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "null",
+      "status": 200,
+      "body": null,
+      "schema_valid": false,
+      "semantic_valid": false,
+      "expected_error": "schema.invalid",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "wrong-status",
+      "status": 400,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.status"
+    },
+    {
+      "name": "wrong-batch",
+      "status": 200,
+      "body": {
+        "batch_id": "2-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 0
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.batch_id",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "sum-too-large",
+      "status": 200,
+      "body": {
+        "batch_id": "1-raw-0",
+        "result": "stored",
+        "stored": 1,
+        "quarantined": 1
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.counts",
+      "request_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "retry-missing",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.retry_after"
+    },
+    {
+      "name": "retry-leading-zero",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.retry_after",
+      "retry_after": "05"
+    },
+    {
+      "name": "retry-too-short",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.retry_after",
+      "retry_after": "4"
+    },
+    {
+      "name": "retry-too-long",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.retry_after",
+      "retry_after": "61"
+    },
+    {
+      "name": "retry-non-decimal",
+      "status": 503,
+      "body": {
+        "error": "unavailable"
+      },
+      "schema_valid": true,
+      "semantic_valid": false,
+      "expected_error": "response.retry_after",
+      "retry_after": "five"
+    }
+  ]
+}

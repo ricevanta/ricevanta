@@ -64,16 +64,16 @@ The sequence is assigned at append. On start the core truncates each active segm
 
 A segment is sealed when it reaches 4 MiB uncompressed, 5,000 records, or its class's age limit (audit and findings 1 s, context 10 s, lineage and raw 30 s; policy values), and only when it holds a record, so an idle device has no sealing wakeups. Sealing re-reads the records, verifies every checksum, and writes `<segment id>.ndjson.zst`: a zstd skippable frame (RFC 8878 section 3.1.2) holding the batch descriptor (class, stream epoch, segment id, first and last sequence, record count), then one zstd frame of NDJSON with the content checksum and content size flags set. A 4 MiB input stays under the 5 MB request limit of `../architecture.md` section 3.4 after zstd's worst-case expansion (verify `ZSTD_compressBound` on the pinned version). The raw segment is deleted after the sealed file is synced.
 
-Upload: `POST /agent/v1/events` with `Content-Type: application/x-ndjson`, `Content-Encoding: zstd` and a `Ricevanta-Batch` header carrying the descriptor; the batch id is `<stream epoch>-<class>-<segment id>`, so a retry after a crash reuses it. Classes upload in reverse drop order (audit, findings and state, lineage, context, raw), oldest segment first, with one request in flight per class and at most two in flight in total. The agent deletes a sealed file only after a `200` response, whose body is `{ batch_id, result: stored | duplicate, stored, quarantined }`.
+Upload: `POST /agent/v1/events` with `Content-Type: application/x-ndjson`, `Content-Encoding: zstd` and a `Ricevanta-Batch` header carrying the descriptor; the batch id is `<stream epoch>-<class>-<segment id>`, so a retry after a crash reuses it. Classes upload in reverse drop order (audit, findings and state, lineage, context, raw), oldest segment first, with one request in flight per class and at most two in flight in total. The agent deletes a sealed file only after a valid `200` acknowledgement matching the uploaded descriptor, under [the event upload wire contract](../specs/event-upload-wire.md#5-response-bodies-and-status-binding).
 
-`../specs/core-primitives.md` fixes the first internal Go contracts for lowercase UUIDv7 event ids and validation of a decoded batch descriptor and batch id. Those leaf packages do not define or decode the `Ricevanta-Batch` header, zstd descriptor frame or NDJSON body. The machine-readable wire contract and compiled OCSF types remain absent, so the primitives do not make upload or ingest ready.
+`../specs/core-primitives.md` defines internal UUIDv7 and decoded batch-descriptor validation. [The event upload wire contract](../specs/event-upload-wire.md) defines the descriptor header, skippable frame, consistency checks and response bodies, with machine-readable files and fixtures under `schemas/events/v1/`. Its decoder slice covers only the descriptor prefix; NDJSON decompression, compiled OCSF types and full ingest remain separate implementation gates.
 
 | Response | Agent action |
 |---|---|
-| `200` | Delete the sealed file |
+| Valid `200` acknowledgement | Delete the sealed file only after the wire contract's response checks pass |
 | `429` or `503` with `Retry-After` | Pause that class for `Retry-After`, capped at 10 minutes, with ±20 % jitter |
 | Other `5xx`, timeout, connection error | Exponential backoff with full jitter per class: base 1 s, cap 5 minutes, reset on success |
-| `400` (malformed batch) | Move the file to `rejected/`, emit a `drop` event with reason `rejected`; the file counts against the cap and is the first deleted under pressure |
+| `400` (malformed batch) or `413` (batch too large) | Move the file to `rejected/`, emit a `drop` event with reason `rejected`; the file counts against the cap and is the first deleted under pressure |
 | `401` or `403` | Stop uploading and keep the spool; the identity module renews or recovers (`pki.md` section 2) |
 | `403` with `update_only` | Keep spooling under the cap until the update installs (`../architecture.md` section 3.4) |
 

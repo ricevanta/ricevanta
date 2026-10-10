@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/events/v1/fixture.schema.json",
+  "title": "Event wire fixture containers",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "cases"
+      ],
+      "properties": {
+        "kind": {
+          "const": "header"
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "header_values",
+              "expected_error"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "header_values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expected_error": {
+                "enum": [
+                  "wire.ErrHeaderCount",
+                  "wire.ErrHeaderSize",
+                  "wire.ErrHeaderSyntax",
+                  "wire.ErrVersion",
+                  "wire.ErrReaderBound",
+                  "wire.ErrFrameRead",
+                  "wire.ErrFrameMagic",
+                  "wire.ErrFrameSize",
+                  "wire.ErrFrameReserved",
+                  "wire.ErrDescriptorMismatch",
+                  "batch.ErrClass",
+                  "batch.ErrStreamEpoch",
+                  "batch.ErrRecordCount",
+                  "batch.ErrSequenceRange",
+                  "batch.ErrSequenceCount",
+                  null
+                ]
+              },
+              "expected_descriptor": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "class",
+                  "epoch",
+                  "segment",
+                  "first",
+                  "last",
+                  "count"
+                ],
+                "properties": {
+                  "class": {
+                    "enum": [
+                      "raw",
+                      "context",
+                      "lineage",
+                      "findings",
+                      "audit"
+                    ]
+                  },
+                  "epoch": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "segment": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "first": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "last": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "count": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "expected_error": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "expected_descriptor"
+                  ]
+                },
+                "else": {
+                  "not": {
+                    "required": [
+                      "expected_descriptor"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "cases"
+      ],
+      "properties": {
+        "kind": {
+          "const": "descriptor"
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "header_values",
+              "construction",
+              "frame_hex",
+              "consumed_bytes",
+              "expected_error"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "header_values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expected_error": {
+                "enum": [
+                  "wire.ErrHeaderCount",
+                  "wire.ErrHeaderSize",
+                  "wire.ErrHeaderSyntax",
+                  "wire.ErrVersion",
+                  "wire.ErrReaderBound",
+                  "wire.ErrFrameRead",
+                  "wire.ErrFrameMagic",
+                  "wire.ErrFrameSize",
+                  "wire.ErrFrameReserved",
+                  "wire.ErrDescriptorMismatch",
+                  "batch.ErrClass",
+                  "batch.ErrStreamEpoch",
+                  "batch.ErrRecordCount",
+                  "batch.ErrSequenceRange",
+                  "batch.ErrSequenceCount",
+                  null
+                ]
+              },
+              "expected_descriptor": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "class",
+                  "epoch",
+                  "segment",
+                  "first",
+                  "last",
+                  "count"
+                ],
+                "properties": {
+                  "class": {
+                    "enum": [
+                      "raw",
+                      "context",
+                      "lineage",
+                      "findings",
+                      "audit"
+                    ]
+                  },
+                  "epoch": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "segment": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "first": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "last": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "count": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  }
+                }
+              },
+              "construction": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "magic",
+                  "size",
+                  "version",
+                  "class",
+                  "reserved",
+                  "epoch",
+                  "segment",
+                  "first",
+                  "last",
+                  "count",
+                  "truncate"
+                ],
+                "properties": {
+                  "magic": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  },
+                  "class": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  },
+                  "reserved": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "epoch": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "segment": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "first": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "last": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "count": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "truncate": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 48
+                  }
+                }
+              },
+              "frame_hex": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{2})*$",
+                "maxLength": 96
+              },
+              "consumed_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 48
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "expected_error": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "expected_descriptor"
+                  ]
+                },
+                "else": {
+                  "not": {
+                    "required": [
+                      "expected_descriptor"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "cases"
+      ],
+      "properties": {
+        "kind": {
+          "const": "response"
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "status",
+              "body",
+              "schema_valid",
+              "semantic_valid",
+              "expected_error"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  200,
+                  400,
+                  413,
+                  403,
+                  429,
+                  503
+                ]
+              },
+              "body": {},
+              "request_descriptor": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "class",
+                  "epoch",
+                  "segment",
+                  "first",
+                  "last",
+                  "count"
+                ],
+                "properties": {
+                  "class": {
+                    "enum": [
+                      "raw",
+                      "context",
+                      "lineage",
+                      "findings",
+                      "audit"
+                    ]
+                  },
+                  "epoch": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "segment": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "first": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "last": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "count": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  }
+                }
+              },
+              "retry_after": {
+                "type": "string"
+              },
+              "schema_valid": {
+                "type": "boolean"
+              },
+              "semantic_valid": {
+                "type": "boolean"
+              },
+              "expected_error": {
+                "enum": [
+                  null,
+                  "schema.invalid",
+                  "response.status",
+                  "response.batch_id",
+                  "response.counts",
+                  "response.retry_after"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

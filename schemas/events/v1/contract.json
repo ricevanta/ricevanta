@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "request": {
+    "method": "POST",
+    "path": "/agent/v1/events",
+    "content_type": "application/x-ndjson",
+    "content_encoding": "zstd",
+    "header": {
+      "name": "Ricevanta-Batch",
+      "value_count": 1,
+      "max_bytes": 139,
+      "grammar": "header.abnf",
+      "keys": [
+        "v",
+        "class",
+        "epoch",
+        "segment",
+        "first",
+        "last",
+        "count"
+      ],
+      "device_identity": false
+    }
+  },
+  "descriptor_frame": {
+    "magic_hex": "184d2a50",
+    "magic_bytes_hex": "502a4d18",
+    "payload_bytes": 40,
+    "total_bytes": 48,
+    "byte_order": "little",
+    "fields": [
+      {
+        "name": "magic",
+        "offset": 0,
+        "bytes": 4,
+        "constant": 407710288
+      },
+      {
+        "name": "size",
+        "offset": 4,
+        "bytes": 4,
+        "constant": 40
+      },
+      {
+        "name": "version",
+        "offset": 8,
+        "bytes": 1,
+        "constant": 1
+      },
+      {
+        "name": "class",
+        "offset": 9,
+        "bytes": 1,
+        "mapping": {
+          "1": "raw",
+          "2": "context",
+          "3": "lineage",
+          "4": "findings",
+          "5": "audit"
+        }
+      },
+      {
+        "name": "reserved",
+        "offset": 10,
+        "bytes": 2,
+        "constant": 0
+      },
+      {
+        "name": "epoch",
+        "offset": 12,
+        "bytes": 8,
+        "go_field": "StreamEpoch"
+      },
+      {
+        "name": "segment",
+        "offset": 20,
+        "bytes": 8,
+        "go_field": "SegmentID"
+      },
+      {
+        "name": "first",
+        "offset": 28,
+        "bytes": 8,
+        "go_field": "FirstSequence"
+      },
+      {
+        "name": "last",
+        "offset": 36,
+        "bytes": 8,
+        "go_field": "LastSequence"
+      },
+      {
+        "name": "count",
+        "offset": 44,
+        "bytes": 4,
+        "go_field": "RecordCount"
+      }
+    ]
+  },
+  "limits": {
+    "compressed_bytes": 5000000,
+    "reader_budget_max": 5000001,
+    "decompressed_bytes": 67108864,
+    "lines": 10000,
+    "line_payload_bytes": 1048576
+  },
+  "responses": {
+    "200": {
+      "schema": "response.schema.json#/$defs/success"
+    },
+    "400": {
+      "schema": "response.schema.json#/$defs/error",
+      "error": "malformed_batch"
+    },
+    "413": {
+      "schema": "response.schema.json#/$defs/error",
+      "error": "batch_too_large"
+    },
+    "403": {
+      "schema": "response.schema.json#/$defs/error",
+      "error": "update_only"
+    },
+    "429": {
+      "schema": "response.schema.json#/$defs/error",
+      "error": "rate_limited",
+      "retry_after": {
+        "minimum_seconds": 5,
+        "maximum_seconds": 60,
+        "format": "canonical-decimal"
+      }
+    },
+    "503": {
+      "schema": "response.schema.json#/$defs/error",
+      "error": "unavailable",
+      "retry_after": {
+        "minimum_seconds": 5,
+        "maximum_seconds": 60,
+        "format": "canonical-decimal"
+      }
+    }
+  },
+  "semantics": "../../../docs/specs/event-upload-wire.md",
+  "fixtures": [
+    "fixtures/header.json",
+    "fixtures/descriptor.json",
+    "fixtures/response.json"
+  ]
+}

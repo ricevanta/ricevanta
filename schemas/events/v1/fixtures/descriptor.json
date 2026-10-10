@@ -1,0 +1,2423 @@
+{
+  "kind": "descriptor",
+  "cases": [
+    {
+      "name": "valid-raw",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-context",
+      "header_values": [
+        "v=1;class=context;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 2,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001020000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "context",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-lineage",
+      "header_values": [
+        "v=1;class=lineage;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 3,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001030000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "lineage",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-findings",
+      "header_values": [
+        "v=1;class=findings;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 4,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001040000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "findings",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "valid-audit",
+      "header_values": [
+        "v=1;class=audit;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 5,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001050000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "audit",
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1"
+      }
+    },
+    {
+      "name": "max-u64",
+      "header_values": [
+        "v=1;class=raw;epoch=18446744073709551615;segment=18446744073709551615;first=18446744073709551615;last=18446744073709551615;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "18446744073709551615",
+        "last": "18446744073709551615",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01000000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "raw",
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "18446744073709551615",
+        "last": "18446744073709551615",
+        "count": "1"
+      }
+    },
+    {
+      "name": "max-count",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=5;last=10004;count=10000"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "5",
+        "last": "10004",
+        "count": "10000",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000500000000000000142700000000000010270000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "raw",
+        "epoch": "1",
+        "segment": "0",
+        "first": "5",
+        "last": "10004",
+        "count": "10000"
+      }
+    },
+    {
+      "name": "max-header",
+      "header_values": [
+        "v=1;class=findings;epoch=18446744073709551615;segment=18446744073709551615;first=18446744073709541616;last=18446744073709551615;count=10000"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 4,
+        "reserved": 0,
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "18446744073709541616",
+        "last": "18446744073709551615",
+        "count": "10000",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001040000fffffffffffffffffffffffffffffffff0d8ffffffffffffffffffffffffffff10270000",
+      "consumed_bytes": 48,
+      "expected_error": null,
+      "expected_descriptor": {
+        "class": "findings",
+        "epoch": "18446744073709551615",
+        "segment": "18446744073709551615",
+        "first": "18446744073709541616",
+        "last": "18446744073709551615",
+        "count": "10000"
+      }
+    },
+    {
+      "name": "truncated-0",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 0
+      },
+      "frame_hex": "",
+      "consumed_bytes": 0,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-1",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 1
+      },
+      "frame_hex": "50",
+      "consumed_bytes": 1,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-2",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 2
+      },
+      "frame_hex": "502a",
+      "consumed_bytes": 2,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-3",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 3
+      },
+      "frame_hex": "502a4d",
+      "consumed_bytes": 3,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-4",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 4
+      },
+      "frame_hex": "502a4d18",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-5",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 5
+      },
+      "frame_hex": "502a4d1828",
+      "consumed_bytes": 5,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-6",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 6
+      },
+      "frame_hex": "502a4d182800",
+      "consumed_bytes": 6,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-7",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 7
+      },
+      "frame_hex": "502a4d18280000",
+      "consumed_bytes": 7,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-8",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 8
+      },
+      "frame_hex": "502a4d1828000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-9",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 9
+      },
+      "frame_hex": "502a4d182800000001",
+      "consumed_bytes": 9,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-10",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 10
+      },
+      "frame_hex": "502a4d18280000000101",
+      "consumed_bytes": 10,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-11",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 11
+      },
+      "frame_hex": "502a4d1828000000010100",
+      "consumed_bytes": 11,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-12",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 12
+      },
+      "frame_hex": "502a4d182800000001010000",
+      "consumed_bytes": 12,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-13",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 13
+      },
+      "frame_hex": "502a4d18280000000101000001",
+      "consumed_bytes": 13,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-14",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 14
+      },
+      "frame_hex": "502a4d1828000000010100000100",
+      "consumed_bytes": 14,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-15",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 15
+      },
+      "frame_hex": "502a4d182800000001010000010000",
+      "consumed_bytes": 15,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-16",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 16
+      },
+      "frame_hex": "502a4d18280000000101000001000000",
+      "consumed_bytes": 16,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-17",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 17
+      },
+      "frame_hex": "502a4d1828000000010100000100000000",
+      "consumed_bytes": 17,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-18",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 18
+      },
+      "frame_hex": "502a4d182800000001010000010000000000",
+      "consumed_bytes": 18,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-19",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 19
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000",
+      "consumed_bytes": 19,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-20",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 20
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000",
+      "consumed_bytes": 20,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-21",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 21
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000",
+      "consumed_bytes": 21,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-22",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 22
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000",
+      "consumed_bytes": 22,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-23",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 23
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000",
+      "consumed_bytes": 23,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-24",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 24
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000",
+      "consumed_bytes": 24,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-25",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 25
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000",
+      "consumed_bytes": 25,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-26",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 26
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000",
+      "consumed_bytes": 26,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-27",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 27
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000",
+      "consumed_bytes": 27,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-28",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 28
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000",
+      "consumed_bytes": 28,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-29",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 29
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000",
+      "consumed_bytes": 29,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-30",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 30
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000",
+      "consumed_bytes": 30,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-31",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 31
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000000000",
+      "consumed_bytes": 31,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-32",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 32
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000000000",
+      "consumed_bytes": 32,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-33",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 33
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000",
+      "consumed_bytes": 33,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-34",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 34
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000000000000000",
+      "consumed_bytes": 34,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-35",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 35
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000000000000000",
+      "consumed_bytes": 35,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-36",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 36
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000",
+      "consumed_bytes": 36,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-37",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 37
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 37,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-38",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 38
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 38,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-39",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 39
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 39,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-40",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 40
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 40,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-41",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 41
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 41,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-42",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 42
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 42,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-43",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 43
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 43,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-44",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 44
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 44,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-45",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 45
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001",
+      "consumed_bytes": 45,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-46",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 46
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000000000000000000000000000000000000100",
+      "consumed_bytes": 46,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "truncated-47",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 47
+      },
+      "frame_hex": "502a4d1828000000010100000100000000000000000000000000000000000000000000000000000000000000010000",
+      "consumed_bytes": 47,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "alternate-magic-184d2a51",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a51",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "512a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a52",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a52",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "522a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a53",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a53",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "532a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a54",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a54",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "542a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a55",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a55",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "552a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a56",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a56",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "562a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a57",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a57",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "572a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a58",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a58",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "582a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a59",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a59",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "592a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a5a",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a5a",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "5a2a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a5b",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a5b",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "5b2a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a5c",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a5c",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "5c2a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a5d",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a5d",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "5d2a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a5e",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a5e",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "5e2a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "alternate-magic-184d2a5f",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a5f",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "5f2a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "magic-big-endian",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "502a4d18",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "184d2a502800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "ordinary-magic",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "fd2fb528",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "28b52ffd2800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "size-0",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 0,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d180000000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameSize"
+    },
+    {
+      "name": "size-39",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 39,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182700000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameSize"
+    },
+    {
+      "name": "size-41",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 41,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182900000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameSize"
+    },
+    {
+      "name": "size-671088640",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 671088640,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d180000002801010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameSize"
+    },
+    {
+      "name": "size-4294967295",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 4294967295,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d18ffffffff01010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameSize"
+    },
+    {
+      "name": "version-0",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 0,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000000010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "version-2",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 2,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000002010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "version-255",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 255,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d1828000000ff010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "reserved-1",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 1,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010100010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrFrameReserved"
+    },
+    {
+      "name": "reserved-256",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 256,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010001010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrFrameReserved"
+    },
+    {
+      "name": "reserved-65535",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 65535,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d18280000000101ffff010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrFrameReserved"
+    },
+    {
+      "name": "class-zero",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 0,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001000000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrClass"
+    },
+    {
+      "name": "class-six",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 6,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001060000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrClass"
+    },
+    {
+      "name": "epoch-zero",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "0",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000000000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrStreamEpoch"
+    },
+    {
+      "name": "count-zero",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "0",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrRecordCount"
+    },
+    {
+      "name": "count-10001",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "10001",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000011270000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrRecordCount"
+    },
+    {
+      "name": "reverse",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "18446744073709551615",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d18280000000101000001000000000000000000000000000000ffffffffffffffff000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrSequenceRange"
+    },
+    {
+      "name": "sequence-count",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "2",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000000000000000000002000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrSequenceCount"
+    },
+    {
+      "name": "mismatch-class",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 2,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001020000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrDescriptorMismatch"
+    },
+    {
+      "name": "mismatch-epoch",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "2",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000020000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrDescriptorMismatch"
+    },
+    {
+      "name": "mismatch-segment",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "1",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000001000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrDescriptorMismatch"
+    },
+    {
+      "name": "mismatch-range",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "1",
+        "last": "1",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000100000000000000010000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrDescriptorMismatch"
+    },
+    {
+      "name": "mismatch-count-last",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "1",
+        "count": "2",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000000000000000000010000000000000002000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrDescriptorMismatch"
+    },
+    {
+      "name": "mismatch-little-endian-epoch",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "72057594037927936",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000000000000000000100000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrDescriptorMismatch"
+    },
+    {
+      "name": "header-before-frame",
+      "header_values": [
+        ""
+      ],
+      "construction": {
+        "magic": "00000000",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "000000002800000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 0,
+      "expected_error": "wire.ErrHeaderSyntax"
+    },
+    {
+      "name": "magic-before-size",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "00000000",
+        "size": 0,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "000000000000000001010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 4,
+      "expected_error": "wire.ErrFrameMagic"
+    },
+    {
+      "name": "size-before-version",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 0,
+        "version": 2,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d180000000002010000010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 8,
+      "expected_error": "wire.ErrFrameSize"
+    },
+    {
+      "name": "truncation-before-version",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 2,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 9
+      },
+      "frame_hex": "502a4d182800000002",
+      "consumed_bytes": 9,
+      "expected_error": "wire.ErrFrameRead"
+    },
+    {
+      "name": "version-before-reserved",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 2,
+        "class": 1,
+        "reserved": 1,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000002010100010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrVersion"
+    },
+    {
+      "name": "reserved-before-class",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 0,
+        "reserved": 1,
+        "epoch": "1",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001000100010000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "wire.ErrFrameReserved"
+    },
+    {
+      "name": "class-before-epoch",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 0,
+        "reserved": 0,
+        "epoch": "0",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "1",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001000000000000000000000000000000000000000000000000000000000000000000000001000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrClass"
+    },
+    {
+      "name": "epoch-before-count",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "0",
+        "segment": "0",
+        "first": "0",
+        "last": "0",
+        "count": "0",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrStreamEpoch"
+    },
+    {
+      "name": "count-before-range",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "1",
+        "last": "0",
+        "count": "0",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000100000000000000000000000000000000000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrRecordCount"
+    },
+    {
+      "name": "range-before-count-match",
+      "header_values": [
+        "v=1;class=raw;epoch=1;segment=0;first=0;last=0;count=1"
+      ],
+      "construction": {
+        "magic": "184d2a50",
+        "size": 40,
+        "version": 1,
+        "class": 1,
+        "reserved": 0,
+        "epoch": "1",
+        "segment": "0",
+        "first": "2",
+        "last": "0",
+        "count": "2",
+        "truncate": 48
+      },
+      "frame_hex": "502a4d182800000001010000010000000000000000000000000000000200000000000000000000000000000002000000",
+      "consumed_bytes": 48,
+      "expected_error": "batch.ErrSequenceRange"
+    }
+  ]
+}

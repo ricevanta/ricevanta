@@ -85,7 +85,7 @@ func ValidateBatchID(claimed string, d Descriptor) error
 func (c SpoolClass) String() string
 ```
 
-Canonical class names are `raw`, `context`, `lineage`, `findings` and `audit`. The numeric values, short class names and rules below are new internal contracts. They make the existing five spool classes exact for code without defining the missing `Ricevanta-Batch` wire schema.
+Canonical class names are `raw`, `context`, `lineage`, `findings` and `audit`. The numeric values, short class names and rules below are new internal contracts. They make the five spool classes exact for code. [The event upload wire contract](event-upload-wire.md) defines the `Ricevanta-Batch` header and descriptor frame.
 
 Validation applies in this order:
 
@@ -113,12 +113,12 @@ The multi-invalid table starts with every omitted field. It then makes one field
 
 Both packages process attacker-controlled agent input. They bound work to fixed-size values, allocate no input-sized collections, use no regular expressions and never panic on malformed input. Callers must still cap compressed and decompressed bytes before these checks.
 
-This slice does not define or parse the `Ricevanta-Batch` header, zstd skippable frame, or NDJSON body. The machine wire schema remains absent. It does not count body lines, compare event sequences with the descriptor, validate JSON or OCSF, bind a device, authenticate a sender, verify extension provenance, deduplicate data, write a ledger or database, quarantine an event, or acknowledge a batch. Descriptor validity supplies no authenticity or ingest guarantee.
+This slice does not parse the `Ricevanta-Batch` header, zstd skippable frame, or NDJSON body. [The event upload wire contract](event-upload-wire.md) defines the descriptor header and frame, their decoder slice and the machine-readable contract. It does not count body lines, compare event sequences with the descriptor, validate JSON or OCSF, bind a device, authenticate a sender, verify extension provenance, deduplicate data, write a ledger or database, quarantine an event, or acknowledge a batch. Descriptor validity supplies no authenticity or ingest guarantee.
 
 ## 5. Benefits, trade-offs and alternatives
 
 The packages isolate cheap checks that later transport and schema code can call without a database. Typed errors support metrics and precise rejection tests. The cost is two small packages before their callers exist.
 
-A general UUID dependency would add a dependency for four bit and shape checks. Accepting every RFC text spelling would preserve equivalent strings in raw events. Parsing the unspecified batch header now would freeze a wire format without a machine-readable contract. These alternatives are outside this slice.
+A general UUID dependency would add a dependency for four bit and shape checks. Accepting every RFC text spelling would preserve equivalent strings in raw events. Parsing the batch header belongs to [the event upload wire slice](event-upload-wire.md); adding transport parsing here would couple primitive validation to the wire format. These alternatives are outside this slice.
 
 Source: [RFC 9562 sections 4, 4.1, 4.2, 5.7 and Appendix A.6](https://www.rfc-editor.org/rfc/rfc9562).

@@ -298,6 +298,12 @@ Why: partition drop cannot skip rows (BE-06), and investigations and legal holds
 Rejected: row-level DELETE with hold exceptions, which brings back the vacuum load that partition drop avoids.
 Detail: `design/events.md` section 5.
 
+### EV-08. Event upload descriptor wire contract
+Decision: event upload v1 uses one canonical ASCII descriptor header and one fixed-size binary descriptor skippable frame; both descriptors must match, and only mTLS supplies device identity.
+Why: bounded parsing and one representation prevent ambiguous batch routing and retry identities.
+Rejected: JSON descriptors, permissive header lists and trusting either copy on mismatch, which add representations or admit conflicting metadata.
+Detail: `specs/event-upload-wire.md` and `schemas/events/v1/`.
+
 ## Policy (POL)
 
 ### POL-01. CEL runtimes

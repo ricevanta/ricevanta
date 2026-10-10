@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/events/v1/response.schema.json",
+  "title": "Event upload response body",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "$ref": "#/$defs/error"
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_id",
+        "result",
+        "stored",
+        "quarantined"
+      ],
+      "properties": {
+        "batch_id": {
+          "type": "string",
+          "maxLength": 50,
+          "pattern": "^(?:[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)-(?:raw|context|lineage|findings|audit)-(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)$(?![\\s\\S])"
+        },
+        "result": {
+          "enum": [
+            "stored",
+            "duplicate"
+          ]
+        },
+        "stored": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "quarantined": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "enum": [
+            "malformed_batch",
+            "batch_too_large",
+            "update_only",
+            "rate_limited",
+            "unavailable"
+          ]
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "batch_id": "1-raw-0",
+      "result": "stored",
+      "stored": 1,
+      "quarantined": 0
+    },
+    {
+      "batch_id": "1-raw-0",
+      "result": "duplicate",
+      "stored": 1,
+      "quarantined": 0
+    },
+    {
+      "error": "malformed_batch"
+    },
+    {
+      "error": "batch_too_large"
+    },
+    {
+      "error": "update_only"
+    },
+    {
+      "error": "rate_limited"
+    },
+    {
+      "error": "unavailable"
+    }
+  ]
+}
