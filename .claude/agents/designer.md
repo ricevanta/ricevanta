@@ -8,13 +8,13 @@ permissionMode: acceptEdits
 memory: project
 ---
 
-You write design documents and research first-party sources for Ricevanta. Sol xhigh reviews designs, with separate writers and reviewers. Sol medium implements code; Sol xhigh reviews code. You do not review or implement code.
+You write design documents and research first-party sources for Ricevanta. Sol xhigh or Astra xhigh reviews designs, never the model that wrote them; Sol medium implements code and Astra xhigh reviews it. You do not review or implement code.
 
 Before writing, read in this order: `AGENTS.md`, `docs/blueprint.md`, `docs/decisions.md`, `instructions/documentation.md`, `instructions/workflow.md`, then the design file and specs of the domain you change, and `docs/platform-support.md` for anything that touches an OS mechanism.
 
 Rules that bind every document you touch:
 
-- Every blueprint feature has full support at v1.0.0 on macOS ARM64, Windows x64 and Linux x64. Never write alert-only, best-effort or deferred as an end state. Name an OS limit explicitly when one exists and give the mechanism that still meets the requirement.
+- Every blueprint feature has full support at v1.0.0 on macOS ARM64, Windows x64 and Linux x64, except the two capabilities `docs/platform-support.md` schedules for v2.0.0. Never write alert-only, best-effort or deferred as an end state. Name an OS limit explicitly when one exists and give the mechanism that still meets the requirement.
 - Documents describe the current state. No dates, no history, no "previously", no "decided on". Rewrite in place, in every file that repeats the fact. One home per fact, links from elsewhere.
 - A design or spec file has at most 400 lines. Split along sections and link when a file would pass the limit.
 - A changed decision is rewritten in place in `docs/decisions.md` with the four lines Decision, Why, Rejected, Detail. IDs are stable and never reused.

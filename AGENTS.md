@@ -6,7 +6,7 @@ This file applies to every agent (Codex, Claude Code and others) and to people. 
 
 ## State
 
-Implementation proceeds in reviewed slices. Each slice needs an independently reviewed design and implementation plan before code starts. Unresolved native, platform and security gates remain implementation blockers for the code that depends on them. The repository contains initial Go server libraries, but no releasable binary, Rust agent or Vue console. Brand assets and their build script remain in `branding/`.
+Implementation proceeds in reviewed slices. Each slice needs an independently reviewed design and implementation plan before code starts. Unresolved native, platform and security gates remain implementation blockers for the code that depends on them. The repository contains Go server libraries under `server/internal/` and the first Rust agent crate under `agent/crates/`, but no releasable binary or Vue console. Brand assets and their build script remain in `branding/`.
 
 ## Map
 
@@ -29,16 +29,16 @@ Implementation proceeds in reviewed slices. Each slice needs an independently re
 | Any design work | `docs/blueprint.md`, `docs/decisions.md`, `instructions/workflow.md`, then the domain's design file |
 | Writing or changing a document | `instructions/documentation.md` |
 | Reviewing, committing, reporting a task | `instructions/workflow.md` |
-| Work in one domain (mdm, edr, dlp, lineage, pki, radius, policy, events, console, agent, backend, extensions) | This file, `docs/design/<domain>.md`, that domain's section of `docs/decisions.md`. Nothing else is required. |
+| Work in one domain (mdm, edr, dlp, lineage, pki, radius, policy, events, console, agent, backend, extensions) | This file, `docs/design/<domain>.md` and that domain's section of `docs/decisions.md` are the minimum domain context; component guides, language and testing instructions and the task's specs still apply. |
 
 ## AI agent definitions
 
 | Tool | Where | Agents |
 |---|---|---|
 | Claude Code | `.claude/agents/` | `designer` (Fable) |
-| Codex | `.codex/agents/` | `design_reviewer` (Sol xhigh, read-only), `implementer` (Sol medium), `code_reviewer` (Sol xhigh, read-only, including adversarial review) |
+| Codex | `.codex/agents/` | `design_reviewer` (Sol xhigh or Astra xhigh, read-only), `implementer` (Sol medium), `code_reviewer` (Sol xhigh or Astra xhigh, including adversarial review) |
 
-Claude Code handles design and research only, on Fable. When Fable reaches its usage limit, Astra writes and improves designs in a separate general-purpose worker. Sol xhigh reviews designs, with an independent reviewer for every fix. Sol xhigh reviews code, including the adversarial pass, and Sol medium implements code. Agents may use subagents and general-purpose agents; there is no separate researcher role. Set the model and effort explicitly on every dispatch: `gpt-6-astra` at `high` for design when Fable is unavailable, `gpt-6.1-sol` at `medium` for planning and implementation, `gpt-6.1-sol` at `xhigh` for every review and fix confirmation, and `gpt-6-luna` at `low` for exploration and mechanical work. No work runs on Sonnet or Opus; map a skill's Sonnet or Opus delegation to Sol medium while preserving ownership. Give each worker owned paths and use separate worktrees for concurrent edits. A reviewer never implements what they review. The primary agent handles Git operations under `instructions/workflow.md`; subagents never commit or push.
+Claude Code handles design and research only, on Fable. When Fable reaches its usage limit, Astra writes and improves designs in a separate general-purpose worker. Sol xhigh or Astra xhigh reviews designs and code, including the adversarial pass, and confirms fixes, never on work the same model wrote (`instructions/workflow.md`, Reviews). Sol medium implements code. Agents may use subagents and general-purpose agents; there is no separate researcher role. Set the model and effort explicitly on every dispatch: `gpt-6-astra` at `high` for design when Fable is unavailable, `gpt-6.1-sol` at `medium` for planning and implementation, `gpt-6.1-sol` or `gpt-6-astra` at `xhigh` for every review and fix confirmation, and `gpt-6-luna` at `low` for exploration and mechanical work. No work runs on Sonnet or Opus; map a skill's Sonnet or Opus delegation to Sol medium while preserving ownership. Give each worker owned paths and use separate worktrees for concurrent edits. A reviewer never implements what they review. The primary agent handles Git operations under `instructions/workflow.md`; subagents never commit or push.
 
 Track the agent definitions listed above under `.claude/agents/` and `.codex/agents/`. Keep other local tool settings ignored.
 

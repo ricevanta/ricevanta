@@ -9,4 +9,4 @@ Read these files before changing server code:
 - `../docs/design/backend.md` and `../docs/design/events.md` for server and event-pipeline boundaries.
 - `../docs/specs/core-primitives.md` for the implemented event primitives.
 
-The current module contains two standard-library-only libraries: `internal/events/eventid` and `internal/events/batch`. It has no executable, server runtime, API, database access, network path or platform integration.
+The current module contains libraries only: `internal/events/eventid`, `internal/events/batch`, `internal/events/wire` and `internal/events/body` (event upload decoding), `internal/signing/dsse` (DSSE envelopes) and `internal/policy/celdecl` (CEL declarations). Each package's spec is under `../docs/specs/`. The module has no executable, server runtime, API, database access, network path or platform integration.
