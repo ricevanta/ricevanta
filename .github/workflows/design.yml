@@ -20,6 +20,7 @@ on:
       - 'NOTICE'
       - '.gitattributes'
       - 'scripts/ci/**'
+      - 'server/internal/authz/catalogue/schema_test.py'
   pull_request:
     paths:
       - 'docs/**'
@@ -38,6 +39,7 @@ on:
       - 'NOTICE'
       - '.gitattributes'
       - 'scripts/ci/**'
+      - 'server/internal/authz/catalogue/schema_test.py'
   workflow_dispatch:
 
 permissions:
@@ -62,6 +64,9 @@ jobs:
           cache-dependency-path: .github/requirements-design.txt
       - name: Install validation dependencies
         run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+      - name: Validate permission source coverage
+        working-directory: .
+        run: python server/internal/authz/catalogue/schema_test.py --check-sources
       - name: Validate policy schemas and examples
         run: |
           python schemas/policy/v1alpha1/validate.py

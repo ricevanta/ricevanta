@@ -9,6 +9,7 @@ on:
       - 'schemas/events/**'
       - 'schemas/cel/**'
       - '.github/workflows/server.yml'
+      - 'schemas/permissions/**'
   pull_request:
     paths:
       - 'server/**'
@@ -16,6 +17,7 @@ on:
       - 'schemas/events/**'
       - 'schemas/cel/**'
       - '.github/workflows/server.yml'
+      - 'schemas/permissions/**'
   workflow_dispatch:
 
 permissions:
@@ -48,6 +50,12 @@ jobs:
             printf '%s\n' "$unformatted"
             exit 1
           fi
+      - name: Validate permission catalogue
+        working-directory: .
+        run: |
+          python3 -m venv "$RUNNER_TEMP/permission-schema-venv"
+          "$RUNNER_TEMP/permission-schema-venv/bin/python" -m pip install 'jsonschema==4.25.1'
+          "$RUNNER_TEMP/permission-schema-venv/bin/python" server/internal/authz/catalogue/schema_test.py
       - name: Test
         run: go test -count=1 ./...
       - name: Test with race detector
@@ -75,7 +83,9 @@ jobs:
               {"package":"./internal/events/body","target":"FuzzExtractLine"},
               {"package":"./internal/events/body","target":"FuzzDecode"},
               {"package":"./internal/policy/celdecl","target":"FuzzParse"},
-              {"package":"./internal/policy/celdecl","target":"FuzzLoad"}
+              {"package":"./internal/policy/celdecl","target":"FuzzLoad"},
+              {"package":"./internal/authz/catalogue","target":"FuzzValidateName"},
+              {"package":"./internal/authz/catalogue","target":"FuzzParse"}
             ]
         run: |
           python3 - <<'PY'
