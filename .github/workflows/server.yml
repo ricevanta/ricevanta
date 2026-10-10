@@ -7,12 +7,14 @@ on:
       - 'server/**'
       - 'schemas/dsse/**'
       - 'schemas/events/**'
+      - 'schemas/cel/**'
       - '.github/workflows/server.yml'
   pull_request:
     paths:
       - 'server/**'
       - 'schemas/dsse/**'
       - 'schemas/events/**'
+      - 'schemas/cel/**'
       - '.github/workflows/server.yml'
   workflow_dispatch:
 
