@@ -1,0 +1,25 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "apple.declaration",
+        "settings": {
+          "identifier": "io.ricevanta.config",
+          "type": "com.apple.configuration",
+          "payload": {
+            "enabled": true
+          }
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

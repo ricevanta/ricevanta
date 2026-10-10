@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/check.query.json",
+  "title": "check.query",
+  "description": "SQL read-only table/function qualification and CEL compilation remain required. Schema acceptance does not execute queries or waive required-compliance weakening approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+    },
+    "expect": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+    }
+  },
+  "required": [
+    "query",
+    "expect"
+  ],
+  "x-ricevanta-effect": "check",
+  "x-ricevanta-protected-publication": false
+}

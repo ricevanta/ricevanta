@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/apple.declaration.json",
+  "title": "apple.declaration",
+  "description": "Native payload is vendor-defined JSON. Publication rejects server token/status fields and requires pinned Apple catalogue validation and transport compilation.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "identifier": {
+      "$ref": "../mdm-common.schema.json#/$defs/identifier"
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^com\\.apple\\.[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*(?![\\s\\S])"
+        }
+      ]
+    },
+    "payload": {
+      "allOf": [
+        {
+          "$ref": "../mdm-common.schema.json#/$defs/nativeJSON"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": [
+    "identifier",
+    "type",
+    "payload"
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

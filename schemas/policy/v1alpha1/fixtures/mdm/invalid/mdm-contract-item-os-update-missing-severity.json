@@ -1,0 +1,49 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "os_update",
+        "settings": {
+          "platform": "macos",
+          "maintenance": {
+            "timezone": "UTC",
+            "slots": [
+              {
+                "days": [
+                  "mon"
+                ],
+                "start": "02:00",
+                "durationMinutes": 60
+              }
+            ]
+          },
+          "reboot": {
+            "notify": "1h",
+            "maxDeferrals": 1,
+            "deadline": "1d"
+          },
+          "targetVersion": "latest",
+          "deferrals": {
+            "majorDays": 0,
+            "minorDays": 0,
+            "systemDays": 0
+          },
+          "automaticDownload": true,
+          "automaticInstall": true,
+          "notifications": true
+        },
+        "required": true
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

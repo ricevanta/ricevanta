@@ -1,0 +1,46 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample",
+    "labels": {
+      "site": "lab"
+    },
+    "annotations": {
+      "owner": "team"
+    },
+    "description": "Managed resource"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "encryption",
+        "settings": {
+          "platform": "linux",
+          "enabled": true,
+          "escrow": true,
+          "existingLuks2Root": true,
+          "tpm2": true
+        },
+        "required": true,
+        "severity": "high",
+        "grace": "24h",
+        "authority": "agent",
+        "references": [
+          {
+            "framework": "cis",
+            "id": "1.1",
+            "document": "control",
+            "version": "1"
+          }
+        ]
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ],
+    "minOsVersion": "1.0"
+  }
+}

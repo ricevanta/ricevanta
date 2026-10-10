@@ -1,0 +1,61 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample",
+    "labels": {
+      "site": "lab"
+    },
+    "annotations": {
+      "owner": "team"
+    },
+    "description": "Managed resource"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "os_update",
+        "settings": {
+          "platform": "linux",
+          "maintenance": {
+            "timezone": "UTC",
+            "slots": [
+              {
+                "days": [
+                  "mon"
+                ],
+                "start": "02:00",
+                "durationMinutes": 60
+              }
+            ]
+          },
+          "reboot": {
+            "notify": "1h",
+            "maxDeferrals": 1,
+            "deadline": "1d"
+          },
+          "class": "security",
+          "includeFlatpak": true
+        },
+        "required": true,
+        "severity": "high",
+        "grace": "24h",
+        "authority": "agent",
+        "references": [
+          {
+            "framework": "cis",
+            "id": "1.1",
+            "document": "control",
+            "version": "1"
+          }
+        ]
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ],
+    "minOsVersion": "1.0"
+  }
+}

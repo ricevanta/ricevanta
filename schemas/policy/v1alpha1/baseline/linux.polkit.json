@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/linux.polkit.json",
+  "title": "linux.polkit",
+  "description": "Rules remain executable protected configuration. Validation does not execute or sandbox rules; the output path derives from item id.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rules": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384,
+      "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+    }
+  },
+  "required": [
+    "rules"
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

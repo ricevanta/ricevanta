@@ -1,0 +1,23 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "check.query",
+        "settings": {
+          "query": "SELECT 1;\n",
+          "expect": "true",
+          "unexpected": false
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "linux.systemd",
+        "settings": {
+          "unit": "example@instance.service",
+          "state": "masked",
+          "dropIn": {
+            "name": "config",
+            "sections": [
+              {
+                "name": "Service",
+                "directives": [
+                  {
+                    "name": "Environment",
+                    "value": "MODE=secure"
+                  },
+                  {
+                    "name": "Environment",
+                    "value": ""
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

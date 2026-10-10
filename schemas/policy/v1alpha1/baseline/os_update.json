@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/os_update.json",
+  "title": "os_update",
+  "description": "Semantic validation compares durations, requires positive reboot deadline, unequal active-hours endpoints, targetBuild requiring targetVersion other than latest, and platform equal to Baseline os. Native planning verifies timezone existence, gaps/folds, slot union and qualified native bounds.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "macos"
+        },
+        "maintenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+              "allOf": [
+                {
+                  "pattern": "^(?:device|UTC|[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)+)(?![\\s\\S])"
+                }
+              ]
+            },
+            "slots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 14,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "days": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 7,
+                    "items": {
+                      "enum": [
+                        "mon",
+                        "tue",
+                        "wed",
+                        "thu",
+                        "fri",
+                        "sat",
+                        "sun"
+                      ]
+                    },
+                    "uniqueItems": true
+                  },
+                  "start": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5,
+                    "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                    "allOf": [
+                      {
+                        "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9](?![\\s\\S])"
+                      }
+                    ]
+                  },
+                  "durationMinutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440
+                  }
+                },
+                "required": [
+                  "days",
+                  "start",
+                  "durationMinutes"
+                ]
+              }
+            }
+          },
+          "required": [
+            "timezone",
+            "slots"
+          ]
+        },
+        "reboot": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "notify": {
+              "$ref": "../mdm-common.schema.json#/$defs/duration"
+            },
+            "maxDeferrals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "deadline": {
+              "$ref": "../mdm-common.schema.json#/$defs/duration"
+            }
+          },
+          "required": [
+            "notify",
+            "maxDeferrals",
+            "deadline"
+          ]
+        },
+        "targetVersion": {
+          "$ref": "../mdm-common.schema.json#/$defs/version"
+        },
+        "targetBuild": {
+          "$ref": "../mdm-common.schema.json#/$defs/version"
+        },
+        "deferrals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "majorDays": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 90
+            },
+            "minorDays": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 90
+            },
+            "systemDays": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 90
+            }
+          },
+          "required": [
+            "majorDays",
+            "minorDays",
+            "systemDays"
+          ]
+        },
+        "automaticDownload": {
+          "type": "boolean"
+        },
+        "automaticInstall": {
+          "type": "boolean"
+        },
+        "notifications": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "platform",
+        "maintenance",
+        "reboot",
+        "targetVersion",
+        "deferrals",
+        "automaticDownload",
+        "automaticInstall",
+        "notifications"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "windows"
+        },
+        "maintenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+              "allOf": [
+                {
+                  "pattern": "^(?:device|UTC|[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)+)(?![\\s\\S])"
+                }
+              ]
+            },
+            "slots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 14,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "days": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 7,
+                    "items": {
+                      "enum": [
+                        "mon",
+                        "tue",
+                        "wed",
+                        "thu",
+                        "fri",
+                        "sat",
+                        "sun"
+                      ]
+                    },
+                    "uniqueItems": true
+                  },
+                  "start": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5,
+                    "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                    "allOf": [
+                      {
+                        "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9](?![\\s\\S])"
+                      }
+                    ]
+                  },
+                  "durationMinutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440
+                  }
+                },
+                "required": [
+                  "days",
+                  "start",
+                  "durationMinutes"
+                ]
+              }
+            }
+          },
+          "required": [
+            "timezone",
+            "slots"
+          ]
+        },
+        "reboot": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "notify": {
+              "$ref": "../mdm-common.schema.json#/$defs/duration"
+            },
+            "maxDeferrals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "deadline": {
+              "$ref": "../mdm-common.schema.json#/$defs/duration"
+            }
+          },
+          "required": [
+            "notify",
+            "maxDeferrals",
+            "deadline"
+          ]
+        },
+        "productVersion": {
+          "$ref": "../mdm-common.schema.json#/$defs/version"
+        },
+        "targetRelease": {
+          "$ref": "../mdm-common.schema.json#/$defs/version"
+        },
+        "qualityDeferralDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "featureDeferralDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 365
+        },
+        "qualityDeadlineDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "featureDeadlineDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "graceDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "activeHours": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "end": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ]
+        }
+      },
+      "required": [
+        "platform",
+        "maintenance",
+        "reboot",
+        "productVersion",
+        "targetRelease",
+        "qualityDeferralDays",
+        "featureDeferralDays",
+        "qualityDeadlineDays",
+        "featureDeadlineDays",
+        "graceDays",
+        "activeHours"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "linux"
+        },
+        "maintenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+              "allOf": [
+                {
+                  "pattern": "^(?:device|UTC|[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)+)(?![\\s\\S])"
+                }
+              ]
+            },
+            "slots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 14,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "days": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 7,
+                    "items": {
+                      "enum": [
+                        "mon",
+                        "tue",
+                        "wed",
+                        "thu",
+                        "fri",
+                        "sat",
+                        "sun"
+                      ]
+                    },
+                    "uniqueItems": true
+                  },
+                  "start": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5,
+                    "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                    "allOf": [
+                      {
+                        "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9](?![\\s\\S])"
+                      }
+                    ]
+                  },
+                  "durationMinutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440
+                  }
+                },
+                "required": [
+                  "days",
+                  "start",
+                  "durationMinutes"
+                ]
+              }
+            }
+          },
+          "required": [
+            "timezone",
+            "slots"
+          ]
+        },
+        "reboot": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "notify": {
+              "$ref": "../mdm-common.schema.json#/$defs/duration"
+            },
+            "maxDeferrals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "deadline": {
+              "$ref": "../mdm-common.schema.json#/$defs/duration"
+            }
+          },
+          "required": [
+            "notify",
+            "maxDeferrals",
+            "deadline"
+          ]
+        },
+        "class": {
+          "enum": [
+            "security",
+            "all"
+          ]
+        },
+        "includeFlatpak": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "platform",
+        "maintenance",
+        "reboot",
+        "class",
+        "includeFlatpak"
+      ]
+    }
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

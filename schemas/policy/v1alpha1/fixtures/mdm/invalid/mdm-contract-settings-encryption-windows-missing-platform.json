@@ -1,0 +1,25 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "encryption",
+        "settings": {
+          "enabled": true,
+          "escrow": true
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "linux.sysctl",
+        "settings": {
+          "key": "net.ipv4.ip_forward",
+          "value": "0",
+          "unexpected": false
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

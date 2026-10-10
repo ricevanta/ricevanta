@@ -1,0 +1,12 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "DeviceGroup",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "members": [
+      {}
+    ]
+  }
+}

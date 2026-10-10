@@ -1,0 +1,38 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "SoftwarePackage",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "format": "msix",
+    "version": "1.0",
+    "source": {
+      "type": "blob",
+      "blobKey": "packages/app.bin",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": 1
+    },
+    "signature": {
+      "type": "msix",
+      "publisher": "Example"
+    },
+    "detection": {
+      "type": "msix",
+      "family": "Example_App",
+      "version": "1.0"
+    },
+    "allowedGroups": [
+      "fleet"
+    ],
+    "installArgs": [],
+    "uninstallArgs": [],
+    "reboot": {
+      "mode": "none"
+    },
+    "interaction": {
+      "mode": "silent"
+    }
+  }
+}

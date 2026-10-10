@@ -1,0 +1,27 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "windows.csp",
+        "settings": {
+          "locUri": {},
+          "format": "bool",
+          "value": true
+        },
+        "required": true,
+        "severity": "high",
+        "authority": "native"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

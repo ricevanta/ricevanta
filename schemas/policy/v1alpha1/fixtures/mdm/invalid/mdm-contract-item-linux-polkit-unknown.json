@@ -1,0 +1,25 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "linux.polkit",
+        "settings": {
+          "rules": "polkit.addRule(function(action, subject) {\n return polkit.Result.NOT_HANDLED;\n});"
+        },
+        "required": true,
+        "severity": "high",
+        "unexpected": false
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

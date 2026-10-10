@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/linux.sysctl.json",
+  "title": "linux.sysctl",
+  "description": "Native application and effective-state qualification remain required.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^[a-z0-9_]+(?:\\.[a-z0-9_-]+)+(?![\\s\\S])"
+        }
+      ]
+    },
+    "value": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+    }
+  },
+  "required": [
+    "key",
+    "value"
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

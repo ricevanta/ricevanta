@@ -1,0 +1,26 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "encryption",
+        "settings": {
+          "platform": "macos",
+          "enabled": null,
+          "escrow": true
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

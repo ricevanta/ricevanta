@@ -1,0 +1,709 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline.schema.json",
+  "title": "Baseline",
+  "description": "Authoring only. Semantic validation checks duplicate item ids, aggregate resource/settings budgets, duration seconds and critical grace, target/encoding constraints and settings platform equal to os. Defaults require later compiler normalization. Approval, native execution and evidence are outside validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "ricevanta.io/v1alpha1"
+    },
+    "kind": {
+      "const": "Baseline"
+    },
+    "metadata": {
+      "$ref": "mdm-common.schema.json#/$defs/metadata"
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "enum": [
+            "macos",
+            "windows",
+            "linux"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "mdm-common.schema.json#/$defs/name"
+              },
+              "kind": {
+                "enum": [
+                  "apple.declaration",
+                  "apple.profile",
+                  "windows.csp",
+                  "windows.registry",
+                  "windows.service",
+                  "linux.dconf",
+                  "linux.polkit",
+                  "linux.sysctl",
+                  "linux.systemd",
+                  "linux.pam",
+                  "linux.file",
+                  "linux.repository",
+                  "software",
+                  "check.query",
+                  "check.collector",
+                  "os_update",
+                  "encryption"
+                ]
+              },
+              "settings": {},
+              "required": {
+                "type": "boolean"
+              },
+              "severity": {
+                "enum": [
+                  "informational",
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              },
+              "grace": {
+                "$ref": "mdm-common.schema.json#/$defs/duration"
+              },
+              "authority": {
+                "enum": [
+                  "native",
+                  "agent"
+                ]
+              },
+              "references": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "framework": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+                    },
+                    "document": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+                    }
+                  },
+                  "required": [
+                    "framework",
+                    "id"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "settings",
+              "required",
+              "severity"
+            ],
+            "oneOf": [
+              {
+                "properties": {
+                  "kind": {
+                    "const": "apple.declaration"
+                  },
+                  "settings": {
+                    "$ref": "baseline/apple.declaration.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "apple.profile"
+                  },
+                  "settings": {
+                    "$ref": "baseline/apple.profile.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "windows.csp"
+                  },
+                  "settings": {
+                    "$ref": "baseline/windows.csp.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "windows.registry"
+                  },
+                  "settings": {
+                    "$ref": "baseline/windows.registry.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "windows.service"
+                  },
+                  "settings": {
+                    "$ref": "baseline/windows.service.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.dconf"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.dconf.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.polkit"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.polkit.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.sysctl"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.sysctl.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.systemd"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.systemd.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.pam"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.pam.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.file"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.file.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "linux.repository"
+                  },
+                  "settings": {
+                    "$ref": "baseline/linux.repository.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "software"
+                  },
+                  "settings": {
+                    "$ref": "baseline/software.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "check.query"
+                  },
+                  "settings": {
+                    "$ref": "baseline/check.query.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "check.collector"
+                  },
+                  "settings": {
+                    "$ref": "baseline/check.collector.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "os_update"
+                  },
+                  "settings": {
+                    "$ref": "baseline/os_update.json"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "encryption"
+                  },
+                  "settings": {
+                    "$ref": "baseline/encryption.json"
+                  }
+                }
+              }
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "apple.declaration",
+                        "apple.profile"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "authority": {
+                      "const": "native"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "windows.registry",
+                        "windows.service",
+                        "linux.dconf",
+                        "linux.polkit",
+                        "linux.sysctl",
+                        "linux.systemd",
+                        "linux.pam",
+                        "linux.file",
+                        "linux.repository",
+                        "software",
+                        "check.query",
+                        "check.collector"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "authority": {
+                      "const": "agent"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "windows.csp"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "authority": {
+                      "enum": [
+                        "native",
+                        "agent"
+                      ],
+                      "default": "native"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "severity": {
+                      "const": "critical"
+                    }
+                  },
+                  "required": [
+                    "severity"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "grace": {
+                      "default": 0
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "severity": {
+                      "enum": [
+                        "informational",
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "severity"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "grace": {
+                      "default": "24h"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "allowedGroups": {
+          "$ref": "mdm-common.schema.json#/$defs/groups"
+        },
+        "minOsVersion": {
+          "$ref": "mdm-common.schema.json#/$defs/version"
+        }
+      },
+      "required": [
+        "os",
+        "items"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "os": {
+                "const": "macos"
+              }
+            },
+            "required": [
+              "os"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "apple.declaration",
+                            "apple.profile",
+                            "software",
+                            "check.query",
+                            "check.collector",
+                            "os_update",
+                            "encryption"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "os_update",
+                              "encryption"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "authority": {
+                            "const": "native",
+                            "default": "native"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "os": {
+                "const": "windows"
+              }
+            },
+            "required": [
+              "os"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "windows.csp",
+                            "windows.registry",
+                            "windows.service",
+                            "software",
+                            "check.query",
+                            "check.collector",
+                            "os_update",
+                            "encryption"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "os_update",
+                              "encryption"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "authority": {
+                            "const": "agent",
+                            "default": "agent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "os": {
+                "const": "linux"
+              }
+            },
+            "required": [
+              "os"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "items": {
+                  "allOf": [
+                    {
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "linux.dconf",
+                            "linux.polkit",
+                            "linux.sysctl",
+                            "linux.systemd",
+                            "linux.pam",
+                            "linux.file",
+                            "linux.repository",
+                            "software",
+                            "check.query",
+                            "check.collector",
+                            "os_update",
+                            "encryption"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "os_update",
+                              "encryption"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "authority": {
+                            "const": "agent",
+                            "default": "agent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "items": {
+                "contains": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "apple.declaration",
+                        "apple.profile",
+                        "windows.csp",
+                        "windows.registry",
+                        "windows.service",
+                        "linux.dconf",
+                        "linux.polkit",
+                        "linux.sysctl",
+                        "linux.systemd",
+                        "linux.pam",
+                        "linux.file",
+                        "linux.repository",
+                        "software",
+                        "os_update",
+                        "encryption"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "allowedGroups"
+            ]
+          },
+          "else": {
+            "if": {
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "check.query",
+                          "check.collector"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "required": [
+                "items"
+              ]
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "allowedGroups"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ]
+}

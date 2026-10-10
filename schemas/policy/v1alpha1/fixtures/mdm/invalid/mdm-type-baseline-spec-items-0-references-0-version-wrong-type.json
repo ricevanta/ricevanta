@@ -1,0 +1,46 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample",
+    "labels": {
+      "site": "lab"
+    },
+    "annotations": {
+      "owner": "team"
+    },
+    "description": "Managed resource"
+  },
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "apple.declaration",
+        "settings": {
+          "identifier": "io.ricevanta.config",
+          "type": "com.apple.configuration",
+          "payload": {
+            "enabled": true
+          }
+        },
+        "required": true,
+        "severity": "high",
+        "grace": "24h",
+        "authority": "native",
+        "references": [
+          {
+            "framework": "cis",
+            "id": "1.1",
+            "document": "control",
+            "version": {}
+          }
+        ]
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ],
+    "minOsVersion": "1.0"
+  }
+}

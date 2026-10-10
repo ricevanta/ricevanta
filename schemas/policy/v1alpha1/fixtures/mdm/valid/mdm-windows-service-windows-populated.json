@@ -1,0 +1,44 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample",
+    "labels": {
+      "site": "lab"
+    },
+    "annotations": {
+      "owner": "team"
+    },
+    "description": "Managed resource"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "windows.service",
+        "settings": {
+          "name": "example",
+          "startType": "automatic",
+          "state": "running"
+        },
+        "required": true,
+        "severity": "high",
+        "grace": "24h",
+        "authority": "agent",
+        "references": [
+          {
+            "framework": "cis",
+            "id": "1.1",
+            "document": "control",
+            "version": "1"
+          }
+        ]
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ],
+    "minOsVersion": "1.0"
+  }
+}

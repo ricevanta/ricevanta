@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/linux.pam.json",
+  "title": "linux.pam",
+  "description": "Native application qualifies PAM integration without arbitrary module, stack or command input.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "pwquality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minlen": {
+          "type": "integer",
+          "minimum": 6,
+          "maximum": 128
+        },
+        "minclass": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "maxrepeat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "enforceForRoot": {
+          "type": "boolean"
+        }
+      },
+      "minProperties": 1
+    },
+    "faillock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deny": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "failIntervalSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "unlockTimeSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 604800
+        },
+        "evenDenyRoot": {
+          "type": "boolean"
+        },
+        "rootUnlockTimeSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        }
+      },
+      "minProperties": 1,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "evenDenyRoot": {
+                "const": true
+              }
+            },
+            "required": [
+              "evenDenyRoot"
+            ]
+          },
+          "then": {
+            "required": [
+              "rootUnlockTimeSeconds"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "minProperties": 1,
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

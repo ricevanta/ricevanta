@@ -1,0 +1,52 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "os_update",
+        "settings": {
+          "platform": "windows",
+          "maintenance": {
+            "timezone": "UTC",
+            "slots": [
+              {
+                "days": [
+                  "mon"
+                ],
+                "start": "02:00",
+                "durationMinutes": 60
+              }
+            ]
+          },
+          "reboot": {
+            "notify": "1h",
+            "maxDeferrals": null,
+            "deadline": "1d"
+          },
+          "productVersion": "Windows11",
+          "targetRelease": "latest",
+          "qualityDeferralDays": 0,
+          "featureDeferralDays": 0,
+          "qualityDeadlineDays": 0,
+          "featureDeadlineDays": 0,
+          "graceDays": 0,
+          "activeHours": {
+            "start": 8,
+            "end": 18
+          }
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

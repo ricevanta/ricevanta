@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/software.json",
+  "title": "software",
+  "description": "Package references resolve to immutable approved artifacts before deployment.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "package": {
+      "$ref": "../mdm-common.schema.json#/$defs/name"
+    },
+    "ensure": {
+      "enum": [
+        "present",
+        "absent",
+        "latest"
+      ]
+    },
+    "removeOnUnassign": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "package",
+    "ensure"
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

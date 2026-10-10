@@ -184,6 +184,12 @@ Why: CIS Benchmarks are not redistributable, and regulated customers need contro
 Rejected: bundling CIS content; OVAL as the native format.
 Detail: `specs/baseline.md` section 5.
 
+### MDM-10. MDM authoring schemas and decoded validation
+Decision: Baseline, SoftwarePackage and DeviceGroup use closed JSON Schema 2020-12 authoring contracts and a standard-library Go validator, with shared positive and negative fixtures enforcing structural and semantic agreement. Every apply-capable Baseline kind carries an explicit protected-publication classification; validation does not authorize execution.
+Why: the missing MDM resource schemas block resource validation, and privileged configuration needs a classification that author input cannot disable.
+Rejected: a Go JSON Schema dependency that still needs custom semantic checks; unconstrained settings and author-controlled protection flags.
+Detail: [MDM resource schemas](specs/mdm-resource-schemas.md) and [implementation plan](plans/mdm-resource-schemas.md).
+
 ## EDR
 
 ### EDR-01. Sigma evaluation placement

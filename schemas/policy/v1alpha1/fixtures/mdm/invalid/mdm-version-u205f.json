@@ -1,0 +1,27 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "windows.csp",
+        "settings": {
+          "locUri": "./Device/Vendor/MSFT/Policy/Config/Test",
+          "format": "int",
+          "value": 1
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ],
+    "minOsVersion": "1\u205f0"
+  }
+}

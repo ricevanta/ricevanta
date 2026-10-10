@@ -1,0 +1,41 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "SoftwarePackage",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "format": "exe",
+    "name": "app",
+    "version": "1.0",
+    "source": {
+      "type": "repository",
+      "manager": "flatpak",
+      "ref": "repo",
+      "package": "app"
+    },
+    "signature": {
+      "type": "authenticode",
+      "subject": "Example"
+    },
+    "detection": {
+      "type": "uninstall",
+      "hive": "HKLM",
+      "view": 64,
+      "key": "Example",
+      "version": "1.0"
+    },
+    "allowedGroups": [
+      "fleet"
+    ],
+    "installArgs": [],
+    "uninstallArgs": [],
+    "reboot": {
+      "mode": "none"
+    },
+    "interaction": {
+      "mode": "silent"
+    }
+  }
+}

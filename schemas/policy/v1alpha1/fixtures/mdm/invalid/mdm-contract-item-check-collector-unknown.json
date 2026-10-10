@@ -1,0 +1,23 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "check.collector",
+        "settings": {
+          "ref": "ext/example/collector",
+          "expect": "true"
+        },
+        "required": true,
+        "severity": "high",
+        "unexpected": false
+      }
+    ]
+  }
+}

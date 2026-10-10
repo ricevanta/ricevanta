@@ -4,6 +4,8 @@ How Ricevanta manages devices: the device record and its lifecycle, inventory, s
 
 Abbreviations: DDM (Declarative Device Management), ADE (Automated Device Enrollment), CSP (configuration service provider), MS-MDE2 (Mobile Device Enrollment Protocol version 2), APNs (Apple Push Notification service), WNS (Windows Push Notification Services), PRK (FileVault personal recovery key), LUKS (Linux Unified Key Setup), CMS (Cryptographic Message Syntax), HPKE (Hybrid Public Key Encryption).
 
+[MDM resource schemas](../specs/mdm-resource-schemas.md) defines the authoring contracts for Baseline, SoftwarePackage and DeviceGroup and the decoded Go validator; its [implementation plan](../plans/mdm-resource-schemas.md) retains the native and evidence gates in this design.
+
 ## 1. Device record and lifecycle
 
 ### 1.1 `devices` and `mdm` modules

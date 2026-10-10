@@ -1,0 +1,30 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "linux.pam",
+        "settings": {
+          "faillock": {
+            "deny": 3,
+            "failIntervalSeconds": "wrong",
+            "unlockTimeSeconds": 0,
+            "evenDenyRoot": true,
+            "rootUnlockTimeSeconds": 600
+          }
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "SoftwarePackage",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "format": "msi",
+    "name": "app",
+    "version": "1.0",
+    "source": {
+      "type": "blob",
+      "blobKey": "packages/app.bin",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": 1
+    },
+    "signature": {
+      "type": "none",
+      "reason": "Reviewed unsigned artifact",
+      "allowUnsigned": true
+    },
+    "detection": {
+      "type": "msi",
+      "productCode": "{12345678-ABCD-1234-ABCD-1234567890AB}"
+    },
+    "allowedGroups": [
+      "fleet"
+    ],
+    "installArgs": [],
+    "uninstallArgs": [],
+    "reboot": {
+      "mode": "none"
+    },
+    "interaction": {
+      "mode": "silent"
+    }
+  }
+}

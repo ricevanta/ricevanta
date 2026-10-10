@@ -1,0 +1,957 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/software-package.schema.json",
+  "title": "SoftwarePackage",
+  "description": "Authoring only. Semantic validation rejects blob-key dot segments and duplicate exit codes, checks detection version and package-name equality and enforces aggregate budgets. Explicit unsigned exceptions never waive OS signature requirements. Repository resolution, artifact freezing, approval and native installer success remain separate gates.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "ricevanta.io/v1alpha1"
+    },
+    "kind": {
+      "const": "SoftwarePackage"
+    },
+    "metadata": {
+      "$ref": "mdm-common.schema.json#/$defs/metadata"
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "enum": [
+            "macos",
+            "windows",
+            "linux"
+          ]
+        },
+        "format": {
+          "enum": [
+            "pkg",
+            "homebrew-formula",
+            "homebrew-cask",
+            "msi",
+            "msix",
+            "exe",
+            "winget",
+            "deb",
+            "rpm",
+            "flatpak"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "version": {
+          "$ref": "mdm-common.schema.json#/$defs/version",
+          "not": {
+            "const": "latest"
+          }
+        },
+        "source": {
+          "$ref": "mdm-common.schema.json#/$defs/source"
+        },
+        "signature": {
+          "$ref": "mdm-common.schema.json#/$defs/signature"
+        },
+        "detection": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "bundle"
+                },
+                "identifier": {
+                  "$ref": "mdm-common.schema.json#/$defs/identifier"
+                },
+                "version": {
+                  "$ref": "mdm-common.schema.json#/$defs/version"
+                }
+              },
+              "required": [
+                "type",
+                "identifier",
+                "version"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "msi"
+                },
+                "productCode": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 38,
+                  "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                  "allOf": [
+                    {
+                      "pattern": "^\\{[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}\\}(?![\\s\\S])"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type",
+                "productCode"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "msix"
+                },
+                "family": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                  "allOf": [
+                    {
+                      "pattern": "^(?!-)[^\\s]+(?![\\s\\S])"
+                    }
+                  ]
+                },
+                "version": {
+                  "$ref": "mdm-common.schema.json#/$defs/version"
+                }
+              },
+              "required": [
+                "type",
+                "family",
+                "version"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "uninstall"
+                },
+                "hive": {
+                  "const": "HKLM"
+                },
+                "view": {
+                  "enum": [
+                    32,
+                    64
+                  ]
+                },
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                  "allOf": [
+                    {
+                      "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?![\\s\\S])"
+                    }
+                  ]
+                },
+                "version": {
+                  "$ref": "mdm-common.schema.json#/$defs/version"
+                }
+              },
+              "required": [
+                "type",
+                "hive",
+                "view",
+                "key",
+                "version"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "package"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                  "allOf": [
+                    {
+                      "pattern": "^(?!-)[^\\s]+(?![\\s\\S])"
+                    }
+                  ]
+                },
+                "version": {
+                  "$ref": "mdm-common.schema.json#/$defs/version"
+                }
+              },
+              "required": [
+                "type",
+                "name",
+                "version"
+              ]
+            }
+          ]
+        },
+        "allowedGroups": {
+          "$ref": "mdm-common.schema.json#/$defs/groups"
+        },
+        "installArgs": {
+          "$ref": "mdm-common.schema.json#/$defs/args"
+        },
+        "uninstallArgs": {
+          "$ref": "mdm-common.schema.json#/$defs/args"
+        },
+        "reboot": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "none",
+                    "required"
+                  ]
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "exit-code"
+                },
+                "codes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "code": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "reboot": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "reboot"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "mode",
+                "codes"
+              ]
+            }
+          ]
+        },
+        "interaction": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "silent"
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "defer-while-running"
+                },
+                "processes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 64,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                    "allOf": [
+                      {
+                        "pattern": "^[^/\\\\]+(?![\\s\\S])"
+                      }
+                    ]
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "mode",
+                "processes"
+              ]
+            }
+          ]
+        },
+        "retrySafe": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "os",
+        "format",
+        "name",
+        "version",
+        "source",
+        "signature",
+        "detection",
+        "allowedGroups",
+        "installArgs",
+        "uninstallArgs",
+        "reboot",
+        "interaction"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "os": {
+              "const": "macos"
+            },
+            "format": {
+              "const": "pkg"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "blob"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "developer-id",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "bundle"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "macos"
+            },
+            "format": {
+              "const": "homebrew-formula"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "homebrew"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "checksum",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "macos"
+            },
+            "format": {
+              "const": "homebrew-cask"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "homebrew"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "checksum",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "bundle"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "windows"
+            },
+            "format": {
+              "const": "msi"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "blob"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "authenticode",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "msi"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "windows"
+            },
+            "format": {
+              "const": "msix"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "blob"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "msix",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "msix"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "windows"
+            },
+            "format": {
+              "const": "exe"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "blob"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "authenticode",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "uninstall"
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "windows"
+            },
+            "format": {
+              "const": "winget"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "winget"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "authenticode",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "uninstall"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "windows"
+            },
+            "format": {
+              "const": "winget"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "winget"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "msix",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "msix"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "format": {
+              "const": "deb"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "blob"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "const": "none"
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "format": {
+              "const": "deb"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "apt"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "openpgp",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "format": {
+              "const": "rpm"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "blob"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "openpgp",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "format": {
+              "const": "rpm"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "dnf"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "openpgp",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "format": {
+              "const": "rpm"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "zypper"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "openpgp",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "format": {
+              "const": "flatpak"
+            },
+            "source": {
+              "properties": {
+                "type": {
+                  "const": "repository"
+                },
+                "manager": {
+                  "const": "flatpak"
+                }
+              }
+            },
+            "signature": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "openpgp",
+                    "none"
+                  ]
+                }
+              }
+            },
+            "detection": {
+              "properties": {
+                "type": {
+                  "const": "package"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "retrySafe"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ]
+}

@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/windows.registry.json",
+  "title": "windows.registry",
+  "description": "Semantic validation rejects dot segments, edge spaces, Policies descendants and explicit WOW6432Node segments, checks canonical base64, and bounds qword to 18446744073709551615.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hive": {
+          "const": "HKLM"
+        },
+        "view": {
+          "enum": [
+            32,
+            64
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:\\\\[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "type": {
+          "const": "string"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 16384,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "hive",
+        "view",
+        "key",
+        "name",
+        "type",
+        "value"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hive": {
+          "const": "HKLM"
+        },
+        "view": {
+          "enum": [
+            32,
+            64
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:\\\\[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "type": {
+          "const": "expand-string"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 16384,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "hive",
+        "view",
+        "key",
+        "name",
+        "type",
+        "value"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hive": {
+          "const": "HKLM"
+        },
+        "view": {
+          "enum": [
+            32,
+            64
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:\\\\[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "type": {
+          "const": "multi-string"
+        },
+        "value": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 1024,
+            "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+          }
+        }
+      },
+      "required": [
+        "hive",
+        "view",
+        "key",
+        "name",
+        "type",
+        "value"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hive": {
+          "const": "HKLM"
+        },
+        "view": {
+          "enum": [
+            32,
+            64
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:\\\\[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "type": {
+          "const": "dword"
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "hive",
+        "view",
+        "key",
+        "name",
+        "type",
+        "value"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hive": {
+          "const": "HKLM"
+        },
+        "view": {
+          "enum": [
+            32,
+            64
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:\\\\[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "type": {
+          "const": "qword"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^(?:0|[1-9][0-9]{0,19})(?![\\s\\S])"
+            }
+          ]
+        }
+      },
+      "required": [
+        "hive",
+        "view",
+        "key",
+        "name",
+        "type",
+        "value"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hive": {
+          "const": "HKLM"
+        },
+        "view": {
+          "enum": [
+            32,
+            64
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:\\\\[\\x20-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "type": {
+          "const": "binary"
+        },
+        "value": {
+          "$ref": "../mdm-common.schema.json#/$defs/base64"
+        }
+      },
+      "required": [
+        "hive",
+        "view",
+        "key",
+        "name",
+        "type",
+        "value"
+      ]
+    }
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/encryption.json",
+  "title": "encryption",
+  "description": "Semantic validation requires platform equal to Baseline os. Desired state grants no escrow, lock, recovery or retirement authority; native gates remain in force.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "macos"
+        },
+        "enabled": {
+          "const": true
+        },
+        "escrow": {
+          "const": true
+        }
+      },
+      "required": [
+        "platform",
+        "enabled",
+        "escrow"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "windows"
+        },
+        "enabled": {
+          "const": true
+        },
+        "escrow": {
+          "const": true
+        }
+      },
+      "required": [
+        "platform",
+        "enabled",
+        "escrow"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "linux"
+        },
+        "enabled": {
+          "const": true
+        },
+        "escrow": {
+          "const": true
+        },
+        "existingLuks2Root": {
+          "const": true
+        },
+        "tpm2": {
+          "const": true
+        }
+      },
+      "required": [
+        "platform",
+        "enabled",
+        "escrow",
+        "existingLuks2Root",
+        "tpm2"
+      ]
+    }
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

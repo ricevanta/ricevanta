@@ -1,0 +1,39 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "SoftwarePackage",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "format": "homebrew-formula",
+    "name": "app",
+    "version": "1.0",
+    "source": {
+      "type": "repository",
+      "manager": null,
+      "ref": "repo",
+      "package": "app"
+    },
+    "signature": {
+      "type": "checksum",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "detection": {
+      "type": "package",
+      "name": "app",
+      "version": "1.0"
+    },
+    "allowedGroups": [
+      "fleet"
+    ],
+    "installArgs": [],
+    "uninstallArgs": [],
+    "reboot": {
+      "mode": "none"
+    },
+    "interaction": {
+      "mode": "silent"
+    }
+  }
+}

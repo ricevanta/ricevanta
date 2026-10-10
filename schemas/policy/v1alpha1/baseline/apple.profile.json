@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/apple.profile.json",
+  "title": "apple.profile",
+  "description": "Semantic validation rejects duplicate payload identifiers. Publication requires pinned Apple catalogue validation, generated UUIDs and safe payload combinations.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "identifier": {
+      "$ref": "../mdm-common.schema.json#/$defs/identifier"
+    },
+    "payloads": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "allOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "../mdm-common.schema.json#/$defs/nativeJSON"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "PayloadType",
+              "PayloadIdentifier"
+            ],
+            "properties": {
+              "PayloadType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                "allOf": [
+                  {
+                    "pattern": "^com\\.apple\\.[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*(?![\\s\\S])"
+                  }
+                ],
+                "not": {
+                  "enum": [
+                    "com.apple.mdm",
+                    "com.apple.security.scep",
+                    "com.apple.security.pkcs12"
+                  ]
+                }
+              },
+              "PayloadIdentifier": {
+                "$ref": "../mdm-common.schema.json#/$defs/identifier"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "identifier",
+    "payloads"
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

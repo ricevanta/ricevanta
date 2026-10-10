@@ -1,0 +1,48 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample",
+    "labels": {
+      "site": "lab"
+    },
+    "annotations": {
+      "owner": "team"
+    },
+    "description": "Managed resource"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "check.collector",
+        "settings": {
+          "ref": "ext/example/collector",
+          "expect": "true",
+          "input": {
+            "nested": [
+              null,
+              true,
+              1,
+              "value"
+            ]
+          }
+        },
+        "required": true,
+        "severity": "high",
+        "grace": "24h",
+        "authority": "agent",
+        "references": [
+          {
+            "framework": "cis",
+            "id": "1.1",
+            "document": "control",
+            "version": "1"
+          }
+        ]
+      }
+    ],
+    "minOsVersion": "1.0"
+  }
+}

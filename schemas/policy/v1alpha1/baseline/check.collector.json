@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/check.collector.json",
+  "title": "check.collector",
+  "description": "Resolution requires an enabled collector, manifest input validation and disclosure grant. Schema acceptance does not confer capabilities or waive required-compliance weakening approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^ext/[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9_-]*(?![\\s\\S])"
+        }
+      ]
+    },
+    "expect": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+    },
+    "input": {
+      "allOf": [
+        {
+          "$ref": "../mdm-common.schema.json#/$defs/nativeJSON"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": [
+    "ref",
+    "expect"
+  ],
+  "x-ricevanta-effect": "check",
+  "x-ricevanta-protected-publication": false
+}

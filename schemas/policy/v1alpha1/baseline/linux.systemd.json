@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/linux.systemd.json",
+  "title": "linux.systemd",
+  "description": "Semantic validation rejects duplicate section names. Repeated directives preserve order. Native compilation checks directives against unit type and derives the drop-in output path; directive values may execute commands.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^(?!\\.)(?![\\s\\S]*\\.\\.)(?![^@]*@[^@]*@)(?![^@]*@\\.)(?:[A-Za-z0-9_:@.-]+)\\.(?:service|socket|timer|target|path|mount|automount|swap|slice)(?![\\s\\S])"
+        }
+      ]
+    },
+    "state": {
+      "enum": [
+        "enabled",
+        "disabled",
+        "masked"
+      ]
+    },
+    "dropIn": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "../mdm-common.schema.json#/$defs/name"
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "enum": [
+                  "Unit",
+                  "Service",
+                  "Socket",
+                  "Timer",
+                  "Path",
+                  "Mount",
+                  "Automount",
+                  "Swap",
+                  "Slice",
+                  "Install"
+                ]
+              },
+              "directives": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 128,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                      "allOf": [
+                        {
+                          "pattern": "^[A-Za-z][A-Za-z0-9]*(?![\\s\\S])"
+                        }
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 0,
+                      "maxLength": 4096,
+                      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+                      "allOf": [
+                        {
+                          "pattern": "^(?:[\\s\\S]*[^\\\\])?(?![\\s\\S])"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "value"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "directives"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "sections"
+      ]
+    }
+  },
+  "required": [
+    "unit"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "state"
+      ]
+    },
+    {
+      "required": [
+        "dropIn"
+      ]
+    }
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

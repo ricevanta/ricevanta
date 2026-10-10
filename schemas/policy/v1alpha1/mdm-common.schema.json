@@ -1,0 +1,446 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/mdm-common.schema.json",
+  "title": "MDMCommon",
+  "description": "Shared definitions only. Semantic validation enforces aggregate budgets, scalar-valid text and decoded target constraints. Pure JSON Schema success is not full acceptance or publication authority.",
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(?![\\s\\S])"
+        }
+      ]
+    },
+    "hash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        }
+      ]
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^[^\\u0000-\\u0020\\u007f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028-\\u2029\\u202f\\u205f\\u3000\\ufeff]+(?![\\s\\S])"
+        }
+      ]
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^(?:[A-F0-9]{40}|[A-F0-9]{64})(?![\\s\\S])"
+        }
+      ]
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)+(?![\\s\\S])"
+        }
+      ]
+    },
+    "base64": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 16384,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])"
+        }
+      ]
+    },
+    "nonemptyBase64": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 16384,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])"
+        }
+      ]
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "mdm-common.schema.json#/$defs/name"
+      },
+      "uniqueItems": true
+    },
+    "args": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "minLength": 0,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+      }
+    },
+    "metadata": {
+      "allOf": [
+        {
+          "$ref": "policy.schema.json#/$defs/metadata"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "$ref": "mdm-common.schema.json#/$defs/name"
+            },
+            "labels": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 256,
+                "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 63,
+                "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+              }
+            },
+            "annotations": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 256,
+                "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 4096,
+                "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+              }
+            },
+            "description": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1024,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+            }
+          }
+        }
+      ]
+    },
+    "nativeJSON": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "maxLength": 16384,
+          "pattern": "^[^\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/nativeJSON"
+          }
+        },
+        {
+          "type": "object",
+          "maxProperties": 256,
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 16384,
+            "pattern": "^[^\\ud800-\\udfff]*(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/nativeJSON"
+          }
+        }
+      ],
+      "description": "Native strings permit controls and null. Semantic preflight requires finite numbers and enforces depth, total bytes and value budgets."
+    },
+    "duration": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "const": 0
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 7,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+          "allOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,5}(s|m|h|d)(?![\\s\\S])"
+            }
+          ]
+        }
+      ],
+      "description": "Semantic validation bounds converted seconds to 2592000 and checks critical grace and reboot comparisons. Defaults describe interpretation without mutating input."
+    },
+    "posixPath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^/[\\x21-\\x2e\\x30-\\x5b\\x5d-\\x7e]+(?:/[\\x21-\\x2e\\x30-\\x5b\\x5d-\\x7e]+)*(?![\\s\\S])"
+        }
+      ],
+      "description": "Semantic validation rejects dot segments and kind-specific protected targets. Lexical acceptance does not establish ownership or protection against links."
+    },
+    "https": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "^https://[^\\s\\\\#]+(?![\\s\\S])"
+        }
+      ],
+      "description": "Semantic validation checks canonical DNS/IPv4 authority, port, escapes and decoded path segments. Fetchers must enforce origin, redirect and private-address policy. A host containing only digits and dots must be canonical IPv4."
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "blob"
+            },
+            "blobKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+              "allOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*(?![\\s\\S])"
+                }
+              ]
+            },
+            "sha256": {
+              "$ref": "mdm-common.schema.json#/$defs/hash"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "type",
+            "blobKey",
+            "sha256",
+            "size"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "repository"
+            },
+            "manager": {
+              "enum": [
+                "apt",
+                "dnf",
+                "zypper",
+                "flatpak",
+                "homebrew",
+                "winget"
+              ]
+            },
+            "ref": {
+              "$ref": "mdm-common.schema.json#/$defs/name"
+            },
+            "package": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+              "allOf": [
+                {
+                  "pattern": "^(?!-)[^\\s]+(?![\\s\\S])"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "manager",
+            "ref",
+            "package"
+          ]
+        }
+      ],
+      "description": "Semantic validation rejects blob-key dot segments. Repository bindings and artifact integrity require later compilation."
+    },
+    "signature": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "developer-id"
+            },
+            "teamId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])",
+              "allOf": [
+                {
+                  "pattern": "^[A-Z0-9]{10}(?![\\s\\S])"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "teamId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "authenticode"
+            },
+            "subject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "type",
+            "subject"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "msix"
+            },
+            "publisher": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "type",
+            "publisher"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "openpgp"
+            },
+            "fingerprints": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": {
+                "$ref": "mdm-common.schema.json#/$defs/fingerprint"
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "type",
+            "fingerprints"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "checksum"
+            },
+            "sha256": {
+              "$ref": "mdm-common.schema.json#/$defs/hash"
+            }
+          },
+          "required": [
+            "type",
+            "sha256"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "none"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+            },
+            "allowUnsigned": {
+              "const": true
+            }
+          },
+          "required": [
+            "type",
+            "reason",
+            "allowUnsigned"
+          ]
+        }
+      ],
+      "description": "Explicit none needs protected approval and cannot waive OS signature requirements. Checksum does not assert publisher identity."
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "items": [
+      {
+        "id": "item",
+        "kind": "windows.registry",
+        "settings": {
+          "hive": "HKLM",
+          "view": 32,
+          "key": "SOFTWARE\\Ricevanta",
+          "name": "",
+          "type": "expand-string",
+          "value": "%PATH%",
+          "unexpected": false
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

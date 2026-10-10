@@ -2,6 +2,8 @@
 
 The `Baseline` resource that carries MDM desired state, the item kinds and the channel each one uses per OS, how the agent and the native MDM servers converge and check items, and how a device's compliance state is computed, stored, signed and consumed. The policy that applies a baseline, its scope and its signatures are in `policy-envelope.md`; the mechanisms behind each item kind are in `../design/mdm.md`. Decisions: POL-02, MDM-01, MDM-03, MDM-06 and MDM-09.
 
+The authoring fields, per-kind settings and decoded Go validator are specified in [MDM resource schemas](mdm-resource-schemas.md); the schemas, fixtures and Python authoring checks are published under `schemas/policy/v1alpha1/`. The Go consumer remains pending under its [plan](../plans/mdm-resource-schemas.md); native compilation and evidence qualification remain separate gates.
+
 ## 1. Resource
 
 A baseline is a list of items for one OS. An `mdm` policy names it in `trigger.state.baseline` and chooses the execution semantics with its action: `apply` converges and reports every item, `report` checks and reports without changing the device (`policy-envelope.md` section 4).
@@ -52,7 +54,7 @@ spec:
 ### 1.1 Field rules
 
 - `id` is a DNS-1123 label unique within the baseline. `<baseline>/<id>` is the display and exception name, not the evidence key. Evidence and grace state use organization, device uid, baseline uid, canonical baseline revision SHA-256, item id and item settings SHA-256 (sections 3 and 4).
-- `kind` is one of the kinds in section 2 that is valid for `spec.os`; `settings` requires validation against per-kind schemas under `schemas/policy/v1alpha1/baseline/<kind>.json`; those files are absent and block baseline validators (`../analysis.md` section 3).
+- `kind` is one of the kinds in section 2 that is valid for `spec.os`; `settings` requires validation against per-kind schemas under `schemas/policy/v1alpha1/baseline/<kind>.json`; all 17 schemas and their Python authoring checks are published. The Go consumer remains pending; schema acceptance does not qualify native execution or evidence (`../analysis.md` section 3).
 - `allowedGroups` is required when any item kind can apply state. It is the maximum device-group scope approved for that exact baseline revision. It is absent on a baseline made only of `check.query` and `check.collector` items.
 - `references` are identifiers only (framework, document, version, control or recommendation number). Benchmark text, rationale and audit procedures copied from a licensed benchmark are refused at publish when the source is marked non-redistributable in `../licensing.md` (section 5).
 - A `windows.csp` item may set `authority: agent` when the agent can read its effective state (registry, WMI or API); the agent's signed result then decides the item and the OMA-DM `Get` result is informational. The default `authority: native` takes the native channel's result (section 6).

@@ -45,5 +45,7412 @@
   "exception-expiry-newline.json": [
     "spec",
     "expires"
+  ],
+  "mdm/invalid/mdm-contract-root-missing-apiversion.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-contract-root-missing-kind.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-root-missing-metadata.json": [
+    "metadata"
+  ],
+  "mdm/invalid/mdm-contract-root-missing-spec.json": [
+    "spec"
+  ],
+  "mdm/invalid/mdm-contract-root-unknown.json": [
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-metadata-missing-name.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-metadata-unknown.json": [
+    "metadata",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-baseline-spec-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-baseline-spec-missing-items.json": [
+    "spec",
+    "items"
+  ],
+  "mdm/invalid/mdm-contract-baseline-spec-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-baseline-spec-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-declaration-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-declaration-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-declaration-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-declaration-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-declaration-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-declaration-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-declaration-com-apple-configuration-missing-identifier.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-declaration-com-apple-configuration-missing-payload.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payload"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-declaration-com-apple-configuration-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-declaration-com-apple-configuration-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-reference-missing-framework.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "framework"
+  ],
+  "mdm/invalid/mdm-contract-reference-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-reference-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-profile-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-profile-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-profile-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-profile-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-profile-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-apple-profile-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-profile-missing-identifier.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-profile-missing-payloads.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads"
+  ],
+  "mdm/invalid/mdm-contract-settings-apple-profile-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-native-profile-missing-payloadidentifier.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads",
+    0,
+    "PayloadIdentifier"
+  ],
+  "mdm/invalid/mdm-contract-native-profile-missing-payloadtype.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads",
+    0,
+    "PayloadType"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-csp-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-csp-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-csp-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-csp-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-csp-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-csp-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-int-missing-format.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-int-missing-locuri.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-int-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-int-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-registry-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-registry-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-registry-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-registry-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-registry-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-registry-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-missing-hive.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-missing-view.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-string-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-service-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-service-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-service-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-service-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-service-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-windows-service-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-service-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-service-missing-starttype.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "startType"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-service-missing-state.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "state"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-service-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-dconf-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-dconf-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-dconf-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-dconf-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-dconf-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-dconf-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-dconf-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-dconf-missing-locked.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locked"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-dconf-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-dconf-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-polkit-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-polkit-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-polkit-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-polkit-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-polkit-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-polkit-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-polkit-missing-rules.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "rules"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-polkit-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-sysctl-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-sysctl-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-sysctl-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-sysctl-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-sysctl-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-sysctl-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-sysctl-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-sysctl-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-sysctl-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-systemd-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-systemd-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-systemd-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-systemd-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-systemd-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-systemd-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-systemd-missing-unit.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-systemd-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-pam-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-pam-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-pam-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-pam-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-pam-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-pam-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-pam-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-pwquality-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-file-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-file-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-file-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-file-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-file-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-file-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-file-missing-content.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "content"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-file-missing-group.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "group"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-file-missing-mode.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "mode"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-file-missing-owner.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "owner"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-file-missing-path.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-file-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-repository-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-repository-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-repository-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-repository-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-repository-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-linux-repository-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-missing-components.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "components"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-missing-manager.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "manager"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-missing-suite.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "suite"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-missing-url.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "url"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-apt-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-repository-key-missing-fingerprint.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "fingerprint"
+  ],
+  "mdm/invalid/mdm-contract-repository-key-missing-sha256.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-contract-repository-key-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-software-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-software-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-software-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-software-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-software-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-software-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-software-missing-ensure.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ensure"
+  ],
+  "mdm/invalid/mdm-contract-settings-software-missing-package.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "package"
+  ],
+  "mdm/invalid/mdm-contract-settings-software-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-check-query-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-check-query-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-check-query-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-check-query-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-check-query-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-check-query-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-check-query-missing-expect.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "expect"
+  ],
+  "mdm/invalid/mdm-contract-settings-check-query-missing-query.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "query"
+  ],
+  "mdm/invalid/mdm-contract-settings-check-query-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-check-collector-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-check-collector-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-check-collector-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-check-collector-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-check-collector-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-check-collector-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-check-collector-missing-expect.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "expect"
+  ],
+  "mdm/invalid/mdm-contract-settings-check-collector-missing-ref.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ref"
+  ],
+  "mdm/invalid/mdm-contract-settings-check-collector-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-os-update-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-os-update-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-os-update-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-os-update-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-os-update-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-os-update-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-automaticdownload.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "automaticDownload"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-automaticinstall.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "automaticInstall"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-deferrals.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-maintenance.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-notifications.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "notifications"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-platform.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-reboot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-missing-targetversion.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetVersion"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-macos-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-maintenance-missing-slots.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots"
+  ],
+  "mdm/invalid/mdm-contract-maintenance-missing-timezone.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-contract-maintenance-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-slot-missing-days.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days"
+  ],
+  "mdm/invalid/mdm-contract-slot-missing-durationminutes.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-contract-slot-missing-start.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-contract-slot-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-update-reboot-missing-deadline.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-contract-update-reboot-missing-maxdeferrals.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-contract-update-reboot-missing-notify.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-contract-update-reboot-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-deferrals-missing-majordays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "majorDays"
+  ],
+  "mdm/invalid/mdm-contract-deferrals-missing-minordays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "minorDays"
+  ],
+  "mdm/invalid/mdm-contract-deferrals-missing-systemdays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "systemDays"
+  ],
+  "mdm/invalid/mdm-contract-deferrals-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-activehours.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-featuredeadlinedays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "featureDeadlineDays"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-featuredeferraldays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "featureDeferralDays"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-gracedays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "graceDays"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-maintenance.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-platform.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-productversion.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "productVersion"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-qualitydeadlinedays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "qualityDeadlineDays"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-qualitydeferraldays.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "qualityDeferralDays"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-reboot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-missing-targetrelease.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetRelease"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-windows-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-active-hours-missing-end.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "end"
+  ],
+  "mdm/invalid/mdm-contract-active-hours-missing-start.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "start"
+  ],
+  "mdm/invalid/mdm-contract-active-hours-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-linux-missing-class.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "class"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-linux-missing-includeflatpak.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "includeFlatpak"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-linux-missing-maintenance.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-linux-missing-platform.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-linux-missing-reboot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-settings-os-update-linux-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-item-encryption-missing-id.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-contract-item-encryption-missing-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-contract-item-encryption-missing-required.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-contract-item-encryption-missing-settings.json": [
+    "spec",
+    "items",
+    0,
+    "settings"
+  ],
+  "mdm/invalid/mdm-contract-item-encryption-missing-severity.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-contract-item-encryption-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-macos-missing-enabled.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-macos-missing-escrow.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-macos-missing-platform.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-macos-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-windows-missing-enabled.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-windows-missing-escrow.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-windows-missing-platform.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-windows-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-linux-missing-enabled.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-linux-missing-escrow.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-linux-missing-existingluks2root.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "existingLuks2Root"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-linux-missing-platform.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-linux-missing-tpm2.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "tpm2"
+  ],
+  "mdm/invalid/mdm-contract-settings-encryption-linux-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-bool-missing-format.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-bool-missing-locuri.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-bool-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-bool-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-chr-missing-format.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-chr-missing-locuri.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-chr-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-chr-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-xml-missing-format.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-xml-missing-locuri.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-xml-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-xml-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-b64-missing-format.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-b64-missing-locuri.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-b64-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-csp-b64-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-missing-hive.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-missing-view.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-expand-string-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-missing-hive.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-missing-view.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-multi-string-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-missing-hive.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-missing-view.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-dword-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-missing-hive.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-missing-view.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-qword-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-missing-hive.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-missing-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-missing-view.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-settings-windows-registry-binary-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-drop-in-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-drop-in-missing-sections.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections"
+  ],
+  "mdm/invalid/mdm-contract-drop-in-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-section-missing-directives.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives"
+  ],
+  "mdm/invalid/mdm-contract-section-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-section-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-directive-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-directive-missing-value.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "value"
+  ],
+  "mdm/invalid/mdm-contract-directive-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-faillock-missing-rootunlocktimeseconds.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "rootUnlockTimeSeconds"
+  ],
+  "mdm/invalid/mdm-contract-faillock-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-dnf-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-dnf-missing-manager.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "manager"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-dnf-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-dnf-missing-url.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "url"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-dnf-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-zypper-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-zypper-missing-manager.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "manager"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-zypper-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-zypper-missing-url.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "url"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-zypper-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-flatpak-missing-key.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-flatpak-missing-manager.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "manager"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-flatpak-missing-name.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-flatpak-missing-url.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "url"
+  ],
+  "mdm/invalid/mdm-contract-settings-linux-repository-flatpak-unknown.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-pkg-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-source-blob-missing-blobkey.json": [
+    "spec",
+    "source",
+    "blobKey"
+  ],
+  "mdm/invalid/mdm-contract-source-blob-missing-sha256.json": [
+    "spec",
+    "source",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-contract-source-blob-missing-size.json": [
+    "spec",
+    "source",
+    "size"
+  ],
+  "mdm/invalid/mdm-contract-source-blob-missing-type.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-source-blob-unknown.json": [
+    "spec",
+    "source",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-signature-developer-id-missing-teamid.json": [
+    "spec",
+    "signature",
+    "teamId"
+  ],
+  "mdm/invalid/mdm-contract-signature-developer-id-missing-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-signature-developer-id-unknown.json": [
+    "spec",
+    "signature",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-detection-bundle-missing-identifier.json": [
+    "spec",
+    "detection",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-contract-detection-bundle-missing-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-detection-bundle-missing-version.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-detection-bundle-unknown.json": [
+    "spec",
+    "detection",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-none-missing-mode.json": [
+    "spec",
+    "reboot",
+    "mode"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-none-unknown.json": [
+    "spec",
+    "reboot",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-interaction-silent-missing-mode.json": [
+    "spec",
+    "interaction",
+    "mode"
+  ],
+  "mdm/invalid/mdm-contract-interaction-silent-unknown.json": [
+    "spec",
+    "interaction",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-signature-none-missing-allowunsigned.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-contract-signature-none-missing-reason.json": [
+    "spec",
+    "signature",
+    "reason"
+  ],
+  "mdm/invalid/mdm-contract-signature-none-missing-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-signature-none-unknown.json": [
+    "spec",
+    "signature",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-formula-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-source-repository-missing-manager.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-contract-source-repository-missing-package.json": [
+    "spec",
+    "source",
+    "package"
+  ],
+  "mdm/invalid/mdm-contract-source-repository-missing-ref.json": [
+    "spec",
+    "source",
+    "ref"
+  ],
+  "mdm/invalid/mdm-contract-source-repository-missing-type.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-source-repository-unknown.json": [
+    "spec",
+    "source",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-signature-checksum-missing-sha256.json": [
+    "spec",
+    "signature",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-contract-signature-checksum-missing-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-signature-checksum-unknown.json": [
+    "spec",
+    "signature",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-detection-package-missing-name.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-detection-package-missing-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-detection-package-missing-version.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-detection-package-unknown.json": [
+    "spec",
+    "detection",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-homebrew-cask-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msi-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-signature-authenticode-missing-subject.json": [
+    "spec",
+    "signature",
+    "subject"
+  ],
+  "mdm/invalid/mdm-contract-signature-authenticode-missing-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-signature-authenticode-unknown.json": [
+    "spec",
+    "signature",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-detection-msi-missing-productcode.json": [
+    "spec",
+    "detection",
+    "productCode"
+  ],
+  "mdm/invalid/mdm-contract-detection-msi-missing-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-detection-msi-unknown.json": [
+    "spec",
+    "detection",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-msix-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-signature-msix-missing-publisher.json": [
+    "spec",
+    "signature",
+    "publisher"
+  ],
+  "mdm/invalid/mdm-contract-signature-msix-missing-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-signature-msix-unknown.json": [
+    "spec",
+    "signature",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-detection-msix-missing-family.json": [
+    "spec",
+    "detection",
+    "family"
+  ],
+  "mdm/invalid/mdm-contract-detection-msix-missing-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-detection-msix-missing-version.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-detection-msix-unknown.json": [
+    "spec",
+    "detection",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-exe-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-detection-uninstall-missing-hive.json": [
+    "spec",
+    "detection",
+    "hive"
+  ],
+  "mdm/invalid/mdm-contract-detection-uninstall-missing-key.json": [
+    "spec",
+    "detection",
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-detection-uninstall-missing-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-detection-uninstall-missing-version.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-detection-uninstall-missing-view.json": [
+    "spec",
+    "detection",
+    "view"
+  ],
+  "mdm/invalid/mdm-contract-detection-uninstall-unknown.json": [
+    "spec",
+    "detection",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-winget-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-deb-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-signature-openpgp-missing-fingerprints.json": [
+    "spec",
+    "signature",
+    "fingerprints"
+  ],
+  "mdm/invalid/mdm-contract-signature-openpgp-missing-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-contract-signature-openpgp-unknown.json": [
+    "spec",
+    "signature",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-rpm-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-allowedgroups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-detection.json": [
+    "spec",
+    "detection"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-format.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-installargs.json": [
+    "spec",
+    "installArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-interaction.json": [
+    "spec",
+    "interaction"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-name.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-reboot.json": [
+    "spec",
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-signature.json": [
+    "spec",
+    "signature"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-source.json": [
+    "spec",
+    "source"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-uninstallargs.json": [
+    "spec",
+    "uninstallArgs"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-missing-version.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-contract-package-spec-flatpak-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-interaction-defer-while-running-missing-mode.json": [
+    "spec",
+    "interaction",
+    "mode"
+  ],
+  "mdm/invalid/mdm-contract-interaction-defer-while-running-missing-processes.json": [
+    "spec",
+    "interaction",
+    "processes"
+  ],
+  "mdm/invalid/mdm-contract-interaction-defer-while-running-unknown.json": [
+    "spec",
+    "interaction",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-required-missing-mode.json": [
+    "spec",
+    "reboot",
+    "mode"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-required-unknown.json": [
+    "spec",
+    "reboot",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-exit-code-missing-codes.json": [
+    "spec",
+    "reboot",
+    "codes"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-exit-code-missing-mode.json": [
+    "spec",
+    "reboot",
+    "mode"
+  ],
+  "mdm/invalid/mdm-contract-package-reboot-exit-code-unknown.json": [
+    "spec",
+    "reboot",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-exit-code-missing-code.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "code"
+  ],
+  "mdm/invalid/mdm-contract-exit-code-missing-reboot.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "reboot"
+  ],
+  "mdm/invalid/mdm-contract-exit-code-unknown.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-group-spec-unknown.json": [
+    "spec",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-selector-unknown.json": [
+    "spec",
+    "selector",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-expression-in-missing-key.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-expression-in-missing-operator.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "operator"
+  ],
+  "mdm/invalid/mdm-contract-expression-in-missing-values.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values"
+  ],
+  "mdm/invalid/mdm-contract-expression-in-unknown.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-expression-notin-missing-key.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-expression-notin-missing-operator.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "operator"
+  ],
+  "mdm/invalid/mdm-contract-expression-notin-missing-values.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values"
+  ],
+  "mdm/invalid/mdm-contract-expression-notin-unknown.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-expression-exists-missing-key.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-expression-exists-missing-operator.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "operator"
+  ],
+  "mdm/invalid/mdm-contract-expression-exists-unknown.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-expression-doesnotexist-missing-key.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "key"
+  ],
+  "mdm/invalid/mdm-contract-expression-doesnotexist-missing-operator.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "operator"
+  ],
+  "mdm/invalid/mdm-contract-expression-doesnotexist-unknown.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-contract-group-os-unknown.json": [
+    "spec",
+    "selector",
+    "os",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-type-baseline-apiversion-null.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-apiversion-wrong-type.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-kind-null.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-baseline-kind-wrong-type.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-baseline-metadata-name-null.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-metadata-name-wrong-type.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-os-null.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-os-wrong-type.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-id-null.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-id-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-kind-null.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-kind-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-baseline-apple-declaration-com-apple-configuration-spec-items-0-settings-identifier-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-type-baseline-apple-declaration-com-apple-configuration-spec-items-0-settings-identifier-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-type-baseline-apple-declaration-com-apple-configuration-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-apple-declaration-com-apple-configuration-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-required-null.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-required-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "required"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-severity-null.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-severity-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "severity"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-allowedgroups-0-null.json": [
+    "spec",
+    "allowedGroups",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-allowedgroups-0-wrong-type.json": [
+    "spec",
+    "allowedGroups",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-metadata-description-null.json": [
+    "metadata",
+    "description"
+  ],
+  "mdm/invalid/mdm-type-baseline-metadata-description-wrong-type.json": [
+    "metadata",
+    "description"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-grace-null.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-grace-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-authority-null.json": [
+    "spec",
+    "items",
+    0,
+    "authority"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-authority-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "authority"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-framework-null.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "framework"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-framework-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "framework"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-id-null.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-id-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "id"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-document-null.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "document"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-document-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "document"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-version-null.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "version"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-items-0-references-0-version-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "references",
+    0,
+    "version"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-minosversion-null.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-spec-minosversion-wrong-type.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-apple-profile--spec-items-0-settings-identifier-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-type-baseline-apple-profile--spec-items-0-settings-identifier-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-int-spec-items-0-settings-locuri-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-int-spec-items-0-settings-locuri-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-int-spec-items-0-settings-format-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-int-spec-items-0-settings-format-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-int-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-int-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-hive-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-hive-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-view-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-view-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-string-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-service--spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-service--spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-service--spec-items-0-settings-starttype-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "startType"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-service--spec-items-0-settings-starttype-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "startType"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-service--spec-items-0-settings-state-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "state"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-service--spec-items-0-settings-state-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "state"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-dconf--spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-dconf--spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-dconf--spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-dconf--spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-dconf--spec-items-0-settings-locked-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locked"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-dconf--spec-items-0-settings-locked-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locked"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-polkit--spec-items-0-settings-rules-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "rules"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-polkit--spec-items-0-settings-rules-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "rules"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-sysctl--spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-sysctl--spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-sysctl--spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-sysctl--spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-unit-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-unit-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-state-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "state"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-state-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "state"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-minlen-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "minlen"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-minlen-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "minlen"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-path-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-path-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-content-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "content"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-content-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "content"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-mode-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "mode"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-mode-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "mode"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-owner-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "owner"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-owner-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "owner"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-group-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "group"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-file--spec-items-0-settings-group-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "group"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-manager-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "manager"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-manager-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "manager"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-url-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "url"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-url-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "url"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-key-sha256-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-key-sha256-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-key-fingerprint-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "fingerprint"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-key-fingerprint-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key",
+    "fingerprint"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-suite-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "suite"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-suite-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "suite"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-components-0-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "components",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-repository--spec-items-0-settings-components-0-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "components",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-software--spec-items-0-settings-package-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "package"
+  ],
+  "mdm/invalid/mdm-type-baseline-software--spec-items-0-settings-package-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "package"
+  ],
+  "mdm/invalid/mdm-type-baseline-software--spec-items-0-settings-ensure-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ensure"
+  ],
+  "mdm/invalid/mdm-type-baseline-software--spec-items-0-settings-ensure-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ensure"
+  ],
+  "mdm/invalid/mdm-type-baseline-software--spec-items-0-settings-removeonunassign-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "removeOnUnassign"
+  ],
+  "mdm/invalid/mdm-type-baseline-software--spec-items-0-settings-removeonunassign-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "removeOnUnassign"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-query--spec-items-0-settings-query-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "query"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-query--spec-items-0-settings-query-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "query"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-query--spec-items-0-settings-expect-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "expect"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-query--spec-items-0-settings-expect-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "expect"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-collector--spec-items-0-settings-ref-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ref"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-collector--spec-items-0-settings-ref-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ref"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-collector--spec-items-0-settings-expect-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "expect"
+  ],
+  "mdm/invalid/mdm-type-baseline-check-collector--spec-items-0-settings-expect-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "expect"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-platform-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-platform-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-timezone-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-timezone-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-slots-0-days-0-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-slots-0-days-0-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-slots-0-start-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-slots-0-start-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-slots-0-durationminutes-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-maintenance-slots-0-durationminutes-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-reboot-notify-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-reboot-notify-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-reboot-maxdeferrals-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-reboot-maxdeferrals-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-reboot-deadline-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-reboot-deadline-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-targetversion-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-targetversion-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-deferrals-majordays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "majorDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-deferrals-majordays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "majorDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-deferrals-minordays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "minorDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-deferrals-minordays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "minorDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-deferrals-systemdays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "systemDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-deferrals-systemdays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "deferrals",
+    "systemDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-automaticdownload-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "automaticDownload"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-automaticdownload-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "automaticDownload"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-automaticinstall-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "automaticInstall"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-automaticinstall-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "automaticInstall"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-notifications-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "notifications"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-notifications-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "notifications"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-targetbuild-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetBuild"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-macos-spec-items-0-settings-targetbuild-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetBuild"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-platform-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-platform-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-timezone-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-timezone-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-slots-0-days-0-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-slots-0-days-0-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-slots-0-start-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-slots-0-start-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-slots-0-durationminutes-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-maintenance-slots-0-durationminutes-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-reboot-notify-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-reboot-notify-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-reboot-maxdeferrals-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-reboot-maxdeferrals-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-reboot-deadline-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-reboot-deadline-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-productversion-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "productVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-productversion-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "productVersion"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-targetrelease-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetRelease"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-targetrelease-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "targetRelease"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-qualitydeferraldays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "qualityDeferralDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-qualitydeferraldays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "qualityDeferralDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-featuredeferraldays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "featureDeferralDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-featuredeferraldays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "featureDeferralDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-qualitydeadlinedays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "qualityDeadlineDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-qualitydeadlinedays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "qualityDeadlineDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-featuredeadlinedays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "featureDeadlineDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-featuredeadlinedays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "featureDeadlineDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-gracedays-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "graceDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-gracedays-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "graceDays"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-activehours-start-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-activehours-start-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-activehours-end-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "end"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-windows-spec-items-0-settings-activehours-end-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "activeHours",
+    "end"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-platform-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-platform-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-timezone-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-timezone-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "timezone"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-slots-0-days-0-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-slots-0-days-0-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "days",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-slots-0-start-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-slots-0-start-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "start"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-slots-0-durationminutes-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-maintenance-slots-0-durationminutes-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "maintenance",
+    "slots",
+    0,
+    "durationMinutes"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-reboot-notify-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-reboot-notify-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "notify"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-reboot-maxdeferrals-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-reboot-maxdeferrals-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "maxDeferrals"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-reboot-deadline-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-reboot-deadline-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "reboot",
+    "deadline"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-class-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "class"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-class-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "class"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-includeflatpak-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "includeFlatpak"
+  ],
+  "mdm/invalid/mdm-type-baseline-os-update-linux-spec-items-0-settings-includeflatpak-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "includeFlatpak"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-macos-spec-items-0-settings-platform-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-macos-spec-items-0-settings-platform-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-macos-spec-items-0-settings-enabled-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-macos-spec-items-0-settings-enabled-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-macos-spec-items-0-settings-escrow-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-macos-spec-items-0-settings-escrow-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-windows-spec-items-0-settings-platform-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-windows-spec-items-0-settings-platform-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-windows-spec-items-0-settings-enabled-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-windows-spec-items-0-settings-enabled-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-windows-spec-items-0-settings-escrow-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-windows-spec-items-0-settings-escrow-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-platform-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-platform-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-enabled-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-enabled-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "enabled"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-escrow-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-escrow-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "escrow"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-existingluks2root-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "existingLuks2Root"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-existingluks2root-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "existingLuks2Root"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-tpm2-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "tpm2"
+  ],
+  "mdm/invalid/mdm-type-baseline-encryption-linux-spec-items-0-settings-tpm2-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "tpm2"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-bool-spec-items-0-settings-locuri-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-bool-spec-items-0-settings-locuri-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-bool-spec-items-0-settings-format-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-bool-spec-items-0-settings-format-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-bool-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-bool-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-chr-spec-items-0-settings-locuri-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-chr-spec-items-0-settings-locuri-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-chr-spec-items-0-settings-format-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-chr-spec-items-0-settings-format-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-chr-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-chr-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-xml-spec-items-0-settings-locuri-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-xml-spec-items-0-settings-locuri-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-xml-spec-items-0-settings-format-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-xml-spec-items-0-settings-format-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-xml-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-xml-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-b64-spec-items-0-settings-locuri-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-b64-spec-items-0-settings-locuri-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-b64-spec-items-0-settings-format-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-b64-spec-items-0-settings-format-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-b64-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-csp-b64-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-hive-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-hive-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-view-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-view-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-expand-string-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-hive-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-hive-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-view-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-view-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-value-0-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-multi-string-spec-items-0-settings-value-0-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value",
+    0
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-hive-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-hive-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-view-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-view-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-dword-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-hive-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-hive-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-view-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-view-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-qword-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-hive-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-hive-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-view-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-view-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-key-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-key-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-type-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-type-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-windows-registry-binary-spec-items-0-settings-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-sections-0-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-sections-0-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-sections-0-directives-0-name-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-sections-0-directives-0-name-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "name"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-sections-0-directives-0-value-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-systemd--spec-items-0-settings-dropin-sections-0-directives-0-value-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "value"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-minclass-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "minclass"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-minclass-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "minclass"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-maxrepeat-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "maxrepeat"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-maxrepeat-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "maxrepeat"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-enforceforroot-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "enforceForRoot"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-pwquality-enforceforroot-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "pwquality",
+    "enforceForRoot"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-deny-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "deny"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-deny-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "deny"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-failintervalseconds-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "failIntervalSeconds"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-failintervalseconds-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "failIntervalSeconds"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-unlocktimeseconds-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "unlockTimeSeconds"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-unlocktimeseconds-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "unlockTimeSeconds"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-evendenyroot-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "evenDenyRoot"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-evendenyroot-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "evenDenyRoot"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-rootunlocktimeseconds-null.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "rootUnlockTimeSeconds"
+  ],
+  "mdm/invalid/mdm-type-baseline-linux-pam--spec-items-0-settings-faillock-rootunlocktimeseconds-wrong-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "faillock",
+    "rootUnlockTimeSeconds"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-apiversion-null.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-apiversion-wrong-type.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-kind-null.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-kind-wrong-type.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-metadata-name-null.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-metadata-name-wrong-type.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-os-null.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-os-wrong-type.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-format-null.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-format-wrong-type.json": [
+    "spec",
+    "format"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-name-null.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-name-wrong-type.json": [
+    "spec",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-version-null.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-version-wrong-type.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-type-null.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-type-wrong-type.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-blobkey-null.json": [
+    "spec",
+    "source",
+    "blobKey"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-blobkey-wrong-type.json": [
+    "spec",
+    "source",
+    "blobKey"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-sha256-null.json": [
+    "spec",
+    "source",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-sha256-wrong-type.json": [
+    "spec",
+    "source",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-size-null.json": [
+    "spec",
+    "source",
+    "size"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-blob-spec-source-size-wrong-type.json": [
+    "spec",
+    "source",
+    "size"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-developer-id-spec-signature-type-null.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-developer-id-spec-signature-type-wrong-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-developer-id-spec-signature-teamid-null.json": [
+    "spec",
+    "signature",
+    "teamId"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-developer-id-spec-signature-teamid-wrong-type.json": [
+    "spec",
+    "signature",
+    "teamId"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-bundle-spec-detection-type-null.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-bundle-spec-detection-type-wrong-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-bundle-spec-detection-identifier-null.json": [
+    "spec",
+    "detection",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-bundle-spec-detection-identifier-wrong-type.json": [
+    "spec",
+    "detection",
+    "identifier"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-bundle-spec-detection-version-null.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-bundle-spec-detection-version-wrong-type.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-allowedgroups-0-null.json": [
+    "spec",
+    "allowedGroups",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-allowedgroups-0-wrong-type.json": [
+    "spec",
+    "allowedGroups",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-reboot-mode-null.json": [
+    "spec",
+    "reboot",
+    "mode"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-reboot-mode-wrong-type.json": [
+    "spec",
+    "reboot",
+    "mode"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-interaction-mode-null.json": [
+    "spec",
+    "interaction",
+    "mode"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-interaction-mode-wrong-type.json": [
+    "spec",
+    "interaction",
+    "mode"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-none-spec-signature-type-null.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-none-spec-signature-type-wrong-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-none-spec-signature-reason-null.json": [
+    "spec",
+    "signature",
+    "reason"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-none-spec-signature-reason-wrong-type.json": [
+    "spec",
+    "signature",
+    "reason"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-none-spec-signature-allowunsigned-null.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-none-spec-signature-allowunsigned-wrong-type.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-type-null.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-type-wrong-type.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-manager-null.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-manager-wrong-type.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-ref-null.json": [
+    "spec",
+    "source",
+    "ref"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-ref-wrong-type.json": [
+    "spec",
+    "source",
+    "ref"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-package-null.json": [
+    "spec",
+    "source",
+    "package"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-source-repository-spec-source-package-wrong-type.json": [
+    "spec",
+    "source",
+    "package"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-checksum-spec-signature-type-null.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-checksum-spec-signature-type-wrong-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-checksum-spec-signature-sha256-null.json": [
+    "spec",
+    "signature",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-checksum-spec-signature-sha256-wrong-type.json": [
+    "spec",
+    "signature",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-package-spec-detection-type-null.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-package-spec-detection-type-wrong-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-package-spec-detection-name-null.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-package-spec-detection-name-wrong-type.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-package-spec-detection-version-null.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-package-spec-detection-version-wrong-type.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-authenticode-spec-signature-type-null.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-authenticode-spec-signature-type-wrong-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-authenticode-spec-signature-subject-null.json": [
+    "spec",
+    "signature",
+    "subject"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-authenticode-spec-signature-subject-wrong-type.json": [
+    "spec",
+    "signature",
+    "subject"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msi-spec-detection-type-null.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msi-spec-detection-type-wrong-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msi-spec-detection-productcode-null.json": [
+    "spec",
+    "detection",
+    "productCode"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msi-spec-detection-productcode-wrong-type.json": [
+    "spec",
+    "detection",
+    "productCode"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-msix-spec-signature-type-null.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-msix-spec-signature-type-wrong-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-msix-spec-signature-publisher-null.json": [
+    "spec",
+    "signature",
+    "publisher"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-msix-spec-signature-publisher-wrong-type.json": [
+    "spec",
+    "signature",
+    "publisher"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msix-spec-detection-type-null.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msix-spec-detection-type-wrong-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msix-spec-detection-family-null.json": [
+    "spec",
+    "detection",
+    "family"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msix-spec-detection-family-wrong-type.json": [
+    "spec",
+    "detection",
+    "family"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msix-spec-detection-version-null.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-msix-spec-detection-version-wrong-type.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-type-null.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-type-wrong-type.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-hive-null.json": [
+    "spec",
+    "detection",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-hive-wrong-type.json": [
+    "spec",
+    "detection",
+    "hive"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-view-null.json": [
+    "spec",
+    "detection",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-view-wrong-type.json": [
+    "spec",
+    "detection",
+    "view"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-key-null.json": [
+    "spec",
+    "detection",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-key-wrong-type.json": [
+    "spec",
+    "detection",
+    "key"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-version-null.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-detection-uninstall-spec-detection-version-wrong-type.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-openpgp-spec-signature-type-null.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-openpgp-spec-signature-type-wrong-type.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-openpgp-spec-signature-fingerprints-0-null.json": [
+    "spec",
+    "signature",
+    "fingerprints",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-signature-openpgp-spec-signature-fingerprints-0-wrong-type.json": [
+    "spec",
+    "signature",
+    "fingerprints",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-installargs-0-null.json": [
+    "spec",
+    "installArgs",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-installargs-0-wrong-type.json": [
+    "spec",
+    "installArgs",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-uninstallargs-0-null.json": [
+    "spec",
+    "uninstallArgs",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-uninstallargs-0-wrong-type.json": [
+    "spec",
+    "uninstallArgs",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-retrysafe-null.json": [
+    "spec",
+    "retrySafe"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-retrysafe-wrong-type.json": [
+    "spec",
+    "retrySafe"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-interaction-processes-0-null.json": [
+    "spec",
+    "interaction",
+    "processes",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-interaction-processes-0-wrong-type.json": [
+    "spec",
+    "interaction",
+    "processes",
+    0
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-reboot-codes-0-code-null.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "code"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-reboot-codes-0-code-wrong-type.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "code"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-reboot-codes-0-reboot-null.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "reboot"
+  ],
+  "mdm/invalid/mdm-type-softwarepackage-spec-reboot-codes-0-reboot-wrong-type.json": [
+    "spec",
+    "reboot",
+    "codes",
+    0,
+    "reboot"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-apiversion-null.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-apiversion-wrong-type.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-kind-null.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-kind-wrong-type.json": [
+    "kind"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-metadata-name-null.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-metadata-name-wrong-type.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-members-0-null.json": [
+    "spec",
+    "members",
+    0
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-members-0-wrong-type.json": [
+    "spec",
+    "members",
+    0
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-matchexpressions-0-key-null.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "key"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-matchexpressions-0-key-wrong-type.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "key"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-matchexpressions-0-operator-null.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "operator"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-matchexpressions-0-operator-wrong-type.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "operator"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-matchexpressions-0-values-0-null.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values",
+    0
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-matchexpressions-0-values-0-wrong-type.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values",
+    0
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-os-macos-null.json": [
+    "spec",
+    "selector",
+    "os",
+    "macos"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-os-macos-wrong-type.json": [
+    "spec",
+    "selector",
+    "os",
+    "macos"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-os-windows-null.json": [
+    "spec",
+    "selector",
+    "os",
+    "windows"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-os-windows-wrong-type.json": [
+    "spec",
+    "selector",
+    "os",
+    "windows"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-os-linux-null.json": [
+    "spec",
+    "selector",
+    "os",
+    "linux"
+  ],
+  "mdm/invalid/mdm-type-devicegroup-spec-selector-os-linux-wrong-type.json": [
+    "spec",
+    "selector",
+    "os",
+    "linux"
+  ],
+  "mdm/invalid/mdm-file-mode-0755.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "mode"
+  ],
+  "mdm/invalid/mdm-file-mode-04755.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "mode"
+  ],
+  "mdm/invalid/mdm-file-mode-420.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "mode"
+  ],
+  "mdm/invalid/mdm-file-injection-symlink.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "symlink"
+  ],
+  "mdm/invalid/mdm-file-injection-type.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "type"
+  ],
+  "mdm/invalid/mdm-file-injection-protected.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "protected"
+  ],
+  "mdm/invalid/mdm-file-injection-effect.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "effect"
+  ],
+  "mdm/invalid/mdm-file-injection-approval.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "approval"
+  ],
+  "mdm/invalid/mdm-file-path-1117.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1118.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1119.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1120.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1121.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1122.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1123.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-file-path-1124.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-registry-target-1125.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1126.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1127.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1128.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1129.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1130.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1131.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-registry-target-1132.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "key"
+  ],
+  "mdm/invalid/mdm-csp-target-1133.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-target-1134.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-target-1135.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-target-1136.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-target-1137.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-systemd-injection-content.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "content"
+  ],
+  "mdm/invalid/mdm-systemd-injection-path.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "path"
+  ],
+  "mdm/invalid/mdm-systemd-injection-rawunit.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "rawUnit"
+  ],
+  "mdm/invalid/mdm-systemd-directive-newline.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "value"
+  ],
+  "mdm/invalid/mdm-systemd-directive-continuation.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    0,
+    "directives",
+    0,
+    "value"
+  ],
+  "mdm/invalid/mdm-systemd-unit-1143.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-systemd-unit-1144.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-systemd-unit-1145.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-systemd-unit-1146.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-systemd-unit-1147.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-systemd-unit-1148.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unit"
+  ],
+  "mdm/invalid/mdm-pam-stack.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "stack"
+  ],
+  "mdm/invalid/mdm-repository-disable-verification.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "disableVerification"
+  ],
+  "mdm/invalid/mdm-profile-forbidden-mdm.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads",
+    0,
+    "PayloadType"
+  ],
+  "mdm/invalid/mdm-profile-forbidden-scep.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads",
+    0,
+    "PayloadType"
+  ],
+  "mdm/invalid/mdm-profile-forbidden-pkcs12.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads",
+    0,
+    "PayloadType"
+  ],
+  "mdm/invalid/mdm-baseline-unknown-kind.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-baseline-unknown-os.json": [
+    "spec",
+    "os"
+  ],
+  "mdm/invalid/mdm-baseline-wrong-os.json": [
+    "spec",
+    "items",
+    0,
+    "kind"
+  ],
+  "mdm/invalid/mdm-baseline-authority-wrong.json": [
+    "spec",
+    "items",
+    0,
+    "authority"
+  ],
+  "mdm/invalid/mdm-baseline-protected-false.json": [
+    "spec",
+    "items",
+    0,
+    "protected"
+  ],
+  "mdm/invalid/mdm-check-forbidden-groups.json": [
+    "spec",
+    "allowedGroups"
+  ],
+  "mdm/invalid/mdm-root-status.json": [
+    "status"
+  ],
+  "mdm/invalid/mdm-metadata-uid.json": [
+    "metadata",
+    "uid"
+  ],
+  "mdm/invalid/mdm-name-trailing-lf.json": [
+    "metadata",
+    "name"
+  ],
+  "mdm/invalid/mdm-hash-trailing-lf.json": [
+    "spec",
+    "source",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-reference-trailing-lf.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "ref"
+  ],
+  "mdm/invalid/mdm-package-latest.json": [
+    "spec",
+    "version"
+  ],
+  "mdm/invalid/mdm-package-version-relation.json": [
+    "spec",
+    "detection",
+    "version"
+  ],
+  "mdm/invalid/mdm-service-disabled-running.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "state"
+  ],
+  "mdm/invalid/mdm-update-platform-relation.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "platform"
+  ],
+  "mdm/invalid/mdm-package-macos-pkg-blob-developer-id-bundle-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-pkg-blob-developer-id-bundle-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-pkg-blob-developer-id-bundle-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-pkg-blob-none-bundle-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-pkg-blob-none-bundle-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-pkg-blob-none-bundle-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-checksum-package-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-checksum-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-checksum-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-checksum-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-formula-homebrew-none-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-cask-homebrew-checksum-bundle-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-cask-homebrew-checksum-bundle-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-cask-homebrew-checksum-bundle-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-cask-homebrew-none-bundle-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-cask-homebrew-none-bundle-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-macos-homebrew-cask-homebrew-none-bundle-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-windows-msi-blob-authenticode-msi-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msi-blob-authenticode-msi-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msi-blob-authenticode-msi-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msi-blob-none-msi-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msi-blob-none-msi-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msi-blob-none-msi-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-windows-msix-blob-msix-msix-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msix-blob-msix-msix-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msix-blob-msix-msix-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msix-blob-none-msix-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msix-blob-none-msix-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-msix-blob-none-msix-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-windows-exe-blob-authenticode-uninstall-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-exe-blob-authenticode-uninstall-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-exe-blob-authenticode-uninstall-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-exe-blob-none-uninstall-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-exe-blob-none-uninstall-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-exe-blob-none-uninstall-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-authenticode-uninstall-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-authenticode-uninstall-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-authenticode-uninstall-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-none-uninstall-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-none-uninstall-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-none-uninstall-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-msix-msix-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-msix-msix-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-msix-msix-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-none-msix-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-none-msix-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-windows-winget-winget-none-msix-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-blob-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-blob-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-blob-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-openpgp-package-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-openpgp-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-openpgp-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-openpgp-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-deb-apt-none-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-blob-openpgp-package-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-blob-openpgp-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-blob-openpgp-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-blob-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-blob-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-blob-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-openpgp-package-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-openpgp-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-openpgp-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-openpgp-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-dnf-none-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-openpgp-package-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-openpgp-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-openpgp-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-openpgp-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-rpm-zypper-none-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-openpgp-package-signature-mismatch.json": [
+    "spec",
+    "signature",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-openpgp-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-openpgp-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-openpgp-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-none-package-detection-mismatch.json": [
+    "spec",
+    "detection",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-none-package-source-mismatch.json": [
+    "spec",
+    "source",
+    "type"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-none-package-unsigned-false.json": [
+    "spec",
+    "signature",
+    "allowUnsigned"
+  ],
+  "mdm/invalid/mdm-package-linux-flatpak-flatpak-none-package-package-name-relation.json": [
+    "spec",
+    "detection",
+    "name"
+  ],
+  "mdm/invalid/mdm-source-union-overlap.json": [
+    "spec",
+    "source",
+    "manager"
+  ],
+  "mdm/invalid/mdm-blob-hash.json": [
+    "spec",
+    "source",
+    "sha256"
+  ],
+  "mdm/invalid/mdm-blob-size-zero.json": [
+    "spec",
+    "source",
+    "size"
+  ],
+  "mdm/invalid/mdm-blob-size-fractional.json": [
+    "spec",
+    "source",
+    "size"
+  ],
+  "mdm/invalid/mdm-retry-safe-non-exe.json": [
+    "spec",
+    "retrySafe"
+  ],
+  "mdm/invalid/mdm-group-empty-or-duplicate-1265.json": [
+    "spec",
+    "selector"
+  ],
+  "mdm/invalid/mdm-group-empty-or-duplicate-1266.json": [
+    "spec",
+    "members"
+  ],
+  "mdm/invalid/mdm-group-empty-or-duplicate-1267.json": [
+    "spec",
+    "selector",
+    "matchLabels"
+  ],
+  "mdm/invalid/mdm-group-empty-or-duplicate-1268.json": [
+    "spec",
+    "selector",
+    "matchExpressions"
+  ],
+  "mdm/invalid/mdm-group-empty-or-duplicate-1269.json": [
+    "spec",
+    "selector",
+    "os"
+  ],
+  "mdm/invalid/mdm-group-empty-or-duplicate-1270.json": [
+    "spec",
+    "members"
+  ],
+  "mdm/invalid/mdm-group-in-missing-values.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values"
+  ],
+  "mdm/invalid/mdm-group-notin-missing-values.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values"
+  ],
+  "mdm/invalid/mdm-group-exists-forbidden-values.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values"
+  ],
+  "mdm/invalid/mdm-group-doesnotexist-forbidden-values.json": [
+    "spec",
+    "selector",
+    "matchExpressions",
+    0,
+    "values"
+  ],
+  "mdm/invalid/mdm-group-duplicate-expressions.json": [
+    "spec",
+    "selector",
+    "matchExpressions"
+  ],
+  "mdm/invalid/mdm-group-empty.json": [
+    "spec"
+  ],
+  "mdm/invalid/mdm-duplicate-item-id.json": [
+    "spec",
+    "items",
+    1,
+    "id"
+  ],
+  "mdm/invalid/mdm-critical-grace-nonzero.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-grace-721h.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-duration-spelling-1284.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-duration-spelling-1285.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-duration-spelling-1286.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-duration-spelling-1287.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-duration-spelling-1288.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-duration-spelling-1289.json": [
+    "spec",
+    "items",
+    0,
+    "grace"
+  ],
+  "mdm/invalid/mdm-qword-overflow.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-base64-pad-bits.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-base64-unpadded.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-base64-trailing-lf.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-duplicate-profile.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payloads",
+    1,
+    "PayloadIdentifier"
+  ],
+  "mdm/invalid/mdm-duplicate-sections.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "dropIn",
+    "sections",
+    1,
+    "name"
+  ],
+  "mdm/invalid/mdm-duplicate-exit-codes.json": [
+    "spec",
+    "reboot",
+    "codes",
+    1,
+    "code"
+  ],
+  "mdm/invalid/mdm-precedence-envelope-before-schema.json": [
+    "apiVersion"
+  ],
+  "mdm/invalid/mdm-precedence-schema-before-unique.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "unexpected"
+  ],
+  "mdm/invalid/mdm-precedence-unique-before-target.json": [
+    "spec",
+    "items",
+    1,
+    "id"
+  ],
+  "mdm/invalid/mdm-precedence-encoding-before-relation.json": [
+    "spec",
+    "items",
+    1,
+    "settings",
+    "value"
+  ],
+  "mdm/invalid/mdm-native-nested-string-limit.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payload",
+    "nested"
+  ],
+  "mdm/invalid/mdm-native-nested-array-limit.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "payload",
+    "nested"
+  ],
+  "mdm/invalid/mdm-csp-device-dot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-device-dotdot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-dot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-dotdot.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-scope.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-case.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-empty.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-empty-segment.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-percent.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-query.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-csp-user-fragment.json": [
+    "spec",
+    "items",
+    0,
+    "settings",
+    "locUri"
+  ],
+  "mdm/invalid/mdm-version-u0000.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u001f.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u0020.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u007f.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u0085.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u00a0.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u1680.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u2000.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u200a.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u2028.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u2029.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u202f.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u205f.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-u3000.json": [
+    "spec",
+    "minOsVersion"
+  ],
+  "mdm/invalid/mdm-version-ufeff.json": [
+    "spec",
+    "minOsVersion"
   ]
 }

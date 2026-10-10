@@ -1,0 +1,34 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "SoftwarePackage",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "windows",
+    "format": "winget",
+    "name": "app",
+    "version": "1.0",
+    "source": {
+      "type": "repository",
+      "manager": "winget",
+      "ref": "repo",
+      "package": "app"
+    },
+    "signature": {
+      "type": "authenticode",
+      "subject": "Example"
+    },
+    "allowedGroups": [
+      "fleet"
+    ],
+    "installArgs": [],
+    "uninstallArgs": [],
+    "reboot": {
+      "mode": "none"
+    },
+    "interaction": {
+      "mode": "silent"
+    }
+  }
+}

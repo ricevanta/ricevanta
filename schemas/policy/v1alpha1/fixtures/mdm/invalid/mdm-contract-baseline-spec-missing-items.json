@@ -1,0 +1,13 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

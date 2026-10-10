@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/policy/v1alpha1/baseline/linux.dconf.json",
+  "title": "linux.dconf",
+  "description": "Semantic validation checks path segments. Native compilation parses one GVariant value and generates database/profile entries.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "$ref": "../mdm-common.schema.json#/$defs/posixPath"
+    },
+    "value": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 16384,
+      "pattern": "^[^\\x00-\\x1f\\x7f\\ud800-\\udfff]*(?![\\s\\S])"
+    },
+    "locked": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "key",
+    "value",
+    "locked"
+  ],
+  "x-ricevanta-effect": "apply",
+  "x-ricevanta-protected-publication": true
+}

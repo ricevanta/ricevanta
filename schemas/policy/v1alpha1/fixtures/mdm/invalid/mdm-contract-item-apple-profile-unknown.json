@@ -1,0 +1,31 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "macos",
+    "items": [
+      {
+        "id": "item",
+        "kind": "apple.profile",
+        "settings": {
+          "identifier": "io.ricevanta.profile",
+          "payloads": [
+            {
+              "PayloadType": "com.apple.applicationaccess",
+              "PayloadIdentifier": "io.ricevanta.restriction"
+            }
+          ]
+        },
+        "required": true,
+        "severity": "high",
+        "unexpected": false
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

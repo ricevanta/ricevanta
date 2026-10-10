@@ -1,0 +1,28 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "Baseline",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "os": "linux",
+    "items": [
+      {
+        "id": "item",
+        "kind": "encryption",
+        "settings": {
+          "platform": "linux",
+          "enabled": true,
+          "escrow": true,
+          "existingLuks2Root": "wrong",
+          "tpm2": true
+        },
+        "required": true,
+        "severity": "high"
+      }
+    ],
+    "allowedGroups": [
+      "fleet"
+    ]
+  }
+}

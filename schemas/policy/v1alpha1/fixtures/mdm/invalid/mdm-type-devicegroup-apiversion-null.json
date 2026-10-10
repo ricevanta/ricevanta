@@ -1,0 +1,12 @@
+{
+  "apiVersion": null,
+  "kind": "DeviceGroup",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "members": [
+      "device-one"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "apiVersion": "ricevanta.io/v1alpha1",
+  "kind": "DeviceGroup",
+  "metadata": {
+    "name": "sample"
+  },
+  "spec": {
+    "members": [
+      "device-one",
+      "device-two"
+    ],
+    "selector": {
+      "matchLabels": {
+        "site": "lab"
+      },
+      "matchExpressions": [
+        {
+          "key": "managed",
+          "operator": "Exists"
+        }
+      ],
+      "os": {
+        "macos": "",
+        "windows": null,
+        "linux": ""
+      }
+    }
+  }
+}
