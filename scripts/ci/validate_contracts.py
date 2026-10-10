@@ -24,6 +24,7 @@ NON_FIXTURES = {
 CONTRACTS = (
     ("schemas/dsse/v1/vectors.schema.json", "schemas/dsse/v1/vectors.json"),
     ("schemas/dsse/v1/envelope.schema.json", "schemas/dsse/v1/vectors.json"),
+    ("schemas/dsse/v1/key-admission-vectors.schema.json", "schemas/dsse/v1/key-admission-vectors.json"),
     ("schemas/events/v1/fixture.schema.json", "schemas/events/v1/fixtures/header.json"),
     ("schemas/events/v1/fixture.schema.json", "schemas/events/v1/fixtures/descriptor.json"),
     ("schemas/events/v1/fixture.schema.json", "schemas/events/v1/fixtures/response.json"),

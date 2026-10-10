@@ -4,7 +4,7 @@ A standard-library-only Go package signs and verifies Ricevanta's single-signatu
 
 ## 1. Scope and location
 
-Use `server/internal/signing/dsse` in module `github.com/ricevanta/ricevanta/server`, with Go 1.27.1. The package imports only the standard library and no Ricevanta module. Policy and extensions both import this leaf package. This realizes the reuse required by [backend design section 2](../design/backend.md#2-library-choices) without making extensions import the policy module. A policy-owned package would couple unrelated consumers; a public package would promise an external API before a consumer exists.
+Use `server/internal/signing/dsse` in module `github.com/ricevanta/ricevanta/server`, with Go 1.27.1. The package uses only standard-library cryptography. Its shared key-validity dependency and admission rules are specified in [Ed25519 key admission](ed25519-key-admission.md); policy and extensions both consume this signing package. This realizes the reuse required by [backend design section 2](../design/backend.md#2-library-choices) without making extensions import the policy module. A policy-owned package would couple unrelated consumers; a public package would promise an external API before a consumer exists.
 
 The profile narrows DSSE deliberately. The [DSSE protocol](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md) permits both base64 alphabets and defines verification over distinct trusted keys for thresholds. The [envelope specification](https://github.com/secure-systems-lab/dsse/blob/master/envelope.md) permits extra fields and optional key hints. Ricevanta requires standard padded base64, a closed field set, a hint and exactly one signature. This package is not a general DSSE consumer. The wire array is `signatures`, as in the upstream examples, not the singular `signature` spelling in its parsing-rule prose.
 
@@ -64,7 +64,7 @@ On error, `Sign` returns nil and `Verify` returns `Verified{}`. Functions never 
 | `ErrPayloadTooLarge` | `dsse payload too large` |
 | `ErrBase64` | `dsse base64 format` |
 | `ErrSignature` | `dsse invalid signature` |
-| `ErrPublicKey` | `dsse public key length` |
+| `ErrPublicKey` | `dsse invalid public key` |
 | `ErrPrivateKey` | `dsse private key format` |
 
 A public parse-only API would invite consumers to use unverified payloads. A generic `crypto.Signer` would add algorithm and custody behavior outside this slice. Both are rejected. Raw Ed25519 keys keep the primitive testable; custody-specific signing adapters need a separate reviewed API.
@@ -115,7 +115,7 @@ The limits are profile choices, not measured capacity claims. Sixteen MiB allows
 
 Pre-authentication encoding (PAE) is the concatenation of ASCII `DSSEv1`, one space, the decimal byte length of the UTF-8 type, one space, the type bytes, one space, the decimal payload byte length, one space, and the exact payload. Decimal lengths have no leading zeros; zero is `0`. No trailing delimiter follows the payload. The [DSSE protocol](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md) authenticates type and payload; `keyid` is outside PAE.
 
-`Sign` uses deterministic plain Ed25519 on the complete PAE. It does not sign the JSON envelope, prehash PAE, normalize payload bytes, or use Ed25519ph or Ed25519ctx. Validate a private key as exactly 64 bytes and require equality with `ed25519.NewKeyFromSeed(privateKey[:32])`, including its public-key suffix, before signing. Validate a verification key as exactly 32 bytes before calling Ed25519. A 64-byte but cryptographically invalid signature returns `ErrSignature`. [Go Ed25519](https://pkg.go.dev/crypto/ed25519@go1.27.1) documents the key sizes, seed representation and panics on wrong key lengths. These guards prevent caller mistakes from crashing a process.
+`Sign` uses deterministic plain Ed25519 on the complete PAE. It does not sign the JSON envelope, prehash PAE, normalize payload bytes, or use Ed25519ph or Ed25519ctx. Validate a private key as exactly 64 bytes and require equality with `ed25519.NewKeyFromSeed(privateKey[:32])`, including its public-key suffix, before signing. Validate a verification key under [Ed25519 key admission](ed25519-key-admission.md#3-accepted-points-and-error-precedence) before calling Ed25519. A 64-byte but cryptographically invalid signature returns `ErrSignature`. [Go Ed25519](https://pkg.go.dev/crypto/ed25519@go1.27.1) documents the key sizes, seed representation and panics on wrong key lengths. These guards prevent caller mistakes from crashing a process.
 
 The signer produces this exact ASCII layout, with no whitespace or final newline:
 
@@ -160,7 +160,7 @@ The command and grant are separate signed objects, so no object hashes itself. C
 7. Encoded payload length greater than 22,369,624: `ErrPayloadTooLarge`, even if base64 is invalid.
 8. Payload base64 decoding and canonicality: `ErrBase64`; then decoded length above the cap: `ErrPayloadTooLarge`.
 9. Signature base64 decoding and canonicality: `ErrBase64`; then decoded length unequal to 64: `ErrSignature`.
-10. Public key length unequal to 32: `ErrPublicKey`.
+10. Public key rejected by [Ed25519 key admission](ed25519-key-admission.md#4-dsse-integration): `ErrPublicKey`.
 11. Ed25519 verification failure: `ErrSignature`.
 
 `Sign` checks supported type (`ErrPayloadType`), payload size (`ErrPayloadTooLarge`), then private-key length and seed/suffix consistency (`ErrPrivateKey`). No signature is computed before these pass. All valid signing inputs fit the envelope cap by construction. The fixed-size fingerprint cannot fail shape validation.

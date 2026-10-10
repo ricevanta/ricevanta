@@ -32,7 +32,7 @@ Detail: `architecture.md` section 6.
 Decision: one standard-library-only Go primitive signs and verifies the Ricevanta DSSE profile with Ed25519, a closed payload-type list, strict envelope fields, standard padded base64 and exactly one signature. Signers emit canonical bytes; envelope hashes bind exact received bytes, and certificate fingerprints remain hints without authority.
 Why: policy and extension consumers need identical Go and Rust byte contracts, and dispatch grants must bind the exact command envelope delivered to the agent.
 Rejected: per-module parsers, hashes of re-encoded envelopes and accept-any-signature recovery checks, which permit parser disagreements, byte substitution or quorum weakening.
-Detail: [DSSE envelope spec](specs/dsse-envelope.md) and [implementation plan](plans/dsse-envelope.md).
+Detail: [DSSE envelope spec](specs/dsse-envelope.md) and [implementation plan](plans/dsse-envelope.md). [Ed25519 key admission](specs/ed25519-key-admission.md) and [its plan](plans/ed25519-key-admission.md) define the shared canonical prime-subgroup predicate and DSSE revalidation.
 
 ## Platform (PF)
 
