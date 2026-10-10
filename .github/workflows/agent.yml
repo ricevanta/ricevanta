@@ -2,7 +2,7 @@ name: Agent checks
 
 on:
   push:
-    branches: [master]
+    branches: [master, 'wip/**']
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
@@ -68,7 +68,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/registry/src
-          key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
+            agent/target
+          key: agent-cargo-target-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
       - name: Check locked dependency pins
         run: |
           cargo metadata --locked --format-version 1 | python -c '
@@ -91,3 +92,7 @@ jobs:
         env:
           CARGO_NET_OFFLINE: 'true'
         run: cargo test --locked --workspace
+      - name: Extended recovery property test
+        env:
+          CARGO_NET_OFFLINE: 'true'
+        run: cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact

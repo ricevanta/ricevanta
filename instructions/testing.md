@@ -1,31 +1,36 @@
 # Testing
 
-Run checks from the component directory. For the Go server, run:
+Before review, run light checks for the touched component. For the Go server, run from `server/`:
 
 ```sh
-gofmt -w .
-go test ./...
-go test -race ./...
-go vet ./...
+gofmt -l .
+go vet ./internal/path/to/touched/package
+go test -count=1 ./internal/path/to/touched/package
 ```
 
-`gofmt -l .` must print no files in continuous integration. The race run is required even when the ordinary test run passes.
+`-count=1` prevents cached Go test results from hiding changes to fixtures outside `server/`.
 
-Run every Go fuzz target for a bounded interval before review. The initial server targets require:
+`gofmt -l .` must print no files. Replace the example package path with the touched packages. Fix formatting with `gofmt -w` on the touched files.
+
+CI runs the full ordinary suite, race tests and timed fuzzing on the pushed `wip/**` branch. Ordinary `go test -count=1 ./...` keeps running every fuzz target's seed corpus. The primary agent reads the CI results before merging and does not merge failed checks.
+
+The following commands are the CI fuzz target list. Each target gets one matrix entry and runs for 60 seconds from `server/`:
 
 ```sh
-go test ./internal/events/eventid -fuzz=FuzzParse -fuzztime=5s -parallel=2
-go test ./internal/events/batch -fuzz=FuzzDescriptor -fuzztime=5s -parallel=2
-go test ./internal/signing/dsse -fuzz=FuzzVerify -fuzztime=5s -parallel=2
-go test ./internal/events/wire -fuzz=FuzzParseHeader -fuzztime=5s -parallel=2
-go test ./internal/events/wire -fuzz=FuzzDecode -fuzztime=5s -parallel=2
-go test ./internal/events/body -fuzz=FuzzExtractLine -fuzztime=5s -parallel=2
-go test ./internal/events/body -fuzz=FuzzDecode -fuzztime=5s -parallel=2
-go test ./internal/policy/celdecl -fuzz=FuzzParse -fuzztime=5s -parallel=2
-go test ./internal/policy/celdecl -fuzz=FuzzLoad -fuzztime=5s -parallel=2
+go test -count=1 ./internal/events/eventid -fuzz=FuzzParse -fuzztime=60s -parallel=2
+go test -count=1 ./internal/events/batch -fuzz=FuzzDescriptor -fuzztime=60s -parallel=2
+go test -count=1 ./internal/signing/dsse -fuzz=FuzzVerify -fuzztime=60s -parallel=2
+go test -count=1 ./internal/events/wire -fuzz=FuzzParseHeader -fuzztime=60s -parallel=2
+go test -count=1 ./internal/events/wire -fuzz=FuzzDecode -fuzztime=60s -parallel=2
+go test -count=1 ./internal/events/body -fuzz=FuzzExtractLine -fuzztime=60s -parallel=2
+go test -count=1 ./internal/events/body -fuzz=FuzzDecode -fuzztime=60s -parallel=2
+go test -count=1 ./internal/policy/celdecl -fuzz=FuzzParse -fuzztime=60s -parallel=2
+go test -count=1 ./internal/policy/celdecl -fuzz=FuzzLoad -fuzztime=60s -parallel=2
 ```
 
-Run those commands from `server/`. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result. Ordinary continuous integration runs each fuzz target's seed corpus through `go test`; it does not run timed fuzzing.
+Keep the single target list in `.github/workflows/server.yml` aligned with these commands. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
+
+Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in CI on the pushed `wip/**` branch. Browser checks start with the first reviewed console slice; no browser test suite exists yet.
 
 The initial server packages have pure unit and fuzz tests. They do not establish PostgreSQL, network, process, operating-system or platform support. Add integration and platform checks with the first code that crosses those boundaries, following its reviewed design and the qualification gates in `docs/specs/platform-qualification.md`.
 
@@ -37,18 +42,25 @@ The first Rust slice follows [instructions/rust.md](rust.md) and [the spool impl
 python agent/tools/generate-spool-fixtures.py --check
 ```
 
-Run the Rust checks from `agent/`:
+Before review, run Cargo formatting, Clippy and ordinary tests for touched crates from `agent/`:
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo test --locked --workspace
-cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+cargo clippy --locked -p ricevanta-spool --all-targets -- -D warnings
+cargo test --locked -p ricevanta-spool
 cargo tree --locked --edges normal,build,dev
 ```
 
-The ordinary suite runs every shared fixture and the deterministic `fuzz_recover` target. The ignored extended target runs before review; report its seed, case count, elapsed time and result. The plan fixes both budgets and mutation invariants. Tests match error variants and fields, check combined defects and use an independent CRC oracle. A failed check stays failed in the report.
+Select the touched crates with `-p`; `ricevanta-spool` is the current crate.
 
-CI runs fixture regeneration, fmt, Clippy and ordinary tests natively on macOS ARM64, Windows x64 and Linux x64 with the exact Rust pin. These checks establish portable codec behavior, not file permissions, power-loss durability, sensors, resource budgets or full platform support. Add native integration checks only with their reviewed slice and [platform qualification](../docs/specs/platform-qualification.md).
+CI also runs the extended property test on every native matrix entry:
+
+```sh
+cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+```
+
+The ordinary suite runs every shared fixture and the deterministic `fuzz_recover` target. The ignored extended target runs in CI; report its seed, case count, elapsed time and result. The plan fixes both budgets and mutation invariants. Tests match error variants and fields, check combined defects and use an independent CRC oracle. A failed check stays failed in the report.
+
+CI runs fixture regeneration, fmt, Clippy, ordinary tests and the extended property test natively on macOS ARM64, Windows x64 and Linux x64 with the exact Rust pin. These checks establish portable codec behavior, not file permissions, power-loss durability, sensors, resource budgets or full platform support. Add native integration checks only with their reviewed slice and [platform qualification](../docs/specs/platform-qualification.md).
 
 No releasable binary exists, so the repository has no binary, installer, container or upgrade test yet.

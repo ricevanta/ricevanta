@@ -2,7 +2,7 @@ name: Server checks
 
 on:
   push:
-    branches: [master]
+    branches: [master, 'wip/**']
     paths:
       - 'server/**'
       - 'schemas/dsse/**'
@@ -49,8 +49,73 @@ jobs:
             exit 1
           fi
       - name: Test
-        run: go test ./...
+        run: go test -count=1 ./...
       - name: Test with race detector
-        run: go test -race ./...
+        run: go test -race -count=1 ./...
       - name: Vet
         run: go vet ./...
+
+  fuzz-targets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.matrix.outputs.targets }}
+    steps:
+      - name: Discover fuzz matrix
+        id: matrix
+        env:
+          # Keep this single list aligned with instructions/testing.md.
+          FUZZ_TARGETS: >-
+            [
+              {"package":"./internal/events/eventid","target":"FuzzParse"},
+              {"package":"./internal/events/batch","target":"FuzzDescriptor"},
+              {"package":"./internal/signing/dsse","target":"FuzzVerify"},
+              {"package":"./internal/events/wire","target":"FuzzParseHeader"},
+              {"package":"./internal/events/wire","target":"FuzzDecode"},
+              {"package":"./internal/events/body","target":"FuzzExtractLine"},
+              {"package":"./internal/events/body","target":"FuzzDecode"},
+              {"package":"./internal/policy/celdecl","target":"FuzzParse"},
+              {"package":"./internal/policy/celdecl","target":"FuzzLoad"}
+            ]
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          targets = json.loads(os.environ['FUZZ_TARGETS'])
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('targets=' + json.dumps(targets, separators=(',', ':')) + '\n')
+          PY
+
+  fuzz:
+    needs: fuzz-targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.fuzz-targets.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: true
+          cache-dependency-path: server/go.sum
+      - name: Fuzz for 60 seconds
+        env:
+          FUZZ_PACKAGE: ${{ matrix.package }}
+          FUZZ_TARGET: ${{ matrix.target }}
+        run: go test "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2
+      - name: Upload failing corpus
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}
+          path: server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**
+          if-no-files-found: ignore
