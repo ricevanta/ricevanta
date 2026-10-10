@@ -1,12 +1,12 @@
 # Extension design
 
-How third parties extend Ricevanta: the package and its manifest, trust and grants, the five component kinds, console modules, service connectors, browser adapters, and distribution and compatibility. The scope is in `../blueprint.md` section 3.9; decisions EXT-01 to EXT-07 in `../decisions.md`. Process topology is in `../architecture.md`, the agent execution contract in `../specs/extension-agent-runtime.md`, and the compiled bundle in `../specs/policy-envelope.md` section 6. Claims marked "verify" rest on vendor or third-party sources or were not confirmed from a first-party page.
+How third parties extend Ricevanta: the package and its manifest, trust and grants, the five component kinds, console modules, service connectors, browser adapters, and distribution and compatibility. The scope is in `../blueprint.md` section 3.9; decisions EXT-01 to EXT-08 in `../decisions.md`. Process topology is in `../architecture.md`, the agent execution contract in `../specs/extension-agent-runtime.md`, and the compiled bundle in `../specs/policy-envelope.md` section 6. Claims marked "verify" rest on vendor or third-party sources or were not confirmed from a first-party page.
 
 One rule shapes everything below: no third-party code runs inside `ricevanta-agent`, `ricevanta-server`, the sensors, the Windows driver, the macOS system extensions or the browser extension's own code. Code enters through three doors only: the `ricevanta-ext` helper (section 4), a sandboxed console iframe (section 5) and a connector process the operator deploys (section 6). Everything else in a package is data that the server validates against a JSON Schema.
 
 ## 1. Package and manifest
 
-An extension is one zstd-compressed tar archive holding `extension.yaml`, its DSSE (Dead Simple Signing Envelope) envelope `envelope.json` and the component files. The manifest schema is required under `schemas/extension/v1alpha1/` and is absent. The manifest, resource, adapter, registration, WIT, bridge and connector contracts in `../analysis.md` section 3 block their consumers until schemas and fixtures exist.
+An extension is one zstd-compressed tar archive holding `extension.yaml`, its DSSE (Dead Simple Signing Envelope) envelope `envelope.json` and the component files. The package manifest schema and fixtures are in `schemas/extension/v1alpha1/`; [the manifest contract](../specs/extension-manifest.md) and [validator plan](../plans/extension-manifest.md) define the decoded validation slice. The resource, adapter, registration, grant, WIT, bridge and connector contracts in `../analysis.md` section 3 still block their consumers.
 
 | Field | Content |
 |---|---|
@@ -28,49 +28,7 @@ Key rotation needs a protected ownership transfer, preserves prior versions and 
 
 Archive rules match the bundle reader of `../specs/policy-envelope.md` section 6: no links, no duplicate or non-canonical paths, no member outside the listing, declared sizes enforced, and a total decompressed limit of 64 MB by default, configurable per server.
 
-Example:
-
-```yaml
-apiVersion: ricevanta.io/v1alpha1
-kind: Extension
-metadata:
-  id: com.example.vn-banking
-  version: 1.2.0
-  publisher:
-    name: Example Security
-    key: sha256:9f2c41d0...e1
-  license: Apache-2.0
-  homepage: https://example.com/ricevanta
-  source: https://github.com/example/ricevanta-vn-banking
-spec:
-  requires:
-    content: ext.ricevanta.io/content/v1
-    agent-module: ricevanta:agent/classifier@1.0.0
-    console-module: ext.ricevanta.io/console-module/v1
-  components:
-    - name: bank-accounts
-      kind: agent-module
-      interface: ricevanta:agent/classifier@1.0.0
-      file: modules/bank-accounts.wasm
-      capabilities:
-        memory_pages: 256          # 16 MiB
-        fuel_per_call: 50000000
-        deadline_ms: 200
-    - name: sbv-categories
-      kind: content
-      format: classification
-      file: content/sbv-categories.yaml
-    - name: findings-panel
-      kind: console-module
-      entry: console/index.html
-      slots: [alert-panel]
-      capabilities:
-        operations: [listDlpFindings, getDlpFinding]
-files:
-  - {path: modules/bank-accounts.wasm, sha256: "3b7a...", size: 412331}
-  - {path: content/sbv-categories.yaml, sha256: "c01e...", size: 5120}
-  - {path: console/index.html, sha256: "77d4...", size: 2048}
-```
+Complete examples live in [the manifest fixtures](../../schemas/extension/v1alpha1/fixtures.json). The contract defines `spec.requires` as arrays of interfaces per kind, explicit component file ownership and bounded capability requests. A valid manifest alone never authorizes installation.
 
 ## 2. Trust
 
@@ -85,7 +43,7 @@ A publisher may add a Sigstore bundle or SLSA (Supply-chain Levels for Software 
 ### 2.2 Install flow
 
 1. The package arrives by console upload, `/api/v1`, GitOps or the index.
-2. The bounded reader opens the archive; `extension.yaml` validates against the manifest schema.
+2. The bounded reader opens the archive and verifies the exact `extension.yaml` bytes through DSSE against a currently authorized trust-list key before decoding the YAML payload once and validating the manifest.
 3. The signature verifies against the trust list, and the id matches the key's prefixes.
 4. Every file hash and size matches `files[]`.
 5. Every interface version in `spec.requires` is one the server serves (section 8); the global id ownership and immutable `(id, version)` rules pass.

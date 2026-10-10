@@ -1,0 +1,80 @@
+{
+  "profile": "extension-manifest-loader-v1alpha1",
+  "cases": [
+    {
+      "name": "untagged",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "accept"
+    },
+    {
+      "name": "comment-exclamation",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n# ! !!map !<tag:yaml.org,2002:str>\n",
+      "result": "accept"
+    },
+    {
+      "name": "double-quoted-exclamation",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: \"Example ! Security\"\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "accept"
+    },
+    {
+      "name": "single-quoted-exclamation",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: 'Example ! Security'\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "accept"
+    },
+    {
+      "name": "plain-exclamation",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example ! Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "accept"
+    },
+    {
+      "name": "block-exclamation",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: |-\n      Example ! Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "accept"
+    },
+    {
+      "name": "bare-tag-mapping",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "shorthand-tag-mapping",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !!map\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "verbatim-tag-mapping",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !<tag:yaml.org,2002:map>\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "bare-tag-sequence",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components: !\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "shorthand-tag-sequence",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components: !!seq\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "verbatim-tag-sequence",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components: !<tag:yaml.org,2002:seq>\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "bare-tag-scalar",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: ! Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "shorthand-tag-scalar",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: !!str Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    },
+    {
+      "name": "verbatim-tag-scalar",
+      "yaml": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd\n  license: !<tag:yaml.org,2002:str> Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "result": "reject-explicit-tag"
+    }
+  ]
+}

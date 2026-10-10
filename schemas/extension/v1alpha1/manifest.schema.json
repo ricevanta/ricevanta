@@ -1,0 +1,972 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/extension/v1alpha1/manifest.schema.json",
+  "title": "Ricevanta extension package manifest",
+  "description": "Decoded shape only. The Go validator also enforces the semantic rules in docs/specs/extension-manifest.md. This is not the GitOps Extension resource.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec",
+    "files"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "ricevanta.io/v1alpha1"
+    },
+    "kind": {
+      "const": "Extension"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "publisher",
+        "license",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*))*)?$(?![\\s\\S])"
+        },
+        "publisher": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "key"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$(?![\\s\\S])"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 71,
+              "maxLength": 71,
+              "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])"
+            }
+          }
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9.():+ -]+$(?![\\s\\S])"
+        },
+        "homepage": {
+          "$ref": "#/$defs/url"
+        },
+        "source": {
+          "$ref": "#/$defs/url"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requires",
+        "components"
+      ],
+      "properties": {
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "content": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ext.ricevanta.io/content/v1"
+                ]
+              }
+            },
+            "browser-adapter": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ext.ricevanta.io/browser-adapter/v1"
+                ]
+              }
+            },
+            "agent-module": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ricevanta:agent/classifier@1.0.0",
+                  "ricevanta:agent/parser@1.0.0",
+                  "ricevanta:agent/collector@1.0.0",
+                  "ricevanta:agent/responder@1.0.0"
+                ]
+              }
+            },
+            "console-module": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ext.ricevanta.io/console-module/v1"
+                ]
+              }
+            },
+            "service-connector": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ext.ricevanta.io/export-destination/v1",
+                  "ext.ricevanta.io/ca-connector/v1",
+                  "ext.ricevanta.io/notifier/v1",
+                  "ext.ricevanta.io/enricher/v1"
+                ]
+              }
+            }
+          },
+          "minProperties": 1
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/component"
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "size"
+        ],
+        "properties": {
+          "path": {
+            "$ref": "#/$defs/path"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1073741824
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){1,15}$(?![\\s\\S])"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$(?![\\s\\S])"
+    },
+    "sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "url": {
+      "type": "string",
+      "minLength": 9,
+      "maxLength": 2048,
+      "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?::[1-9][0-9]{0,4})?(?:/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*)?(?:\\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$(?![\\s\\S])"
+    },
+    "component": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "format",
+            "file",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "content"
+            },
+            "interface": {
+              "enum": [
+                "ext.ricevanta.io/content/v1"
+              ]
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "format": {
+              "enum": [
+                "sigma",
+                "yara",
+                "pii",
+                "secrets",
+                "dictionary",
+                "fingerprint",
+                "osquery",
+                "falco",
+                "classification",
+                "baseline",
+                "mdm-template",
+                "report"
+              ]
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "file",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "browser-adapter"
+            },
+            "interface": {
+              "enum": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "registration",
+                "os"
+              ],
+              "properties": {
+                "registration": {
+                  "$ref": "#/$defs/id"
+                },
+                "os": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [],
+                  "properties": {
+                    "macos": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "policy_names",
+                        "native_host"
+                      ],
+                      "properties": {
+                        "policy_names": {
+                          "type": "array",
+                          "minItems": 0,
+                          "maxItems": 64,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                          }
+                        },
+                        "native_host": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "windows": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "policy_names",
+                        "native_host"
+                      ],
+                      "properties": {
+                        "policy_names": {
+                          "type": "array",
+                          "minItems": 0,
+                          "maxItems": 64,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                          }
+                        },
+                        "native_host": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "linux": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "policy_names",
+                        "native_host"
+                      ],
+                      "properties": {
+                        "policy_names": {
+                          "type": "array",
+                          "minItems": 0,
+                          "maxItems": 64,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                          }
+                        },
+                        "native_host": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  },
+                  "minProperties": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "file",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/classifier@1.0.0"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "file",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/parser@1.0.0"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms",
+                "mime_types"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                },
+                "mime_types": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 127,
+                    "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$(?![\\s\\S])"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "file",
+            "row_schema",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/collector@1.0.0"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "row_schema": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms",
+                "max_roots",
+                "max_path_depth",
+                "max_directory_entries",
+                "max_open_handles",
+                "max_list_requests",
+                "max_read_requests",
+                "max_bytes_per_file",
+                "max_input_bytes",
+                "max_rows",
+                "max_output_bytes"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                },
+                "max_roots": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16
+                },
+                "max_path_depth": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 32
+                },
+                "max_directory_entries": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "max_open_handles": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                },
+                "max_list_requests": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1024
+                },
+                "max_read_requests": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "max_bytes_per_file": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16777216
+                },
+                "max_input_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 67108864
+                },
+                "max_rows": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "max_output_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16777216
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "file",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/responder@1.0.0"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms",
+                "actions",
+                "max_entities",
+                "max_parameters_bytes",
+                "max_plan_steps",
+                "max_plan_bytes"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                },
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 9,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "edr.kill_process",
+                      "edr.quarantine_file",
+                      "edr.restore_file",
+                      "edr.isolate_host",
+                      "edr.unisolate_host",
+                      "edr.kill_and_ban",
+                      "edr.unban",
+                      "edr.collect",
+                      "edr.scan"
+                    ]
+                  }
+                },
+                "max_entities": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "max_parameters_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65536
+                },
+                "max_plan_steps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "max_plan_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1048576
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "entry",
+            "bridge",
+            "slots",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "console-module"
+            },
+            "interface": {
+              "enum": [
+                "ext.ricevanta.io/console-module/v1"
+              ]
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "entry": {
+              "$ref": "#/$defs/path"
+            },
+            "bridge": {
+              "const": "ext.ricevanta.io/console-bridge/v1"
+            },
+            "slots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 6,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "navigation",
+                  "device-tab",
+                  "alert-panel",
+                  "finding-panel",
+                  "dashboard-panel",
+                  "settings"
+                ]
+              }
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "operations"
+              ],
+              "properties": {
+                "operations": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 23,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "listDevices",
+                      "getDevice",
+                      "getDeviceInventory",
+                      "listDeviceSoftware",
+                      "getDeviceCapabilities",
+                      "getDevicePolicyState",
+                      "getDeviceFootprint",
+                      "listComplianceResults",
+                      "listAlerts",
+                      "getAlert",
+                      "listInvestigations",
+                      "listResponseActions",
+                      "listDlpFindings",
+                      "getDlpFinding",
+                      "listClassifications",
+                      "listExceptions",
+                      "queryLineage",
+                      "getLineageEdge",
+                      "updateAlert",
+                      "createInvestigation",
+                      "updateInvestigation",
+                      "updateDlpFinding",
+                      "createResponseAction"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "interface",
+            "files",
+            "file",
+            "capabilities"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "service-connector"
+            },
+            "interface": {
+              "enum": [
+                "ext.ricevanta.io/export-destination/v1",
+                "ext.ricevanta.io/ca-connector/v1",
+                "ext.ricevanta.io/notifier/v1",
+                "ext.ricevanta.io/enricher/v1"
+              ]
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "outbound"
+              ],
+              "properties": {
+                "outbound": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 64,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "host",
+                      "port",
+                      "transport"
+                    ],
+                    "properties": {
+                      "host": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 253,
+                        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$(?![\\s\\S])"
+                      },
+                      "port": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "transport": {
+                        "enum": [
+                          "tcp",
+                          "udp"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

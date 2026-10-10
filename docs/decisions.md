@@ -549,3 +549,9 @@ Decision: no marketplace service; the project publishes a DSSE-signed static JSO
 Why: OCI 1.1 does not require registries to accept arbitrary artifact types and referrers support on GHCR, Harbor, Distribution and Zot is unconfirmed, while Kubernetes-style versioned groups let each interface move on its own.
 Rejected: an OCI registry as the v1.0.0 channel, which the package format can still be wrapped for later; a project-hosted marketplace, a service every installation would depend on; product-version ranges as in VS Code's `engines` and Grafana's `grafanaDependency`, which tie an extension to release numbers instead of the interfaces it uses.
 Detail: `design/extensions.md` section 8.
+
+### EXT-08. Extension manifest validation boundary
+Decision: retain YAML and its DSSE payload type for package manifests, with a closed decoded schema, bounded capability requests, canonical identity strings and explicit file ownership; the pure Go validator validates decoded trees without granting admission. The later strict YAML loader uses `go.yaml.in/yaml/v3` v3.0.4 and preserves signed bytes.
+Why: package identity, file commitments and requested authority need exact rejection rules before stateful admission can consume them.
+Rejected: JSON-only payloads, which exclude ordinary YAML manifests; permissive struct decoding, which loses unknown-field evidence; schema-only admission, which cannot prove ownership, key authority or grants.
+Detail: [manifest contract](specs/extension-manifest.md) and [implementation plan](plans/extension-manifest.md).
