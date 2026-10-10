@@ -231,17 +231,48 @@ func FuzzDescriptor(f *testing.F) {
 		count   uint32
 		claimed string
 	}{
+		// Valid classes, ordinary count boundaries, and zero sequence values.
 		{uint8(ClassRaw), 1, 0, 0, 0, 1, "1-raw-0"},
 		{uint8(ClassContext), 2, 3, 5, 10004, 10000, "2-context-3"},
+		{uint8(ClassLineage), 3, 4, 0, 0, 1, "3-lineage-4"},
+		{uint8(ClassFindings), 4, 5, 0, 0, 1, "4-findings-5"},
+		{uint8(ClassAudit), 5, 6, 0, 0, 1, "5-audit-6"},
+
+		// Invalid fields and ordinary range errors.
+		{0, 1, 0, 0, 0, 1, "1-raw-0"},
+		{6, 1, 0, 0, 0, 1, "1-unknown-0"},
+		{uint8(ClassRaw), 0, 0, 0, 0, 1, "0-raw-0"},
+		{uint8(ClassRaw), 1, 0, 0, 0, 0, "1-raw-0"},
+		{uint8(ClassRaw), 1, 0, 0, 10000, 10001, "1-raw-0"},
+		{uint8(ClassRaw), 1, 0, 5, 4, 1, "1-raw-0"},
+		{uint8(ClassRaw), 1, 0, 0, 1, 1, "1-raw-0"},
+
+		// Maximum sequence boundaries.
 		{uint8(ClassLineage), 1, math.MaxUint64, math.MaxUint64, math.MaxUint64, 1, "1-lineage-18446744073709551615"},
 		{uint8(ClassFindings), math.MaxUint64, 7, math.MaxUint64 - 9999, math.MaxUint64, 10000, "18446744073709551615-findings-7"},
-		{uint8(ClassAudit), 9, 42, 0, 0, 1, "09-audit-42"},
-		{0, 0, 0, 0, 0, 0, ""},
-		{6, 1, 1, 0, 0, 1, "1-unknown-1"},
-		{uint8(ClassRaw), 0, 0, 0, 0, 1, "0-raw-0"},
-		{uint8(ClassRaw), 1, 0, 1, 0, 1, "1-raw-0"},
+		{uint8(ClassRaw), 1, 0, math.MaxUint64, 0, 1, "1-raw-0"},
 		{uint8(ClassRaw), 1, 0, math.MaxUint64, math.MaxUint64, 2, "1-raw-0"},
-		{uint8(ClassRaw), 1, 0, 0, 10000, 10001, "1-raw-0"},
+
+		// Validation precedence, from no valid fields through count agreement.
+		{0, 0, 0, 0, 0, 0, ""},
+		{6, 0, 0, math.MaxUint64, 0, 10001, "mismatched"},
+		{uint8(ClassRaw), 0, 0, math.MaxUint64, 0, 10001, "mismatched"},
+		{uint8(ClassRaw), 1, 0, math.MaxUint64, 0, 10001, "mismatched"},
+		{uint8(ClassRaw), 0, 0, 0, 0, 0, "mismatched"},
+		{uint8(ClassRaw), 1, 0, 0, 0, 0, "mismatched"},
+		{uint8(ClassRaw), 1, 0, 2, 1, 1, "mismatched"},
+		{uint8(ClassRaw), 1, 0, 1, 2, 1, "mismatched"},
+
+		// Canonical and alternate claimed IDs for the same valid descriptor.
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "9-raw-42"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "09-raw-42"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "9-RAW-42"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "9-context-42"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "9-raw-042"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "9-raw-43"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, " 9-raw-42"},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, "9-raw-42 "},
+		{uint8(ClassRaw), 9, 42, 5, 5, 1, ""},
 	}
 	for _, seed := range seeds {
 		f.Add(seed.class, seed.epoch, seed.segment, seed.first, seed.last, seed.count, seed.claimed)
