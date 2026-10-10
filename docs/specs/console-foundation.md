@@ -34,7 +34,7 @@ Every direct dependency uses an exact version without a range. The committed pnp
 
 | Development package | Pin | Source |
 |---|---|---|
-| `vite` | 8.3.4 | [published manifest](https://cdn.jsdelivr.net/npm/vite/package.json) |
+| `vite` | 8.3.2 | [published manifest](https://cdn.jsdelivr.net/npm/vite/package.json) |
 | `@vitejs/plugin-vue` | 6.0.9 | [manifest](https://github.com/vitejs/vite-plugin-vue/blob/plugin-vue%406.0.9/packages/plugin-vue/package.json) |
 | `typescript` | 5.9.3 | [manifest](https://github.com/microsoft/TypeScript/blob/v5.9.3/package.json) |
 | `vue-tsc` | 3.1.0 | [manifest](https://github.com/vuejs/language-tools/blob/v3.1.0/packages/tsc/package.json) |
@@ -52,7 +52,7 @@ Every direct dependency uses an exact version without a range. The committed pnp
 | `@playwright/test`, `playwright`, `playwright-core` | 1.59.1 each | [manifest](https://github.com/microsoft/playwright/blob/v1.59.1/packages/playwright-test/package.json) |
 | `@axe-core/playwright` | 4.11.0 | [manifest](https://github.com/dequelabs/axe-core-npm/blob/v4.11.0/packages/playwright/package.json) |
 
-`console/pnpm-workspace.yaml` is a single-package configuration: `saveExact: true`, `engineStrict: true`, `strictPeerDependencies: true`, `autoInstallPeers: false`, `minimumReleaseAge: 10080`, `ignoreScripts: true`, and `verifyDepsBeforeRun: error`. Invoke the reviewed project scripts explicitly. No dependency lifecycle scripts are approved. A required native install hook blocks acceptance until separately reviewed; do not relax the setting to get a green build. [pnpm documents script suppression](https://pnpm.io/settings/build) and [release-age filtering](https://pnpm.io/settings/dependency-resolution). Verify those settings against the installed pnpm, since the online reference includes newer versions.
+`console/pnpm-workspace.yaml` is a single-package configuration: `saveExact: true`, `engineStrict: true`, `strictPeerDependencies: true`, `autoInstallPeers: false`, `ignoreScripts: true`, and `verifyDepsBeforeRun: error`. Invoke the reviewed project scripts explicitly. No dependency lifecycle scripts are approved. A required native install hook blocks acceptance until separately reviewed; do not relax the setting to get a green build. Release-age filtering keeps the pnpm 11 default of 1,440 minutes; exact pins and the frozen lockfile already prevent silent upgrades. [pnpm documents script suppression](https://pnpm.io/settings/build) and [release-age filtering](https://pnpm.io/settings/dependency-resolution). Verify those settings against the installed pnpm, since the online reference includes newer versions.
 
 Create directories only with real files:
 
