@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "records": [{
+    "name": "console-record.json",
+    "target": "web",
+    "image": false,
+    "artifacts": [{
+      "name": "ricevanta-console_{version}_web_unsigned-dev.tar.gz",
+      "component": "console",
+      "format": "tar.gz",
+      "identityPaths": ["build-info.json"]
+    }]
+  }],
+  "evidence": ["console-evidence.tar.gz"]
+}

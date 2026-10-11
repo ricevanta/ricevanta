@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/build/v1/inventory.schema.json",
+  "title": "Unsigned development build inventory v1",
+  "description": "Trusted recipe inventory. Expand artifact name {version} once from expected identity, then enforce release-builds.md semantic and path rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "records", "evidence"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "records": {
+      "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+      "items": { "$ref": "#/$defs/record" }
+    },
+    "evidence": {
+      "type": "array", "maxItems": 256, "uniqueItems": true,
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/basename" },
+          { "pattern": "\\.(?:tar\\.gz|tar|zip)$(?![\\s\\S])" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "basename": {
+      "type": "string", "maxLength": 240,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*$(?![\\s\\S])",
+      "not": { "pattern": "\\.$(?![\\s\\S])" }
+    },
+    "artifactName": {
+      "type": "string", "maxLength": 240,
+      "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_.+-]*(?:\\{version\\}[A-Za-z0-9_.+-]*)?|\\{version\\}[A-Za-z0-9_.+-]*)$(?![\\s\\S])",
+      "not": { "pattern": "\\.$(?![\\s\\S])" }
+    },
+    "memberPath": {
+      "type": "string", "maxLength": 1024,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]{0,239}(?:/[A-Za-z0-9][A-Za-z0-9_.+-]{0,239}){0,31}$(?![\\s\\S])"
+    },
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "target", "image", "artifacts"],
+      "properties": {
+        "name": { "$ref": "#/$defs/basename" },
+        "target": {
+          "enum": ["macos-arm64", "windows-x64", "linux-x64", "linux-arm64", "web"]
+        },
+        "image": { "type": "boolean" },
+        "artifacts": {
+          "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/artifact" },
+          "contains": {
+            "properties": { "format": { "enum": ["tar.gz", "tar", "zip", "identity"] } },
+            "required": ["format"]
+          }
+        }
+      },
+      "allOf": [{
+        "if": { "properties": { "image": { "const": true } }, "required": ["image"] },
+        "then": { "properties": { "target": { "enum": ["linux-x64", "linux-arm64"] } } }
+      }]
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "component", "format", "identityPaths"],
+      "properties": {
+        "name": { "$ref": "#/$defs/artifactName" },
+        "component": {
+          "type": "string", "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9.-]*$(?![\\s\\S])"
+        },
+        "format": { "enum": ["tar.gz", "tar", "zip", "identity", "sbom"] },
+        "identityPaths": {
+          "type": "array", "maxItems": 128, "uniqueItems": true,
+          "items": { "type": "string", "maxLength": 1024 }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "format": { "const": "identity" } } },
+          "then": { "properties": { "identityPaths": { "const": [""] } } }
+        },
+        {
+          "if": { "properties": { "format": { "const": "sbom" } } },
+          "then": { "properties": { "identityPaths": { "const": [] } } }
+        },
+        {
+          "if": { "properties": { "format": { "enum": ["tar.gz", "tar", "zip"] } } },
+          "then": {
+            "properties": {
+              "identityPaths": { "minItems": 1, "items": { "$ref": "#/$defs/memberPath" } }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
