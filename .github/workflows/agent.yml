@@ -2,7 +2,7 @@ name: Agent checks
 
 on:
   push:
-    branches: [master, 'wip/**']
+    branches: [master]
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
@@ -15,6 +15,8 @@ on:
       - 'schemas/events/v1/**'
       - '.github/workflows/agent.yml'
   pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
@@ -26,14 +28,13 @@ on:
       - 'server/internal/events/body/**'
       - 'schemas/events/v1/**'
       - '.github/workflows/agent.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: agent-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: agent-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:

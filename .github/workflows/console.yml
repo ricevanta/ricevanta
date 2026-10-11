@@ -14,6 +14,8 @@ name: Console checks
       - docs/licensing.md
       - .github/workflows/console.yml
   pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     paths:
       - console/**
       - branding/BRAND_SPEC.md
@@ -25,12 +27,11 @@ name: Console checks
       - instructions/testing.md
       - docs/licensing.md
       - .github/workflows/console.yml
-  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: console-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: console-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   validate:
     runs-on: ubuntu-24.04

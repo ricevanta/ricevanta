@@ -2,7 +2,7 @@ name: Server checks
 
 on:
   push:
-    branches: [master, 'wip/**']
+    branches: [master]
     paths:
       - 'server/**'
       - 'schemas/dsse/**'
@@ -16,6 +16,8 @@ on:
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     paths:
       - 'server/**'
       - 'schemas/dsse/**'
@@ -28,19 +30,18 @@ on:
       - 'schemas/extension/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: server-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: server-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: server
@@ -81,12 +82,28 @@ jobs:
           "$RUNNER_TEMP/permission-schema-venv/bin/python" server/internal/authz/catalogue/schema_test.py
       - name: Test
         run: go test -count=1 ./...
-      - name: Test with race detector
-        run: go test -race -count=1 ./...
       - name: Benchmark key admission
         run: go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
       - name: Vet
         run: go vet ./...
+
+  race:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: true
+          cache-dependency-path: server/go.sum
+      - name: Test with race detector
+        run: go test -race -count=1 ./...
 
   fuzz-targets:
     runs-on: ubuntu-24.04

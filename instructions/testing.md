@@ -12,7 +12,11 @@ go test -count=1 ./internal/path/to/touched/package
 
 `gofmt -l .` must print no files. Replace the example package path with the touched packages. Fix formatting with `gofmt -w` on the touched files.
 
-CI runs the full ordinary suite, race tests and timed fuzzing on the pushed `wip/**` branch. Ordinary `go test -count=1 ./...` keeps running every fuzz target's seed corpus. The primary agent reads the CI results before merging and does not merge failed checks.
+CI runs the full ordinary suite, race tests and timed fuzzing on pull requests targeting `master` and pushes to `master` when their paths match. A push to `wip/<slice>` needs an open PR for normal CI. Draft PRs run checks. Superseding pushes cancel only the same PR's runs; master pushes use unique run-ID groups and never cancel running or pending master work.
+
+Server jobs `validate` and `race` run separately, each with a 20-minute timeout. `validate` keeps ordinary tests, formatting, vet and the key-admission benchmark. `race` runs `go test -race -count=1 ./...` from `server/`.
+
+Ordinary `go test -count=1 ./...` keeps running every fuzz target's seed corpus. The primary agent reads the CI results before merging and does not merge failed checks.
 
 The following commands are the CI fuzz target list. Each target gets one matrix entry and runs for 60 seconds from `server/`:
 
@@ -59,7 +63,9 @@ go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./inter
 
 The first consumer owns performance qualification and its request and candidate bounds.
 
-Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in CI on the pushed `wip/**` branch. Console browser checks run in `.github/workflows/console.yml`.
+Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in PR/master CI. Console browser checks run in `.github/workflows/console.yml`.
+
+A temporary push diagnosis workflow may target one exact `wip/<slice>` branch with distinct job names, read-only permissions and no secrets or required-check claim. Remove the diagnosis workflow before opening a landing PR to `master`; see [workflow](workflow.md#parallel-slices-and-ci).
 
 The initial server packages have pure unit and fuzz tests. They do not establish PostgreSQL, network, process, operating-system or platform support. Add integration and platform checks with the first code that crosses those boundaries, following its reviewed design and the qualification gates in `docs/specs/platform-qualification.md`.
 

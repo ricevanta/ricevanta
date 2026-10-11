@@ -2,54 +2,17 @@ name: Design checks
 
 on:
   push:
-    branches: [master, 'wip/**']
-    paths:
-      - 'docs/**'
-      - 'schemas/**'
-      - 'instructions/**'
-      - '.codex/agents/**'
-      - '.claude/agents/**'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - '.github/workflows/design.yml'
-      - '.github/requirements-design.txt'
-      - 'branding/**'
-      - 'README.md'
-      - 'CONTRIBUTING.md'
-      - 'TODO.md'
-      - 'NOTICE'
-      - '.gitattributes'
-      - 'scripts/ci/**'
-      - 'server/internal/authz/catalogue/schema_test.py'
-      - 'server/internal/events/ocsf/schema/**'
+    branches: [master]
   pull_request:
-    paths:
-      - 'docs/**'
-      - 'schemas/**'
-      - 'instructions/**'
-      - '.codex/agents/**'
-      - '.claude/agents/**'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - '.github/workflows/design.yml'
-      - '.github/requirements-design.txt'
-      - 'branding/**'
-      - 'README.md'
-      - 'CONTRIBUTING.md'
-      - 'TODO.md'
-      - 'NOTICE'
-      - '.gitattributes'
-      - 'scripts/ci/**'
-      - 'server/internal/authz/catalogue/schema_test.py'
-      - 'server/internal/events/ocsf/schema/**'
-  workflow_dispatch:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
   contents: read
 
 concurrency:
-  group: design-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: design-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
@@ -97,6 +60,7 @@ jobs:
           python scripts/ci/validate_contracts.py
           python scripts/ci/test_key_admission_contract.py
           python -m unittest discover -s scripts/ci -p test_validate_contracts.py
+          python -B -m unittest discover -s scripts/ci -p test_triggers.py -v
       - name: Validate ExportDestination schemas and examples
         run: |
           python schemas/export/v1alpha1/validate.py
