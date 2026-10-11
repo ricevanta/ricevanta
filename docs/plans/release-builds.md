@@ -1,0 +1,126 @@
+# Release builds implementation plan
+
+Build and publish the unsigned development artifacts defined by [the spec](../specs/release-builds.md). This plan is for the build system, not an authorization to invent the missing agent runtime, server, enrollment protocol or installer lifecycle.
+
+Roles: the coordinator owns dependencies, Git and CI evidence; the implementer owns one task's paths; an independent design reviewer approves contracts; an independent code reviewer reviews each implementation and confirms fixes. Security review includes adversarial release and cache tests. A reviewer never implements the reviewed task. Use the project's implementation workflow task by task; no worker commits or pushes.
+
+## Boundaries and ordering
+
+Tasks are separate PRs with failing-check-first tests. Read the spec with each task. The implementation may edit the paths named below, including `.github/`; the design task does not. Use separate worktrees for concurrent edits and respect [workflow](../../instructions/workflow.md) limits.
+
+1. Coordinate the independent CI-audit fixes and trigger/race split. Their contracts are prerequisites, not code to duplicate here.
+2. Tasks 1 to 3 can land against the existing libraries and console.
+3. Task 4 requires independently reviewed, implemented agent/server entry points, console embedding, and an AG-09 footprint harness with its baseline. No stub executable or missing-file skip satisfies that gate.
+4. Task 5 requires Task 4 and the image/deployment contract. Native installers remain a separate lifecycle slice under AG-12; until then publish archives only and make their limits explicit.
+5. Task 6 requires all prior tasks, full CI-audit fixes and verified owner settings. Publishing a complete release remains blocked while any runtime prerequisite is absent.
+
+Every task's positive result must be accompanied by its negative controls. Build scripts are invoked by their pinned Python interpreter; `python3` below denotes that interpreter on Unix and `python` the same verified pin on Windows. Commands run from repository root unless stated. Scripts named here are interfaces to create, not claims of existing tools. Light unit and contract checks run locally; race, fuzz, browser, native matrices and reproducibility builds run on GitHub CI.
+
+Global constraints: one product version, no secrets in artifacts, no compiled-output cache restoration, no tag-run cache access, verified toolchain bytes before use, native builds, read-only build tokens, offline release keys, and no published signed or qualified claim from development artifacts. Preserve the separate server race jobs and `pull_request` plus `push` to `master` triggers.
+
+## Review focus
+
+- A pull request deletes a target or recipe and leaves zero work: Task 2 must fail expected-work accounting.
+- A valid-looking tag points outside master or moves during a build: Task 6 must refuse publication.
+- One architecture embeds a different console version: Tasks 3 to 5 must fail identity and tree checks.
+- A restored compiled cache or replaced toolchain changes output: Tasks 2 and 4 must prove fresh compilation and reject altered payloads before execution.
+- A partial upload or rerun overwrites release bytes: Task 6 must preserve the unpublished draft and refuse conflicting or published assets.
+
+## Task 1. Product identity and metadata contract
+
+Owner: implementer. Size: one PR. No runtime code.
+
+Create `VERSION`, `scripts/release/version.py`, `scripts/release/test_version.py`, `scripts/release/verify.py` and `scripts/release/test_verify.py`. Consume `schemas/build/v1/build-record.schema.json` , `example.json` and `example-image.json`. Modify `scripts/ci/validate_contracts.py` only to register the build contract using its existing inventory convention, and extend its tests. Wire `release-contracts` into the CI entry workflow agreed with the aggregate-check owner.
+
+Interfaces:
+
+- `version.py --root PATH --channel pr|master|prerelease --ref REF --out DIR` emits `identity.json` and component identity inputs. It validates the checkout SHA, clean state, core pins and release grammar. It never executes REF or writes tracked manifests.
+- `verify.py --records DIR --artifacts DIR --inventory PATH --expected-identity PATH` validates schema, expected identity, expected set, file types, sizes and SHA-256. It requires every record and embedded identity to match all four expected fields. It exits nonzero with the exact missing or invalid item. Its inventory parser accepts an explicitly versioned closed structure under `scripts/release/`, not shell expressions.
+
+The verification job derives `--expected-identity` independently through the validated checkout and triggering event under spec section 2, before reading candidate files. The file contains exactly `version`, `commit`, `channel` and `sourceEpoch`, using the schema's identity definition. It is job-owned input outside candidate directories, never a downloaded identity, build record or artifact. `version.py` validates its channel/ref arguments against the triggering event; caller-selected labels alone supply no authority. The publisher derives the same fields through its pinned logic under Task 6 without running build scripts.
+
+- [ ] Add tests for valid alpha/beta/rc, leading zeroes, stable tags, metadata-bearing tags, dirty CI sources, shallow/missing history, mismatched core, shell metacharacters, PR integration SHA and deterministic reruns. Use disposable Git repositories, not the working branch.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p test_version.py -v`; require failure before the resolver exists.
+- [ ] Implement the resolver and generation boundary in the spec. Define the exact lower-camel-case public fields `version`, `commit`, `channel`, `sourceEpoch`; Go and Rust constants map to those fields.
+- [ ] Add verifier controls for changed payload bytes, malformed/uppercase digest, duplicate and case-colliding names, traversal, symlinks, extra/missing files and different component identity. Independently alter each of `version`, `commit`, `channel` and `sourceEpoch` in records and embedded identities and require rejection against the expected identity. Reject a complete, self-consistent PR artifact set presented with the expected pre-release identity, even when its files, hashes and records agree. A schema-valid synthetic fixture must never pass real-file verification without its exact files.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p 'test_*.py' -v`, `python3 -B scripts/ci/validate_contracts.py` and `python3 -B -m jsonschema -i schemas/build/v1/example.json schemas/build/v1/build-record.schema.json`. Require all tests and the schema example to pass.
+- [ ] CI proof: `release-contracts` runs every test name and publishes its count. Independent review confirms no version fallback or authoritative signature claim.
+
+## Task 2. Consume the audited CI trust boundary
+
+Owner: implementer, coordinated with the CI-audit owner. Size: one integration PR after the separate fixes. Own `scripts/release/test_ci_contract.py`, new release workflow configuration and the affected build instructions; reuse the existing audit helpers under `scripts/ci/`. Do not rewrite the separate trigger/race work.
+
+Consumes: the audit's digest-checked bootstrap, hash-locked Python closure, selected-test verifier, reviewed-base catalogue compatibility check, routing and `ci-required`. Their final paths and interfaces must be recorded in this task before execution if the parallel slice chooses different names. No independent duplicate bootstrap or aggregate.
+
+- [ ] Add negative workflow fixtures with `setup-go cache: true`, restored `target/`, cached `node_modules`, an unpinned action, an unverified download, an unknown recipe and an omitted consumer input. Require the audit policy checker to reject each fixture.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p test_ci_contract.py -v`; require red against the unsafe fixture set before integration.
+- [ ] Wire the shared bootstrap and required-work evidence into the new build workflow. Cover all release-script, lockfile, schema, manifest, generated-input, consumed-document and action changes in routing. Tag builds select every gate, including catalogue compatibility, schema consumers and the split race matrix.
+- [ ] Prove a renamed test, zero selector matches, unexpected skip, missing nested-loader measurement and missing/neutral/cancelled job each make the aggregate fail. Prove a deliberately poisoned earlier compiled cache is never read. Corrupt each downloaded toolchain payload before extraction and require refusal before any tool executes.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p test_ci_contract.py -v` and `actionlint .github/workflows/*.yml`. Require passing positive workflows and all negative controls rejected.
+- [ ] CI proof: `release-contracts`, bootstrap checks on all four native host architectures, existing audit jobs and `ci-required`. Capture actual test names and outcomes. An audit fix still open blocks dependent release jobs.
+
+## Task 3. Version the existing console build
+
+Owner: implementer. Size: one PR. Own `console/scripts/build-info.ts`, `console/src/generated/build-info.ts` generation, the existing shell information view, `console/tests/unit/build-info.test.ts`, console build scripts and `.github/workflows/builds.yml`. Generated files remain ignored; add scoped ignore entries only when required. Read console foundation and Vue instructions.
+
+Consumes: Task 1 identity. Produces: validated unpacked console assets and public metadata, with an identical source identity and no inline script or weakened CSP. A native server later embeds this exact asset tree. Task 5 creates the distributable console archive.
+
+- [ ] Write a test that requires the generated version and commit to appear in built metadata and the shell. Change one input and require the identity/tree check to fail; ensure no environment secret appears in assets. Extend existing output-budget checks to print measured values beside limits.
+- [ ] Run `pnpm --dir console test:unit -- tests/unit/build-info.test.ts`; require failure before identity integration.
+- [ ] Generate the typed module from the validated record and integrate it into the existing production build. Keep package.json's core and frozen lockfile unchanged on tag builds. Preserve dependency-script suppression, current license audit and OSV policy.
+- [ ] Run `pnpm --dir console typecheck`, `pnpm --dir console lint`, `pnpm --dir console format:check` and `pnpm --dir console test:unit`; require pass locally for touched contracts.
+- [ ] CI proof in `console-build`: `pnpm --dir console install --frozen-lockfile`, `pnpm --dir console audit:deps`, `pnpm --dir console build`, `pnpm --dir console check:reproducible`, `pnpm --dir console test:component`, `pnpm --dir console test:csp` and `pnpm --dir console test:fuzz`. Install pinned browser payloads through the verified bootstrap first. Require two equal manifests, browser negative controls, the 10,000-case property run and printed budgets.
+- [ ] Upload the unpacked console tree as an Actions artifact with 14-day retention and evidence with 30-day retention. CI may publish this Actions artifact before runtime prerequisites, but it must not create a product pre-release on its own.
+
+## Task 4. Native executable builds and footprint evidence
+
+Owner: implementer. Size: one build integration PR after runtime prerequisites. Own `scripts/release/build.py`, `scripts/release/recipes.json`, `scripts/release/test_build.py`, `.github/workflows/builds.yml` and version integration at the entry points supplied by their own reviewed slices. Required paths: `server/cmd/ricevanta-server/`, `server/internal/buildinfo/` and the runtime slice's `ricevanta-agent` binary target. The coordinator records the exact Rust crate path before dispatch; missing runtime paths block this task.
+
+Consumes: Tasks 1 to 3, runtime and console-serving contracts, and the per-OS footprint harness/baseline. Produces: unpacked native binaries and validated console assets from the six jobs in spec section 3, with records and evidence, plus any additional unpacked outputs required by introduced components. Task 5 owns images, distributable archives and the complete artifact set.
+
+`build.py --component agent|server|console --target TARGET --identity PATH --out DIR --pass 1|2` builds unpacked outputs in an isolated root using a fixed recipe and never infers optional outputs from file existence. `build.py --compare DIR1 DIR2` requires identical native binary bytes and console asset manifests.
+
+- [ ] Add controls for absent binaries, missing helper recipes, wrong architecture, mismatched embedded identity, missing console embedding, missing baseline and nonempty/restored compiler caches. Run `python3 -B -m unittest discover -s scripts/release -p test_build.py -v`; require red before integration.
+- [ ] Implement the six native jobs and their exact architecture assertions. Use the runner/target table in the spec. Verify file architecture and run `--version` on each native binary. Never accept an emulated cross-build as its native execution result.
+- [ ] From `agent/`, use `cargo build --locked --release --target "$RICEVANTA_TARGET" --bin ricevanta-agent`; from `server/`, use `go build -mod=readonly -trimpath -buildvcs=false -o "$RICEVANTA_OUTPUT" ./cmd/ricevanta-server`. Task 1's generated identity precedes both commands. Source paths and flags remain recipe constants, not event-controlled shell strings.
+- [ ] CI runs the existing ordinary, race, fuzz, extended Rust, interop and console gates through shared workflows. Selected results prove execution under Task 2. Each agent matrix entry runs its reviewed footprint command and absolute budget checks; the harness's exact command is a prerequisite deliverable, not left to an implementer to invent.
+- [ ] Run each native build twice with empty compiler/output directories in separate roots. Use `python3 -B scripts/release/build.py --compare "$RICEVANTA_PASS1" "$RICEVANTA_PASS2"`; require equality and retain manifests/diffs on failure.
+- [ ] CI proof: all six jobs in spec section 3, `agent-footprint` with all three native targets, existing component test gates and `ci-required`. Independent review confirms actual executable behavior and footprint evidence from the runtime slice, not only `--version` output.
+
+## Task 5. Archives, container handoff, checksums and SBOM
+
+Owner: implementer. Size: one PR. Own `scripts/release/pack.py`, `scripts/release/sbom.py`, their `test_*.py` files and `docs/specs/release-builds.md` only for resolved tooling details. Consume the deployment slice's `deploy/` image recipe and Compose contract; do not invent first-start authority handling. Add exact Syft toolchain digests to the shared bootstrap lock. Native package recipes join only after their independent lifecycle slice passes review.
+
+Consumes: Task 4's unpacked outputs and both clean build passes, plus the reviewed image/deployment contract. Produces: the complete artifact set in spec section 3, including native image archives and the standalone console archive.
+
+Interfaces: `pack.py --records DIR --staging DIR --out DIR` builds native images and writes deterministic archives; `pack.py --compare DIR1 DIR2` compares normalized image/archive outputs and SBOMs; `sbom.py --records DIR --staging DIR --out DIR` invokes pinned local Syft and checks dependency coverage; `verify.py --records DIR --artifacts DIR --inventory PATH --expected-identity PATH` checks the final set against Task 1's independently derived expected identity. `pack.py --checksums DIR` writes the complete sorted checksum file after metadata and SBOM exist.
+
+- [ ] Add tests for unstable timestamps, omitted notices, extra secrets, traversal/link payloads, nondeterministic SBOM metadata, a substituted console tree, missing first-party extension, wrong image architecture, missing or mismatched image ID/base digests and an SBOM missing a locked dependency. Include a payload named like an option to prove no shell interpretation occurs.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p test_pack.py -v` and `python3 -B -m unittest discover -s scripts/release -p test_sbom.py -v`; require red before implementation.
+- [ ] Implement deterministic archives and the Docker-loadable native image handoff. Disable network enrichment and update checks for SBOM generation. Reconcile lockfile and image inventories, keep licenses and distinguish build-only dependencies. Fetch no install-time executable script.
+- [ ] Pack each clean build pass independently on its native target, including images, all archives and SBOMs. Run `python3 -B scripts/release/pack.py --compare "$RICEVANTA_PACK1" "$RICEVANTA_PACK2"`; require equal normalized image/archive outputs and SBOMs, retaining both manifests and the diff on failure.
+- [ ] CI smoke command: `docker load --input "$RICEVANTA_IMAGE_ARCHIVE"`, then `docker run --rm "$RICEVANTA_IMAGE_ID" --version` on both Linux architectures. Also run the real server's reviewed health/console-serving smoke suite with its disposable test configuration; version output alone does not prove serving. Verify embedded console hashes and enforcing headers.
+- [ ] Run all release unit tests, then `python3 -B scripts/release/verify.py --records "$RICEVANTA_RECORDS" --artifacts "$RICEVANTA_ARTIFACTS" --inventory scripts/release/recipes.json --expected-identity "$RICEVANTA_EXPECTED_IDENTITY"`. Corrupt one byte and require rejection. Repeat Task 1's per-field identity and self-consistent PR substitution controls against the complete set. Cross-check `SHA256SUMS` with native SHA-256 tools.
+- [ ] CI proof: `artifact-verify`, `sbom`, both `server-linux-*` jobs, all agent jobs and `ci-required`. Retain package contents, checksums, dependency reconciliation and both reproduction manifests. No installer or successful enrollment claim is permitted from archive smoke evidence.
+
+## Task 6. Tag rebuild and guarded pre-release publication
+
+Owner: implementer; owner configures repository settings. Size: one security-sensitive PR. Own `.github/workflows/release.yml`, `scripts/release/publish.py`, `scripts/release/test_publish.py` and release workflow tests. Review is independent and adversarial. The coordinator verifies settings through read-only API queries before enabling a real publish.
+
+Consumes: complete Tasks 1 to 5, all audit fixes, protected master and tag settings. `publish.py --repository OWNER/REPO --tag TAG --commit SHA --run-id ID --artifacts DIR --dry-run` validates a complete publication request; without `--dry-run`, it follows spec section 7 using GitHub's Releases API. Its full-SHA-pinned logic validates those arguments against the triggering event and validated checkout, independently derives all four expected identity fields, and checks every record and embedded identity by parsing bytes without executing artifacts or build scripts. Candidate files never supply the expected identity. The token comes from the job environment and never enters logs or child build processes. API base and upload host are fixed/allowlisted GitHub endpoints; untrusted redirect URLs cannot receive the token.
+
+- [ ] Test against an in-process fake API: untrusted tag syntax, missing tag, wrong event SHA, non-master ancestry, tag moved after build, wrong-run artifact, cancelled gate, missing asset, hash mismatch, paginated extra assets, conflicting draft and an already-published release. Repeat the per-field identity mismatch and complete self-consistent PR artifact substitution controls against the publisher's independently derived expected identity. Require refusal before any publish call.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p test_publish.py -v`; require red before the publisher exists. Keep these tests offline and use fake credentials.
+- [ ] Implement the tag workflow: strict preflight; full clean rebuild; `release-ready` under `if: always()`; fresh publish job with only `contents: write`; no caches, product execution or secrets in build jobs. Fetch artifacts by exact current run and explicit artifact IDs, not name search across runs. Verify transport digest and every file again.
+- [ ] Test create-draft, upload, verification and final publication as separate transitions. Interrupt each transition. An identical draft retry may finish; differing bytes or a published release must fail. Confirm `prerelease: true`, `make_latest: false`, existing-tag-only behavior, fixed asset set and unsigned release text.
+- [ ] Run `python3 -B -m unittest discover -s scripts/release -p 'test_*.py' -v` and `actionlint .github/workflows/*.yml`. CI `release-contracts` and `ci-required` must pass before owner acceptance.
+- [ ] Owner configures the rules listed in spec section 7 and records denied unauthorized creation, update and deletion probes. Verify the settings in a disposable test repository first; do not mutate production tags for a negative test. No production release is authorized by this implementation plan alone.
+- [ ] CI proof: an owner-authorized alpha tag rebuild reaches `release-ready`, then `publish`; independent download verification compares every published asset against `SHA256SUMS`, the tag commit and expected set. The coordinator reports actual run URLs and results. Until that authorized run occurs, publication verification remains pending.
+
+## Acceptance and machine-testing handoff
+
+The slice is complete only when the full native artifact matrix builds from a protected pre-release tag and its authorized publication test passes. Tasks 1 to 3 alone are useful partial work, not completion. No tests may silently skip missing runtime prerequisites.
+
+The tester receives the exact artifacts and evidence described by spec section 9. Native installer, deployment, enrollment and offline updater tasks are tracked in [analysis](../analysis.md#31-first-installable-build); each needs its own approved spec and plan before code. The real-machine test uses the platform-qualification case IDs and records failures and unavailable mechanisms. It cannot promote an unsigned alpha to qualified support.
+
+The coordinator reports focused checks, full CI results, negative controls, retained evidence, owner-setting verification and pending real-machine gates. Do not claim a configured ruleset, signed build, runnable server, successful enrollment or qualified target from design text.

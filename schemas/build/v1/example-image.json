@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "version": "0.1.0-alpha.1",
+    "commit": "1111111111111111111111111111111111111111",
+    "channel": "prerelease",
+    "sourceEpoch": 1
+  },
+  "target": "linux-x64",
+  "signing": "unsigned-development",
+  "artifacts": [
+    {
+      "name": "ricevanta-server_0.1.0-alpha.1_linux-x64_unsigned-dev.image.tar",
+      "component": "server",
+      "bytes": 1,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "image": {
+    "id": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "platform": "linux/amd64",
+    "baseDigests": [
+      "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    ]
+  }
+}

@@ -48,7 +48,7 @@ Copilot reviews every pull request push automatically using [repository guidance
 - Stage files by explicit path. Never `git add -A`, `git add .` or `git commit -a`, which can sweep another session's changes into the commit.
 - Every commit is signed off: `git commit -s` (Developer Certificate of Origin, see `CONTRIBUTING.md`).
 - The primary agent may push `wip/` branches at any time and lands slices on `master` only through the procedure in "Landing a slice". Before landing, inspect the full log and diff of the branch, combine fixups and work-in-progress commits, and keep separate changes separate when that helps review.
-- Use CI to verify every slice before it reaches `master`. Keep CI scoped to affected files, cancel superseded runs, and cache dependencies and build output. GitHub Actions is free for this public repository, so heavy checks belong in CI rather than on local machines.
+- Use CI to verify every slice before it reaches `master`. Keep CI scoped to affected files, cancel superseded runs, and cache only downloaded dependency sources whose integrity is rechecked. Authoritative jobs never restore compiled output; tag builds use no restored caches ([release builds](../docs/specs/release-builds.md)). GitHub Actions is free for this public repository, so heavy checks belong in CI rather than on local machines.
 - Branch before committing to `master` once more than one person works on the repository.
 
 ## Reporting

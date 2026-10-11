@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/build/v1/build-record.schema.json",
+  "title": "Unsigned development build record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "identity", "target", "signing", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "identity": { "$ref": "#/$defs/identity" },
+    "target": {
+      "enum": ["macos-arm64", "windows-x64", "linux-x64", "linux-arm64", "web"]
+    },
+    "signing": { "const": "unsigned-development" },
+    "image": { "$ref": "#/$defs/image" },
+    "artifacts": {
+      "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+      "items": { "$ref": "#/$defs/artifact" }
+    }
+  },
+  "allOf": [{
+    "if": { "required": ["image"] },
+    "then": {
+      "properties": { "target": { "enum": ["linux-x64", "linux-arm64"] } },
+      "allOf": [{
+        "if": { "properties": { "target": { "const": "linux-x64" } } },
+        "then": { "properties": { "image": { "properties": { "platform": { "const": "linux/amd64" } } } } },
+        "else": { "properties": { "image": { "properties": { "platform": { "const": "linux/arm64" } } } } }
+      }]
+    }
+  }],
+  "$defs": {
+    "image": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "platform", "baseDigests"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])" },
+        "platform": { "enum": ["linux/amd64", "linux/arm64"] },
+        "baseDigests": {
+          "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])" }
+        }
+      }
+    },
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "commit", "channel", "sourceEpoch"],
+      "properties": {
+        "version": {
+          "type": "string", "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-(?:(?:alpha|beta|rc)\\.[1-9][0-9]*|dev\\.0\\+g[0-9a-f]{40})$(?![\\s\\S])"
+        },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$(?![\\s\\S])" },
+        "channel": { "enum": ["pr", "master", "prerelease"] },
+        "sourceEpoch": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+      },
+      "allOf": [{
+        "if": { "properties": { "channel": { "const": "prerelease" } } },
+        "then": { "properties": { "version": { "pattern": "-(alpha|beta|rc)\\.[1-9][0-9]*$(?![\\s\\S])" } } },
+        "else": { "properties": { "version": { "pattern": "-dev\\.0\\+g[0-9a-f]{40}$(?![\\s\\S])" } } }
+      }]
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "component", "bytes", "sha256"],
+      "properties": {
+        "name": { "type": "string", "maxLength": 240, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.+-]*$(?![\\s\\S])" },
+        "component": { "type": "string", "maxLength": 128, "pattern": "^[a-z][a-z0-9.-]*$(?![\\s\\S])" },
+        "bytes": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])" }
+      }
+    }
+  }
+}

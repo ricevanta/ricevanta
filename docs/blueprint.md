@@ -556,7 +556,7 @@ Before v1.0.0, each functional module must have an end-to-end, documented, teste
 
 ## 11. Repository structure
 
-[Architecture section 6](architecture.md#6-repository-layout) defines the repository layout (SH-04). Rule and destination adapters live with their owning server or agent modules; browser adapters and other first-party extensions live in `extensions/`. Code directories are created with their first real implementation after the relevant design and implementation plan pass independent review. The repository holds Go server libraries, Rust agent crates and the static Vue console foundation, but no releasable binary.
+[Architecture section 6](architecture.md#6-repository-layout) defines the repository layout (SH-04). Rule and destination adapters live with their owning server or agent modules; browser adapters and other first-party extensions live in `extensions/`. Code directories are created with their first real implementation after the relevant design and implementation plan pass independent review. The repository holds Go server libraries, Rust agent crates and the static Vue console foundation, but no releasable binary; the [first-install gap list](analysis.md#31-first-installable-build) tracks what remains.
 
 ---
 

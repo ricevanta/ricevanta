@@ -23,10 +23,10 @@ Rejected: multi-tenancy at v1.0.0, which no requirement asks for and which would
 Detail: `architecture.md` and `design/backend.md`.
 
 ### SH-04. One repository, one release version
-Decision: one repository with `agent/`, `driver/`, `browser/`, `server/`, `console/`, `extensions/`, `schemas/`, `rulepacks/`, `deploy/`, `tests/`, `docs/` and `instructions/`. Server, console, agent, browser extension and the first-party extensions in `extensions/` share one SemVer version per release; third-party extensions carry their own versions and declare the interface versions they need (EXT-07).
+Decision: one repository with `agent/`, `driver/`, `browser/`, `server/`, `console/`, `extensions/`, `schemas/`, `rulepacks/`, `deploy/`, `tests/`, `docs/` and `instructions/`. Server, console, agent, browser extension and the first-party extensions in `extensions/` share one SemVer version derived from the release tag, with one tracked core version and explicit untagged development labels; third-party extensions carry their own versions and declare the interface versions they need (EXT-07).
 Why: cross-component changes (policy envelope, agent API, extension interfaces) land in one change and one test run.
 Rejected: a separate `integrations/` directory for rule and destination adapters, since they are server modules and live with the server; a separate repository for first-party extensions, which would test the extension interfaces apart from their first users.
-Detail: `architecture.md` section 6.
+Detail: `architecture.md` section 6 and [release builds](specs/release-builds.md) sections 2 to 7.
 
 ### SH-05. Shared DSSE envelope profile
 Decision: one standard-library-only Go primitive signs and verifies the Ricevanta DSSE profile with Ed25519, a closed payload-type list, strict envelope fields, standard padded base64 and exactly one signature. Signers emit canonical bytes; envelope hashes bind exact received bytes, and certificate fingerprints remain hints without authority.
@@ -99,10 +99,10 @@ Rejected: routing every decision through the core; adds IPC latency to every fil
 Detail: `design/agent.md` section 3; the rule-only subset is in `specs/policy-envelope.md` section 2.2.
 
 ### AG-07. Signed releases and staged updates
-Decision: release manifests and packages are signed with offline Ed25519 release keys, a root and a successor, whose public keys are compiled into the updater; self-builders substitute their own. The core fetches the manifest and package over its authenticated transport and stages them locally; a separate `ricevanta-updater` service with no network or device-identity access verifies the release signature, the manifest expiry and the OS code signature, refuses lower manifest versions, applies through the OS package mechanism, and restores the previous package unless the core reports healthy locally within a window. Rollout is staged by device group and percentage; a broken download path requires rollback to the retained healthy package or administrator repair with a signed OS package.
+Decision: release manifests and packages are signed with offline Ed25519 release keys, a root and a successor, whose public keys are compiled into the updater; self-builders substitute their own, and CI publishes explicitly unsigned development artifacts without the offline keys; these are never admitted by the updater. The core fetches the manifest and package over its authenticated transport and stages them locally; a separate `ricevanta-updater` service with no network or device-identity access verifies the release signature, the manifest expiry and the OS code signature, refuses lower manifest versions, applies through the OS package mechanism, and restores the previous package unless the core reports healthy locally within a window. Rollout is staged by device group and percentage; a broken download path requires rollback to the retained healthy package or administrator repair with a signed OS package.
 Why: the download channel and the server's blob store are untrusted for code (blueprint section 8), and a broken core cannot roll itself back.
 Rejected: trusting the server TLS connection alone for updates; the core applying its own updates.
-Detail: `design/agent.md` section 8.
+Detail: `design/agent.md` section 8 and [release-build signing boundary](specs/release-builds.md#8-signing-and-installation-boundary).
 
 ### AG-08. Self-watchdog and hot-source control
 Decision: the agent meters CPU per OS thread and memory per owned data structure for each unit of work (telemetry source, rule pack, scan, extension module) against budgets in the policy bundle, throttles and then disables a unit that exceeds its budget, and reports the degradation. Notification telemetry rate-limits per path and per process and mutes busy sources at the enforcement point with the mute reported; authorization and permission rules are exempt, a throttled content check takes the policy fail mode, and repeated mutes attributed to one user are a detection.
@@ -127,6 +127,12 @@ Decision: `ricevanta-batch` in `agent/crates/batch` converts one complete spool 
 Why: the second Rust slice needs exact server-compatible bytes without assuming native file durability, upload or retry behavior.
 Rejected: sealing recovered prefixes, record-limit overshoot and codec-only round trips, which can hide lost records, oversized bodies or cross-language disagreement.
 Detail: [batch writer spec](specs/agent-batch-writer.md) and [implementation plan](plans/agent-batch-writer.md).
+
+### AG-12. Native packages and development archives
+Decision: installed agent builds use macOS `.pkg`, Windows per-machine `.msi`, and Linux `.deb` and `.rpm`, with the OS service manager and a separately delivered enrollment file. CI may publish unsigned development archives before the native lifecycle contracts exist; an archive is not an installer or an AG-07 update package.
+Why: real-machine installation needs owned files, service registration and recoverable package transactions, while build inspection can start before those contracts are complete.
+Rejected: a downloaded root shell installer, a packaging service, or treating extracted binaries as a managed installation.
+Detail: [release builds](specs/release-builds.md) sections 8 and 9; [first-install gaps](analysis.md#31-first-installable-build).
 
 ## MDM
 
