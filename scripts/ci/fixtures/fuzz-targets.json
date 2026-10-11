@@ -1,0 +1,122 @@
+[
+  {
+    "package": "./internal/events/eventid",
+    "target": "FuzzParse",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/batch",
+    "target": "FuzzDescriptor",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/signing/dsse",
+    "target": "FuzzVerify",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/signing/ed25519key",
+    "target": "FuzzValidate",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/wire",
+    "target": "FuzzParseHeader",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/wire",
+    "target": "FuzzDecode",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/body",
+    "target": "FuzzExtractLine",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/body",
+    "target": "FuzzDecode",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/policy/celdecl",
+    "target": "FuzzParse",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/policy/celdecl",
+    "target": "FuzzLoad",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/authz/catalogue",
+    "target": "FuzzValidateName",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/authz/catalogue",
+    "target": "FuzzParse",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/extensions/manifest",
+    "target": "FuzzValidate",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/exportdest",
+    "target": "FuzzValidate",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/exportdest",
+    "target": "FuzzDecoded",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/mdm/resourcevalidate",
+    "target": "FuzzValidate",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/mdm/resourcevalidate",
+    "target": "FuzzBudget",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/reportvalidate",
+    "target": "FuzzValidate",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/reportvalidate",
+    "target": "FuzzBudget",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/events/ocsf",
+    "target": "FuzzValidate",
+    "fuzztime": "60s",
+    "parallel": 2
+  }
+]

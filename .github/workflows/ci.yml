@@ -1,0 +1,167 @@
+name: CI
+'on':
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    - edited
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  route:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      route: ${{ steps.route.outputs.route }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - id: route
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        python -B scripts/ci/route.py --event-name "$EVENT_NAME" --event "$GITHUB_EVENT_PATH" --root . --out "$RUNNER_TEMP/route.json"
+        printf 'route=%s\n' "$(cat "$RUNNER_TEMP/route.json")" >> "$GITHUB_OUTPUT"
+  ci-contracts:
+    needs:
+    - route
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(needs.route.outputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+    - run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
+    - run: python -B scripts/ci/check_policy.py --root .
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ needs.route.outputs.route }}
+        UNIT: ci-contracts
+        CHECKS: '["ci-unit", "ci-policy"]'
+        HOST_OS: ''
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+  design:
+    needs:
+    - route
+    if: ${{ contains(fromJSON(needs.route.outputs.route).groups, 'design') }}
+    uses: ./.github/workflows/design.yml
+    with:
+      route: ${{ needs.route.outputs.route }}
+  server:
+    needs:
+    - route
+    if: ${{ contains(fromJSON(needs.route.outputs.route).groups, 'server') || contains(fromJSON(needs.route.outputs.route).groups,
+      'loader') || contains(fromJSON(needs.route.outputs.route).groups, 'ocsf') }}
+    uses: ./.github/workflows/server.yml
+    with:
+      route: ${{ needs.route.outputs.route }}
+  agent:
+    needs:
+    - route
+    if: ${{ contains(fromJSON(needs.route.outputs.route).groups, 'agent') || contains(fromJSON(needs.route.outputs.route).groups,
+      'interop') }}
+    uses: ./.github/workflows/agent.yml
+    with:
+      route: ${{ needs.route.outputs.route }}
+  console:
+    needs:
+    - route
+    if: ${{ contains(fromJSON(needs.route.outputs.route).groups, 'console') }}
+    uses: ./.github/workflows/console.yml
+    with:
+      route: ${{ needs.route.outputs.route }}
+  bootstrap:
+    needs:
+    - route
+    if: ${{ contains(fromJSON(needs.route.outputs.route).groups, 'bootstrap') }}
+    uses: ./.github/workflows/bootstrap.yml
+    with:
+      route: ${{ needs.route.outputs.route }}
+  ci-required:
+    name: ci-required
+    needs:
+    - route
+    - ci-contracts
+    - design
+    - server
+    - agent
+    - console
+    - bootstrap
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+    - name: Download same-run receipts
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: ci-proof-${{ github.run_id }}-${{ github.run_attempt }}-*
+        path: ${{ runner.temp }}/ci-receipts
+        merge-multiple: false
+    - name: Prepare aggregate inputs
+      shell: bash
+      env:
+        ROUTE_JSON: ${{ needs.route.outputs.route }}
+        NEEDS_JSON: ${{ toJSON(needs) }}
+      run: |
+        python - <<'PY'
+        import os, pathlib
+        root = pathlib.Path(os.environ['RUNNER_TEMP'])
+        (root / 'route.json').write_text(os.environ['ROUTE_JSON'])
+        (root / 'needs.json').write_text(os.environ['NEEDS_JSON'])
+        PY
+    - name: Require exact successful work
+      shell: bash
+      run: python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" --needs "$RUNNER_TEMP/needs.json" --receipts "$RUNNER_TEMP/ci-receipts"

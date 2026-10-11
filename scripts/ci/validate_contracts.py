@@ -143,7 +143,7 @@ def check_key_admission_coverage(data):
 def main(key_admission_path=None):
     listed = {schema for schema, _ in CONTRACTS}
     discovered = {
-        str(path.relative_to(ROOT))
+        path.relative_to(ROOT).as_posix()
         for directory in DIRECTORIES
         for path in (ROOT / directory).rglob("*.schema.json")
     }
@@ -157,9 +157,9 @@ def main(key_admission_path=None):
         if fixture.endswith("/cel/v1/fixtures.json"):
             for case in load(ROOT / fixture)["cases"]:
                 path = manifest_path(fixture, case["file"])
-                fixtures.add(str(path.relative_to(ROOT)))
+                fixtures.add(path.relative_to(ROOT).as_posix())
     discovered_fixtures = {
-        str(path.relative_to(ROOT))
+        path.relative_to(ROOT).as_posix()
         for directory in DIRECTORIES
         for path in (ROOT / directory).rglob("*")
         if path.is_file() and not path.name.endswith(".schema.json")

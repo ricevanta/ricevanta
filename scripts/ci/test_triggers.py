@@ -11,7 +11,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS = ("design", "server", "agent", "console")
+WORKFLOWS = ("ci",)
+REUSABLES = ("design", "server", "agent", "console", "bootstrap")
 PR_TYPES = {"opened", "synchronize", "reopened", "ready_for_review", "edited"}
 PR_CANCEL = "${{ github.event_name == 'pull_request' }}"
 RACE_COMMAND = "go test -race -count=1 ./..."
@@ -24,12 +25,15 @@ def load_workflow(path):
 
 def concurrency_errors(name, workflow):
     """Require PR-only cancellation and unique groups for master work."""
-    scopes = [(name, workflow["concurrency"])]
+    reusable = "workflow_call" in workflow.get("on", {})
+    scopes = [] if reusable else [(name, workflow["concurrency"])]
     errors = []
     for job_id, job in workflow.get("jobs", {}).items():
         if "concurrency" not in job:
             continue
         prefix = name + "-" + job_id
+        if reusable:
+            errors.append("reusable job concurrency is forbidden: " + prefix)
         # Reject all matrix job concurrency rather than infer row identities
         # from static, include-only or dynamically generated matrices.
         if "matrix" in job.get("strategy", {}):
@@ -101,7 +105,7 @@ class TriggerTests(unittest.TestCase):
                 self.assertNotIn("branches-ignore", events["pull_request"])
 
     def test_design_runs_for_each_unwatched_path_only_change(self):
-        workflow = load_workflow(ROOT / ".github/workflows/design.yml")
+        workflow = load_workflow(ROOT / ".github/workflows/ci.yml")
         for event in ("pull_request", "push"):
             for changed_path in ("LICENSE", "DCO", ".gitignore",
                                  ".github/workflows/server.yml",
@@ -113,8 +117,10 @@ class TriggerTests(unittest.TestCase):
                                         for pattern in trigger.get("paths", ["**"])))
                     self.assertNotIn("paths", trigger)
                     self.assertNotIn("paths-ignore", trigger)
-        self.assertNotIn("if", workflow["jobs"]["validate"])
-        for step in workflow["jobs"]["validate"]["steps"]:
+        self.assertEqual(workflow["jobs"]["design"]["uses"], "./.github/workflows/design.yml")
+        design = load_workflow(ROOT / ".github/workflows/design.yml")
+        self.assertNotIn("if", design["jobs"]["validate"])
+        for step in design["jobs"]["validate"]["steps"]:
             self.assertNotIn("if", step)
 
     def test_job_concurrency_cannot_cancel_master_work(self):
@@ -129,7 +135,7 @@ class TriggerTests(unittest.TestCase):
                      "${{ github.event.pull_request.number || github.run_id }}",
             "cancel-in-progress": PR_CANCEL,
         }
-        self.assertEqual(concurrency_errors("server", safe), [])
+        self.assertTrue(concurrency_errors("server", safe))
         for concurrency in (
                 {"group": "server-race-all-events", "cancel-in-progress": "true"},
                 {"group": "server-race-all-events", "cancel-in-progress": "false"},
@@ -193,7 +199,7 @@ class TriggerTests(unittest.TestCase):
         self.assertEqual(validate["timeout-minutes"], "20")
         self.assertEqual(race["timeout-minutes"], "20")
         self.assertNotIn("needs", race)
-        self.assertNotIn("if", race)
+        self.assertEqual(race["if"], "${{ contains(fromJSON(inputs.route).groups, 'server') }}")
         self.assertNotIn("continue-on-error", race)
         self.assertEqual(race["runs-on"], "ubuntu-24.04")
         self.assertEqual(race["defaults"]["run"]["working-directory"], "server")
@@ -213,7 +219,7 @@ class TriggerTests(unittest.TestCase):
                             for step in race["steps"]))
 
     def test_workflows_keep_read_only_tokens_and_pinned_checkouts(self):
-        for name in WORKFLOWS:
+        for name in WORKFLOWS + REUSABLES:
             with self.subTest(workflow=name):
                 workflow = load_workflow(ROOT / f".github/workflows/{name}.yml")
                 self.assertEqual(workflow["permissions"], {"contents": "read"})

@@ -1,43 +1,12 @@
 name: Server checks
-
-on:
-  push:
-    branches: [master]
-    paths:
-      - 'server/**'
-      - 'schemas/dsse/**'
-      - 'schemas/events/**'
-      - 'schemas/ocsf/**'
-      - 'schemas/cel/**'
-      - 'schemas/export/**'
-      - 'schemas/policy/**'
-      - 'schemas/report/**'
-      - 'schemas/extension/**'
-      - '.github/workflows/server.yml'
-      - 'schemas/permissions/**'
-  pull_request:
-    branches: [master]
-    types: [opened, synchronize, reopened, ready_for_review, edited]
-    paths:
-      - 'server/**'
-      - 'schemas/dsse/**'
-      - 'schemas/events/**'
-      - 'schemas/ocsf/**'
-      - 'schemas/cel/**'
-      - 'schemas/export/**'
-      - 'schemas/policy/**'
-      - 'schemas/report/**'
-      - 'schemas/extension/**'
-      - '.github/workflows/server.yml'
-      - 'schemas/permissions/**'
-
+'on':
+  workflow_call:
+    inputs:
+      route:
+        required: true
+        type: string
 permissions:
   contents: read
-
-concurrency:
-  group: server-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -46,47 +15,64 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: true
-          cache-dependency-path: server/go.sum
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: .github/requirements-design.txt
-      - name: Install validation dependencies
-        working-directory: .
-        run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
-      - name: Validate ExportDestination schemas and examples
-        working-directory: .
-        run: |
-          python schemas/export/v1alpha1/validate.py
-          python schemas/export/v1alpha1/test_validate.py
-      - name: Check formatting
-        run: |
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            printf '%s\n' "$unformatted"
-            exit 1
-          fi
-      - name: Validate permission catalogue
-        working-directory: .
-        run: |
-          python3 -m venv "$RUNNER_TEMP/permission-schema-venv"
-          "$RUNNER_TEMP/permission-schema-venv/bin/python" -m pip install 'jsonschema==4.25.1'
-          "$RUNNER_TEMP/permission-schema-venv/bin/python" server/internal/authz/catalogue/schema_test.py
-      - name: Test
-        run: go test -count=1 ./...
-      - name: Benchmark key admission
-        run: go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
-      - name: Vet
-        run: go vet ./...
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: true
+        cache-dependency-path: server/go.sum
+    - name: Check formatting
+      run: |
+        unformatted="$(gofmt -l .)"
+        if [ -n "$unformatted" ]; then
+          printf '%s\n' "$unformatted"
+          exit 1
+        fi
+    - name: Test
+      run: go test -count=1 ./...
+    - name: Benchmark key admission
+      run: go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
+    - name: Vet
+      run: go vet ./...
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: server-validate
+        CHECKS: '["server-format", "server-unit", "key-admission-bench", "server-vet"]'
+        HOST_OS: ''
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+    if: ${{ contains(fromJSON(inputs.route).groups, 'server') }}
   race:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -94,60 +80,73 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: true
-          cache-dependency-path: server/go.sum
-      - name: Test with race detector
-        run: go test -race -count=1 ./...
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: true
+        cache-dependency-path: server/go.sum
+    - name: Test with race detector
+      run: go test -race -count=1 ./...
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: server-race
+        CHECKS: '["server-race"]'
+        HOST_OS: ''
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+    if: ${{ contains(fromJSON(inputs.route).groups, 'server') }}
   fuzz-targets:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       targets: ${{ steps.matrix.outputs.targets }}
     steps:
-      - name: Discover fuzz matrix
-        id: matrix
-        env:
-          # Keep this single list aligned with instructions/testing.md.
-          FUZZ_TARGETS: >-
-            [
-              {"package":"./internal/events/eventid","target":"FuzzParse"},
-              {"package":"./internal/events/batch","target":"FuzzDescriptor"},
-              {"package":"./internal/signing/dsse","target":"FuzzVerify"},
-              {"package":"./internal/signing/ed25519key","target":"FuzzValidate"},
-              {"package":"./internal/events/wire","target":"FuzzParseHeader"},
-              {"package":"./internal/events/wire","target":"FuzzDecode"},
-              {"package":"./internal/events/body","target":"FuzzExtractLine"},
-              {"package":"./internal/events/body","target":"FuzzDecode"},
-              {"package":"./internal/policy/celdecl","target":"FuzzParse"},
-              {"package":"./internal/policy/celdecl","target":"FuzzLoad"},
-              {"package":"./internal/authz/catalogue","target":"FuzzValidateName"},
-              {"package":"./internal/authz/catalogue","target":"FuzzParse"},
-              {"package":"./internal/extensions/manifest","target":"FuzzValidate"},
-              {"package":"./internal/events/exportdest","target":"FuzzValidate"},
-              {"package":"./internal/events/exportdest","target":"FuzzDecoded"},
-              {"package":"./internal/mdm/resourcevalidate","target":"FuzzValidate"},
-              {"package":"./internal/mdm/resourcevalidate","target":"FuzzBudget"},
-              {"package":"./internal/events/reportvalidate","target":"FuzzValidate"},
-              {"package":"./internal/events/reportvalidate","target":"FuzzBudget"},
-              {"package":"./internal/events/ocsf","target":"FuzzValidate"}
-            ]
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-
-          targets = json.loads(os.environ['FUZZ_TARGETS'])
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('targets=' + json.dumps(targets, separators=(',', ':')) + '\n')
-          PY
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - name: Discover fuzz matrix
+      id: matrix
+      shell: bash
+      run: |
+        targets="$(python scripts/ci/inventory.py --fuzz-matrix)"
+        printf 'targets=%s\n' "$targets" >> "$GITHUB_OUTPUT"
+    if: ${{ contains(fromJSON(inputs.route).groups, 'server') }}
   fuzz:
     needs: fuzz-targets
     runs-on: ubuntu-24.04
@@ -160,27 +159,64 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.fuzz-targets.outputs.targets) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: true
-          cache-dependency-path: server/go.sum
-      - name: Fuzz for 60 seconds
-        env:
-          FUZZ_PACKAGE: ${{ matrix.package }}
-          FUZZ_TARGET: ${{ matrix.target }}
-        run: go test -count=1 "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2
-      - name: Upload failing corpus
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}
-          path: server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**
-          if-no-files-found: ignore
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: true
+        cache-dependency-path: server/go.sum
+    - name: Fuzz for 60 seconds
+      env:
+        FUZZ_PACKAGE: ${{ matrix.package }}
+        FUZZ_TARGET: ${{ matrix.target }}
+      run: go test -count=1 "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2
+    - name: Upload failing corpus
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}
+        path: server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**
+        if-no-files-found: ignore
+        retention-days: 30
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: server-fuzz:${{ matrix.package }}:${{ matrix.target }}
+        CHECKS: '["go-fuzz:${{ matrix.package }}:${{ matrix.target }}"]'
+        HOST_OS: ''
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+    if: ${{ contains(fromJSON(inputs.route).groups, 'server') }}
   loader-gate-a:
     name: loader Gate A (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -192,65 +228,174 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2025, macos-15]
+        os:
+        - ubuntu-24.04
+        - windows-2025
+        - macos-15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: true
-          cache-dependency-path: server/go.sum
-      - name: Extended parser budget
-        run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
-      - name: Repeat affected parser measurement 50 times
-        run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50
-      - name: Fuzz parser qualification for 60 seconds
-        run: go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
-      - name: Upload failing corpus
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: loader-gate-a-${{ matrix.os }}
-          path: server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**
-          if-no-files-found: ignore
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - name: Assert native receipt host
+      shell: bash
+      working-directory: .
+      env:
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import os, platform, sys
+        sys.path.insert(0, 'scripts/ci')
+        from inventory import HOSTS
+        expected = HOSTS[os.environ['HOST_OS']]
+        actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]
+        arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+        assert actual + '-' + arch == expected, (actual, arch, expected)
+        PY
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: true
+        cache-dependency-path: server/go.sum
+    - name: Extended parser budget
+      run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
+    - name: Repeat affected parser measurement 50 times
+      run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined
+        -loader-budget-repeat-count=50
+    - name: Fuzz parser qualification for 60 seconds
+      run: go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
+    - name: Upload failing corpus
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: loader-gate-a-${{ matrix.os }}
+        path: server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**
+        if-no-files-found: ignore
+        retention-days: 30
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: loader
+        CHECKS: '["loader-extended", "loader-repeat", "loader-fuzz"]'
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+    if: ${{ contains(fromJSON(inputs.route).groups, 'loader') }}
   ocsf-native:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     defaults:
       run:
+        shell: bash
         working-directory: server
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15
-            goos: darwin
-            goarch: arm64
-          - os: windows-2025
-            goos: windows
-            goarch: amd64
-          - os: ubuntu-24.04
-            goos: linux
-            goarch: amd64
+        - os: macos-15
+          goos: darwin
+          goarch: arm64
+        - os: windows-2025
+          goos: windows
+          goarch: amd64
+        - os: ubuntu-24.04
+          goos: linux
+          goarch: amd64
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: true
-          cache-dependency-path: server/go.sum
-      - name: Check native target
-        shell: bash
-        env:
-          EXPECTED_GOOS: ${{ matrix.goos }}
-          EXPECTED_GOARCH: ${{ matrix.goarch }}
-        run: |
-          test "$(go env GOOS)" = "$EXPECTED_GOOS"
-          test "$(go env GOARCH)" = "$EXPECTED_GOARCH"
-      - name: Test OCSF shared corpus
-        run: go test -count=1 ./internal/events/ocsf
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - name: Assert native receipt host
+      shell: bash
+      working-directory: .
+      env:
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import os, platform, sys
+        sys.path.insert(0, 'scripts/ci')
+        from inventory import HOSTS
+        expected = HOSTS[os.environ['HOST_OS']]
+        actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]
+        arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+        assert actual + '-' + arch == expected, (actual, arch, expected)
+        PY
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: true
+        cache-dependency-path: server/go.sum
+    - name: Check native target
+      shell: bash
+      env:
+        EXPECTED_GOOS: ${{ matrix.goos }}
+        EXPECTED_GOARCH: ${{ matrix.goarch }}
+      run: |
+        test "$(go env GOOS)" = "$EXPECTED_GOOS"
+        test "$(go env GOARCH)" = "$EXPECTED_GOARCH"
+    - name: Test OCSF shared corpus
+      run: go test -count=1 ./internal/events/ocsf
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: ocsf
+        CHECKS: '["ocsf-native"]'
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+    if: ${{ contains(fromJSON(inputs.route).groups, 'ocsf') }}

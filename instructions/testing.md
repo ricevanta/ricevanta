@@ -12,7 +12,7 @@ go test -count=1 ./internal/path/to/touched/package
 
 `gofmt -l .` must print no files. Replace the example package path with the touched packages. Fix formatting with `gofmt -w` on the touched files.
 
-CI runs the full ordinary suite, race tests and timed fuzzing on pull requests targeting `master` and pushes to `master` when their paths match. A push to `wip/<slice>` needs an open PR for normal CI. Draft PRs run checks. Superseding pushes cancel only the same PR's runs; master pushes use unique run-ID groups and never cancel running or pending master work.
+The `CI` entry routes the full ordinary suite, race tests and timed fuzzing on pull requests targeting `master` and pushes to `master` from the full Git diff. Design and CI contract checks always run. `ci-required` requires successful selected callers and one same-run receipt per expected leaf; missing matrix rows fail even when other rows pass. A push to `wip/<slice>` needs an open PR for normal CI. Draft PRs run checks. Superseding pushes cancel only the same PR's runs; master pushes use unique run-ID groups and never cancel running or pending master work.
 
 Server jobs `validate` and `race` run separately, each with a 20-minute timeout. `validate` keeps ordinary tests, formatting, vet and the key-admission benchmark. `race` runs `go test -race -count=1 ./...` from `server/`.
 
@@ -43,7 +43,7 @@ go test -count=1 ./internal/events/reportvalidate -fuzz=FuzzBudget -fuzztime=60s
 go test -count=1 ./internal/events/ocsf -fuzz='^FuzzValidate$' -fuzztime=60s -parallel=2
 ```
 
-Keep the single target list in `.github/workflows/server.yml` aligned with these commands. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
+The single target inventory is `scripts/ci/targets.toml`; `.github/workflows/server.yml` generates its fuzz matrix from that inventory. Keep these documented commands aligned with the inventory. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
 
 The extension loader's Gate A job runs natively on Linux x64, Windows x64 and macOS ARM64 in `.github/workflows/server.yml` (`loader-gate-a`), from `server/`:
 

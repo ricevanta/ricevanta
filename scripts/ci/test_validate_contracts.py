@@ -2,6 +2,7 @@
 import copy
 import io
 import unittest
+from pathlib import PureWindowsPath
 from contextlib import redirect_stdout
 from unittest.mock import patch
 import validate_contracts as checker
@@ -32,6 +33,18 @@ class PackageManifestTests(unittest.TestCase):
                 with patch.object(checker, "load", side_effect=patched_load):
                     with self.assertRaises(ValueError), redirect_stdout(io.StringIO()):
                         checker.main()
+
+    def test_windows_inventory_paths_use_posix_separators(self):
+        path_class = type(checker.ROOT)
+        original = path_class.relative_to
+        def windows_relative(path, *args, **kwargs):
+            relative = original(path, *args, **kwargs)
+            return PureWindowsPath(*relative.parts)
+        # Exercise all discovered schema, fixture and referenced CEL paths.
+        with patch.object(path_class, 'relative_to', windows_relative):
+            with redirect_stdout(io.StringIO()) as output:
+                checker.main()
+        self.assertIn('Contract validation passed', output.getvalue())
 
     def test_unmodified_inventory(self):
         with redirect_stdout(io.StringIO()) as output:

@@ -1,0 +1,127 @@
+# Exact existing fuzz selectors. Task 4 adds selected-execution proof.
+
+[[fuzz]]
+package = "./internal/events/eventid"
+target = "FuzzParse"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/batch"
+target = "FuzzDescriptor"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/signing/dsse"
+target = "FuzzVerify"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/signing/ed25519key"
+target = "FuzzValidate"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/wire"
+target = "FuzzParseHeader"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/wire"
+target = "FuzzDecode"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/body"
+target = "FuzzExtractLine"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/body"
+target = "FuzzDecode"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/policy/celdecl"
+target = "FuzzParse"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/policy/celdecl"
+target = "FuzzLoad"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/authz/catalogue"
+target = "FuzzValidateName"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/authz/catalogue"
+target = "FuzzParse"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/extensions/manifest"
+target = "FuzzValidate"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/exportdest"
+target = "FuzzValidate"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/exportdest"
+target = "FuzzDecoded"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/mdm/resourcevalidate"
+target = "FuzzValidate"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/mdm/resourcevalidate"
+target = "FuzzBudget"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/reportvalidate"
+target = "FuzzValidate"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/reportvalidate"
+target = "FuzzBudget"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/events/ocsf"
+target = "FuzzValidate"
+fuzztime = "60s"
+parallel = 2
+
+[loader]
+package = "./internal/extensions/loader"
+target = "FuzzParserQualification"
+fuzztime = "60s"
+parallel = 2
