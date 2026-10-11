@@ -7,7 +7,7 @@
 
 Ricevanta is a free, open-source, self-hosted endpoint security and management platform built around one lightweight agent: device management (MDM), endpoint detection and response (EDR), data loss prevention (DLP), data lineage, PKI, RADIUS network access, unified policies and SIEM export. One agent, one platform, one device identity, no device-count limits, no paid tiers.
 
-Status: early implementation. Each code slice starts from an independently reviewed design and implementation plan. The repository contains initial Go server libraries, but no releasable binary, Rust agent or Vue console. Unresolved native and platform gates still block their dependent code.
+Status: early implementation. Each code slice starts from an independently reviewed design and implementation plan. The repository holds Go server libraries, Rust agent crates and the static Vue console foundation, but no releasable binary. Unresolved native and platform gates still block their dependent code.
 
 | File | Content |
 |---|---|
@@ -19,7 +19,7 @@ Status: early implementation. Each code slice starts from an independently revie
 | `docs/licensing.md` | Third-party code and rule licenses |
 | `docs/roadmap.md` | Release milestones |
 | `docs/architecture.md` | System design: components, roles, protocols, keys, deployment |
-| `docs/design/<domain>.md` | Per-domain design: `agent.md`, `backend.md`, `pki.md`, `lineage.md`, `extensions.md` |
+| `docs/design/<domain>.md` | Per-domain design, one file per domain |
 | `docs/specs/<name>.md` | Policy envelope, CEL profile, OCSF profile, platform qualification; machine-readable files in `schemas/` |
 | `branding/` | Brand identity (`BRAND_SPEC.md`), vector masters, build script and generated assets |
 
@@ -34,7 +34,7 @@ go test -race ./...
 go vet ./...
 ```
 
-`instructions/release.md` records the current release gate. Rust and Vue instructions will be added with their first reviewed code slices.
+`instructions/release.md` records the current release gate. Rust work follows `instructions/rust.md` and console work follows `instructions/vue.md`.
 
 Official sensor binaries (macOS Endpoint Security extension, Windows kernel driver) are signed by the project because Apple and Microsoft tie those signatures to one organization. Self-built sensors run without the features that need them.
 

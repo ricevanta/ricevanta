@@ -7,13 +7,7 @@
 !.claude/
 .claude/*
 !.claude/agents/
-.claude/agents/*
-!.claude/agents/designer.md
 !.codex/
 .codex/*
 !.codex/agents/
-.codex/agents/*
-!.codex/agents/design-reviewer.toml
-!.codex/agents/implementer.toml
-!.codex/agents/code-reviewer.toml
 __pycache__/
