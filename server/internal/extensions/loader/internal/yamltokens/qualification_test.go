@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"runtime/metrics"
 	"strconv"
 	"strings"
 	"testing"
@@ -31,6 +33,10 @@ type parserMeasurement struct {
 	Nanoseconds                                        int64
 	LedgerBytes, LedgerObjects                         uint64
 	ErrorClass                                         string
+	ProcsBefore, ProcsAfter                            int
+	MemoryLimitBefore, MemoryLimitAfter                int64
+	GCPercentBefore, GCPercentAfter                    uint64
+	GCBefore, GCAfter                                  uint32
 }
 
 func parserPayload(c parserInput) []byte {
@@ -175,6 +181,8 @@ func TestParserMeasurementChild(t *testing.T) {
 	if recipe == "" {
 		t.Skip("measurement child only")
 	}
+	runtime.GOMAXPROCS(1)
+	debug.SetMemoryLimit(math.MaxInt64)
 	size, err := strconv.Atoi(os.Getenv("RICEVANTA_PARSER_SIZE"))
 	if err != nil {
 		t.Fatal(err)
@@ -188,10 +196,16 @@ func TestParserMeasurementChild(t *testing.T) {
 		reference := measurementReference(t, parserInput{recipe, size})
 		stats = &statistics{arities: reference.Arities}
 	}
+	prepareMeasurementRuntime()
+	var before, after runtime.MemStats
+	samples := []metrics.Sample{{Name: "/gc/gogc:percent"}}
 	runtime.GC()
 	old := debug.SetGCPercent(-1)
 	defer debug.SetGCPercent(old)
-	var before, after runtime.MemStats
+	procsBefore := runtime.GOMAXPROCS(0)
+	limitBefore := debug.SetMemoryLimit(-1)
+	metrics.Read(samples)
+	gcPercentBefore := samples[0].Value.Uint64()
 	runtime.ReadMemStats(&before)
 	start := time.Now()
 	var node *yaml.Node
@@ -207,12 +221,17 @@ func TestParserMeasurementChild(t *testing.T) {
 			node, checkErr = construct(payload, stats, ledger)
 		}
 	case "combined":
-		node, ledger, checkErr = Decode(payload)
+		ledger = newBudget()
+		node, _, checkErr = decodeBudget(payload, ledger)
 	default:
 		t.Fatal("unknown measurement mode")
 	}
 	elapsed := time.Since(start)
 	runtime.ReadMemStats(&after)
+	procsAfter := runtime.GOMAXPROCS(0)
+	limitAfter := debug.SetMemoryLimit(-1)
+	metrics.Read(samples)
+	gcPercentAfter := samples[0].Value.Uint64()
 	runtime.KeepAlive(payload)
 	runtime.KeepAlive(node)
 	class := os.Getenv("RICEVANTA_PARSER_ERROR")
@@ -254,13 +273,17 @@ func TestParserMeasurementChild(t *testing.T) {
 		t.Fatalf("peak resident memory: %v", err)
 	}
 	m := parserMeasurement{Input: recipe, Mode: mode, Toolchain: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, Status: status, Bytes: len(payload), Alloc: after.TotalAlloc - before.TotalAlloc, Objects: after.Mallocs - before.Mallocs, StackGrowth: stack, RetainedHeap: heap, PeakRSS: peakRSS, Nanoseconds: elapsed.Nanoseconds()}
+	m.ProcsBefore, m.ProcsAfter = procsBefore, procsAfter
+	m.MemoryLimitBefore, m.MemoryLimitAfter = limitBefore, limitAfter
+	m.GCPercentBefore, m.GCPercentAfter = gcPercentBefore, gcPercentAfter
+	m.GCBefore, m.GCAfter = before.NumGC, after.NumGC
 	m.ErrorClass = class
 	if ledger != nil {
 		m.LedgerBytes = ledger.bytes
 		m.LedgerObjects = ledger.objects
-		if m.Alloc > m.LedgerBytes || m.Objects > m.LedgerObjects {
-			t.Fatalf("source charge below measured allocation: %+v", m)
-		}
+	}
+	if m.Alloc > m.LedgerBytes || m.Objects > m.LedgerObjects {
+		t.Fatalf("source charge below measured allocation: %+v", m)
 	}
 	// Compare after every measurement, including peak RSS, so oracle storage
 	// and tree comparison cannot enter candidate allocation or timing totals.
@@ -296,12 +319,12 @@ func runParserBudget(t *testing.T, extended bool) {
 				if err != nil {
 					t.Fatalf("child: %v\n%s", err, out)
 				}
-				var m parserMeasurement
 				found := false
 				for _, line := range strings.Split(string(out), "\n") {
 					if strings.HasPrefix(line, "PARSER_MEASUREMENT ") {
-						if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "PARSER_MEASUREMENT ")), &m); err != nil {
-							t.Fatal(err)
+						_, reportErr := decodeParserMeasurement([]byte(strings.TrimPrefix(line, "PARSER_MEASUREMENT ")))
+						if reportErr != nil {
+							t.Fatal(reportErr)
 						}
 						found = true
 						t.Log(line)
@@ -309,9 +332,6 @@ func runParserBudget(t *testing.T, extended bool) {
 				}
 				if !found {
 					t.Fatal("missing measurement")
-				}
-				if m.Alloc > 64<<20 || m.Objects > 1000000 || m.StackGrowth > 8<<20 {
-					t.Errorf("parser budget exceeded: %+v", m)
 				}
 			})
 		}
@@ -361,4 +381,40 @@ func measurementReference(t *testing.T, c parserInput) measurementOracle {
 		t.Fatal("unclassified measurement recipe")
 	}
 	return v
+}
+
+// decodeParserMeasurement is the parent report path used by every sample.
+func decodeParserMeasurement(data []byte) (parserMeasurement, error) {
+	var m parserMeasurement
+	if err := json.Unmarshal(data, &m); err != nil {
+		return m, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return m, err
+	}
+	reportType := reflect.TypeOf(m)
+	for i := 0; i < reportType.NumField(); i++ {
+		name := reportType.Field(i).Name
+		value, present := fields[name]
+		if !present || string(value) == "null" {
+			return m, fmt.Errorf("missing measurement field %s", name)
+		}
+	}
+	if m.ProcsBefore != 1 || m.ProcsAfter != 1 {
+		return m, fmt.Errorf("GOMAXPROCS must stay at 1: %+v", m)
+	}
+	if m.MemoryLimitBefore != math.MaxInt64 || m.MemoryLimitAfter != math.MaxInt64 {
+		return m, fmt.Errorf("memory limit must stay disabled: %+v", m)
+	}
+	if m.GCPercentBefore != math.MaxUint64 || m.GCPercentAfter != math.MaxUint64 || m.GCBefore != m.GCAfter {
+		return m, fmt.Errorf("GC must stay disabled through both snapshots: %+v", m)
+	}
+	if m.Alloc > m.LedgerBytes || m.Objects > m.LedgerObjects {
+		return m, fmt.Errorf("source charge below measured allocation: %+v", m)
+	}
+	if m.Alloc > 64<<20 || m.Objects > 1000000 || m.StackGrowth > 8<<20 {
+		return m, fmt.Errorf("parser budget exceeded: %+v", m)
+	}
+	return m, nil
 }

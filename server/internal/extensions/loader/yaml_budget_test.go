@@ -8,19 +8,52 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 )
 
 var budgetExtended = flag.Bool("loader-budget-extended", false, "run the native parser qualification corpus")
+var budgetRepeat = flag.String("loader-budget-repeat", "", "repeat one parser recipe/size/mode from the native corpus")
+var budgetRepeatCount = flag.Int("loader-budget-repeat-count", 1, "number of fresh measurement children for the selected parser recipe")
 
 func rootBudget(t *testing.T, extended bool) {
 	t.Helper()
+	corpus := parserCorpus(extended)
+	target := "^TestParserBudgetHarness$"
+	count := 1
+	if *budgetRepeatCount < 1 || (*budgetRepeat == "" && *budgetRepeatCount != 1) {
+		t.Fatal("invalid parser repetition: count must be positive and requires a selector")
+	}
+	if *budgetRepeat != "" {
+		parts := strings.Split(*budgetRepeat, "/")
+		if len(parts) != 3 || (parts[2] != "preflight" && parts[2] != "node" && parts[2] != "combined") {
+			t.Fatal("invalid parser repetition: expected recipe/size/preflight, node or combined")
+		}
+		corpus = nil
+		for _, c := range parserCorpus(true) {
+			if c.Name+"/"+strconv.Itoa(c.Size) == parts[0]+"/"+parts[1] {
+				corpus = []parserInput{c}
+				break
+			}
+		}
+		if len(corpus) == 0 {
+			t.Fatal("invalid parser repetition: unknown recipe or size")
+		}
+		for _, part := range parts {
+			target += "/^" + regexp.QuoteMeta(part) + "$"
+		}
+		count = *budgetRepeatCount
+		extended = true
+	}
 	// Classify every recipe before the candidate and pass data to a separate test
 	// binary. Oracle allocations stay outside all measured candidate children.
+	// Each fresh child isolates runtime activity under section 6 before measuring
+	// one cold candidate call with raw counters and zero extra allowance.
 	classification := make(map[string]referenceMeasurement)
 	dir := t.TempDir()
-	for _, c := range parserCorpus(extended) {
+	for _, c := range corpus {
 		payload := parserPayload(c)
 		node, err := referenceAcceptance(payload)
 		var arities []uint32
@@ -62,8 +95,9 @@ func rootBudget(t *testing.T, extended bool) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	target := "^TestParserBudgetHarness$"
-	args := []string{"test", "-count=1", "./internal/yamltokens", "-run", target, "-v"}
+	// Repeating the selected subtest still starts a fresh measurement child for
+	// each sample. The independent classification above runs only once.
+	args := []string{"test", "-count=" + strconv.Itoa(count), "./internal/yamltokens", "-run", target, "-v"}
 	if extended {
 		args = append(args, "-args", "-loader-budget-extended")
 	}
@@ -88,4 +122,55 @@ type referenceMeasurement struct {
 	Arities  []uint32
 	Error    string
 	Tree     string
+}
+
+func TestParserBudgetRepeatFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name, selector, count string
+		wantFailure           bool
+	}{
+		{"two-samples", "comment-collections/262144/combined", "2", false},
+		{"unknown-recipe", "unknown/262144/combined", "1", true},
+		{"unknown-size", "comment-collections/123/combined", "1", true},
+		{"invalid-size", "comment-collections/no/combined", "1", true},
+		{"unknown-mode", "comment-collections/262144/unknown", "1", true},
+		{"missing-mode", "comment-collections/262144", "1", true},
+		{"zero-count", "comment-collections/262144/combined", "0", true},
+		{"negative-count", "comment-collections/262144/combined", "-1", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestParserBudgetSmoke$", "-test.v", "-loader-budget-repeat="+tc.selector, "-loader-budget-repeat-count="+tc.count)
+			out, err := cmd.CombinedOutput()
+			if tc.wantFailure {
+				if err == nil || !strings.Contains(string(out), "invalid parser repetition") {
+					t.Fatalf("expected repetition validation failure: %v\n%s", err, out)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("repetition: %v\n%s", err, out)
+			}
+			samples := 0
+			for _, line := range strings.Split(string(out), "\n") {
+				_, data, ok := strings.Cut(line, "PARSER_MEASUREMENT ")
+				if !ok {
+					continue
+				}
+				var m struct {
+					Input, Mode string
+					Bytes       int
+				}
+				if err := json.Unmarshal([]byte(data), &m); err != nil {
+					t.Fatal(err)
+				}
+				if m.Input != "comment-collections" || m.Mode != "combined" || m.Bytes != 262144 {
+					t.Fatalf("unexpected measurement: %+v", m)
+				}
+				samples++
+			}
+			if samples != 2 {
+				t.Fatalf("got %d samples, want 2\n%s", samples, out)
+			}
+		})
+	}
 }

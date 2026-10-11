@@ -40,7 +40,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: server
@@ -187,6 +187,8 @@ jobs:
           cache-dependency-path: server/go.sum
       - name: Extended parser budget
         run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
+      - name: Repeat affected parser measurement 50 times
+        run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50
       - name: Fuzz parser qualification for 60 seconds
         run: go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
       - name: Upload failing corpus

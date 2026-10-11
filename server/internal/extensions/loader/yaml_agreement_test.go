@@ -69,6 +69,14 @@ func commentMatrix() []commentCase {
 		{"indent", "a:\n  b: c\n d: e #c\n", yamltokens.ErrSyntax}, {"suffix", "a: b\n... #c\n[", yamltokens.ErrSyntax},
 		{"directive", "%YAML 1.1 #c\n---\na: b\n", yamltokens.ErrSyntax},
 		{"tag-before-syntax", "[!x a, \"\\q\"] #c\n", yamltokens.ErrTag},
+		{"explicit-key-syntax-before-tag-lone-cr", "? 0\n:\r0\n!", yamltokens.ErrSyntax},
+		{"explicit-key-syntax-before-tag-all-cr", "? 0\r:\r0\r!", yamltokens.ErrSyntax},
+		{"explicit-key-syntax-before-tag-cr-comment", "? key\r: #empty\rmissing\r#tail\r!", yamltokens.ErrSyntax},
+		{"explicit-key-syntax-before-tag-eof", "? 0\n:\n0\n!", yamltokens.ErrSyntax},
+		{"explicit-key-syntax-before-tag-value", "? key\n: value\nmissing\n!x tail\n", yamltokens.ErrSyntax},
+		{"explicit-key-syntax-before-tag-comment", "? key\n: #empty\nmissing\n#tail\n!", yamltokens.ErrSyntax},
+		{"explicit-key-syntax-before-tag-empty-key", "?\n:\nmissing\n!!str tail", yamltokens.ErrSyntax},
+		{"explicit-key-tag-before-syntax", "? !x key\n:\nmissing\n!", yamltokens.ErrTag},
 		{"syntax-before-tag", "[\"\\q\", !x a] #c\n", yamltokens.ErrSyntax},
 		{"limit-before-tag", strings.Repeat("[", 65) + "!x a #c\n", yamltokens.ErrLimit},
 		{"tag-before-limit", "!x " + strings.Repeat("[", 65) + "a #c\n", yamltokens.ErrTag},
@@ -149,4 +157,30 @@ func TestExplicitKeyCommentMark(t *testing.T) {
 		t.Fatalf("oracle implicit null: %#v", value)
 	}
 	assertAgreement(t, payload)
+}
+
+// Required simple keys expire only after more than 1024 characters. The quoted
+// key includes both quotes, so the following tag starts exactly at the boundary.
+func TestRequiredKeyExpiryBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		characters int
+		want       error
+	}{
+		{1023, yamltokens.ErrTag}, {1024, yamltokens.ErrTag}, {1025, yamltokens.ErrSyntax},
+	} {
+		t.Run(fmt.Sprint(tc.characters), func(t *testing.T) {
+			payload := []byte("a: b\n\"" + strings.Repeat("x", tc.characters-2) + "\"!x tail\n")
+			_, referenceErr := referenceAcceptance(payload)
+			if referenceErr != tc.want {
+				t.Fatalf("independent reference error = %v, want %v", referenceErr, tc.want)
+			}
+			if err := yamltokens.Check(payload); err != tc.want {
+				t.Fatalf("candidate preflight error = %v, want %v", err, tc.want)
+			}
+			node, budget, err := yamltokens.Decode(payload)
+			if err != tc.want || node != nil || budget != nil {
+				t.Fatalf("candidate Decode = %v, %v, %v; want nil Node/Budget and %v", node, budget, err, tc.want)
+			}
+		})
+	}
 }

@@ -709,6 +709,20 @@ func yaml_parser_fetch_next_token(parser *yaml_parser_t) (ok bool) {
 		return false
 	}
 
+	// Independent source-order check: a required simple key expires at a
+	// line break or after 1024 characters, before any following tag token.
+	for i := range parser.simple_keys {
+		key := &parser.simple_keys[i]
+		if key.possible && (key.mark.line < parser.mark.line || key.mark.index+1024 < parser.mark.index) {
+			if key.required {
+				parser.referenceError = yamltokens.ErrSyntax
+				return false
+			}
+			key.possible = false
+			delete(parser.simple_keys_by_tok, key.token_number)
+		}
+	}
+
 	// [Go] While unrolling indents, transform the head comments of prior
 	// indentation levels observed after scan_start into foot comments at
 	// the respective indexes.

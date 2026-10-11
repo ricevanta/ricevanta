@@ -693,6 +693,14 @@ func yaml_parser_fetch_next_token(parser *yaml_parser_t) (ok bool) {
 		return false
 	}
 
+	// Expired required keys precede the next token's profile checks, even when
+	// lookahead still has an earlier explicit key at the queue head.
+	for i := range parser.simple_keys {
+		if _, ok := yaml_simple_key_is_valid(parser, &parser.simple_keys[i]); !ok {
+			return false
+		}
+	}
+
 	// [Go] While unrolling indents, transform the head comments of prior
 	// indentation levels observed after scan_start into foot comments at
 	// the respective indexes.
