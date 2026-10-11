@@ -1,0 +1,28 @@
+{
+  "classes": [
+    {
+      "class_uid": 99901001,
+      "path": "99901001.schema.json",
+      "sha256": "78f013bdfd7658b0f90ab9a296fdeb65ea1d3f4ac3d3490a4ce31d4d12f6be58"
+    },
+    {
+      "class_uid": 99901002,
+      "path": "99901002.schema.json",
+      "sha256": "483cbb968c7a290c277ee4b419693b94377dc77a13ae1cdfa7780ccbfc31e9a1"
+    },
+    {
+      "class_uid": 99901003,
+      "path": "99901003.schema.json",
+      "sha256": "6f8730d1c18600e675a95499050f35144c60ba50b6520fa8711541147a9351ef"
+    },
+    {
+      "class_uid": 99903001,
+      "path": "99903001.schema.json",
+      "sha256": "712c800dcd6fe7360c6f30d68e68e738a2484dc2dd15da49505025ff1589b287"
+    }
+  ],
+  "format": 1,
+  "inputs_sha256": "717e113faadee46e400f2733aecd90546d4b68e958af46119a88065c1c6f49ee",
+  "profile": "ricevanta-ocsf-1",
+  "upstream_commit": "856d462bd20dc46cc1ffed2dfffe3b91ef0fbeba"
+}

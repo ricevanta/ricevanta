@@ -1,0 +1,1528 @@
+{
+  "$defs": {
+    "budget_sample": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu_limit_pct": {
+          "allOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "not": {
+                "const": 0
+              }
+            }
+          ],
+          "type": "number",
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/cpu_limit_pct"
+        },
+        "cpu_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number",
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/cpu_pct"
+        },
+        "memory_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/memory_bytes"
+        },
+        "memory_limit_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/memory_limit_bytes"
+        },
+        "state": {
+          "enum": [
+            "normal",
+            "throttled",
+            "disabled"
+          ],
+          "maxLength": 9,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 9,
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/state"
+        },
+        "unit": {
+          "allOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_.-]*$"
+            }
+          ],
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/unit"
+        },
+        "window_ms": {
+          "maximum": 3600000,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/budget_sample.json#/attributes/window_ms"
+        }
+      },
+      "required": [
+        "cpu_limit_pct",
+        "memory_limit_bytes",
+        "state",
+        "unit",
+        "window_ms"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/budget_sample.json#"
+    },
+    "certificate": {
+      "additionalProperties": false,
+      "properties": {
+        "created_time": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "int64",
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/created_time"
+        },
+        "expiration_time": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "int64",
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/expiration_time"
+        },
+        "fingerprints": {
+          "items": {
+            "$ref": "#/$defs/fingerprint"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array",
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/fingerprints"
+        },
+        "issuer": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 2048,
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/issuer"
+        },
+        "serial_number": {
+          "allOf": [
+            {
+              "pattern": "^([0-9a-f]{2}){1,20}$"
+            }
+          ],
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 40,
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/serial_number"
+        },
+        "subject": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 2048,
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/subject"
+        },
+        "uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "upstream/1.9.0/objects/certificate.json#/attributes/uid"
+        }
+      },
+      "required": [
+        "created_time",
+        "expiration_time",
+        "fingerprints",
+        "issuer",
+        "serial_number",
+        "uid"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/certificate.json#"
+    },
+    "coverage_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "extensions/ricevanta/objects/coverage_entry.json#/attributes/path"
+        },
+        "reason": {
+          "enum": [
+            "not_applicable",
+            "not_observed",
+            "sensor_unavailable",
+            "permission_denied",
+            "collection_failed",
+            "privacy_filtered"
+          ],
+          "maxLength": 18,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 18,
+          "x-source": "extensions/ricevanta/objects/coverage_entry.json#/attributes/reason"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/coverage_entry.json#"
+    },
+    "device": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/group"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array",
+          "x-source": "upstream/1.9.0/objects/device.json#/attributes/groups"
+        },
+        "hostname": {
+          "maxLength": 253,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 253,
+          "x-source": "upstream/1.9.0/objects/device.json#/attributes/hostname"
+        },
+        "labels": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "type": "string",
+            "x-maxBytes": 128
+          },
+          "maxItems": 32,
+          "minItems": 0,
+          "type": "array",
+          "x-source": "extensions/ricevanta/objects/device.json#/attributes/labels"
+        },
+        "os": {
+          "$ref": "#/$defs/os",
+          "x-source": "extensions/ricevanta/objects/device.json#/attributes/os"
+        },
+        "type_id": {
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "upstream/1.9.0/objects/device.json#/attributes/type_id"
+        },
+        "uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "upstream/1.9.0/objects/device.json#/attributes/uid"
+        }
+      },
+      "required": [
+        "hostname",
+        "os",
+        "type_id",
+        "uid"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/device.json#"
+    },
+    "event_rate": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/event_rate.json#/attributes/count"
+        },
+        "source": {
+          "allOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_.-]*$"
+            }
+          ],
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "extensions/ricevanta/objects/event_rate.json#/attributes/source"
+        }
+      },
+      "required": [
+        "count",
+        "source"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/event_rate.json#"
+    },
+    "extension": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "ricevanta",
+          "maxLength": 9,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 9,
+          "x-source": "upstream/1.9.0/objects/extension.json#/attributes/name"
+        },
+        "uid": {
+          "const": "999",
+          "maxLength": 3,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 3,
+          "x-source": "upstream/1.9.0/objects/extension.json#/attributes/uid"
+        },
+        "version": {
+          "const": "1.9.0",
+          "maxLength": 5,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 5,
+          "x-source": "upstream/1.9.0/objects/extension.json#/attributes/version"
+        }
+      },
+      "required": [
+        "name",
+        "uid",
+        "version"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/extension.json#"
+    },
+    "extension_origin": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "allOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_.-]*$"
+            }
+          ],
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/component"
+        },
+        "component_digest": {
+          "allOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/component_digest"
+        },
+        "grant_generation": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/grant_generation"
+        },
+        "id": {
+          "allOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+            }
+          ],
+          "maxLength": 253,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 253,
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/id"
+        },
+        "package_digest": {
+          "allOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/package_digest"
+        },
+        "recovery_epoch": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/recovery_epoch"
+        },
+        "version": {
+          "allOf": [
+            {
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "extensions/ricevanta/objects/extension_origin.json#/attributes/version"
+        }
+      },
+      "required": [
+        "component",
+        "component_digest",
+        "grant_generation",
+        "id",
+        "package_digest",
+        "recovery_epoch",
+        "version"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/extension_origin.json#"
+    },
+    "fingerprint": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_id": {
+          "const": 3,
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "upstream/1.9.0/objects/fingerprint.json#/attributes/algorithm_id"
+        },
+        "value": {
+          "allOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "upstream/1.9.0/objects/fingerprint.json#/attributes/value"
+        }
+      },
+      "required": [
+        "algorithm_id",
+        "value"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/fingerprint.json#"
+    },
+    "group": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "upstream/1.9.0/objects/group.json#/attributes/name"
+        },
+        "uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "upstream/1.9.0/objects/group.json#/attributes/uid"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/group.json#"
+    },
+    "metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_state": {
+          "enum": [
+            "absent",
+            "installed"
+          ],
+          "maxLength": 9,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 9,
+          "x-source": "extensions/ricevanta/objects/metadata.json#/attributes/bundle_state"
+        },
+        "correlation_uid": {
+          "maxLength": 36,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 36,
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/correlation_uid"
+        },
+        "coverage": {
+          "items": {
+            "$ref": "#/$defs/coverage_entry"
+          },
+          "maxItems": 512,
+          "minItems": 1,
+          "type": "array",
+          "x-source": "extensions/ricevanta/objects/metadata.json#/attributes/coverage"
+        },
+        "extension_origin": {
+          "$ref": "#/$defs/extension_origin",
+          "x-source": "extensions/ricevanta/objects/metadata.json#/attributes/extension_origin"
+        },
+        "extensions": {
+          "items": {
+            "$ref": "#/$defs/extension"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array",
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/extensions"
+        },
+        "is_truncated": {
+          "const": true,
+          "type": "boolean",
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/is_truncated"
+        },
+        "original_time": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/original_time"
+        },
+        "policy_bundle": {
+          "$ref": "#/$defs/policy_bundle",
+          "x-source": "extensions/ricevanta/objects/metadata.json#/attributes/policy_bundle"
+        },
+        "product": {
+          "$ref": "#/$defs/product",
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/product"
+        },
+        "profiles": {
+          "items": {
+            "maxLength": 4,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "type": "string",
+            "x-maxBytes": 4
+          },
+          "maxItems": 1,
+          "minItems": 0,
+          "type": "array",
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/profiles"
+        },
+        "sequence": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/sequence"
+        },
+        "truncation": {
+          "$ref": "#/$defs/truncation",
+          "x-source": "extensions/ricevanta/objects/metadata.json#/attributes/truncation"
+        },
+        "uid": {
+          "maxLength": 36,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 36,
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/uid"
+        },
+        "untruncated_size": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/untruncated_size"
+        },
+        "version": {
+          "const": "1.9.0",
+          "maxLength": 5,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 5,
+          "x-source": "upstream/1.9.0/objects/metadata.json#/attributes/version"
+        }
+      },
+      "required": [
+        "correlation_uid",
+        "extensions",
+        "product",
+        "profiles",
+        "sequence",
+        "uid",
+        "version"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/metadata.json#"
+    },
+    "os": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "cpu_architecture": {
+                "const": "x64"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "type_id": {
+                "const": 300
+              }
+            },
+            "required": [
+              "type_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "cpu_architecture": {
+                "const": "arm64"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "cpu_architecture": {
+          "enum": [
+            "arm64",
+            "x64"
+          ],
+          "maxLength": 5,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 5,
+          "x-source": "extensions/ricevanta/objects/os.json#/attributes/cpu_architecture"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "upstream/1.9.0/objects/os.json#/attributes/name"
+        },
+        "type_id": {
+          "enum": [
+            100,
+            200,
+            300
+          ],
+          "maximum": 300,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "upstream/1.9.0/objects/os.json#/attributes/type_id"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "upstream/1.9.0/objects/os.json#/attributes/version"
+        }
+      },
+      "required": [
+        "cpu_architecture",
+        "name",
+        "type_id"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/os.json#"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "upstream/1.9.0/objects/policy.json#/attributes/uid"
+        },
+        "version": {
+          "allOf": [
+            {
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "upstream/1.9.0/objects/policy.json#/attributes/version"
+        }
+      },
+      "required": [
+        "uid",
+        "version"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/policy.json#"
+    },
+    "policy_bundle": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "extensions/ricevanta/objects/policy_bundle.json#/attributes/bundle_uid"
+        },
+        "recovery_epoch": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/policy_bundle.json#/attributes/recovery_epoch"
+        },
+        "scope_id": {
+          "allOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "extensions/ricevanta/objects/policy_bundle.json#/attributes/scope_id"
+        },
+        "sequence": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/policy_bundle.json#/attributes/sequence"
+        }
+      },
+      "required": [
+        "bundle_uid",
+        "recovery_epoch",
+        "scope_id",
+        "sequence"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/policy_bundle.json#"
+    },
+    "process_sample": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number",
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/cpu_pct"
+        },
+        "event_rates": {
+          "items": {
+            "$ref": "#/$defs/event_rate"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/event_rates"
+        },
+        "fd_count": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/fd_count"
+        },
+        "footprint_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/footprint_bytes"
+        },
+        "footprint_metric": {
+          "enum": [
+            "phys_footprint",
+            "private_working_set",
+            "pss"
+          ],
+          "maxLength": 19,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 19,
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/footprint_metric"
+        },
+        "handle_count": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/handle_count"
+        },
+        "name": {
+          "allOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_.-]*$"
+            }
+          ],
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 128,
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/name"
+        },
+        "pid": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/pid"
+        },
+        "uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "extensions/ricevanta/objects/process_sample.json#/attributes/uid"
+        }
+      },
+      "required": [
+        "event_rates",
+        "footprint_metric",
+        "name",
+        "pid",
+        "uid"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/process_sample.json#"
+    },
+    "product": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "Ricevanta",
+          "maxLength": 9,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 9,
+          "x-source": "upstream/1.9.0/objects/product.json#/attributes/name"
+        },
+        "vendor_name": {
+          "const": "Ricevanta",
+          "maxLength": 9,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 9,
+          "x-source": "upstream/1.9.0/objects/product.json#/attributes/vendor_name"
+        },
+        "version": {
+          "allOf": [
+            {
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+            }
+          ],
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 64,
+          "x-source": "upstream/1.9.0/objects/product.json#/attributes/version"
+        }
+      },
+      "required": [
+        "name",
+        "vendor_name",
+        "version"
+      ],
+      "type": "object",
+      "x-source": "upstream/1.9.0/objects/product.json#"
+    },
+    "requester": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "device",
+            "user",
+            "service"
+          ],
+          "maxLength": 7,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 7,
+          "x-source": "extensions/ricevanta/objects/requester.json#/attributes/kind"
+        },
+        "uid": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "extensions/ricevanta/objects/requester.json#/attributes/uid"
+        }
+      },
+      "required": [
+        "kind",
+        "uid"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/requester.json#"
+    },
+    "sequence_range": {
+      "additionalProperties": false,
+      "properties": {
+        "first": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/sequence_range.json#/attributes/first"
+        },
+        "last": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/sequence_range.json#/attributes/last"
+        }
+      },
+      "required": [
+        "first",
+        "last"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/sequence_range.json#"
+    },
+    "spool_sample": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-restriction": "Explicit unsigned byte counter at this use site.",
+          "x-source": "upstream/1.9.0/dictionary.json#/attributes/bytes"
+        },
+        "dropped_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/dropped_bytes"
+        },
+        "dropped_records": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/dropped_records"
+        },
+        "dropped_segments": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/dropped_segments"
+        },
+        "last_ack_sequence": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/last_ack_sequence"
+        },
+        "oldest_unsent_ms": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/oldest_unsent_ms"
+        },
+        "spool_class": {
+          "enum": [
+            "raw",
+            "context",
+            "lineage",
+            "findings",
+            "audit"
+          ],
+          "maxLength": 8,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 8,
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/spool_class"
+        },
+        "stream_epoch": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/stream_epoch"
+        },
+        "upload_errors": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/spool_sample.json#/attributes/upload_errors"
+        }
+      },
+      "required": [
+        "bytes",
+        "dropped_bytes",
+        "dropped_records",
+        "dropped_segments",
+        "spool_class",
+        "stream_epoch",
+        "upload_errors"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/spool_sample.json#"
+    },
+    "truncation": {
+      "additionalProperties": false,
+      "properties": {
+        "omitted_entries": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/truncation.json#/attributes/omitted_entries"
+        },
+        "original_event_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 1,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/truncation.json#/attributes/original_event_bytes"
+        },
+        "original_unmapped_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/truncation.json#/attributes/original_unmapped_bytes"
+        }
+      },
+      "required": [
+        "omitted_entries",
+        "original_event_bytes",
+        "original_unmapped_bytes"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/truncation.json#"
+    },
+    "unmapped": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/unmapped_entry"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-source": "extensions/ricevanta/objects/unmapped.json#/attributes/entries"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/unmapped.json#"
+    },
+    "unmapped_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "enum": [
+            "os_error_code",
+            "sampler_backend",
+            "native_event_code"
+          ],
+          "maxLength": 17,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 17,
+          "x-source": "extensions/ricevanta/objects/unmapped_entry.json#/attributes/field"
+        },
+        "index": {
+          "maximum": 127,
+          "minimum": 0,
+          "type": "integer",
+          "x-integer": "uint64",
+          "x-source": "extensions/ricevanta/objects/unmapped_entry.json#/attributes/index"
+        },
+        "reason": {
+          "enum": [
+            "field_unmapped",
+            "value_unmapped"
+          ],
+          "maxLength": 14,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 14,
+          "x-source": "extensions/ricevanta/objects/unmapped_entry.json#/attributes/reason"
+        },
+        "value": {
+          "allOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            }
+          ],
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "type": "string",
+          "x-maxBytes": 256,
+          "x-source": "extensions/ricevanta/objects/unmapped_entry.json#/attributes/value"
+        }
+      },
+      "required": [
+        "field",
+        "index",
+        "reason",
+        "value"
+      ],
+      "type": "object",
+      "x-source": "extensions/ricevanta/objects/unmapped_entry.json#"
+    }
+  },
+  "$id": "https://ricevanta.io/schemas/ocsf/compiled/99903001.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "activity_id": {
+            "const": 1
+          }
+        },
+        "required": [
+          "activity_id"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "prior_certificate_uid"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "reason": {
+            "enum": [
+              "issued"
+            ]
+          },
+          "status_id": {
+            "const": 1
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "activity_id": {
+            "const": 2
+          }
+        },
+        "required": [
+          "activity_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "renewed"
+            ]
+          },
+          "status_id": {
+            "const": 1
+          }
+        },
+        "required": [
+          "prior_certificate_uid",
+          "reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "activity_id": {
+            "const": 3
+          }
+        },
+        "required": [
+          "activity_id"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "prior_certificate_uid"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "reason": {
+            "enum": [
+              "revoked"
+            ]
+          },
+          "status_id": {
+            "const": 1
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "activity_id": {
+            "const": 4
+          }
+        },
+        "required": [
+          "activity_id"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "prior_certificate_uid"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "reason": {
+            "enum": [
+              "expired"
+            ]
+          },
+          "status_id": {
+            "const": 1
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "metadata": {
+          "not": {
+            "required": [
+              "coverage"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "metadata": {
+          "not": {
+            "required": [
+              "extension_origin"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "not": {
+        "required": [
+          "unmapped"
+        ]
+      }
+    }
+  ],
+  "anyOf": [
+    {
+      "not": {
+        "required": [
+          "device"
+        ]
+      },
+      "properties": {
+        "metadata": {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "bundle_state"
+                ]
+              },
+              {
+                "required": [
+                  "policy_bundle"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "profiles": {
+              "const": []
+            }
+          }
+        }
+      },
+      "x-sourceKind": "server"
+    }
+  ],
+  "properties": {
+    "activity_id": {
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "maximum": 4,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "uint64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/activity_id"
+    },
+    "ca_uid": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "type": "string",
+      "x-maxBytes": 256,
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/prior_certificate_uid"
+    },
+    "category_uid": {
+      "const": 3,
+      "maximum": 3,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "uint64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/category_uid"
+    },
+    "certificate": {
+      "$ref": "#/$defs/certificate",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/certificate"
+    },
+    "class_uid": {
+      "const": 99903001,
+      "maximum": 99903001,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "uint64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/class_uid"
+    },
+    "device": {
+      "$ref": "#/$defs/device",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/device"
+    },
+    "message": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "type": "string",
+      "x-maxBytes": 1024,
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/message"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/metadata"
+    },
+    "prior_certificate_uid": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "type": "string",
+      "x-maxBytes": 256,
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/prior_certificate_uid"
+    },
+    "profile": {
+      "allOf": [
+        {
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        }
+      ],
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "type": "string",
+      "x-maxBytes": 128,
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/profile"
+    },
+    "reason": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "type": "string",
+      "x-maxBytes": 128,
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/reason"
+    },
+    "request_uid": {
+      "maxLength": 36,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "type": "string",
+      "x-maxBytes": 36,
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/request_uid"
+    },
+    "requester": {
+      "$ref": "#/$defs/requester",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/requester"
+    },
+    "severity_id": {
+      "maximum": 6,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "uint64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/severity_id"
+    },
+    "status_id": {
+      "enum": [
+        0,
+        1,
+        2
+      ],
+      "maximum": 2,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "uint64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/status_id"
+    },
+    "time": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "int64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/time"
+    },
+    "type_uid": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "type": "integer",
+      "x-integer": "int64",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/type_uid"
+    },
+    "unmapped": {
+      "$ref": "#/$defs/unmapped",
+      "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#/attributes/unmapped"
+    }
+  },
+  "required": [
+    "activity_id",
+    "ca_uid",
+    "category_uid",
+    "certificate",
+    "class_uid",
+    "metadata",
+    "profile",
+    "request_uid",
+    "requester",
+    "severity_id",
+    "status_id",
+    "time",
+    "type_uid"
+  ],
+  "type": "object",
+  "x-rule": [
+    "type_uid",
+    "bundle_state",
+    "certificate_activity",
+    "unmapped",
+    "truncation"
+  ],
+  "x-source": "extensions/ricevanta/events/certificate_lifecycle_activity.json#"
+}

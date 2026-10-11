@@ -1,0 +1,313 @@
+{
+  "attributes": {
+    "affected_device_uid": {
+      "caption": "Affected device uid",
+      "description": "Ricevanta affected device uid.",
+      "type": "string_t"
+    },
+    "archive_uid": {
+      "caption": "Archive uid",
+      "description": "Ricevanta archive uid.",
+      "type": "string_t"
+    },
+    "budgets": {
+      "caption": "Budgets",
+      "description": "Ricevanta budgets.",
+      "is_array": true,
+      "type": "budget_sample"
+    },
+    "bundle_state": {
+      "caption": "Bundle state",
+      "description": "Ricevanta bundle state.",
+      "type": "string_t"
+    },
+    "bundle_uid": {
+      "caption": "Bundle uid",
+      "description": "Ricevanta bundle uid.",
+      "type": "string_t"
+    },
+    "ca_uid": {
+      "caption": "Ca uid",
+      "description": "Ricevanta ca uid.",
+      "type": "string_t"
+    },
+    "candidate_bundle_uid": {
+      "caption": "Candidate bundle uid",
+      "description": "Ricevanta candidate bundle uid.",
+      "type": "string_t"
+    },
+    "component_digest": {
+      "caption": "Component digest",
+      "description": "Ricevanta component digest.",
+      "type": "string_t"
+    },
+    "coverage": {
+      "caption": "Coverage",
+      "description": "Ricevanta coverage.",
+      "is_array": true,
+      "type": "coverage_entry"
+    },
+    "cpu_limit_pct": {
+      "caption": "Cpu limit pct",
+      "description": "Ricevanta cpu limit pct.",
+      "type": "float_t"
+    },
+    "cpu_pct": {
+      "caption": "Cpu pct",
+      "description": "Ricevanta cpu pct.",
+      "type": "float_t"
+    },
+    "destination": {
+      "caption": "Destination",
+      "description": "Ricevanta destination.",
+      "type": "string_t"
+    },
+    "destination_state": {
+      "caption": "Destination state",
+      "description": "Ricevanta destination state.",
+      "type": "string_t"
+    },
+    "dropped_bytes": {
+      "caption": "Dropped bytes",
+      "description": "Ricevanta dropped bytes.",
+      "type": "integer_t"
+    },
+    "dropped_records": {
+      "caption": "Dropped records",
+      "description": "Ricevanta dropped records.",
+      "type": "integer_t"
+    },
+    "dropped_segments": {
+      "caption": "Dropped segments",
+      "description": "Ricevanta dropped segments.",
+      "type": "integer_t"
+    },
+    "entries": {
+      "caption": "Entries",
+      "description": "Ricevanta entries.",
+      "is_array": true,
+      "type": "unmapped_entry"
+    },
+    "event_rates": {
+      "caption": "Event rates",
+      "description": "Ricevanta event rates.",
+      "is_array": true,
+      "type": "event_rate"
+    },
+    "exception_uid": {
+      "caption": "Exception uid",
+      "description": "Ricevanta exception uid.",
+      "type": "string_t"
+    },
+    "extension_origin": {
+      "caption": "Extension origin",
+      "description": "Ricevanta extension origin.",
+      "type": "extension_origin"
+    },
+    "fd_count": {
+      "caption": "Fd count",
+      "description": "Ricevanta fd count.",
+      "type": "integer_t"
+    },
+    "field": {
+      "caption": "Field",
+      "description": "Ricevanta field.",
+      "type": "string_t"
+    },
+    "first": {
+      "caption": "First",
+      "description": "Ricevanta first.",
+      "type": "integer_t"
+    },
+    "footprint_bytes": {
+      "caption": "Footprint bytes",
+      "description": "Ricevanta footprint bytes.",
+      "type": "integer_t"
+    },
+    "footprint_metric": {
+      "caption": "Footprint metric",
+      "description": "Ricevanta footprint metric.",
+      "type": "string_t"
+    },
+    "grant_generation": {
+      "caption": "Grant generation",
+      "description": "Ricevanta grant generation.",
+      "type": "integer_t"
+    },
+    "handle_count": {
+      "caption": "Handle count",
+      "description": "Ricevanta handle count.",
+      "type": "integer_t"
+    },
+    "id": {
+      "caption": "Id",
+      "description": "Ricevanta id.",
+      "type": "string_t"
+    },
+    "index": {
+      "caption": "Index",
+      "description": "Ricevanta index.",
+      "type": "integer_t"
+    },
+    "interval_ms": {
+      "caption": "Interval ms",
+      "description": "Ricevanta interval ms.",
+      "type": "integer_t"
+    },
+    "kernel_bytes": {
+      "caption": "Kernel bytes",
+      "description": "Ricevanta kernel bytes.",
+      "type": "integer_t"
+    },
+    "kind": {
+      "caption": "Kind",
+      "description": "Ricevanta kind.",
+      "type": "string_t"
+    },
+    "last": {
+      "caption": "Last",
+      "description": "Ricevanta last.",
+      "type": "integer_t"
+    },
+    "last_ack_sequence": {
+      "caption": "Last ack sequence",
+      "description": "Ricevanta last ack sequence.",
+      "type": "integer_t"
+    },
+    "memory_bytes": {
+      "caption": "Memory bytes",
+      "description": "Ricevanta memory bytes.",
+      "type": "integer_t"
+    },
+    "memory_limit_bytes": {
+      "caption": "Memory limit bytes",
+      "description": "Ricevanta memory limit bytes.",
+      "type": "integer_t"
+    },
+    "oldest_unsent_ms": {
+      "caption": "Oldest unsent ms",
+      "description": "Ricevanta oldest unsent ms.",
+      "type": "integer_t"
+    },
+    "omitted_entries": {
+      "caption": "Omitted entries",
+      "description": "Ricevanta omitted entries.",
+      "type": "integer_t"
+    },
+    "original_event_bytes": {
+      "caption": "Original event bytes",
+      "description": "Ricevanta original event bytes.",
+      "type": "integer_t"
+    },
+    "original_unmapped_bytes": {
+      "caption": "Original unmapped bytes",
+      "description": "Ricevanta original unmapped bytes.",
+      "type": "integer_t"
+    },
+    "package_digest": {
+      "caption": "Package digest",
+      "description": "Ricevanta package digest.",
+      "type": "string_t"
+    },
+    "policy_bundle": {
+      "caption": "Policy bundle",
+      "description": "Ricevanta policy bundle.",
+      "type": "policy_bundle"
+    },
+    "prior_certificate_uid": {
+      "caption": "Prior certificate uid",
+      "description": "Ricevanta prior certificate uid.",
+      "type": "string_t"
+    },
+    "processes": {
+      "caption": "Processes",
+      "description": "Ricevanta processes.",
+      "is_array": true,
+      "type": "process_sample"
+    },
+    "profile": {
+      "caption": "Profile",
+      "description": "Ricevanta profile.",
+      "type": "string_t"
+    },
+    "quarantine_uid": {
+      "caption": "Quarantine uid",
+      "description": "Ricevanta quarantine uid.",
+      "type": "string_t"
+    },
+    "reason": {
+      "caption": "Reason",
+      "description": "Ricevanta reason.",
+      "type": "string_t"
+    },
+    "recovery_epoch": {
+      "caption": "Recovery epoch",
+      "description": "Ricevanta recovery epoch.",
+      "type": "integer_t"
+    },
+    "request_uid": {
+      "caption": "Request uid",
+      "description": "Ricevanta request uid.",
+      "type": "string_t"
+    },
+    "requester": {
+      "caption": "Requester",
+      "description": "Ricevanta requester.",
+      "type": "requester"
+    },
+    "rule_uid": {
+      "caption": "Rule uid",
+      "description": "Ricevanta rule uid.",
+      "type": "string_t"
+    },
+    "scope_id": {
+      "caption": "Scope id",
+      "description": "Ricevanta scope id.",
+      "type": "string_t"
+    },
+    "sequence_range": {
+      "caption": "Sequence range",
+      "description": "Ricevanta sequence range.",
+      "type": "sequence_range"
+    },
+    "spool_class": {
+      "caption": "Spool class",
+      "description": "Ricevanta spool class.",
+      "type": "string_t"
+    },
+    "spools": {
+      "caption": "Spools",
+      "description": "Ricevanta spools.",
+      "is_array": true,
+      "type": "spool_sample"
+    },
+    "stream_epoch": {
+      "caption": "Stream epoch",
+      "description": "Ricevanta stream epoch.",
+      "type": "integer_t"
+    },
+    "truncation": {
+      "caption": "Truncation",
+      "description": "Ricevanta truncation.",
+      "type": "truncation"
+    },
+    "unit": {
+      "caption": "Unit",
+      "description": "Ricevanta unit.",
+      "type": "string_t"
+    },
+    "upload_errors": {
+      "caption": "Upload errors",
+      "description": "Ricevanta upload errors.",
+      "type": "integer_t"
+    },
+    "window_ms": {
+      "caption": "Window ms",
+      "description": "Ricevanta window ms.",
+      "type": "integer_t"
+    }
+  },
+  "caption": "Ricevanta",
+  "description": "Ricevanta foundation attributes.",
+  "name": "ricevanta"
+}

@@ -1,0 +1,86 @@
+{
+  "$id": "https://ricevanta.io/schemas/ocsf/fixture.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "events": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "event_json": {
+            "maxLength": 2097152,
+            "type": "string"
+          },
+          "expected_error": {
+            "enum": [
+              null,
+              "ErrSource",
+              "ErrBudget",
+              "ErrDecoded",
+              "ErrVersion",
+              "ErrClass",
+              "ErrShape",
+              "ErrConstraint"
+            ]
+          },
+          "name": {
+            "maxLength": 128,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "agent",
+              "server"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "event_json",
+          "expected_error"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2048,
+      "type": "array"
+    },
+    "format": {
+      "const": 1
+    },
+    "parser": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "event_json": {
+            "maxLength": 2097152,
+            "type": "string"
+          },
+          "expected_error": {
+            "const": "parse.invalid"
+          },
+          "name": {
+            "maxLength": 128,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "event_json",
+          "expected_error"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2048,
+      "type": "array"
+    }
+  },
+  "required": [
+    "format",
+    "events",
+    "parser"
+  ],
+  "type": "object"
+}

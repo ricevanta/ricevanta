@@ -36,6 +36,7 @@ go test -count=1 ./internal/mdm/resourcevalidate -fuzz=FuzzValidate -fuzztime=60
 go test -count=1 ./internal/mdm/resourcevalidate -fuzz=FuzzBudget -fuzztime=60s -parallel=2
 go test -count=1 ./internal/events/reportvalidate -fuzz=FuzzValidate -fuzztime=60s -parallel=2
 go test -count=1 ./internal/events/reportvalidate -fuzz=FuzzBudget -fuzztime=60s -parallel=2
+go test -count=1 ./internal/events/ocsf -fuzz='^FuzzValidate$' -fuzztime=60s -parallel=2
 ```
 
 Keep the single target list in `.github/workflows/server.yml` aligned with these commands. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.

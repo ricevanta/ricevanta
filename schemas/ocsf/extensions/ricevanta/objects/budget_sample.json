@@ -1,0 +1,50 @@
+{
+  "attributes": {
+    "cpu_limit_pct": {
+      "caption": "Cpu limit pct",
+      "description": "Ricevanta cpu limit pct.",
+      "requirement": "required",
+      "type": "float_t"
+    },
+    "cpu_pct": {
+      "caption": "Cpu pct",
+      "description": "Ricevanta cpu pct.",
+      "requirement": "optional",
+      "type": "float_t"
+    },
+    "memory_bytes": {
+      "caption": "Memory bytes",
+      "description": "Ricevanta memory bytes.",
+      "requirement": "optional",
+      "type": "integer_t"
+    },
+    "memory_limit_bytes": {
+      "caption": "Memory limit bytes",
+      "description": "Ricevanta memory limit bytes.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "state": {
+      "caption": "State",
+      "description": "Ricevanta state.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "unit": {
+      "caption": "Unit",
+      "description": "Ricevanta unit.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "window_ms": {
+      "caption": "Window ms",
+      "description": "Ricevanta window ms.",
+      "requirement": "required",
+      "type": "integer_t"
+    }
+  },
+  "caption": "Budget sample",
+  "description": "Ricevanta budget sample.",
+  "extends": "object",
+  "name": "budget_sample"
+}

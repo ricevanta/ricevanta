@@ -1,0 +1,109 @@
+{
+  "attributes": {
+    "activity_id": {
+      "enum": {
+        "1": {
+          "caption": "Drop"
+        },
+        "2": {
+          "caption": "Gap"
+        },
+        "3": {
+          "caption": "Quarantine"
+        },
+        "4": {
+          "caption": "Destination state"
+        },
+        "5": {
+          "caption": "Archive"
+        },
+        "6": {
+          "caption": "Lookback overrun"
+        }
+      },
+      "requirement": "required"
+    },
+    "affected_device_uid": {
+      "requirement": "optional"
+    },
+    "archive_uid": {
+      "requirement": "optional"
+    },
+    "bytes": {
+      "requirement": "optional"
+    },
+    "category_uid": {
+      "enum": {
+        "1": {
+          "caption": "System activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "class_uid": {
+      "enum": {
+        "99901003": {
+          "caption": "Pipeline activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "count": {
+      "requirement": "optional"
+    },
+    "destination": {
+      "requirement": "optional"
+    },
+    "destination_state": {
+      "requirement": "optional"
+    },
+    "device": {
+      "requirement": "optional"
+    },
+    "event_uid": {
+      "requirement": "optional"
+    },
+    "message": {
+      "requirement": "optional"
+    },
+    "metadata": {
+      "requirement": "required"
+    },
+    "quarantine_uid": {
+      "requirement": "optional"
+    },
+    "reason": {
+      "requirement": "optional"
+    },
+    "sequence_range": {
+      "requirement": "optional"
+    },
+    "severity_id": {
+      "requirement": "required"
+    },
+    "spool_class": {
+      "requirement": "optional"
+    },
+    "status_id": {
+      "requirement": "required"
+    },
+    "stream_epoch": {
+      "requirement": "optional"
+    },
+    "time": {
+      "requirement": "required"
+    },
+    "type_uid": {
+      "requirement": "required"
+    },
+    "unmapped": {
+      "requirement": "optional"
+    }
+  },
+  "caption": "Pipeline activity",
+  "category": "system",
+  "description": "Ricevanta pipeline activity.",
+  "extends": "base_event",
+  "name": "pipeline_activity",
+  "uid": 3
+}

@@ -1,0 +1,73 @@
+{
+  "attributes": {
+    "activity_id": {
+      "enum": {
+        "1": {
+          "caption": "Sample"
+        }
+      },
+      "requirement": "required"
+    },
+    "budgets": {
+      "requirement": "required"
+    },
+    "category_uid": {
+      "enum": {
+        "1": {
+          "caption": "System activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "class_uid": {
+      "enum": {
+        "99901001": {
+          "caption": "Agent health activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "device": {
+      "requirement": "optional"
+    },
+    "interval_ms": {
+      "requirement": "required"
+    },
+    "kernel_bytes": {
+      "requirement": "optional"
+    },
+    "message": {
+      "requirement": "optional"
+    },
+    "metadata": {
+      "requirement": "required"
+    },
+    "processes": {
+      "requirement": "required"
+    },
+    "severity_id": {
+      "requirement": "required"
+    },
+    "spools": {
+      "requirement": "required"
+    },
+    "status_id": {
+      "requirement": "required"
+    },
+    "time": {
+      "requirement": "required"
+    },
+    "type_uid": {
+      "requirement": "required"
+    },
+    "unmapped": {
+      "requirement": "optional"
+    }
+  },
+  "caption": "Agent health activity",
+  "category": "system",
+  "description": "Ricevanta agent health activity.",
+  "extends": "base_event",
+  "name": "agent_health_activity",
+  "uid": 1
+}

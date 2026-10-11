@@ -7,6 +7,7 @@ on:
       - 'server/**'
       - 'schemas/dsse/**'
       - 'schemas/events/**'
+      - 'schemas/ocsf/**'
       - 'schemas/cel/**'
       - 'schemas/export/**'
       - 'schemas/policy/**'
@@ -19,6 +20,7 @@ on:
       - 'server/**'
       - 'schemas/dsse/**'
       - 'schemas/events/**'
+      - 'schemas/ocsf/**'
       - 'schemas/cel/**'
       - 'schemas/export/**'
       - 'schemas/policy/**'
@@ -116,7 +118,8 @@ jobs:
               {"package":"./internal/mdm/resourcevalidate","target":"FuzzValidate"},
               {"package":"./internal/mdm/resourcevalidate","target":"FuzzBudget"},
               {"package":"./internal/events/reportvalidate","target":"FuzzValidate"},
-              {"package":"./internal/events/reportvalidate","target":"FuzzBudget"}
+              {"package":"./internal/events/reportvalidate","target":"FuzzBudget"},
+              {"package":"./internal/events/ocsf","target":"FuzzValidate"}
             ]
         run: |
           python3 - <<'PY'
@@ -152,7 +155,7 @@ jobs:
         env:
           FUZZ_PACKAGE: ${{ matrix.package }}
           FUZZ_TARGET: ${{ matrix.target }}
-        run: go test "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2
+        run: go test -count=1 "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2
       - name: Upload failing corpus
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -193,3 +196,42 @@ jobs:
           name: loader-gate-a-${{ matrix.os }}
           path: server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**
           if-no-files-found: ignore
+
+  ocsf-native:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            goos: darwin
+            goarch: arm64
+          - os: windows-2025
+            goos: windows
+            goarch: amd64
+          - os: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: true
+          cache-dependency-path: server/go.sum
+      - name: Check native target
+        shell: bash
+        env:
+          EXPECTED_GOOS: ${{ matrix.goos }}
+          EXPECTED_GOARCH: ${{ matrix.goarch }}
+        run: |
+          test "$(go env GOOS)" = "$EXPECTED_GOOS"
+          test "$(go env GOARCH)" = "$EXPECTED_GOARCH"
+      - name: Test OCSF shared corpus
+        run: go test -count=1 ./internal/events/ocsf
