@@ -93,7 +93,11 @@
               "none",
               "always",
               "policy_change",
-              "extension_dependency"
+              "extension_dependency",
+              "destination_change",
+              "published_content",
+              "group_change",
+              "child_union"
             ]
           },
           "requires": {
