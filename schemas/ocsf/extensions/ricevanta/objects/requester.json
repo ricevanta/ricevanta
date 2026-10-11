@@ -1,0 +1,20 @@
+{
+  "attributes": {
+    "kind": {
+      "caption": "Kind",
+      "description": "Ricevanta kind.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "uid": {
+      "caption": "Uid",
+      "description": "Ricevanta uid.",
+      "requirement": "required",
+      "type": "string_t"
+    }
+  },
+  "caption": "Requester",
+  "description": "Ricevanta requester.",
+  "extends": "object",
+  "name": "requester"
+}

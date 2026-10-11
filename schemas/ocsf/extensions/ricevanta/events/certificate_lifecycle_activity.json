@@ -1,0 +1,88 @@
+{
+  "attributes": {
+    "activity_id": {
+      "enum": {
+        "1": {
+          "caption": "Issue"
+        },
+        "2": {
+          "caption": "Renew"
+        },
+        "3": {
+          "caption": "Revoke"
+        },
+        "4": {
+          "caption": "Expire"
+        }
+      },
+      "requirement": "required"
+    },
+    "ca_uid": {
+      "requirement": "required"
+    },
+    "category_uid": {
+      "enum": {
+        "3": {
+          "caption": "Identity and access management"
+        }
+      },
+      "requirement": "required"
+    },
+    "certificate": {
+      "requirement": "required"
+    },
+    "class_uid": {
+      "enum": {
+        "99903001": {
+          "caption": "Certificate lifecycle activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "device": {
+      "requirement": "optional"
+    },
+    "message": {
+      "requirement": "optional"
+    },
+    "metadata": {
+      "requirement": "required"
+    },
+    "prior_certificate_uid": {
+      "requirement": "optional"
+    },
+    "profile": {
+      "requirement": "required"
+    },
+    "reason": {
+      "requirement": "optional"
+    },
+    "request_uid": {
+      "requirement": "required"
+    },
+    "requester": {
+      "requirement": "required"
+    },
+    "severity_id": {
+      "requirement": "required"
+    },
+    "status_id": {
+      "requirement": "required"
+    },
+    "time": {
+      "requirement": "required"
+    },
+    "type_uid": {
+      "requirement": "required"
+    },
+    "unmapped": {
+      "requirement": "optional"
+    }
+  },
+  "caption": "Certificate lifecycle activity",
+  "category": "iam",
+  "description": "Ricevanta certificate lifecycle activity.",
+  "extends": "base_event",
+  "name": "certificate_lifecycle_activity",
+  "uid": 1
+}

@@ -1,0 +1,904 @@
+{
+  "$defs": {
+    "array": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "items": {
+          "$ref": "#/$defs/item"
+        },
+        "maxItems": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minItems": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "type": {
+          "const": "array"
+        },
+        "x-restriction": {
+          "type": "string"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "type": "object"
+    },
+    "array_fragment": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "items": {
+          "$ref": "#/$defs/item"
+        },
+        "maxItems": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minItems": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "attribute": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/item"
+        },
+        {
+          "required": [
+            "x-source"
+          ]
+        }
+      ]
+    },
+    "boolean": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "type": {
+          "const": "boolean"
+        },
+        "x-restriction": {
+          "type": "string"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "class": {
+      "additionalProperties": false,
+      "properties": {
+        "additionalProperties": {
+          "const": false
+        },
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/attribute"
+          },
+          "type": "object"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "object"
+        },
+        "x-rule": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+        "x-source"
+      ],
+      "type": "object"
+    },
+    "definition": {
+      "additionalProperties": false,
+      "properties": {
+        "additionalProperties": {
+          "const": false
+        },
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/attribute"
+          },
+          "type": "object"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "object"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+        "x-source"
+      ],
+      "type": "object"
+    },
+    "fragment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/string"
+        },
+        {
+          "$ref": "#/$defs/integer"
+        },
+        {
+          "$ref": "#/$defs/number"
+        },
+        {
+          "$ref": "#/$defs/boolean"
+        },
+        {
+          "$ref": "#/$defs/array"
+        },
+        {
+          "$ref": "#/$defs/literal_fragment"
+        },
+        {
+          "$ref": "#/$defs/object_fragment"
+        },
+        {
+          "$ref": "#/$defs/string_fragment"
+        },
+        {
+          "$ref": "#/$defs/number_fragment"
+        },
+        {
+          "$ref": "#/$defs/array_fragment"
+        }
+      ]
+    },
+    "integer": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "type": {
+          "const": "integer"
+        },
+        "x-integer": {
+          "enum": [
+            "int64",
+            "uint64"
+          ]
+        },
+        "x-restriction": {
+          "type": "string"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "item": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/string"
+        },
+        {
+          "$ref": "#/$defs/integer"
+        },
+        {
+          "$ref": "#/$defs/number"
+        },
+        {
+          "$ref": "#/$defs/boolean"
+        },
+        {
+          "$ref": "#/$defs/array"
+        }
+      ]
+    },
+    "literal_fragment": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "number": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "type": {
+          "const": "number"
+        },
+        "x-restriction": {
+          "type": "string"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "number_fragment": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "x-integer": {
+          "enum": [
+            "int64",
+            "uint64"
+          ]
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "object_fragment": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/fragment"
+          },
+          "type": "object"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "x-sourceKind": {
+          "enum": [
+            "agent",
+            "server"
+          ]
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "reference": {
+      "additionalProperties": false,
+      "properties": {
+        "$ref": {
+          "pattern": "^#/\\$defs/[a-z][a-z0-9_]*$",
+          "type": "string"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "$ref"
+      ],
+      "type": "object"
+    },
+    "string": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "maxLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "type": {
+          "const": "string"
+        },
+        "x-maxBytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "x-restriction": {
+          "type": "string"
+        },
+        "x-source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "string_fragment": {
+      "additionalProperties": false,
+      "properties": {
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "else": {
+          "$ref": "#/$defs/fragment"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/fragment"
+        },
+        "maxLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not": {
+          "$ref": "#/$defs/fragment"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/fragment"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "then": {
+          "$ref": "#/$defs/fragment"
+        },
+        "x-maxBytes": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "$id": "https://ricevanta.io/schemas/ocsf/profile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "classes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "category_uid": {
+            "type": "integer"
+          },
+          "class_uid": {
+            "type": "integer"
+          },
+          "local_uid": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema": {
+            "$ref": "#/$defs/class"
+          },
+          "source_kinds": {
+            "items": {
+              "enum": [
+                "agent",
+                "server"
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "local_uid",
+          "category_uid",
+          "class_uid",
+          "source_kinds",
+          "schema"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "format": {
+      "const": 1
+    },
+    "objects": {
+      "additionalProperties": {
+        "$ref": "#/$defs/definition"
+      },
+      "type": "object"
+    },
+    "profile": {
+      "const": "ricevanta-ocsf-1"
+    }
+  },
+  "required": [
+    "format",
+    "profile",
+    "classes",
+    "objects"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,21 @@
+{
+  "attributes": {
+    "labels": {
+      "caption": "Labels",
+      "description": "Ricevanta labels.",
+      "is_array": true,
+      "requirement": "optional",
+      "type": "string_t"
+    },
+    "os": {
+      "caption": "Os",
+      "description": "Ricevanta os.",
+      "requirement": "required",
+      "type": "os"
+    }
+  },
+  "caption": "Device",
+  "description": "Ricevanta device projection additions.",
+  "extends": "device",
+  "name": "device"
+}

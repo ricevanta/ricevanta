@@ -1,0 +1,109 @@
+{
+  "attributes": {
+    "activity_id": {
+      "enum": {
+        "1": {
+          "caption": "Evaluated"
+        },
+        "10": {
+          "caption": "Unit throttled"
+        },
+        "11": {
+          "caption": "Unit disabled"
+        },
+        "2": {
+          "caption": "Error"
+        },
+        "3": {
+          "caption": "Exception applied"
+        },
+        "4": {
+          "caption": "Fail open applied"
+        },
+        "5": {
+          "caption": "Fail closed applied"
+        },
+        "6": {
+          "caption": "Command refused"
+        },
+        "7": {
+          "caption": "Bundle installed"
+        },
+        "8": {
+          "caption": "Bundle refused"
+        },
+        "9": {
+          "caption": "Rule unsupported"
+        }
+      },
+      "requirement": "required"
+    },
+    "candidate_bundle_uid": {
+      "requirement": "optional"
+    },
+    "category_uid": {
+      "enum": {
+        "1": {
+          "caption": "System activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "class_uid": {
+      "enum": {
+        "99901002": {
+          "caption": "Policy activity"
+        }
+      },
+      "requirement": "required"
+    },
+    "command_uid": {
+      "requirement": "optional"
+    },
+    "device": {
+      "requirement": "optional"
+    },
+    "exception_uid": {
+      "requirement": "optional"
+    },
+    "message": {
+      "requirement": "optional"
+    },
+    "metadata": {
+      "requirement": "required"
+    },
+    "policy": {
+      "requirement": "optional"
+    },
+    "reason": {
+      "requirement": "optional"
+    },
+    "rule_uid": {
+      "requirement": "optional"
+    },
+    "severity_id": {
+      "requirement": "required"
+    },
+    "status_id": {
+      "requirement": "required"
+    },
+    "time": {
+      "requirement": "required"
+    },
+    "type_uid": {
+      "requirement": "required"
+    },
+    "unit": {
+      "requirement": "optional"
+    },
+    "unmapped": {
+      "requirement": "optional"
+    }
+  },
+  "caption": "Policy activity",
+  "category": "system",
+  "description": "Ricevanta policy activity.",
+  "extends": "base_event",
+  "name": "policy_activity",
+  "uid": 2
+}

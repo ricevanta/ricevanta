@@ -1,0 +1,63 @@
+{
+  "attributes": {
+    "cpu_pct": {
+      "caption": "Cpu pct",
+      "description": "Ricevanta cpu pct.",
+      "requirement": "optional",
+      "type": "float_t"
+    },
+    "event_rates": {
+      "caption": "Event rates",
+      "description": "Ricevanta event rates.",
+      "is_array": true,
+      "requirement": "required",
+      "type": "event_rate"
+    },
+    "fd_count": {
+      "caption": "Fd count",
+      "description": "Ricevanta fd count.",
+      "requirement": "optional",
+      "type": "integer_t"
+    },
+    "footprint_bytes": {
+      "caption": "Footprint bytes",
+      "description": "Ricevanta footprint bytes.",
+      "requirement": "optional",
+      "type": "integer_t"
+    },
+    "footprint_metric": {
+      "caption": "Footprint metric",
+      "description": "Ricevanta footprint metric.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "handle_count": {
+      "caption": "Handle count",
+      "description": "Ricevanta handle count.",
+      "requirement": "optional",
+      "type": "integer_t"
+    },
+    "name": {
+      "caption": "Name",
+      "description": "Ricevanta name.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "pid": {
+      "caption": "Pid",
+      "description": "Ricevanta pid.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "uid": {
+      "caption": "Uid",
+      "description": "Ricevanta uid.",
+      "requirement": "required",
+      "type": "string_t"
+    }
+  },
+  "caption": "Process sample",
+  "description": "Ricevanta process sample.",
+  "extends": "object",
+  "name": "process_sample"
+}
