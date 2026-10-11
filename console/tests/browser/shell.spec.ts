@@ -4,20 +4,9 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { normalizeUnicodeRange, packageFontFaces } from '../helpers/fonts.ts'
-import type { Page } from '@playwright/test'
+import { settleDocumentFonts } from '../helpers/document-fonts.ts'
 const require = createRequire(import.meta.url)
 const expectedFontFaces = packageFontFaces()
-
-async function loadDocumentFonts(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    // Flush layout and settle CSS font loads before explicitly loading unused subsets.
-    document.body.getBoundingClientRect()
-    await document.fonts.ready
-    for (const face of document.fonts)
-      if (face.family.replace(/["']/g, '').trim() === 'Be Vietnam Pro') await face.load()
-    await document.fonts.ready
-  })
-}
 
 test('records actual engine versions and pinned browser revisions', async ({
   browser,
@@ -46,7 +35,7 @@ for (const width of [320, 1440])
     })
     await page.setViewportSize({ width, height: 900 })
     const response = await page.goto('/')
-    await loadDocumentFonts(page)
+    await page.evaluate(settleDocumentFonts)
     assertHeader(response?.headers()['content-security-policy'])
     expect(response?.headers()['content-security-policy-report-only']).toBeUndefined()
     for (const locale of ['en', 'vi'])
@@ -73,8 +62,9 @@ for (const width of [320, 1440])
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           ).toBe(true)
           expect(await page.locator('style,[style],script:not([src])').count()).toBe(0)
+          await page.evaluate(settleDocumentFonts)
           await page.goto('/matrix-unknown')
-          await loadDocumentFonts(page)
+          await page.evaluate(settleDocumentFonts)
           await expect(page.locator('h1')).toHaveCount(1)
           await expect(page.locator('h1')).toBeFocused()
           expect(await page.locator('style,[style],script:not([src])').count()).toBe(0)
@@ -82,13 +72,15 @@ for (const width of [320, 1440])
           await expect(page.locator('h1')).toHaveText(locale === 'en' ? 'Home' : 'Trang chủ')
           await expect(page.locator('h1')).toBeFocused()
         }
+    await page.evaluate(settleDocumentFonts)
     await page.goto('/private?token=hidden')
-    await loadDocumentFonts(page)
+    await page.evaluate(settleDocumentFonts)
     await expect(page.locator('h1')).toHaveText('Không tìm thấy trang')
     await expect(page.locator('h1')).toBeFocused()
     expect(await page.locator('body').innerText()).not.toMatch(/private|hidden/)
+    await page.evaluate(settleDocumentFonts)
     await page.reload()
-    await loadDocumentFonts(page)
+    await page.evaluate(settleDocumentFonts)
     await expect(page.locator('h1')).toBeFocused()
     await clickAndWaitForURL(page, page.getByRole('link', { name: 'Về trang chủ' }), '/')
     await expect(page.locator('h1')).toHaveText('Trang chủ')
@@ -131,7 +123,7 @@ for (const width of [320, 1440])
           ),
         }))
       const faces = Array.from(document.fonts).filter((face) => isVietnamPro(face.family))
-      // Earlier document loads finished before interactions or navigation started.
+      // Qualify all twelve faces once, after the navigation matrix has finished.
       const results: PromiseSettledResult<FontFace>[] = []
       for (const face of faces) results.push(...(await Promise.allSettled([face.load()])))
       await document.fonts.ready
