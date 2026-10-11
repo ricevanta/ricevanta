@@ -1,0 +1,50 @@
+{
+  "activity_id": 1,
+  "category_uid": 1,
+  "class_uid": 99901003,
+  "type_uid": 9990100301,
+  "severity_id": 1,
+  "status_id": 2,
+  "time": 1,
+  "metadata": {
+    "version": "1.9.0",
+    "uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+    "correlation_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+    "sequence": 0,
+    "product": {
+      "name": "Ricevanta",
+      "vendor_name": "Ricevanta",
+      "version": "0.1.0"
+    },
+    "profiles": [
+      "host"
+    ],
+    "extensions": [
+      {
+        "name": "ricevanta",
+        "uid": "999",
+        "version": "1.9.0"
+      }
+    ],
+    "bundle_state": "absent"
+  },
+  "device": {
+    "uid": "device-a",
+    "hostname": "host-a",
+    "type_id": 3,
+    "os": {
+      "name": "Linux",
+      "type_id": 200,
+      "cpu_architecture": "x64"
+    }
+  },
+  "spool_class": "raw",
+  "stream_epoch": 1,
+  "sequence_range": {
+    "first": 5,
+    "last": 6
+  },
+  "count": 2,
+  "bytes": 100,
+  "reason": "capacity"
+}
