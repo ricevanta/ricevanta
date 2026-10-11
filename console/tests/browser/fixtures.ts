@@ -1,77 +1,39 @@
 import { verifyHeader, expectedHeader } from './verify-probe.ts'
 import { test as base, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+import type { Page } from '@playwright/test'
+import { installCspEvidence } from './csp-evidence.ts'
 export { expectedHeader }
+const evidenceReaders = new WeakMap<Page, Awaited<ReturnType<typeof installCspEvidence>>>()
+export async function readCspEvents(
+  page: Page,
+  deadline = Date.now() + 5000,
+): Promise<string[] | undefined> {
+  const evidence = evidenceReaders.get(page)
+  if (!evidence) throw new Error('ProbeCspRecordError: Missing page collector')
+  return evidence.readSnapshot(deadline)
+}
 export const test = base.extend<{
-  violations: string[]
+  violations: () => Promise<string[]>
   errors: string[]
   discardCspEvents: boolean
 }>({
   discardCspEvents: [false, { option: true }],
-  violations: [
-    async ({ context, discardCspEvents }, use) => {
-      const violations: string[] = []
-      await context.exposeBinding('recordCsp', (_source, directive: unknown) => {
-        if (typeof directive !== 'string') throw new Error('Invalid CSP event')
-        if (!discardCspEvents) violations.push(directive)
-      })
-      await context.addInitScript(() => {
-        const diagnostics = {
-          listenerAttachedAt: performance.now(),
-          eventCount: 0,
-          documentEventCount: 0,
-          bindingMissing: 0,
-          bindingPending: 0,
-          bindingDelivered: 0,
-          bindingRejected: 0,
-          events: [] as { directive: string; target: string; at: number }[],
-        }
-        Reflect.set(window, 'cspDiagnostics', diagnostics)
-        window.addEventListener(
-          'securitypolicyviolation',
-          (event) => {
-            diagnostics.eventCount++
-            diagnostics.events.push({
-              directive: event.effectiveDirective,
-              target:
-                event.target === document
-                  ? 'document'
-                  : event.target === window
-                    ? 'window'
-                    : event.target instanceof Element
-                      ? event.target.tagName
-                      : 'other',
-              at: performance.now(),
-            })
-          },
-          { capture: true, passive: true },
-        )
-        document.addEventListener('securitypolicyviolation', (event) => {
-          diagnostics.documentEventCount++
-          const value: unknown = Reflect.get(window, 'recordCsp')
-          if (typeof value === 'function') {
-            const promise: unknown = Reflect.apply(value, undefined, [event.effectiveDirective])
-            if (promise instanceof Promise) {
-              diagnostics.bindingPending++
-              void promise.then(
-                () => {
-                  diagnostics.bindingPending--
-                  diagnostics.bindingDelivered++
-                },
-                () => {
-                  diagnostics.bindingPending--
-                  diagnostics.bindingRejected++
-                  throw new Error('CSP observation failed')
-                },
-              )
-            }
-          } else diagnostics.bindingMissing++
-        })
-      })
-      await use(violations)
-    },
-    { auto: true },
-  ],
+  page: async ({ page, discardCspEvents }, use) => {
+    const evidence = await installCspEvidence(page, discardCspEvents)
+    evidenceReaders.set(page, evidence)
+    try {
+      await use(page)
+    } finally {
+      evidenceReaders.delete(page)
+      evidence.dispose()
+    }
+  },
+  violations: async ({ page }, use) => {
+    const evidence = evidenceReaders.get(page)
+    if (!evidence) throw new Error('ProbeCspRecordError: Missing page collector')
+    await use(evidence.read)
+  },
   errors: [
     async ({ page }, use) => {
       const errors: string[] = []

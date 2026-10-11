@@ -1,5 +1,4 @@
 import type { Page, Response } from '@playwright/test'
-import { setTimeout } from 'node:timers/promises'
 import { readFileSync } from 'node:fs'
 import {
   probes,
@@ -12,50 +11,41 @@ import {
   expectedHeader,
 } from './verify-probe.ts'
 import type { ProbeObservation } from './verify-probe.ts'
-import { test, expect, assertHeader } from './fixtures.ts'
+import { test, expect, assertHeader, readCspEvents } from './fixtures.ts'
+import { observeProbe } from '../helpers/probe-observation.ts'
 
 const fileHeader = readFileSync('security/csp.txt', 'utf8').replace(/\n$/, '')
 async function observe(
   page: Page,
   response: Response | null,
-  violations: readonly string[],
   waitForEvents: boolean,
   waitForResult = true,
 ): Promise<ProbeObservation> {
   expect(response?.status()).toBe(200)
   const headers = await response?.allHeaders()
-  const result = page.locator('#result')
-  const deadline = Date.now() + 5000
-  while (Date.now() < deadline) {
-    if (
-      (!waitForResult || (await result.getAttribute('data-done')) === 'yes') &&
-      (!waitForEvents || violations.length > 0)
-    )
-      break
-    await setTimeout(25)
-  }
   return {
     header: headers?.['content-security-policy'],
     reportOnly: headers?.['content-security-policy-report-only'],
-    done: await result.getAttribute('data-done'),
-    outcome: await result.getAttribute('data-outcome'),
-    exception: await result.getAttribute('data-exception'),
-    events: [...violations],
-    content: await result.getAttribute('data-content'),
-    functionReturned: await result.getAttribute('data-function-returned'),
+    ...(await observeProbe(
+      page.locator('#result'),
+      (deadline) => readCspEvents(page, deadline),
+      waitForEvents,
+      waitForResult,
+    )),
   }
 }
 
 for (const [name] of probes) {
   test.describe(name, () => {
-    test('policy-free control succeeds', async ({ page, violations }, testInfo) => {
+    test('policy-free control succeeds', async ({ page }, testInfo) => {
       // Resolve the configured engine before navigation, including policy-free controls.
       probeExpectation(name, testInfo.project.name)
       const response = await page.goto(`/__test__/${name}-control.html`)
+      await observe(page, response, false)
       expect(response?.headers()['content-security-policy']).toBeUndefined()
       await expect(page.locator('#result')).toHaveAttribute('data-done', 'yes')
       await expect(page.locator('#result')).toHaveAttribute('data-outcome', 'succeeded')
-      expect(violations).toEqual([])
+      expect(await readCspEvents(page)).toEqual([])
       expect(() => {
         assertHeader(response?.headers()['content-security-policy'])
       }).toThrow()
@@ -63,20 +53,14 @@ for (const [name] of probes) {
     test('protected operation rejects with the configured directive', async ({
       page,
       browser,
-      violations,
     }, testInfo) => {
       const expected = probeExpectation(name, testInfo.project.name)
       const response = await page.goto(`/__test__/${name}-protected.html`)
-      const observed = await observe(page, response, violations, true)
-      const diagnostics = await page.evaluate(() => {
-        const events: unknown = Reflect.get(window, 'cspDiagnostics')
-        const result = document.querySelector<HTMLElement>('#result')
-        return {
-          events,
-          probeOrder: result?.dataset['probeOrder'],
-          exceptionMessage: result?.dataset['exceptionMessage'],
-        }
-      })
+      const observed = await observe(page, response, true)
+      const diagnostics = {
+        probeOrder: await page.locator('#result').getAttribute('data-probe-order'),
+        exceptionMessage: await page.locator('#result').getAttribute('data-exception-message'),
+      }
       expect(
         () => {
           verifyHeaderIntegrity(observed, fileHeader, expectedHeader)
@@ -85,10 +69,10 @@ for (const [name] of probes) {
         `${name} in ${testInfo.project.name} ${browser.version()}: expected ${expected.directive}, observed ${JSON.stringify(observed)}, diagnostics ${JSON.stringify(diagnostics)}`,
       ).not.toThrow()
     })
-    test('missing header is a header-integrity case', async ({ page, violations }, testInfo) => {
+    test('missing header is a header-integrity case', async ({ page }, testInfo) => {
       probeExpectation(name, testInfo.project.name)
       const response = await page.goto(`/__test__/mutations/missing-header/${name}-protected.html`)
-      const observed = await observe(page, response, violations, false, false)
+      const observed = await observe(page, response, false, false)
       expect(observed.header).toBeUndefined()
       expect(() => {
         verifyHeaderIntegrity(observed, fileHeader, expectedHeader)
@@ -100,15 +84,12 @@ for (const [name] of probes) {
         : name.startsWith('inline-')
           ? 'header-integrity case'
           : 'executable mutation'
-    test(`${mutationLabel}: remove the configured directive`, async ({
-      page,
-      violations,
-    }, testInfo) => {
+    test(`${mutationLabel}: remove the configured directive`, async ({ page }, testInfo) => {
       const expected = probeExpectation(name, testInfo.project.name)
       const removed = expected.removedDirective
       const sourceIntegrity = removed === 'script-src' || removed === 'style-src'
       const response = await page.goto(`/__test__/mutations/${removed}/${name}-protected.html`)
-      const observed = await observe(page, response, violations, !sourceIntegrity, !sourceIntegrity)
+      const observed = await observe(page, response, !sourceIntegrity, !sourceIntegrity)
       const mutatedHeader = fileHeader
         .split('; ')
         .filter((part) => part.split(' ')[0] !== removed)
@@ -151,11 +132,10 @@ for (const [name] of probes) {
       test.use({ discardCspEvents: true })
       test('rejects only the required-event assertion with the unchanged header', async ({
         page,
-        violations,
       }, testInfo) => {
         const expected = probeExpectation(name, testInfo.project.name)
         const response = await page.goto(`/__test__/${name}-protected.html`)
-        const observed = await observe(page, response, violations, true)
+        const observed = await observe(page, response, true)
         expect(() => {
           verifyHeaderIntegrity(observed, fileHeader, expectedHeader)
         }).not.toThrow()

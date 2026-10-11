@@ -193,7 +193,7 @@ for (const width of [320, 1440])
       }
     }
     for (const check of fonts.checks) expect(check.available, fontDiagnostics).toBe(true)
-    expect(violations, fontDiagnostics).toEqual([])
+    expect(await violations(), fontDiagnostics).toEqual([])
     expect(errors, fontDiagnostics).toEqual([])
   })
 test('chunk failure remains generic until explicit reload', async ({
@@ -216,5 +216,5 @@ test('chunk failure remains generic until explicit reload', async ({
   ).toBe(true)
   await page.waitForTimeout(250)
   await expect(page.getByRole('button', { name: 'Reload', exact: true })).toBeVisible()
-  expect(violations).toEqual([])
+  expect(await violations()).toEqual([])
 })
