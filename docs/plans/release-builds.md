@@ -8,7 +8,7 @@ Roles: the coordinator owns dependencies, Git and CI evidence; the implementer o
 
 Tasks are separate PRs with failing-check-first tests. Read the spec with each task. The implementation may edit the paths named below, including `.github/`; the design task does not. Use separate worktrees for concurrent edits and respect [workflow](../../instructions/workflow.md) limits.
 
-1. Coordinate the independent CI-audit fixes and trigger/race split. Their contracts are prerequisites, not code to duplicate here.
+1. Complete the prerequisite tasks in [CI hardening](ci-hardening.md). Its [specification](../specs/ci-hardening.md) owns the shared contracts; do not duplicate them.
 2. Tasks 1 to 3 can land against the existing libraries and console.
 3. Task 4 requires independently reviewed, implemented agent/server entry points, console embedding, and an AG-09 footprint harness with its baseline. No stub executable or missing-file skip satisfies that gate.
 4. Task 5 requires Task 4 and the image/deployment contract. Native installers remain a separate lifecycle slice under AG-12; until then publish archives only and make their limits explicit.
@@ -50,7 +50,17 @@ The verification job derives `--expected-identity` independently through the val
 
 Owner: implementer, coordinated with the CI-audit owner. Size: one integration PR after the separate fixes. Own `scripts/release/test_ci_contract.py`, new release workflow configuration and the affected build instructions; reuse the existing audit helpers under `scripts/ci/`. Do not rewrite the separate trigger/race work.
 
-Consumes: the audit's digest-checked bootstrap, hash-locked Python closure, selected-test verifier, reviewed-base catalogue compatibility check, routing and `ci-required`. Their final paths and interfaces must be recorded in this task before execution if the parallel slice chooses different names. No independent duplicate bootstrap or aggregate.
+Consumes: [CI hardening section 12](../specs/ci-hardening.md#12-release-build-handoff), through these exact interfaces:
+
+- `scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform PLATFORM --tools TOOL[,TOOL...] --dest DIR --cache-mode sources|none --env-out PATH`; tag jobs use `none`. Add Linux ARM64 payload entries and native bootstrap proof before server ARM64 builds.
+- `.github/python-version` (`3.14.8`), `.github/requirements-design.txt` and `scripts/ci/python_env.py --check`; use the sole hash-locked validator environment.
+- `scripts/ci/run_selected.py --id ID --evidence DIR`, with selectors in `scripts/ci/targets.toml`; `scripts/ci/fresh_go.py --root PATH --env-out PATH` creates fresh Go caches.
+- `scripts/ci/catalogue_compat.py --root PATH --base-sha SHA --candidate-sha SHA`; use the validated route's base and tested commits.
+- `scripts/ci/route.py --event-name EVENT --event PATH --root PATH --out PATH`, adding `--full` for validated tag pushes; extend `scripts/ci/inventory.py` for release units.
+- `scripts/ci/required.py --route PATH --needs PATH --receipts DIR` and `schemas/ci/v1/contracts.schema.json`; same-run receipts feed `ci-required` for branches and separate `release-ready` for tags.
+- `scripts/ci/check_policy.py --root PATH`, or `check(root: pathlib.Path) -> list[str]` imported by the release contract tests.
+
+Do not create an independent bootstrap, validator closure, execution parser or branch aggregate. Changes to a shared interface require both designs and this consumer plan to change together.
 
 - [ ] Add negative workflow fixtures with `setup-go cache: true`, restored `target/`, cached `node_modules`, an unpinned action, an unverified download, an unknown recipe and an omitted consumer input. Require the audit policy checker to reject each fixture.
 - [ ] Run `python3 -B -m unittest discover -s scripts/release -p test_ci_contract.py -v`; require red against the unsafe fixture set before integration.
@@ -65,7 +75,7 @@ Owner: implementer. Size: one PR. Own `console/scripts/build-info.ts`, `console/
 
 Consumes: Task 1 identity. Produces: validated unpacked console assets and public metadata, with an identical source identity and no inline script or weakened CSP. A native server later embeds this exact asset tree. Task 5 creates the distributable console archive.
 
-- [ ] Write a test that requires the generated version and commit to appear in built metadata and the shell. Change one input and require the identity/tree check to fail; ensure no environment secret appears in assets. Extend existing output-budget checks to print measured values beside limits.
+- [ ] Write a test that requires the generated version and commit to appear in built metadata and the shell. Change one input and require the identity/tree check to fail; ensure no environment secret appears in assets. Consume the measured output-budget evidence from CI hardening Task 8 and assert identity generation preserves it.
 - [ ] Run `pnpm --dir console test:unit -- tests/unit/build-info.test.ts`; require failure before identity integration.
 - [ ] Generate the typed module from the validated record and integrate it into the existing production build. Keep package.json's core and frozen lockfile unchanged on tag builds. Preserve dependency-script suppression, current license audit and OSV policy.
 - [ ] Run `pnpm --dir console typecheck`, `pnpm --dir console lint`, `pnpm --dir console format:check` and `pnpm --dir console test:unit`; require pass locally for touched contracts.
