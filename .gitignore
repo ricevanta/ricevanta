@@ -1,13 +1,23 @@
 .DS_Store
 *.swp
+
+# Shared agent definitions: role files only; other tool state stays local.
+!/.claude/
+/.claude/*
+!/.claude/agents/
+/.claude/agents/**
+!/.claude/agents/**/
+!/.claude/agents/**/*.md
+/.claude/agents/**/agent-memory*/
+!/.codex/
+/.codex/*
+!/.codex/agents/
+/.codex/agents/**
+!/.codex/agents/**/
+!/.codex/agents/**/*.toml
+/.codex/agents/**/config.toml
+__pycache__/
+
+# Secrets stay ignored everywhere; these lines come last so no negation above re-includes them.
 .env
 .env.*
-
-# Shared agent definitions; other tool state stays local.
-!.claude/
-.claude/*
-!.claude/agents/
-!.codex/
-.codex/*
-!.codex/agents/
-__pycache__/

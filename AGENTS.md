@@ -49,7 +49,7 @@ Claude Code designs and researches; Codex implements and reviews. The owner choo
 - Agents may use subagents and general-purpose agents; there is no separate researcher role. Give each worker owned paths and a separate worktree for concurrent edits. A reviewer never implements what it reviews.
 - The primary agent handles Git operations under `instructions/workflow.md`; subagents never commit or push. The primary agent writes the Codex role files, because the Codex sandbox cannot write `.codex/`.
 - New plans and specifications name roles, not model ids.
-- Track every file under `.claude/agents/` and `.codex/agents/`. Keep other local tool settings ignored.
+- Track every role file: `*.md` under `.claude/agents/` and `*.toml` under `.codex/agents/`. Every other file there, and all other local tool settings, stay ignored.
 
 ## Three rules for every task
 
