@@ -1,8 +1,11 @@
 import { verifyHeader, expectedHeader } from './verify-probe.ts'
-import { test as base, expect } from '@playwright/test'
+import { test as base, expect, selectors } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { installCspEvidence } from './csp-evidence.ts'
+import { registerDocumentFonts } from './document-fonts.ts'
+// Register once in the shared module so shell and history tests use the same utility engine.
+await registerDocumentFonts(selectors)
 export { expectedHeader }
 const evidenceReaders = new WeakMap<Page, Awaited<ReturnType<typeof installCspEvidence>>>()
 export async function readCspEvents(
@@ -58,7 +61,7 @@ export const test = base.extend<{
     { auto: true },
   ],
 })
-export { expect }
+export { expect, selectors }
 export function assertHeader(value: string | undefined): void {
   verifyHeader(value, readFileSync('security/csp.txt', 'utf8').replace(/\n$/, ''), expectedHeader)
   expect(value).toBe(expectedHeader)

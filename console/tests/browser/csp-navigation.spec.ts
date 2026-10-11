@@ -1,4 +1,5 @@
 import { test, expect, assertHeader } from './fixtures.ts'
+import { settleDocumentFonts } from './document-fonts.ts'
 
 test('preserves CSP evidence through Playwright document history', async ({
   page,
@@ -8,21 +9,28 @@ test('preserves CSP evidence through Playwright document history', async ({
   const home = await page.goto('/')
   assertHeader(home?.headers()['content-security-policy'])
   await expect(page.locator('h1')).toHaveText('Home')
+  // Rendered headings can precede font completion. Settle each document before leaving it.
+  await settleDocumentFonts(page)
   expect(await violations()).toEqual([])
   const other = await page.goto('/history-target')
   assertHeader(other?.headers()['content-security-policy'])
   await expect(page.locator('h1')).toHaveCount(1)
+  await settleDocumentFonts(page)
   expect(await violations()).toEqual([])
   await page.goBack()
   await expect(page).toHaveURL('/')
   await expect(page.locator('h1')).toHaveText('Home')
+  await settleDocumentFonts(page)
   expect(await violations()).toEqual([])
   await page.goForward()
   await expect(page).toHaveURL('/history-target')
   await expect(page.locator('h1')).toHaveCount(1)
+  await settleDocumentFonts(page)
   expect(await violations()).toEqual([])
   await page.goBack()
   await expect(page).toHaveURL('/')
+  await expect(page.locator('h1')).toHaveText('Home')
+  await settleDocumentFonts(page)
   expect(await violations()).toEqual([])
   expect(errors).toEqual([])
 })

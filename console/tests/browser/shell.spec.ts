@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { normalizeUnicodeRange, packageFontFaces } from '../helpers/fonts.ts'
-import { settleDocumentFonts } from '../helpers/document-fonts.ts'
+import { settleDocumentFonts, qualifyDocumentFonts } from './document-fonts.ts'
 const require = createRequire(import.meta.url)
 const expectedFontFaces = packageFontFaces()
 
@@ -34,8 +34,9 @@ for (const width of [320, 1440])
         fontResponses.add(response.url())
     })
     await page.setViewportSize({ width, height: 900 })
-    const response = await page.goto('/')
-    await page.evaluate(settleDocumentFonts)
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 5000 })
+    await expect(page.locator('h1')).toBeFocused()
+    await settleDocumentFonts(page)
     assertHeader(response?.headers()['content-security-policy'])
     expect(response?.headers()['content-security-policy-report-only']).toBeUndefined()
     for (const locale of ['en', 'vi'])
@@ -48,23 +49,22 @@ for (const width of [320, 1440])
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
           await expect(page.locator('html')).toHaveAttribute('data-density', density)
           await page.emulateMedia({ colorScheme: 'dark' })
-          const dark = await page
-            .locator('html')
-            .evaluate((el) => getComputedStyle(el).getPropertyValue('--rv-color-page').trim())
-          expect(dark.toUpperCase()).toBe(theme === 'light' ? '#F6F2E7' : '#0F1E2B')
+          await expect(page.locator('html')).toHaveCSS(
+            '--rv-color-page',
+            theme === 'light' ? /^\s*#F6F2E7\s*$/i : /^\s*#0F1E2B\s*$/i,
+          )
           await page.emulateMedia({ colorScheme: 'light' })
-          const light = await page
-            .locator('html')
-            .evaluate((el) => getComputedStyle(el).getPropertyValue('--rv-color-page').trim())
-          expect(light.toUpperCase()).toBe(theme === 'dark' ? '#0F1E2B' : '#F6F2E7')
+          await expect(page.locator('html')).toHaveCSS(
+            '--rv-color-page',
+            theme === 'dark' ? /^\s*#0F1E2B\s*$/i : /^\s*#F6F2E7\s*$/i,
+          )
           await expect(page.locator('h1')).toHaveCount(1)
-          expect(
-            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-          ).toBe(true)
+          expect(await settleDocumentFonts(page)).toBe(true)
           expect(await page.locator('style,[style],script:not([src])').count()).toBe(0)
-          await page.evaluate(settleDocumentFonts)
-          await page.goto('/matrix-unknown')
-          await page.evaluate(settleDocumentFonts)
+          await settleDocumentFonts(page)
+          await page.goto('/matrix-unknown', { waitUntil: 'domcontentloaded', timeout: 5000 })
+          await expect(page.locator('h1')).toBeFocused()
+          await settleDocumentFonts(page)
           await expect(page.locator('h1')).toHaveCount(1)
           await expect(page.locator('h1')).toBeFocused()
           expect(await page.locator('style,[style],script:not([src])').count()).toBe(0)
@@ -72,22 +72,27 @@ for (const width of [320, 1440])
           await expect(page.locator('h1')).toHaveText(locale === 'en' ? 'Home' : 'Trang chủ')
           await expect(page.locator('h1')).toBeFocused()
         }
-    await page.evaluate(settleDocumentFonts)
-    await page.goto('/private?token=hidden')
-    await page.evaluate(settleDocumentFonts)
+    await settleDocumentFonts(page)
+    await page.goto('/private?token=hidden', { waitUntil: 'domcontentloaded', timeout: 5000 })
+    await expect(page.locator('h1')).toBeFocused()
+    await settleDocumentFonts(page)
     await expect(page.locator('h1')).toHaveText('Không tìm thấy trang')
     await expect(page.locator('h1')).toBeFocused()
     expect(await page.locator('body').innerText()).not.toMatch(/private|hidden/)
-    await page.evaluate(settleDocumentFonts)
-    await page.reload()
-    await page.evaluate(settleDocumentFonts)
+    await settleDocumentFonts(page)
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 })
+    await expect(page.locator('h1')).toBeFocused()
+    await settleDocumentFonts(page)
     await expect(page.locator('h1')).toBeFocused()
     await clickAndWaitForURL(page, page.getByRole('link', { name: 'Về trang chủ' }), '/')
     await expect(page.locator('h1')).toHaveText('Trang chủ')
+    await settleDocumentFonts(page)
     await page.goBack()
     await expect(page.locator('h1')).toHaveText('Không tìm thấy trang')
+    await settleDocumentFonts(page)
     await page.goForward()
     await expect(page.locator('h1')).toHaveText('Trang chủ')
+    await settleDocumentFonts(page)
     await page.locator('.skip-link').focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('main')).toBeFocused()
@@ -103,50 +108,7 @@ for (const width of [320, 1440])
     await page.keyboard.press('ArrowUp')
     await page.keyboard.press('Enter')
     await expect(page.locator('#density')).toHaveValue('comfortable')
-    const fonts = await page.evaluate(async () => {
-      const isVietnamPro = (family: string) =>
-        family.replace(/["']/g, '').trim() === 'Be Vietnam Pro'
-      const rules = Array.from(document.styleSheets)
-        .flatMap((sheet) => Array.from(sheet.cssRules))
-        .filter(
-          (rule): rule is CSSFontFaceRule =>
-            rule instanceof CSSFontFaceRule &&
-            isVietnamPro(rule.style.getPropertyValue('font-family')),
-        )
-        .map((rule) => ({
-          weight: rule.style.getPropertyValue('font-weight'),
-          style: rule.style.getPropertyValue('font-style'),
-          unicodeRange: rule.style.getPropertyValue('unicode-range') || 'U+0-10FFFF',
-          sources: Array.from(
-            rule.style.getPropertyValue('src').matchAll(/url\(["']?([^"')]+)["']?\)/g),
-            (match) => new URL(match[1] ?? '', location.href).href,
-          ),
-        }))
-      const faces = Array.from(document.fonts).filter((face) => isVietnamPro(face.family))
-      // Qualify all twelve faces once, after the navigation matrix has finished.
-      const results: PromiseSettledResult<FontFace>[] = []
-      for (const face of faces) results.push(...(await Promise.allSettled([face.load()])))
-      await document.fonts.ready
-      return {
-        origin: location.origin,
-        rules,
-        faces: faces.map((face, index) => {
-          const result = results[index]
-          return {
-            weight: face.weight,
-            style: face.style,
-            unicodeRange: face.unicodeRange,
-            status: face.status,
-            resolved: result?.status === 'fulfilled' && result.value === face,
-            error: result?.status === 'rejected' ? String(result.reason) : null,
-          }
-        }),
-        checks: ['400', '500', '600', '700'].map((weight) => ({
-          weight,
-          available: document.fonts.check(`${weight} 16px "Be Vietnam Pro"`, 'Tiếng Việt Ấ ệ ư Ā'),
-        })),
-      }
-    })
+    const fonts = await qualifyDocumentFonts(page)
     const fontDiagnostics = JSON.stringify(fonts, null, 2)
     const expectedSubsets = ['400', '500', '600', '700'].flatMap((weight) =>
       ['latin', 'latin-ext', 'vietnamese'].map((subset) => `${weight}:normal:${subset}`),
