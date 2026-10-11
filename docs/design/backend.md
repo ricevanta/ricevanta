@@ -33,7 +33,7 @@ Rules:
 
 ### 1.1 Identity principals and protected authority
 
-The [permission catalogue](../specs/permission-catalogue.md) defines the machine-readable permission inventory and the proposed `authz/catalogue` library. Its metadata does not replace the committed-authority checks in this section.
+The [permission catalogue](../specs/permission-catalogue.md) defines the machine-readable permission inventory and the implemented `authz/catalogue` library. Its metadata does not replace the committed-authority checks in this section.
 
 An administrator is one immutable internal user uid with explicit external-principal links. OIDC defines stable subjects per issuer ([claim stability](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability)); SAML defines persistent identifiers separately from transient identifiers ([SAML Core section 8.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). OIDC links key on provider uid, exact `iss` and `sub`; SAML links key on provider uid, issuer, persistent `NameID` format and `NameID`; transient and email-based identifiers cannot create privileged principal links; SCIM links key on directory uid and SCIM resource id; LDAP links key on directory uid and `entryUUID` or `objectGUID`. Each external key links to at most one user and each provider links a user at most once. Email, display name, login name and mutable claims never identify or merge accounts. A sync collision disables the candidate link and raises an alert for an operator to resolve through a protected link operation.
 
