@@ -40,7 +40,7 @@ Claude Code designs and researches; Codex implements and reviews. The owner choo
 | `designer` | Designs, specifications, schemas, first-party research | Claude Code `fable`, high; Codex `gpt-6-astra`, high when Fable is unavailable | `.claude/agents/designer.md`, `.codex/agents/designer.toml` | Writes `docs/`, `schemas/`, `instructions/` |
 | `design_reviewer` | Independent review of designs, specifications and schemas | `gpt-6.1-sol` or `gpt-6-astra`, xhigh, never the author's model | `.codex/agents/design-reviewer.toml` | Read-only |
 | `implementer` | Planning and one bounded code task with its tests | `gpt-6.1-sol`, medium | `.codex/agents/implementer.toml` | Writes the paths its brief owns |
-| `code_reviewer` | Final code review, with the adversarial pass for security-relevant code | `gpt-6-astra`, xhigh; `gpt-6.1-sol`, xhigh for code Astra or a person wrote | `.codex/agents/code-reviewer.toml` | Read-only on sources; builds in a disposable copy |
+| `code_reviewer` | Final code review, with the adversarial pass for security-relevant code | `gpt-6.1-sol` or `gpt-6-astra`, xhigh, never the author's model | `.codex/agents/code-reviewer.toml` | Read-only on sources; builds in a disposable copy |
 | `explorer` | Searches, summaries, mechanical checks | `gpt-6-luna`, low | `.codex/agents/explorer.toml` | Read-only |
 
 - No subagent or worker runs on Sonnet or Opus. When a skill names a Sonnet or Opus delegation, use the model this table gives the skill's role, and keep the skill's ownership.
