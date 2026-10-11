@@ -31,6 +31,7 @@
 3. When `master` has moved, rebase the branch onto it, have an independent reviewer check any conflict resolution that changes behaviour, and push with `git push --force-with-lease` to that `wip/` branch only. CI then runs again on the new head.
 4. Land only a head whose workflows all passed: fast-forward `master` to the pull request head (`git push origin <head>:master`). The `protect-master` ruleset requires an approving review that the sole owner cannot give, so this push uses the owner's admin bypass, which the owner has authorized. GitHub marks the pull request merged, and the commits keep the author's signature, which a squash or rebase merge on GitHub would replace.
 5. Never force-push `master` or rewrite commits that `master` contains.
+6. After landing, and whenever work touches GitHub, review this repository's notification threads for pull requests, reviews and failed runs, including older read threads. Close each handled thread as done with `gh api -X DELETE notifications/threads/<id>` (HTTP 204); `PATCH` only marks a thread read. Close a failed-run thread only after its cause is fixed or explained.
 
 ## Reviews
 
