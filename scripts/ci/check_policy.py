@@ -70,6 +70,66 @@ def windows_rows(job):
     return 'windows' in str(runner).lower() or '${{' in str(runner)
 
 
+GO_FRESH = 'python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"'
+CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" '
+               '--cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"')
+CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
+
+
+def cache_errors(data):
+    """Require fresh compiler environments before every workflow consumer."""
+    errors = []
+    for jid, job in data.get('jobs', {}).items():
+        steps = job.get('steps', [])
+        def fail(message): errors.append(f'{jid}: {message}')
+        for scope in (data, job, *steps):
+            if CACHE_ENV & set(scope.get('env', {})):
+                fail('compiler cache environment override forbidden')
+        go_setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-go@')]
+        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', ''))]
+        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', ''))]
+        for step in steps:
+            action = step.get('uses', '')
+            settings = step.get('with', {})
+            if action.startswith('actions/setup-go@') and (settings.get('cache') != 'false' or 'cache-dependency-path' in settings):
+                fail('setup-go cache must be disabled')
+            if action.startswith('actions/cache'):
+                paths = settings.get('path', '').strip().splitlines()
+                if paths != ['~/.cargo/registry/index', '~/.cargo/registry/cache']:
+                    fail('cache restore may contain only Cargo index and archives')
+            run = step.get('run', '')
+            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
+                fail('compiler cache environment reset forbidden')
+        def admission(command, consumers):
+            matching = [i for i, s in enumerate(steps) if s.get('run') == command]
+            if len(matching) != 1:
+                fail('missing exact fresh cache admission command')
+                return None
+            index = matching[0]
+            step = steps[index]
+            if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != 'bash' or step.get('working-directory') != '.':
+                fail('fresh cache admission must be unconditional at root with bash')
+            if consumers and index >= min(consumers):
+                fail('fresh cache admission must precede consumers')
+            return index
+        if go_setups or go_consumers:
+            index = admission(GO_FRESH, go_consumers)
+            modules = [i for i, s in enumerate(steps) if s.get('run') == 'go mod download\ngo mod verify\n']
+            if len(modules) != 1 or index is None or modules[0] <= index:
+                fail('fresh module cache download and verification required')
+            else:
+                step = steps[modules[0]]
+                if step.get('working-directory') != 'server' or any(k in step for k in ('if', 'continue-on-error')):
+                    fail('module cache verification must be unconditional in server')
+                if any(i < modules[0] for i in go_consumers):
+                    fail('Go consumer precedes module cache verification')
+        if cargo_consumers or any(s.get('run') == CARGO_FRESH for s in steps):
+            index = admission(CARGO_FRESH, cargo_consumers)
+            if index is not None and any(i > index for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/cache')):
+                fail('Cargo cache restore must precede integrity admission')
+    return errors
+
+
 def check(root: Path) -> list[str]:
     errors = []
     def fail(name, message): errors.append(f'.github/workflows/{name}.yml: {message}')
@@ -82,6 +142,7 @@ def check(root: Path) -> list[str]:
             workflows[name] = data
         except (ValueError, yaml.YAMLError):
             fail(name, 'malformed workflow'); continue
+        for error in cache_errors(data): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
         if name == 'copilot-code-review': continue
@@ -215,7 +276,7 @@ def check(root: Path) -> list[str]:
     for job in server.values():
         if 'permission-schema-venv' in str(job) or 'schemas/export/v1alpha1/validate.py' in str(job): fail('server', 'duplicate Python validator')
     if 'pnpm test:fuzz' not in str(workflows['console']): fail('console', 'missing bounded properties')
-    # Task 3 and Task 7 extend cache and tool admission here; existing source caches remain allowed.
+    # Task 7 adds payload admission; Task 3 admits compiler caches above.
     for name, data in workflows.items():
         if name not in required_names: continue
         for jid, job in data.get('jobs', {}).items():

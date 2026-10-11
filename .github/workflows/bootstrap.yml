@@ -44,6 +44,20 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: false
+    - name: Create fresh Go caches
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
     - name: Install contract dependencies
       run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
     - name: Contract unit tests
