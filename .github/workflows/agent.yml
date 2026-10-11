@@ -6,6 +6,10 @@ on:
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
+      - 'server/go.mod'
+      - 'server/go.sum'
+      - 'server/internal/events/batch/**'
+      - 'server/internal/events/eventid/**'
       - 'server/internal/events/wire/**'
       - 'server/internal/events/body/**'
       - 'schemas/events/v1/**'
@@ -14,6 +18,10 @@ on:
     paths:
       - 'agent/**'
       - 'schemas/agent/**'
+      - 'server/go.mod'
+      - 'server/go.sum'
+      - 'server/internal/events/batch/**'
+      - 'server/internal/events/eventid/**'
       - 'server/internal/events/wire/**'
       - 'server/internal/events/body/**'
       - 'schemas/events/v1/**'
@@ -61,7 +69,7 @@ jobs:
           event = json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))
           name = os.environ['GITHUB_EVENT_NAME']
           if name == 'workflow_dispatch':
-              native, interop = True, False
+              native, interop = True, True
           else:
               if name == 'pull_request':
                   base = ensure(event['pull_request']['base']['sha'])
@@ -80,7 +88,17 @@ jobs:
                   raise ValueError('unsupported event')
               paths = git('diff', '--name-only', '--no-renames', '-z', base, head, '--').split(b'\0')
               native = any(p.startswith((b'agent/', b'schemas/agent/')) or p == b'.github/workflows/agent.yml' for p in paths)
-              interop = any(p.startswith((b'agent/crates/batch/', b'agent/crates/spool/', b'server/internal/events/wire/', b'server/internal/events/body/', b'schemas/events/v1/')) for p in paths)
+              interop_prefixes = (
+                  b'agent/crates/batch/', b'agent/crates/spool/',
+                  b'server/internal/events/batch/', b'server/internal/events/body/',
+                  b'server/internal/events/eventid/', b'server/internal/events/wire/',
+                  b'schemas/events/v1/',
+              )
+              interop_files = (
+                  b'agent/Cargo.toml', b'agent/Cargo.lock', b'agent/rust-toolchain.toml',
+                  b'server/go.mod', b'server/go.sum', b'.github/workflows/agent.yml',
+              )
+              interop = any(p.startswith(interop_prefixes) or p in interop_files for p in paths)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write(f'native={str(native).lower()}\ninterop={str(interop).lower()}\n')
           PYDETECT
@@ -132,8 +150,7 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/registry/src
-            agent/target
-          key: agent-cargo-target-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
+          key: agent-cargo-registry-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
       - name: Check locked dependency pins
         run: |
           unset ZSTD_SYS_USE_PKG_CONFIG
@@ -195,12 +212,14 @@ jobs:
           CARGO_NET_OFFLINE: 'true'
         run: |
           unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
           cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
       - name: Extended seal property test
         env:
           CARGO_NET_OFFLINE: 'true'
         run: |
           unset ZSTD_SYS_USE_PKG_CONFIG
+          test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
           cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact
 
   rustinterop:
