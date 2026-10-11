@@ -1,0 +1,156 @@
+{
+  "activity_id": 1,
+  "category_uid": 1,
+  "class_uid": 99901001,
+  "type_uid": 9990100101,
+  "severity_id": 1,
+  "status_id": 1,
+  "time": 1,
+  "metadata": {
+    "version": "1.9.0",
+    "uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+    "correlation_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+    "sequence": 0,
+    "product": {
+      "name": "Ricevanta",
+      "vendor_name": "Ricevanta",
+      "version": "0.1.0"
+    },
+    "profiles": [
+      "host"
+    ],
+    "extensions": [
+      {
+        "name": "ricevanta",
+        "uid": "999",
+        "version": "1.9.0"
+      }
+    ],
+    "bundle_state": "absent",
+    "coverage": [
+      {
+        "path": "/processes/0/cpu_pct",
+        "reason": "collection_failed"
+      },
+      {
+        "path": "/kernel_bytes",
+        "reason": "not_applicable"
+      },
+      {
+        "path": "/spools/0/oldest_unsent_ms",
+        "reason": "not_applicable"
+      },
+      {
+        "path": "/spools/0/last_ack_sequence",
+        "reason": "not_observed"
+      },
+      {
+        "path": "/spools/1/oldest_unsent_ms",
+        "reason": "not_applicable"
+      },
+      {
+        "path": "/spools/1/last_ack_sequence",
+        "reason": "not_observed"
+      },
+      {
+        "path": "/spools/2/oldest_unsent_ms",
+        "reason": "not_applicable"
+      },
+      {
+        "path": "/spools/2/last_ack_sequence",
+        "reason": "not_observed"
+      },
+      {
+        "path": "/spools/3/oldest_unsent_ms",
+        "reason": "not_applicable"
+      },
+      {
+        "path": "/spools/3/last_ack_sequence",
+        "reason": "not_observed"
+      },
+      {
+        "path": "/spools/4/oldest_unsent_ms",
+        "reason": "not_applicable"
+      },
+      {
+        "path": "/spools/4/last_ack_sequence",
+        "reason": "not_observed"
+      }
+    ]
+  },
+  "device": {
+    "uid": "device-a",
+    "hostname": "host-a",
+    "type_id": 3,
+    "os": {
+      "name": "Linux",
+      "type_id": 200,
+      "cpu_architecture": "x64"
+    }
+  },
+  "interval_ms": 60000,
+  "processes": [
+    {
+      "uid": "process-a",
+      "name": "ricevanta-agent",
+      "pid": 1,
+      "footprint_bytes": 44000000,
+      "footprint_metric": "pss",
+      "fd_count": 4,
+      "event_rates": [
+        {
+          "source": "events",
+          "count": 0
+        }
+      ]
+    }
+  ],
+  "budgets": [],
+  "spools": [
+    {
+      "spool_class": "raw",
+      "bytes": 0,
+      "dropped_segments": 0,
+      "dropped_records": 0,
+      "dropped_bytes": 0,
+      "upload_errors": 0,
+      "stream_epoch": 1
+    },
+    {
+      "spool_class": "context",
+      "bytes": 0,
+      "dropped_segments": 0,
+      "dropped_records": 0,
+      "dropped_bytes": 0,
+      "upload_errors": 0,
+      "stream_epoch": 1
+    },
+    {
+      "spool_class": "lineage",
+      "bytes": 0,
+      "dropped_segments": 0,
+      "dropped_records": 0,
+      "dropped_bytes": 0,
+      "upload_errors": 0,
+      "stream_epoch": 1
+    },
+    {
+      "spool_class": "findings",
+      "bytes": 0,
+      "dropped_segments": 0,
+      "dropped_records": 0,
+      "dropped_bytes": 0,
+      "upload_errors": 0,
+      "stream_epoch": 1
+    },
+    {
+      "spool_class": "audit",
+      "bytes": 0,
+      "dropped_segments": 0,
+      "dropped_records": 0,
+      "dropped_bytes": 0,
+      "upload_errors": 0,
+      "stream_epoch": 1
+    }
+  ]
+}

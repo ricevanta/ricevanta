@@ -46,6 +46,7 @@ Ricevanta is Apache-2.0. This file records what third-party code and rule source
 | STIX 2.1, TAXII 2.1 (OASIS Standards) | OASIS IPR policy of the CTI TC (verify mode) | Formats implemented in-project; no library |
 | MISP feed format | MISP is AGPL-3.0 | Format parsed in-project; no MISP code used or linked |
 | OCSF schema, `ocsf-schema-compiler`, `ocsf-validator` | Apache-2.0 | Event format and its CI tooling |
+| [OCSF schema 1.9.0, commit 856d462bd20dc46cc1ffed2dfffe3b91ef0fbeba](https://github.com/ocsf/ocsf-schema/tree/856d462bd20dc46cc1ffed2dfffe3b91ef0fbeba) | [Apache-2.0](https://github.com/ocsf/ocsf-schema/blob/856d462bd20dc46cc1ffed2dfffe3b91ef0fbeba/LICENSE) | Approved schema-data snapshot for offline deterministic foundation compilation under EV-03; implementation vendors only the selected JSON source/metaschema files, LICENSE and NOTICE. Preserve exact notices, reproduce NOTICE attribution in distribution and include the snapshot in the SBOM. No upstream compiler or validator executable is required by this slice. |
 | cel-spec and its conformance suite | Apache-2.0 | Language definition and the profile's CI gate |
 | DSSE specification | Apache-2.0 | Bundle and command signature envelope |
 | CIS Benchmarks | Not freely redistributable | Not bundled; baselines are authored in-project |

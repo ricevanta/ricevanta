@@ -1,0 +1,49 @@
+{
+  "activity_id": 1,
+  "category_uid": 3,
+  "class_uid": 99903001,
+  "type_uid": 9990300101,
+  "severity_id": 1,
+  "status_id": 1,
+  "time": 1,
+  "metadata": {
+    "version": "1.9.0",
+    "uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+    "correlation_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+    "sequence": 0,
+    "product": {
+      "name": "Ricevanta",
+      "vendor_name": "Ricevanta",
+      "version": "0.1.0"
+    },
+    "profiles": [],
+    "extensions": [
+      {
+        "name": "ricevanta",
+        "uid": "999",
+        "version": "1.9.0"
+      }
+    ]
+  },
+  "certificate": {
+    "uid": "certificate-a",
+    "issuer": "CN=Ricevanta Test CA",
+    "serial_number": "01",
+    "fingerprints": [
+      {
+        "algorithm_id": 3,
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "created_time": 0,
+    "expiration_time": 1000
+  },
+  "ca_uid": "ca-a",
+  "profile": "agent-identity",
+  "requester": {
+    "kind": "device",
+    "uid": "device-a"
+  },
+  "request_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+  "reason": "issued"
+}

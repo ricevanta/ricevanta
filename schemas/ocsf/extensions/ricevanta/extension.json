@@ -3,5 +3,5 @@
   "name": "ricevanta",
   "uid": 999,
   "version": "1.9.0",
-  "description": "Ricevanta extension to OCSF 1.9.0: lineage, certificate lifecycle, agent health and policy activity classes; lineage node, classification reference, match evidence and policy bundle objects; enforcement mode and analytic author attributes. Detail: docs/specs/ocsf-profile.md. uid 999 is the registry's development uid; the project registers a public uid in the OCSF schema repository before v1.0.0."
+  "description": "Ricevanta foundation extension to OCSF 1.9.0: agent health, policy, pipeline and certificate lifecycle contracts. Detail: docs/specs/ocsf-profile.md. The extension permanently uses the unregistered development uid 999. No OCSF registration or uid migration is planned."
 }
