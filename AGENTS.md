@@ -33,20 +33,22 @@ Implementation proceeds in reviewed slices. Each slice needs an independently re
 
 ## Agents and models
 
-Claude Code designs and researches; Codex implements and reviews. The owner chooses the primary session's model; this table sets the model of every subagent and worker. Among the process files (this file, `CLAUDE.md`, `instructions/` and the agent files), model ids appear only in this table and in the agent files' headers, so a model change edits those places alone.
+Use the roles below for design, research, implementation and review. The owner chooses the primary session's model; this table sets the model of every subagent and worker. Among the process files (this file, `CLAUDE.md`, `instructions/` and the agent files), model ids appear only in this table and in the agent files' headers, so a model change edits those places alone.
 
 | Role | Work | Model | Definition | Access |
 |---|---|---|---|---|
-| `designer` | Designs, specifications, schemas, first-party research | Claude Code `fable`, high; Codex `gpt-6-astra`, high when Fable is unavailable | `.claude/agents/designer.md`, `.codex/agents/designer.toml` | Writes `docs/`, `schemas/`, `instructions/` |
-| `design_reviewer` | Independent review of designs, specifications and schemas | `gpt-6.1-sol` or `gpt-6-astra`, xhigh, never the author's model | `.codex/agents/design-reviewer.toml` | Read-only |
+| `designer` | Designs, specifications, schemas, first-party research | Claude Code `fable`, high; Codex `gpt-6-astra`, high | `.claude/agents/designer.md`, `.codex/agents/designer.toml` | Writes `docs/`, `schemas/`, `instructions/` |
+| `design_reviewer` | Independent review of designs, specifications and schemas | `gpt-6.1-sol`, xhigh | `.codex/agents/design-reviewer.toml` | Read-only |
 | `implementer` | Planning and one bounded code task with its tests | `gpt-6.1-sol`, medium | `.codex/agents/implementer.toml` | Writes the paths its brief owns |
-| `code_reviewer` | Final code review, with the adversarial pass for security-relevant code | `gpt-6.1-sol` or `gpt-6-astra`, xhigh, never the author's model | `.codex/agents/code-reviewer.toml` | Read-only on sources; builds in a disposable copy |
+| `code_reviewer` | Final code review, with the adversarial pass for security-relevant code | `gpt-6.1-sol`, xhigh | `.codex/agents/code-reviewer.toml` | Read-only on sources; builds in a disposable copy |
 | `explorer` | Searches, summaries, mechanical checks | `gpt-6-luna`, low | `.codex/agents/explorer.toml` | Read-only |
 
-- No subagent or worker runs on Sonnet or Opus. When a skill names a Sonnet or Opus delegation, use the model this table gives the skill's role, and keep the skill's ownership.
+- Use only the models and efforts in this table for subagents and workers. When a skill names another model, use the entry for the skill's role and keep the skill's ownership.
 - Set the model and effort explicitly on every dispatch.
-- A review runs only on Sol or Astra at `xhigh`, never on Luna and never on the model that wrote the work. When no qualified reviewer is available, the work waits; it is never approved on a smaller model.
-- Agents may use subagents and general-purpose agents; there is no separate researcher role. Give each worker owned paths and a separate worktree for concurrent edits. A reviewer never implements what it reviews.
+- The Claude Code `designer` writes the initial design. The Codex `designer` reviews and improves it in place, or writes it when the Claude Code `designer` is unavailable. Both paths are design work and do not count as independent review.
+- `design_reviewer` conducts independent design reviews; `code_reviewer` conducts code reviews and adversarial passes. Fix confirmations use the role that owns the review and may come from the original reviewer if that reviewer did not write the fixes.
+- An independent reviewer is a separate job from every author or improver and never edits or implements the work it reviews. The author and reviewer may use the same model. A worker's own statement that its work passed an independent review, for example after it reviewed itself with subagents, is not a review. When no qualified reviewer is available, the work waits; it is never approved on a smaller model. The approval gates are defined in [the workflow](instructions/workflow.md#design-and-implementation-current).
+- Agents may use subagents and general-purpose agents; there is no separate researcher role. Give each worker owned paths and a separate worktree for concurrent edits.
 - The primary agent handles Git operations under `instructions/workflow.md`; subagents never commit or push. The primary agent writes the Codex role files, because the Codex sandbox cannot write `.codex/`.
 - New plans and specifications name roles, not model ids.
 - Track every role file: `*.md` under `.claude/agents/` and `*.toml` under `.codex/agents/`. Every other file there, and all other local tool settings, stay ignored.

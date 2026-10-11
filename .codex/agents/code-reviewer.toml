@@ -1,6 +1,6 @@
 name = "code_reviewer"
-description = "Independent review of a Ricevanta implementation against its design document after the last code task of a plan, with an adversarial pass for security-relevant code. Runs in a disposable copy; never reviews code written on its own model and never edits a source file."
-model = "gpt-6-astra"
+description = "Independent review of a Ricevanta implementation against its design document after the last code task of a plan, with an adversarial pass for security-relevant code. Runs in a disposable copy; never edits a source file."
+model = "gpt-6.1-sol"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 developer_instructions = """

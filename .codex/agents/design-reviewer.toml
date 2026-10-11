@@ -1,5 +1,5 @@
 name = "design_reviewer"
-description = "Independent read-only review of Ricevanta designs, specifications and schemas before implementation. Never reviews work written on its own model and never edits a file."
+description = "Independent read-only review of Ricevanta designs, specifications and schemas before implementation. Never edits a file."
 model = "gpt-6.1-sol"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"

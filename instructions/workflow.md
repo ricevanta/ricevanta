@@ -3,8 +3,8 @@
 ## Design and implementation (current)
 
 1. Read `docs/blueprint.md`, the Shared, Platform and domain sections of `docs/decisions.md`, and the domain's design file if it exists. A design reviewer reads all of `docs/decisions.md`.
-2. Write or update the document where `instructions/documentation.md` says it lives. If the work changes a decision, rewrite the entry in `docs/decisions.md` in the same change.
-3. Define each code slice in a design and implementation plan that name its boundaries, contracts and required checks. Someone who did not write the design must approve both before implementation starts.
+2. Write or update the document where `instructions/documentation.md` says it lives. Use `designer` under the [design routing rules](../AGENTS.md#agents-and-models). If the work changes a decision, rewrite the entry in `docs/decisions.md` in the same change.
+3. Define each code slice in a design and implementation plan that name its boundaries, contracts and required checks. A `design_reviewer` meeting the [review eligibility rules](../AGENTS.md#agents-and-models) must approve both before implementation starts.
 4. Do not implement production consumers that assume an unresolved native, platform or security guarantee. Explicitly isolated qualification harnesses and prototypes may proceed to resolve a gate, but they cannot claim the missing guarantee until the required evidence passes review.
 5. Add a dependency to `docs/licensing.md` before code relies on it. Add a vendor program or signing requirement to `docs/project.md` before work relies on it.
 6. Follow the language and testing instructions for the component. Go guidance begins with the first server packages. Rust guidance is in `instructions/rust.md` and Vue guidance is in `instructions/vue.md`.
@@ -37,12 +37,9 @@
 
 Copilot reviews every pull request push automatically using [repository guidance](../.github/copilot-instructions.md), [path checklists](../.github/instructions/), the [code-review](../.github/skills/code-review/SKILL.md) and [security-review](../.github/skills/security-review/SKILL.md) skills, and the [review environment](../.github/workflows/copilot-code-review.yml). The guidance links to authoritative rule files instead of restating them.
 
-- Design documents: one review by someone who did not write them.
-- Reviews and fix confirmations run on Sol xhigh or Astra xhigh, never on a model that wrote the work: code written by Sol is reviewed by Astra, designs written by Astra are reviewed by Sol, and work written by Fable or a person goes to whichever reviewer is free. The brief lists each model that contributed, including subagents. A fix confirmation may come from the original reviewer when that reviewer still satisfies this rule.
-- Only a review by a different model counts. A worker's own statement that its work passed an independent review, for example after it reviewed itself with subagents, is not a review.
-- A code review's brief carries the base commit, the diff, and the CI results with their run URLs, because the reviewer may run without Git or network access.
-- Security-relevant work (enrollment, keys, signing, update, enforcement): adversarial review before merge.
-- A reviewer never implements what they review.
+- Use `design_reviewer` and `code_reviewer` under the [routing and independence rules](../AGENTS.md#agents-and-models), including fix confirmations.
+- A `code_reviewer` brief carries the base commit, the diff, and the CI results with their run URLs, because the reviewer may run without Git or network access.
+- Security-relevant work (enrollment, keys, signing, update, enforcement) requires an adversarial pass by `code_reviewer` before merge.
 
 ## Commits and pushing
 
