@@ -377,6 +377,7 @@ type yaml_read_handler_t func(parser *yaml_parser_t, buffer []byte) (n int, err 
 type yaml_simple_key_t struct {
 	possible     bool        // Is a simple key possible?
 	required     bool        // Is a simple key required?
+	lookahead    bool        // Is this key indexed for token lookahead?
 	token_number int         // The number of the token.
 	mark         yaml_mark_t // The position mark.
 }

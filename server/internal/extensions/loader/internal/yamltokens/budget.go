@@ -134,7 +134,7 @@ func reserveParser(p *yaml_parser_t, family string, bytes, objects uint64) bool 
 }
 func liveSimpleKey(p *yaml_parser_t, token int) (int, bool) {
 	for i := len(p.simple_keys) - 1; i >= 0; i-- {
-		if p.simple_keys[i].possible && p.simple_keys[i].token_number == token {
+		if p.simple_keys[i].possible && p.simple_keys[i].lookahead && p.simple_keys[i].token_number == token {
 			return i, true
 		}
 	}

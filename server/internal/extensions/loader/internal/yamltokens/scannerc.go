@@ -921,6 +921,7 @@ func yaml_parser_save_simple_key(parser *yaml_parser_t) bool {
 		simple_key := yaml_simple_key_t{
 			possible:     true,
 			required:     required,
+			lookahead:    true,
 			token_number: parser.tokens_parsed + (len(parser.tokens) - parser.tokens_head),
 			mark:         parser.mark,
 		}
@@ -980,6 +981,13 @@ func yaml_parser_decrease_flow_level(parser *yaml_parser_t) bool {
 	if parser.flow_level > 0 {
 		parser.flow_level--
 		last := len(parser.simple_keys) - 1
+		// Pinned lookup deletion also removes a parent's entry when an inactive
+		// child shares its token number. Keep key validity for a later colon.
+		for i := 0; i < last; i++ {
+			if parser.simple_keys[i].token_number == parser.simple_keys[last].token_number {
+				parser.simple_keys[i].lookahead = false
+			}
+		}
 		parser.simple_keys = parser.simple_keys[:last]
 	}
 	return true
