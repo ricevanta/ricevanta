@@ -578,4 +578,4 @@ Detail: `design/extensions.md` section 8.
 Decision: retain YAML and its DSSE payload type for package manifests, with a closed decoded schema, bounded capability requests, canonical identity strings and explicit file ownership; the pure Go validator validates decoded trees without granting admission. The later strict YAML loader uses `go.yaml.in/yaml/v3` v3.0.4 and preserves signed bytes.
 Why: package identity, file commitments and requested authority need exact rejection rules before stateful admission can consume them.
 Rejected: JSON-only payloads, which exclude ordinary YAML manifests; permissive struct decoding, which loses unknown-field evidence; schema-only admission, which cannot prove ownership, key authority or grants.
-Detail: [manifest contract](specs/extension-manifest.md) and [implementation plan](plans/extension-manifest.md).
+Detail: [manifest contract](specs/extension-manifest.md) and [validator plan](plans/extension-manifest.md); [package loader contract](specs/extension-loader.md) and [loader plan](plans/extension-loader.md) define bounded zstd/USTAR framing, verified YAML loading and the parser resource gate before stateful admission.

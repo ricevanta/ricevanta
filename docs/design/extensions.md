@@ -26,7 +26,7 @@ Overlapping publisher prefixes require an explicit protected ownership assignmen
 
 Key rotation needs a protected ownership transfer, preserves prior versions and cannot replace their bytes.
 
-Archive rules match the bundle reader of `../specs/policy-envelope.md` section 6: no links, no duplicate or non-canonical paths, no member outside the listing, declared sizes enforced, and a total decompressed limit of 64 MB by default, configurable per server.
+The [package loader contract](../specs/extension-loader.md) defines bounded zstd/USTAR reading, regular members, exact byte verification and file commitments. Its default listed-file ceiling is 64 MiB; separate control, header, padding and compression ceilings bound the whole archive. The [loader plan](../plans/extension-loader.md) keeps parser qualification and stateful admission as explicit gates.
 
 Complete examples live in [the manifest fixtures](../../schemas/extension/v1alpha1/fixtures.json). The contract defines `spec.requires` as arrays of interfaces per kind, explicit component file ownership and bounded capability requests. A valid manifest alone never authorizes installation.
 

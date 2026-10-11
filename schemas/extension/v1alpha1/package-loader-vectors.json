@@ -1,0 +1,440 @@
+{
+  "profile": "extension-package-loader-v1alpha1",
+  "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "publisher_fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+  "files": [
+    {
+      "path": "content/rules.yaml",
+      "utf8": "abc",
+      "size": 3,
+      "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    }
+  ],
+  "cases": [
+    {
+      "name": "valid-yaml",
+      "rule": "replace only the base vector publisher fingerprint",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YToKICBpZDogY29tLmV4YW1wbGUucnVsZXMKICB2ZXJzaW9uOiAxLjIuMAogIHB1Ymxpc2hlcjoKICAgIG5hbWU6IEV4YW1wbGUgU2VjdXJpdHkKICAgIGtleTogc2hhMjU2OjU2NDc1YWE3NTQ2MzQ3NGMwMjg1ZGY1ZGJmMmJjYWI3M2RhNjUxMzU4ODM5ZTliNzc0ODFiMmVhYjEwNzcwOGMKICBsaWNlbnNlOiBBcGFjaGUtMi4wCiAgc291cmNlOiBodHRwczovL2V4YW1wbGUuY29tL3J1bGVzCnNwZWM6CiAgcmVxdWlyZXM6CiAgICBjb250ZW50OgogICAgLSBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICBjb21wb25lbnRzOgogIC0gbmFtZTogcnVsZXMKICAgIGtpbmQ6IGNvbnRlbnQKICAgIGludGVyZmFjZTogZXh0LnJpY2V2YW50YS5pby9jb250ZW50L3YxCiAgICBmaWxlczoKICAgIC0gY29udGVudC9ydWxlcy55YW1sCiAgICBmb3JtYXQ6IGNsYXNzaWZpY2F0aW9uCiAgICBmaWxlOiBjb250ZW50L3J1bGVzLnlhbWwKICAgIGNhcGFiaWxpdGllczoge30KZmlsZXM6Ci0gcGF0aDogY29udGVudC9ydWxlcy55YW1sCiAgc2hhMjU2OiBiYTc4MTZiZjhmMDFjZmVhNDE0MTQwZGU1ZGFlMjIyM2IwMDM2MWEzOTYxNzdhOWNiNDEwZmY2MWYyMDAxNWFkCiAgc2l6ZTogMwo=\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"EFtz/oH0zgseI9vR0pUKI2wUHWJwpZZ/v2QuJWc3APApIxUW5+eEziOEQMF5r51VGJhlMiK9CDkKXNF+LD3JBg==\"}]}",
+      "payload_sha256": "5c23f562349a6f14e99c70ff01ff9bf210038163442f625ad719d9dd297b09d5",
+      "archive_manifest_sha256": "5c23f562349a6f14e99c70ff01ff9bf210038163442f625ad719d9dd297b09d5",
+      "envelope_sha256": "a51a7eb10c0b17e4a7e2906dfbe2bb71aed07f99feeb94412acd821ff17a4ab8",
+      "signature_valid": true,
+      "result": "ok",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "valid-comment",
+      "rule": "append # literal ! comment and LF to payload and member",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n# literal ! comment\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n# literal ! comment\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YToKICBpZDogY29tLmV4YW1wbGUucnVsZXMKICB2ZXJzaW9uOiAxLjIuMAogIHB1Ymxpc2hlcjoKICAgIG5hbWU6IEV4YW1wbGUgU2VjdXJpdHkKICAgIGtleTogc2hhMjU2OjU2NDc1YWE3NTQ2MzQ3NGMwMjg1ZGY1ZGJmMmJjYWI3M2RhNjUxMzU4ODM5ZTliNzc0ODFiMmVhYjEwNzcwOGMKICBsaWNlbnNlOiBBcGFjaGUtMi4wCiAgc291cmNlOiBodHRwczovL2V4YW1wbGUuY29tL3J1bGVzCnNwZWM6CiAgcmVxdWlyZXM6CiAgICBjb250ZW50OgogICAgLSBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICBjb21wb25lbnRzOgogIC0gbmFtZTogcnVsZXMKICAgIGtpbmQ6IGNvbnRlbnQKICAgIGludGVyZmFjZTogZXh0LnJpY2V2YW50YS5pby9jb250ZW50L3YxCiAgICBmaWxlczoKICAgIC0gY29udGVudC9ydWxlcy55YW1sCiAgICBmb3JtYXQ6IGNsYXNzaWZpY2F0aW9uCiAgICBmaWxlOiBjb250ZW50L3J1bGVzLnlhbWwKICAgIGNhcGFiaWxpdGllczoge30KZmlsZXM6Ci0gcGF0aDogY29udGVudC9ydWxlcy55YW1sCiAgc2hhMjU2OiBiYTc4MTZiZjhmMDFjZmVhNDE0MTQwZGU1ZGFlMjIyM2IwMDM2MWEzOTYxNzdhOWNiNDEwZmY2MWYyMDAxNWFkCiAgc2l6ZTogMwojIGxpdGVyYWwgISBjb21tZW50Cg==\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"GNDFs0G8MddLytusyH+Yb2bFXE2JmDwF/X2oNnlqtaHWPaeDwIhlnEn2yGwGSDZ80DtuUBxPptCmJ9Xdp/PPDQ==\"}]}",
+      "payload_sha256": "05e8d5b2a34f398b39b85fb380e1e3b6eb6df3c4b1ccdc38db80936349cea50f",
+      "archive_manifest_sha256": "05e8d5b2a34f398b39b85fb380e1e3b6eb6df3c4b1ccdc38db80936349cea50f",
+      "envelope_sha256": "064e23d29f8a4c56184867f47ca2a7c9ebdb9c36dc7c0f9719c4cd5a052b189d",
+      "signature_valid": true,
+      "result": "ok",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "valid-crlf",
+      "rule": "replace each LF with CRLF in payload and member",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\r\nkind: Extension\r\nmetadata:\r\n  id: com.example.rules\r\n  version: 1.2.0\r\n  publisher:\r\n    name: Example Security\r\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\r\n  license: Apache-2.0\r\n  source: https://example.com/rules\r\nspec:\r\n  requires:\r\n    content:\r\n    - ext.ricevanta.io/content/v1\r\n  components:\r\n  - name: rules\r\n    kind: content\r\n    interface: ext.ricevanta.io/content/v1\r\n    files:\r\n    - content/rules.yaml\r\n    format: classification\r\n    file: content/rules.yaml\r\n    capabilities: {}\r\nfiles:\r\n- path: content/rules.yaml\r\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\r\n  size: 3\r\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\r\nkind: Extension\r\nmetadata:\r\n  id: com.example.rules\r\n  version: 1.2.0\r\n  publisher:\r\n    name: Example Security\r\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\r\n  license: Apache-2.0\r\n  source: https://example.com/rules\r\nspec:\r\n  requires:\r\n    content:\r\n    - ext.ricevanta.io/content/v1\r\n  components:\r\n  - name: rules\r\n    kind: content\r\n    interface: ext.ricevanta.io/content/v1\r\n    files:\r\n    - content/rules.yaml\r\n    format: classification\r\n    file: content/rules.yaml\r\n    capabilities: {}\r\nfiles:\r\n- path: content/rules.yaml\r\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\r\n  size: 3\r\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExDQpraW5kOiBFeHRlbnNpb24NCm1ldGFkYXRhOg0KICBpZDogY29tLmV4YW1wbGUucnVsZXMNCiAgdmVyc2lvbjogMS4yLjANCiAgcHVibGlzaGVyOg0KICAgIG5hbWU6IEV4YW1wbGUgU2VjdXJpdHkNCiAgICBrZXk6IHNoYTI1Njo1NjQ3NWFhNzU0NjM0NzRjMDI4NWRmNWRiZjJiY2FiNzNkYTY1MTM1ODgzOWU5Yjc3NDgxYjJlYWIxMDc3MDhjDQogIGxpY2Vuc2U6IEFwYWNoZS0yLjANCiAgc291cmNlOiBodHRwczovL2V4YW1wbGUuY29tL3J1bGVzDQpzcGVjOg0KICByZXF1aXJlczoNCiAgICBjb250ZW50Og0KICAgIC0gZXh0LnJpY2V2YW50YS5pby9jb250ZW50L3YxDQogIGNvbXBvbmVudHM6DQogIC0gbmFtZTogcnVsZXMNCiAgICBraW5kOiBjb250ZW50DQogICAgaW50ZXJmYWNlOiBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjENCiAgICBmaWxlczoNCiAgICAtIGNvbnRlbnQvcnVsZXMueWFtbA0KICAgIGZvcm1hdDogY2xhc3NpZmljYXRpb24NCiAgICBmaWxlOiBjb250ZW50L3J1bGVzLnlhbWwNCiAgICBjYXBhYmlsaXRpZXM6IHt9DQpmaWxlczoNCi0gcGF0aDogY29udGVudC9ydWxlcy55YW1sDQogIHNoYTI1NjogYmE3ODE2YmY4ZjAxY2ZlYTQxNDE0MGRlNWRhZTIyMjNiMDAzNjFhMzk2MTc3YTljYjQxMGZmNjFmMjAwMTVhZA0KICBzaXplOiAzDQo=\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"1yTiaiLGzV1RprtZLhafE0SgRMMNMZa+rcvo2E7Dz7hE++4FK7wkeKdkLaLbw8xHkLAoqhITI47eLYA7eSLJDQ==\"}]}",
+      "payload_sha256": "5cdcd33db9e630c9a63d9fb02c5e2f66fa9c98819715b325f93e7dfcd568efbb",
+      "archive_manifest_sha256": "5cdcd33db9e630c9a63d9fb02c5e2f66fa9c98819715b325f93e7dfcd568efbb",
+      "envelope_sha256": "37c926d0caadfbe3a17e4941196b2ecfbedbe2dc2ec5522eb5307904da544c2f",
+      "signature_valid": true,
+      "result": "ok",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "changed-hint",
+      "rule": "base bytes; use 64 f characters as the envelope hint",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YToKICBpZDogY29tLmV4YW1wbGUucnVsZXMKICB2ZXJzaW9uOiAxLjIuMAogIHB1Ymxpc2hlcjoKICAgIG5hbWU6IEV4YW1wbGUgU2VjdXJpdHkKICAgIGtleTogc2hhMjU2OjU2NDc1YWE3NTQ2MzQ3NGMwMjg1ZGY1ZGJmMmJjYWI3M2RhNjUxMzU4ODM5ZTliNzc0ODFiMmVhYjEwNzcwOGMKICBsaWNlbnNlOiBBcGFjaGUtMi4wCiAgc291cmNlOiBodHRwczovL2V4YW1wbGUuY29tL3J1bGVzCnNwZWM6CiAgcmVxdWlyZXM6CiAgICBjb250ZW50OgogICAgLSBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICBjb21wb25lbnRzOgogIC0gbmFtZTogcnVsZXMKICAgIGtpbmQ6IGNvbnRlbnQKICAgIGludGVyZmFjZTogZXh0LnJpY2V2YW50YS5pby9jb250ZW50L3YxCiAgICBmaWxlczoKICAgIC0gY29udGVudC9ydWxlcy55YW1sCiAgICBmb3JtYXQ6IGNsYXNzaWZpY2F0aW9uCiAgICBmaWxlOiBjb250ZW50L3J1bGVzLnlhbWwKICAgIGNhcGFiaWxpdGllczoge30KZmlsZXM6Ci0gcGF0aDogY29udGVudC9ydWxlcy55YW1sCiAgc2hhMjU2OiBiYTc4MTZiZjhmMDFjZmVhNDE0MTQwZGU1ZGFlMjIyM2IwMDM2MWEzOTYxNzdhOWNiNDEwZmY2MWYyMDAxNWFkCiAgc2l6ZTogMwo=\",\"signatures\":[{\"keyid\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"sig\":\"EFtz/oH0zgseI9vR0pUKI2wUHWJwpZZ/v2QuJWc3APApIxUW5+eEziOEQMF5r51VGJhlMiK9CDkKXNF+LD3JBg==\"}]}",
+      "payload_sha256": "5c23f562349a6f14e99c70ff01ff9bf210038163442f625ad719d9dd297b09d5",
+      "archive_manifest_sha256": "5c23f562349a6f14e99c70ff01ff9bf210038163442f625ad719d9dd297b09d5",
+      "envelope_sha256": "9e7946191be40b4e61002c05787e1c0a58d1b9abaef9b2a1e69f2b5a483cff30",
+      "signature_valid": true,
+      "result": "ok",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "unequal-member",
+      "rule": "base signed payload; append one LF only to archive member",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YToKICBpZDogY29tLmV4YW1wbGUucnVsZXMKICB2ZXJzaW9uOiAxLjIuMAogIHB1Ymxpc2hlcjoKICAgIG5hbWU6IEV4YW1wbGUgU2VjdXJpdHkKICAgIGtleTogc2hhMjU2OjU2NDc1YWE3NTQ2MzQ3NGMwMjg1ZGY1ZGJmMmJjYWI3M2RhNjUxMzU4ODM5ZTliNzc0ODFiMmVhYjEwNzcwOGMKICBsaWNlbnNlOiBBcGFjaGUtMi4wCiAgc291cmNlOiBodHRwczovL2V4YW1wbGUuY29tL3J1bGVzCnNwZWM6CiAgcmVxdWlyZXM6CiAgICBjb250ZW50OgogICAgLSBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICBjb21wb25lbnRzOgogIC0gbmFtZTogcnVsZXMKICAgIGtpbmQ6IGNvbnRlbnQKICAgIGludGVyZmFjZTogZXh0LnJpY2V2YW50YS5pby9jb250ZW50L3YxCiAgICBmaWxlczoKICAgIC0gY29udGVudC9ydWxlcy55YW1sCiAgICBmb3JtYXQ6IGNsYXNzaWZpY2F0aW9uCiAgICBmaWxlOiBjb250ZW50L3J1bGVzLnlhbWwKICAgIGNhcGFiaWxpdGllczoge30KZmlsZXM6Ci0gcGF0aDogY29udGVudC9ydWxlcy55YW1sCiAgc2hhMjU2OiBiYTc4MTZiZjhmMDFjZmVhNDE0MTQwZGU1ZGFlMjIyM2IwMDM2MWEzOTYxNzdhOWNiNDEwZmY2MWYyMDAxNWFkCiAgc2l6ZTogMwo=\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"EFtz/oH0zgseI9vR0pUKI2wUHWJwpZZ/v2QuJWc3APApIxUW5+eEziOEQMF5r51VGJhlMiK9CDkKXNF+LD3JBg==\"}]}",
+      "payload_sha256": "5c23f562349a6f14e99c70ff01ff9bf210038163442f625ad719d9dd297b09d5",
+      "archive_manifest_sha256": "496fbc8c1a911e3e9ef8f78dca50c1b9e4e442b77bad6c6935a61fc15b51b070",
+      "envelope_sha256": "a51a7eb10c0b17e4a7e2906dfbe2bb71aed07f99feeb94412acd821ff17a4ab8",
+      "signature_valid": true,
+      "result": "ErrPayloadMismatch",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "wrong-publisher",
+      "rule": "replace publisher fingerprint with sha256 and 64 zeroes before signing",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:0000000000000000000000000000000000000000000000000000000000000000\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata:\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:0000000000000000000000000000000000000000000000000000000000000000\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YToKICBpZDogY29tLmV4YW1wbGUucnVsZXMKICB2ZXJzaW9uOiAxLjIuMAogIHB1Ymxpc2hlcjoKICAgIG5hbWU6IEV4YW1wbGUgU2VjdXJpdHkKICAgIGtleTogc2hhMjU2OjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAKICBsaWNlbnNlOiBBcGFjaGUtMi4wCiAgc291cmNlOiBodHRwczovL2V4YW1wbGUuY29tL3J1bGVzCnNwZWM6CiAgcmVxdWlyZXM6CiAgICBjb250ZW50OgogICAgLSBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICBjb21wb25lbnRzOgogIC0gbmFtZTogcnVsZXMKICAgIGtpbmQ6IGNvbnRlbnQKICAgIGludGVyZmFjZTogZXh0LnJpY2V2YW50YS5pby9jb250ZW50L3YxCiAgICBmaWxlczoKICAgIC0gY29udGVudC9ydWxlcy55YW1sCiAgICBmb3JtYXQ6IGNsYXNzaWZpY2F0aW9uCiAgICBmaWxlOiBjb250ZW50L3J1bGVzLnlhbWwKICAgIGNhcGFiaWxpdGllczoge30KZmlsZXM6Ci0gcGF0aDogY29udGVudC9ydWxlcy55YW1sCiAgc2hhMjU2OiBiYTc4MTZiZjhmMDFjZmVhNDE0MTQwZGU1ZGFlMjIyM2IwMDM2MWEzOTYxNzdhOWNiNDEwZmY2MWYyMDAxNWFkCiAgc2l6ZTogMwo=\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"zjjMrRLj8OeKqc9BSFTBSyANFGcK+C5h/oBEv985WJDYJlKqWhz/8PbooVef3R4EhqsufgDn2eOsJoHbsUEdDA==\"}]}",
+      "payload_sha256": "403ecd6a9c2f004d88fb7ef6cc26329e2046d55d1d821d698031149f83ec9dc2",
+      "archive_manifest_sha256": "403ecd6a9c2f004d88fb7ef6cc26329e2046d55d1d821d698031149f83ec9dc2",
+      "envelope_sha256": "fcbd077459690bdbd5fab11f94a51390a5be31226127576a1003f0dd149c4c27",
+      "signature_valid": true,
+      "result": "ErrPublisher",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "signed-bare-tag",
+      "rule": "replace metadata colon with metadata colon space ! before signing",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YTogIQogIGlkOiBjb20uZXhhbXBsZS5ydWxlcwogIHZlcnNpb246IDEuMi4wCiAgcHVibGlzaGVyOgogICAgbmFtZTogRXhhbXBsZSBTZWN1cml0eQogICAga2V5OiBzaGEyNTY6NTY0NzVhYTc1NDYzNDc0YzAyODVkZjVkYmYyYmNhYjczZGE2NTEzNTg4MzllOWI3NzQ4MWIyZWFiMTA3NzA4YwogIGxpY2Vuc2U6IEFwYWNoZS0yLjAKICBzb3VyY2U6IGh0dHBzOi8vZXhhbXBsZS5jb20vcnVsZXMKc3BlYzoKICByZXF1aXJlczoKICAgIGNvbnRlbnQ6CiAgICAtIGV4dC5yaWNldmFudGEuaW8vY29udGVudC92MQogIGNvbXBvbmVudHM6CiAgLSBuYW1lOiBydWxlcwogICAga2luZDogY29udGVudAogICAgaW50ZXJmYWNlOiBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICAgIGZpbGVzOgogICAgLSBjb250ZW50L3J1bGVzLnlhbWwKICAgIGZvcm1hdDogY2xhc3NpZmljYXRpb24KICAgIGZpbGU6IGNvbnRlbnQvcnVsZXMueWFtbAogICAgY2FwYWJpbGl0aWVzOiB7fQpmaWxlczoKLSBwYXRoOiBjb250ZW50L3J1bGVzLnlhbWwKICBzaGEyNTY6IGJhNzgxNmJmOGYwMWNmZWE0MTQxNDBkZTVkYWUyMjIzYjAwMzYxYTM5NjE3N2E5Y2I0MTBmZjYxZjIwMDE1YWQKICBzaXplOiAzCg==\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"0ZztSpP2fhPGpPA/U0rEFsBx1Z1gjOqKCEhhIcKjU8yVeuvQnEE5DAfvxgNYC1lnnvutEIWOJofLr4HZoVfFAg==\"}]}",
+      "payload_sha256": "78d7ad947701daddb0e0588bef4ac5f4cdb8f2a8c329708302aef967f6f0dfeb",
+      "archive_manifest_sha256": "78d7ad947701daddb0e0588bef4ac5f4cdb8f2a8c329708302aef967f6f0dfeb",
+      "envelope_sha256": "f3e841ea67d5952676b2d2a4fb52ac0cdfac1baf878af1213a4b09ed6adb74c7",
+      "signature_valid": true,
+      "result": "ErrExplicitTag",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "bad-signature-before-tag",
+      "rule": "signed-bare-tag bytes; xor first signature byte with 1",
+      "payload": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "archive_manifest": "apiVersion: ricevanta.io/v1alpha1\nkind: Extension\nmetadata: !\n  id: com.example.rules\n  version: 1.2.0\n  publisher:\n    name: Example Security\n    key: sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c\n  license: Apache-2.0\n  source: https://example.com/rules\nspec:\n  requires:\n    content:\n    - ext.ricevanta.io/content/v1\n  components:\n  - name: rules\n    kind: content\n    interface: ext.ricevanta.io/content/v1\n    files:\n    - content/rules.yaml\n    format: classification\n    file: content/rules.yaml\n    capabilities: {}\nfiles:\n- path: content/rules.yaml\n  sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n  size: 3\n",
+      "envelope": "{\"payloadType\":\"application/vnd.ricevanta.extension-manifest+yaml\",\"payload\":\"YXBpVmVyc2lvbjogcmljZXZhbnRhLmlvL3YxYWxwaGExCmtpbmQ6IEV4dGVuc2lvbgptZXRhZGF0YTogIQogIGlkOiBjb20uZXhhbXBsZS5ydWxlcwogIHZlcnNpb246IDEuMi4wCiAgcHVibGlzaGVyOgogICAgbmFtZTogRXhhbXBsZSBTZWN1cml0eQogICAga2V5OiBzaGEyNTY6NTY0NzVhYTc1NDYzNDc0YzAyODVkZjVkYmYyYmNhYjczZGE2NTEzNTg4MzllOWI3NzQ4MWIyZWFiMTA3NzA4YwogIGxpY2Vuc2U6IEFwYWNoZS0yLjAKICBzb3VyY2U6IGh0dHBzOi8vZXhhbXBsZS5jb20vcnVsZXMKc3BlYzoKICByZXF1aXJlczoKICAgIGNvbnRlbnQ6CiAgICAtIGV4dC5yaWNldmFudGEuaW8vY29udGVudC92MQogIGNvbXBvbmVudHM6CiAgLSBuYW1lOiBydWxlcwogICAga2luZDogY29udGVudAogICAgaW50ZXJmYWNlOiBleHQucmljZXZhbnRhLmlvL2NvbnRlbnQvdjEKICAgIGZpbGVzOgogICAgLSBjb250ZW50L3J1bGVzLnlhbWwKICAgIGZvcm1hdDogY2xhc3NpZmljYXRpb24KICAgIGZpbGU6IGNvbnRlbnQvcnVsZXMueWFtbAogICAgY2FwYWJpbGl0aWVzOiB7fQpmaWxlczoKLSBwYXRoOiBjb250ZW50L3J1bGVzLnlhbWwKICBzaGEyNTY6IGJhNzgxNmJmOGYwMWNmZWE0MTQxNDBkZTVkYWUyMjIzYjAwMzYxYTM5NjE3N2E5Y2I0MTBmZjYxZjIwMDE1YWQKICBzaXplOiAzCg==\",\"signatures\":[{\"keyid\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sig\":\"0JztSpP2fhPGpPA/U0rEFsBx1Z1gjOqKCEhhIcKjU8yVeuvQnEE5DAfvxgNYC1lnnvutEIWOJofLr4HZoVfFAg==\"}]}",
+      "payload_sha256": "78d7ad947701daddb0e0588bef4ac5f4cdb8f2a8c329708302aef967f6f0dfeb",
+      "archive_manifest_sha256": "78d7ad947701daddb0e0588bef4ac5f4cdb8f2a8c329708302aef967f6f0dfeb",
+      "envelope_sha256": "efc5cce82e3b95686521f5654a6d49ccacadb2474bdd0ad905ca3aa952aa5dac",
+      "signature_valid": false,
+      "result": "dsse.ErrSignature",
+      "decoded_document": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "id": "com.example.rules",
+          "version": "1.2.0",
+          "publisher": {
+            "name": "Example Security",
+            "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+          },
+          "license": "Apache-2.0",
+          "source": "https://example.com/rules"
+        },
+        "spec": {
+          "requires": {
+            "content": [
+              "ext.ricevanta.io/content/v1"
+            ]
+          },
+          "components": [
+            {
+              "name": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "files": [
+                "content/rules.yaml"
+              ],
+              "format": "classification",
+              "file": "content/rules.yaml",
+              "capabilities": {}
+            }
+          ]
+        },
+        "files": [
+          {
+            "path": "content/rules.yaml",
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "size": 3
+          }
+        ]
+      }
+    }
+  ]
+}

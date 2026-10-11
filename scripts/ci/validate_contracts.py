@@ -37,6 +37,7 @@ CONTRACTS = (
     ("schemas/extension/v1alpha1/manifest.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
     ("schemas/extension/v1alpha1/fixtures.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
     ("schemas/extension/v1alpha1/loader-vectors.schema.json", "schemas/extension/v1alpha1/loader-vectors.json"),
+    ("schemas/extension/v1alpha1/package-loader-vectors.schema.json", "schemas/extension/v1alpha1/package-loader-vectors.json"),
 )
 
 
