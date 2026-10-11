@@ -70,8 +70,11 @@ jobs:
         path: |
           ~/.cargo/registry/index
           ~/.cargo/registry/cache
-          ~/.cargo/registry/src
         key: agent-cargo-registry-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
+    - name: Admit Cargo downloads and fresh target
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Check locked dependency pins
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
@@ -193,14 +196,22 @@ jobs:
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
       with:
         go-version-file: server/go.mod
-        cache: true
-        cache-dependency-path: server/go.sum
+        cache: false
+    - name: Create fresh Go caches
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           ~/.cargo/registry/index
           ~/.cargo/registry/cache
-          ~/.cargo/registry/src
         key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
     - name: Install Rust and check native host
       run: |
@@ -209,7 +220,10 @@ jobs:
         test "$(rustc +1.99.0 -vV | sed -n 's/^host: //p')" = 'x86_64-unknown-linux-gnu'
         test "${{ runner.arch }}" = 'X64'
         cc --version
-        echo "CARGO_TARGET_DIR=${{ runner.temp }}/ricevanta-batch-target" >> "$GITHUB_ENV"
+    - name: Admit Cargo downloads and fresh target
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Build live writer
       working-directory: agent
       env:
