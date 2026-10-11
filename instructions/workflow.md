@@ -34,6 +34,8 @@
 
 ## Reviews
 
+Copilot reviews every pull request push automatically using [repository guidance](../.github/copilot-instructions.md), [path checklists](../.github/instructions/), the [code-review](../.github/skills/code-review/SKILL.md) and [security-review](../.github/skills/security-review/SKILL.md) skills, and the [review environment](../.github/workflows/copilot-code-review.yml). The guidance links to authoritative rule files instead of restating them.
+
 - Design documents: one review by someone who did not write them.
 - Reviews and fix confirmations run on Sol xhigh or Astra xhigh, never on the model that wrote the work: code written by Sol is reviewed by Astra, designs written by Astra are reviewed by Sol, and work written by Fable or a person goes to whichever reviewer is free. A fix confirmation may come from the original reviewer when that reviewer still satisfies this rule.
 - Security-relevant work (enrollment, keys, signing, update, enforcement): adversarial review before merge.
