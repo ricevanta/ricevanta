@@ -41,3 +41,33 @@ class PackageManifestTests(unittest.TestCase):
         self.assertEqual(list(checker.instances(SCHEMA, "schemas/extension/v1alpha1/fixtures.json", data)), [
             (case["name"], case["manifest"], case["schema_valid"]) for case in data["cases"]
         ])
+
+
+class BuildContractTests(unittest.TestCase):
+    def test_build_examples_registered(self):
+        self.assertIn('schemas/build/v1', checker.DIRECTORIES)
+        for name in ('example.json', 'example-image.json'):
+            self.assertIn(('schemas/build/v1/build-record.schema.json', 'schemas/build/v1/' + name), checker.CONTRACTS)
+
+    def test_invalid_build_examples_rejected(self):
+        original_load = checker.load
+        for name in ('example.json', 'example-image.json'):
+            path = checker.ROOT / 'schemas/build/v1' / name
+            data = original_load(path)
+            data['identity']['commit'] = 'invalid'
+            with self.subTest(name=name), patch.object(checker, 'load', side_effect=lambda p: data if p == path else original_load(p)):
+                with self.assertRaises(ValueError), redirect_stdout(io.StringIO()):
+                    checker.main()
+
+    def test_inventory_example_registered(self):
+        self.assertIn(('schemas/build/v1/inventory.schema.json',
+                       'schemas/build/v1/inventory-example.json'), checker.CONTRACTS)
+
+    def test_invalid_inventory_example_rejected(self):
+        original_load = checker.load
+        path = checker.ROOT / 'schemas/build/v1/inventory-example.json'
+        data = original_load(path)
+        data['records'][0]['artifacts'][0]['format'] = 'shell'
+        with patch.object(checker, 'load', side_effect=lambda p: data if p == path else original_load(p)):
+            with self.assertRaises(ValueError), redirect_stdout(io.StringIO()):
+                checker.main()

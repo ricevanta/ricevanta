@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
 DIRECTORIES = (
+    "schemas/build/v1",
     "schemas/dsse/v1",
     "schemas/events/v1",
     "schemas/cel/v1",
@@ -22,6 +23,9 @@ NON_FIXTURES = {
 }
 # Each pair names a complete document or a fixture suite with embedded instances.
 CONTRACTS = (
+    ("schemas/build/v1/inventory.schema.json", "schemas/build/v1/inventory-example.json"),
+    ("schemas/build/v1/build-record.schema.json", "schemas/build/v1/example.json"),
+    ("schemas/build/v1/build-record.schema.json", "schemas/build/v1/example-image.json"),
     ("schemas/extension/v1alpha1/manifest.schema.json", "schemas/extension/v1alpha1/package-loader-vectors.json"),
     ("schemas/dsse/v1/vectors.schema.json", "schemas/dsse/v1/vectors.json"),
     ("schemas/dsse/v1/envelope.schema.json", "schemas/dsse/v1/vectors.json"),

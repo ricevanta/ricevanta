@@ -55,6 +55,21 @@ jobs:
         run: |
           python schemas/policy/v1alpha1/validate.py
           python schemas/policy/v1alpha1/test_validate.py
+      - name: release-contracts
+        id: release-contracts
+        run: |
+          python -B - <<'PY'
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover('scripts/release', pattern='test_*.py')
+          expected = suite.countTestCases()
+          if expected == 0:
+              raise SystemExit('release-contracts: no tests discovered')
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          print(f'release-contracts: {result.testsRun} tests executed, {expected} discovered', flush=True)
+          if not result.wasSuccessful() or result.skipped or result.testsRun != expected:
+              raise SystemExit('release-contracts: failed, skipped or missing tests')
+          PY
       - name: Validate fixture contracts
         run: |
           python scripts/ci/validate_contracts.py
