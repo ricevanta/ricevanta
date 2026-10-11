@@ -22,6 +22,7 @@
 - Each slice gets its own worktree and branch. The primary agent assigns decision IDs before work starts, so parallel slices never reuse one.
 - The primary agent runs at most six Codex jobs at once across all of its slices, counting every design, review and implementation job it starts; nested agents count toward their parent job.
 - Workers run only light local checks: formatting, vet or clippy, and focused tests for the packages they touch. Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix run on GitHub CI (`instructions/testing.md`); the primary agent reads those results before integration.
+- For a failing or intermittent check, a crash, or wrong output whose cause is unknown, the primary agent dispatches the troubleshooter and supplies CI logs, artifacts and traces. When logs cannot settle the cause, it runs a temporary diagnosis workflow on a `wip/` branch, supplies the results and deletes the workflow before landing.
 - When a worker stops with a question or a design conflict, the primary agent answers it from the reviewed design, or sends the conflict back to the design author and its independent reviewer, records any approved contract change in the design, and only then resumes the worker with a new task that states the answer.
 
 ## Landing a slice

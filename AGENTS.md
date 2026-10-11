@@ -40,6 +40,7 @@ Use the roles below for design, research, implementation and review. The owner c
 | `designer` | Designs, specifications, schemas, first-party research | Claude Code `fable`, high; Codex `gpt-6-astra`, high | `.claude/agents/designer.md`, `.codex/agents/designer.toml` | Writes `docs/`, `schemas/`, `instructions/` |
 | `design_reviewer` | Independent review of designs, specifications and schemas | `gpt-6.1-sol`, xhigh | `.codex/agents/design-reviewer.toml` | Read-only |
 | `implementer` | Planning and one bounded code task with its tests | `gpt-6.1-sol`, medium | `.codex/agents/implementer.toml` | Writes the paths its brief owns |
+| `troubleshooter` | Root-cause debugging, flaky tests and fixes | `gpt-6.1-sol`, xhigh | `.codex/agents/troubleshooter.toml` | Writes the paths its brief owns |
 | `code_reviewer` | Final code review, with the adversarial pass for security-relevant code | `gpt-6.1-sol`, xhigh | `.codex/agents/code-reviewer.toml` | Read-only on sources; builds in a disposable copy |
 | `explorer` | Searches, summaries, mechanical checks | `gpt-6-luna`, low | `.codex/agents/explorer.toml` | Read-only |
 
@@ -48,6 +49,7 @@ Use the roles below for design, research, implementation and review. The owner c
 - The Claude Code `designer` writes the initial design. The Codex `designer` reviews and improves it in place, or writes it when the Claude Code `designer` is unavailable. Both paths are design work and do not count as independent review.
 - `design_reviewer` conducts independent design reviews; `code_reviewer` conducts code reviews and adversarial passes. Fix confirmations use the role that owns the review and may come from the original reviewer if that reviewer did not write the fixes.
 - An independent reviewer is a separate job from every author or improver and never edits or implements the work it reviews. The author and reviewer may use the same model. A worker's own statement that its work passed an independent review, for example after it reviewed itself with subagents, is not a review. When no qualified reviewer is available, the work waits; it is never approved on a smaller model. The approval gates are defined in [the workflow](instructions/workflow.md#design-and-implementation-current).
+- The primary agent plans and briefs troubleshooting work, supplies CI logs, artifacts and diagnosis runs that workers cannot fetch, verifies reports, runs Git and lands. It delegates investigation and the fix to the troubleshooter instead of investigating itself; routine implementation stays with the implementer.
 - Agents may use subagents and general-purpose agents; there is no separate researcher role. Give each worker owned paths and a separate worktree for concurrent edits.
 - The primary agent handles Git operations under `instructions/workflow.md`; subagents never commit or push. The primary agent writes the Codex role files, because the Codex sandbox cannot write `.codex/`.
 - New plans and specifications name roles, not model ids.
