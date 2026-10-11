@@ -1,0 +1,14 @@
+{
+  "attributes": {
+    "cpu_architecture": {
+      "caption": "Cpu architecture",
+      "description": "Ricevanta cpu architecture.",
+      "requirement": "required",
+      "type": "string_t"
+    }
+  },
+  "caption": "Os",
+  "description": "Ricevanta os projection additions.",
+  "extends": "os",
+  "name": "os"
+}

@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "node": {
+      "additionalProperties": false,
+      "properties": {
+        "$defs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/node"
+          },
+          "type": "object"
+        },
+        "$id": {
+          "type": "string"
+        },
+        "$ref": {
+          "type": "string"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "const": false
+        },
+        "allOf": {
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "const": {},
+        "description": {
+          "type": "string"
+        },
+        "else": {
+          "$ref": "#/$defs/node"
+        },
+        "enum": {
+          "minItems": 1,
+          "type": "array"
+        },
+        "if": {
+          "$ref": "#/$defs/node"
+        },
+        "items": {
+          "$ref": "#/$defs/node"
+        },
+        "maxItems": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minItems": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minLength": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "not": {
+          "$ref": "#/$defs/node"
+        },
+        "oneOf": {
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/node"
+          },
+          "type": "object"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "then": {
+          "$ref": "#/$defs/node"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "x-integer": {
+          "type": "string"
+        },
+        "x-maxBytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x-restriction": {
+          "type": "string"
+        },
+        "x-rule": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "x-source": {
+          "type": "string"
+        },
+        "x-sourceKind": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "$id": "https://ricevanta.io/schemas/ocsf/profile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "classes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "category_uid": {
+            "type": "integer"
+          },
+          "class_uid": {
+            "type": "integer"
+          },
+          "local_uid": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema": {
+            "$ref": "#/$defs/node"
+          },
+          "source_kinds": {
+            "items": {
+              "enum": [
+                "agent",
+                "server"
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "local_uid",
+          "category_uid",
+          "class_uid",
+          "source_kinds",
+          "schema"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "format": {
+      "const": 1
+    },
+    "objects": {
+      "additionalProperties": {
+        "$ref": "#/$defs/node"
+      },
+      "type": "object"
+    },
+    "profile": {
+      "const": "ricevanta-ocsf-1"
+    }
+  },
+  "required": [
+    "format",
+    "profile",
+    "classes",
+    "objects"
+  ],
+  "type": "object"
+}

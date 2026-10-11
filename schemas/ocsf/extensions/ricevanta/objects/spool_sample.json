@@ -1,0 +1,62 @@
+{
+  "attributes": {
+    "bytes": {
+      "caption": "Bytes",
+      "description": "Ricevanta bytes.",
+      "requirement": "required",
+      "type": "long_t"
+    },
+    "dropped_bytes": {
+      "caption": "Dropped bytes",
+      "description": "Ricevanta dropped bytes.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "dropped_records": {
+      "caption": "Dropped records",
+      "description": "Ricevanta dropped records.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "dropped_segments": {
+      "caption": "Dropped segments",
+      "description": "Ricevanta dropped segments.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "last_ack_sequence": {
+      "caption": "Last ack sequence",
+      "description": "Ricevanta last ack sequence.",
+      "requirement": "optional",
+      "type": "integer_t"
+    },
+    "oldest_unsent_ms": {
+      "caption": "Oldest unsent ms",
+      "description": "Ricevanta oldest unsent ms.",
+      "requirement": "optional",
+      "type": "integer_t"
+    },
+    "spool_class": {
+      "caption": "Spool class",
+      "description": "Ricevanta spool class.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "stream_epoch": {
+      "caption": "Stream epoch",
+      "description": "Ricevanta stream epoch.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "upload_errors": {
+      "caption": "Upload errors",
+      "description": "Ricevanta upload errors.",
+      "requirement": "required",
+      "type": "integer_t"
+    }
+  },
+  "caption": "Spool sample",
+  "description": "Ricevanta spool sample.",
+  "extends": "object",
+  "name": "spool_sample"
+}

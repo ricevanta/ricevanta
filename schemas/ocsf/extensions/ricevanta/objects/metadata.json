@@ -1,0 +1,39 @@
+{
+  "attributes": {
+    "bundle_state": {
+      "caption": "Bundle state",
+      "description": "Ricevanta bundle state.",
+      "requirement": "optional",
+      "type": "string_t"
+    },
+    "coverage": {
+      "caption": "Coverage",
+      "description": "Ricevanta coverage.",
+      "is_array": true,
+      "requirement": "optional",
+      "type": "coverage_entry"
+    },
+    "extension_origin": {
+      "caption": "Extension origin",
+      "description": "Ricevanta extension origin.",
+      "requirement": "optional",
+      "type": "extension_origin"
+    },
+    "policy_bundle": {
+      "caption": "Policy bundle",
+      "description": "Ricevanta policy bundle.",
+      "requirement": "optional",
+      "type": "policy_bundle"
+    },
+    "truncation": {
+      "caption": "Truncation",
+      "description": "Ricevanta truncation.",
+      "requirement": "optional",
+      "type": "truncation"
+    }
+  },
+  "caption": "Metadata",
+  "description": "Ricevanta metadata projection additions.",
+  "extends": "metadata",
+  "name": "metadata"
+}

@@ -1,0 +1,20 @@
+{
+  "attributes": {
+    "first": {
+      "caption": "First",
+      "description": "Ricevanta first.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "last": {
+      "caption": "Last",
+      "description": "Ricevanta last.",
+      "requirement": "required",
+      "type": "integer_t"
+    }
+  },
+  "caption": "Sequence range",
+  "description": "Ricevanta sequence range.",
+  "extends": "object",
+  "name": "sequence_range"
+}

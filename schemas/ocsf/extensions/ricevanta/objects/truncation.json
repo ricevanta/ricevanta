@@ -1,0 +1,26 @@
+{
+  "attributes": {
+    "omitted_entries": {
+      "caption": "Omitted entries",
+      "description": "Ricevanta omitted entries.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "original_event_bytes": {
+      "caption": "Original event bytes",
+      "description": "Ricevanta original event bytes.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "original_unmapped_bytes": {
+      "caption": "Original unmapped bytes",
+      "description": "Ricevanta original unmapped bytes.",
+      "requirement": "required",
+      "type": "integer_t"
+    }
+  },
+  "caption": "Truncation",
+  "description": "Ricevanta truncation.",
+  "extends": "object",
+  "name": "truncation"
+}

@@ -1,0 +1,20 @@
+{
+  "attributes": {
+    "path": {
+      "caption": "Path",
+      "description": "Ricevanta path.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "reason": {
+      "caption": "Reason",
+      "description": "Ricevanta reason.",
+      "requirement": "required",
+      "type": "string_t"
+    }
+  },
+  "caption": "Coverage entry",
+  "description": "Ricevanta coverage entry.",
+  "extends": "object",
+  "name": "coverage_entry"
+}

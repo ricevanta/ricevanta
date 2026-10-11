@@ -1,0 +1,20 @@
+{
+  "attributes": {
+    "count": {
+      "caption": "Count",
+      "description": "Ricevanta count.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "source": {
+      "caption": "Source",
+      "description": "Ricevanta source.",
+      "requirement": "required",
+      "type": "string_t"
+    }
+  },
+  "caption": "Event rate",
+  "description": "Ricevanta event rate.",
+  "extends": "object",
+  "name": "event_rate"
+}

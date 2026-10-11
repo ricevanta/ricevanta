@@ -1,0 +1,15 @@
+{
+  "attributes": {
+    "entries": {
+      "caption": "Entries",
+      "description": "Ricevanta entries.",
+      "is_array": true,
+      "requirement": "required",
+      "type": "unmapped_entry"
+    }
+  },
+  "caption": "Unmapped",
+  "description": "Ricevanta unmapped.",
+  "extends": "object",
+  "name": "unmapped"
+}

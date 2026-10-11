@@ -1,0 +1,32 @@
+{
+  "attributes": {
+    "field": {
+      "caption": "Field",
+      "description": "Ricevanta field.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "index": {
+      "caption": "Index",
+      "description": "Ricevanta index.",
+      "requirement": "required",
+      "type": "integer_t"
+    },
+    "reason": {
+      "caption": "Reason",
+      "description": "Ricevanta reason.",
+      "requirement": "required",
+      "type": "string_t"
+    },
+    "value": {
+      "caption": "Value",
+      "description": "Ricevanta value.",
+      "requirement": "required",
+      "type": "string_t"
+    }
+  },
+  "caption": "Unmapped entry",
+  "description": "Ricevanta unmapped entry.",
+  "extends": "object",
+  "name": "unmapped_entry"
+}
