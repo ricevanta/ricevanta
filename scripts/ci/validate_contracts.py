@@ -22,6 +22,7 @@ NON_FIXTURES = {
 }
 # Each pair names a complete document or a fixture suite with embedded instances.
 CONTRACTS = (
+    ("schemas/extension/v1alpha1/manifest.schema.json", "schemas/extension/v1alpha1/package-loader-vectors.json"),
     ("schemas/dsse/v1/vectors.schema.json", "schemas/dsse/v1/vectors.json"),
     ("schemas/dsse/v1/envelope.schema.json", "schemas/dsse/v1/vectors.json"),
     ("schemas/dsse/v1/key-admission-vectors.schema.json", "schemas/dsse/v1/key-admission-vectors.json"),
@@ -57,7 +58,10 @@ def instances(schema, fixture, data):
     """Yield label, instance and expected schema validity, not semantic validity."""
     if schema == "schemas/extension/v1alpha1/manifest.schema.json":
         for case in data["cases"]:
-            yield case["name"], case["manifest"], case["schema_valid"]
+            if fixture == "schemas/extension/v1alpha1/package-loader-vectors.json":
+                yield case["name"], case["decoded_document"], True
+            else:
+                yield case["name"], case["manifest"], case["schema_valid"]
     elif schema.endswith("/envelope.schema.json"):
         # Negative DSSE vectors include parse and cryptographic failures. Their
         # semantic expectations belong to Go tests, not JSON Schema validation.

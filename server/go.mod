@@ -2,4 +2,7 @@ module github.com/ricevanta/ricevanta/server
 
 go 1.27.1
 
-require github.com/klauspost/compress v1.20.1
+require (
+	github.com/klauspost/compress v1.20.1
+	go.yaml.in/yaml/v3 v3.0.4
+)

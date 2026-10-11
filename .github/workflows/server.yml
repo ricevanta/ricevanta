@@ -11,6 +11,7 @@ on:
       - 'schemas/export/**'
       - 'schemas/policy/**'
       - 'schemas/report/**'
+      - 'schemas/extension/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   pull_request:
@@ -22,6 +23,7 @@ on:
       - 'schemas/export/**'
       - 'schemas/policy/**'
       - 'schemas/report/**'
+      - 'schemas/extension/**'
       - '.github/workflows/server.yml'
       - 'schemas/permissions/**'
   workflow_dispatch:
@@ -157,4 +159,37 @@ jobs:
         with:
           name: go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}
           path: server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**
+          if-no-files-found: ignore
+
+  loader-gate-a:
+    name: loader Gate A (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: server
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: true
+          cache-dependency-path: server/go.sum
+      - name: Extended parser budget
+        run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
+      - name: Fuzz parser qualification for 60 seconds
+        run: go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
+      - name: Upload failing corpus
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: loader-gate-a-${{ matrix.os }}
+          path: server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**
           if-no-files-found: ignore

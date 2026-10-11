@@ -40,6 +40,15 @@ go test -count=1 ./internal/events/reportvalidate -fuzz=FuzzBudget -fuzztime=60s
 
 Keep the single target list in `.github/workflows/server.yml` aligned with these commands. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
 
+The extension loader's Gate A job runs natively on Linux x64, Windows x64 and macOS ARM64 in `.github/workflows/server.yml` (`loader-gate-a`), from `server/`:
+
+```sh
+go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
+go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
+```
+
+Keep these commands aligned with that job; it uploads the fuzz corpus on failure.
+
 CI reports key-admission time and allocations without a pass/fail latency threshold:
 
 ```sh
@@ -48,7 +57,7 @@ go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./inter
 
 The first consumer owns performance qualification and its request and candidate bounds.
 
-Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in CI on the pushed `wip/**` branch. Browser checks start with the first reviewed console slice; no browser test suite exists yet.
+Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in CI on the pushed `wip/**` branch. Console browser checks run in `.github/workflows/console.yml`.
 
 The initial server packages have pure unit and fuzz tests. They do not establish PostgreSQL, network, process, operating-system or platform support. Add integration and platform checks with the first code that crosses those boundaries, following its reviewed design and the qualification gates in `docs/specs/platform-qualification.md`.
 

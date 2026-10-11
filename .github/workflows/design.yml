@@ -76,6 +76,7 @@ jobs:
         run: |
           python scripts/ci/validate_contracts.py
           python scripts/ci/test_key_admission_contract.py
+          python -m unittest discover -s scripts/ci -p test_validate_contracts.py
       - name: Validate ExportDestination schemas and examples
         run: |
           python schemas/export/v1alpha1/validate.py
