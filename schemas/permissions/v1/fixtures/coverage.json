@@ -31,7 +31,7 @@
     {"path": "docs/specs/event-upload-wire.md","sha256": "55e8ebe6514ecef1b52ddf67a31c101ad1bff887e147f19ce8909d0e996070e6"},
     {"path": "docs/specs/export-destination-schema.md","sha256": "e184f80bb8d65a542886ce0320a69ecb967c635e8ef05081447356f1c1f8fa16"},
     {"path": "docs/specs/extension-agent-runtime.md","sha256": "0c6f746ef4f6210b8ee3eef4513d9b275f9465065c74b5dcf5e42dd6a78832d5"},
-    {"path": "docs/specs/extension-loader.md","sha256": "cbe9ddc63b84542219cf06f9611048a6c357daf0ca70c64ebec2db7ab8a7d772"},
+    {"path": "docs/specs/extension-loader.md","sha256": "9608eb5d31b25bb7f866212fa49203fd7a284e8221cf92220eda19b76da3f9dc"},
     {"path": "docs/specs/extension-manifest.md","sha256": "15ac50b782a9f81d9ba56047994ff5972fc4dd80e466d34c686d5b93b65ee572"},
     {"path": "docs/specs/isolation-qualification.md","sha256": "eac4abf5f6a4ca3ff657064a58e796e037379b417be63495ecd737b9629e7239"},
     {"path": "docs/specs/mdm-evidence-recovery.md","sha256": "28b6f1ebfbe5aaf58769804f90a88bbd27e9f86c190f55cbae180ed30596490f"},
