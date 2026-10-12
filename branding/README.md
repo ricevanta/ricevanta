@@ -6,8 +6,10 @@
 
 - `source/ricevanta-symbol-master.svg`: the only editable symbol vector. Four filled paths (`arc`, `grain-1`, `grain-2`, `grain-3`), flat fills, viewBox `0 0 668 922` with a 10% safe area.
 - `source/ricevanta-wordmark-master.svg`, `source/ricevanta-tagline-master.svg`: Be Vietnam Pro ExtraBold and Medium, outlined. License notice: `source/OFL-BeVietnamPro.txt`.
-- `scripts/build.py`: generates every file under `dist/` from the masters and validates the output. Output is byte-identical across runs. Requires ImageMagick 7 with librsvg and Pillow. Run `python3 branding/scripts/build.py`; never edit `dist/` by hand.
+- `scripts/build.py`: generates every file under `dist/` from the masters and validates the output. Output is byte-identical across runs. Requires ImageMagick 7 with librsvg, Pillow and the pinned defusedxml parser. In the existing branding Python environment, run `python3 -m pip install --require-hashes --only-binary=:all: -r branding/requirements-build.txt` from the repository root, then `python3 branding/scripts/build.py`; never edit `dist/` by hand.
 - `scripts/outline_wordmark.py <font-dir>`: regenerates the type masters. Requires fonttools, uharfbuzz and the Be Vietnam Pro TTF files from https://github.com/bettergui/BeVietnamPro.
+
+The build rejects DTDs, entity declarations and external entity references in the fixed SVG masters. The build requirements file installs only defusedxml; retain the existing renderer, Pillow and outlining setup. [CI security scanning](../docs/specs/ci-security-scanning.md#finding-remediation-and-advisory-attribution) defines parser checks and dependency admission.
 
 ## Outputs
 

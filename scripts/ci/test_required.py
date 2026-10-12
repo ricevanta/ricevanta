@@ -13,9 +13,9 @@ import required
 class RequiredTests(unittest.TestCase):
     def setUp(self):
         self.route = dict(kind='route', version=1, event='push', baseSha='a'*40, headSha='b'*40,
-                          testedSha='b'*40, runId='123', runAttempt='1', groups=['ci-contracts', 'design'],
-                          units=['ci-contracts', 'design'])
-        self.needs = {n: {'result': 'success' if n in ('route', 'ci-contracts', 'design') else 'skipped'} for n in required.NEEDS}
+                          testedSha='b'*40, runId='123', runAttempt='1', groups=['ci-contracts', 'design', 'gitleaks', 'semgrep'],
+                          units=['ci-contracts', 'design', 'gitleaks', 'semgrep'])
+        self.needs = {n: {'result': 'success' if n in ('route', 'ci-contracts', 'design', 'gitleaks', 'semgrep') else 'skipped'} for n in required.NEEDS}
         self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
 
     def verify(self): required.verify(self.route, self.needs, self.receipts)

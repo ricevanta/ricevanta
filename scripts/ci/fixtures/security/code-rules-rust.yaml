@@ -1,0 +1,6 @@
+rules:
+- id: qualification-rust
+  languages: [rust]
+  message: Synthetic Rust qualification expression
+  severity: WARNING
+  pattern: $X == $X

@@ -1,0 +1,366 @@
+version = 1
+scanner = "8.30.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 18
+EndLine = 18
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:18"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 44
+EndLine = 44
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:44"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 70
+EndLine = 70
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:70"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 96
+EndLine = 96
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:96"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 122
+EndLine = 122
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:122"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 148
+EndLine = 148
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:148"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 174
+EndLine = 174
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:174"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 187
+EndLine = 187
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:187"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 213
+EndLine = 213
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:213"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 226
+EndLine = 226
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:226"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 239
+EndLine = 239
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:239"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 252
+EndLine = 252
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:252"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "git"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 265
+EndLine = 265
+StartColumn = 9
+EndColumn = 30
+Commit = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e"
+Fingerprint = "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:265"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 18
+EndLine = 18
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:18"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 44
+EndLine = 44
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:44"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 70
+EndLine = 70
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:70"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 96
+EndLine = 96
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:96"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 122
+EndLine = 122
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:122"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 148
+EndLine = 148
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:148"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 174
+EndLine = 174
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:174"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 187
+EndLine = 187
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:187"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 213
+EndLine = 213
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:213"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 226
+EndLine = 226
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:226"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 239
+EndLine = 239
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:239"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 252
+EndLine = 252
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:252"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"
+
+[[exception]]
+mode = "dir"
+RuleID = "generic-api-key"
+File = "schemas/dsse/v1/vectors.json"
+StartLine = 265
+EndLine = 265
+StartColumn = 9
+EndColumn = 30
+Commit = ""
+Fingerprint = "schemas/dsse/v1/vectors.json:generic-api-key:265"
+blobSha256 = "020860808f72ce3119a8a2c168ce57ccd98a1fd9de3f85c152f36d605c57e085"
+rationale = "Public RFC test-key row reference; not key material or a credential."
+provenance = "docs/specs/dsse-envelope.md#9-machine-readable-vectors-and-regeneration; RFC 8032 section 7.1"

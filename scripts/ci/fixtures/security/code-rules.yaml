@@ -1,0 +1,6 @@
+rules:
+- id: qualification
+  languages: [go, python, typescript]
+  message: Synthetic qualification expression
+  severity: WARNING
+  pattern: $X == $X

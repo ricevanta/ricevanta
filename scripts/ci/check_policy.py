@@ -1,11 +1,40 @@
 """Check the reviewed workflow graph, routing inputs and receipt obligations."""
 import argparse
+import ast
 from pathlib import Path
 import re
 import json
 import yaml
 import inventory
 from required import NEEDS, CALLERS
+
+
+class WorkflowLoader(yaml.BaseLoader):
+    """Reject duplicate keys before structural credential checks."""
+    def construct_mapping(self, node, deep=False):
+        result = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str) or key in result:
+                raise ValueError('duplicate or non-scalar workflow key')
+            result[key] = self.construct_object(value_node, deep=deep)
+        return result
+
+
+SEMGREP_COMMAND = ['semgrep', 'ci', '--code', '--supply-chain', '--pro', '--no-suppress-errors',
+                   '--verbose', '--disable-nosem', '--disable-version-check', '--metrics=off',
+                   '--json-output=/out/semgrep.json']
+
+
+def observer_command_valid(root):
+    """Inspect the fixed observer arguments without executing candidate code."""
+    try:
+        tree = ast.parse((root / 'scripts/ci/semgrep_observer.py').read_text())
+        values = [node.value for node in tree.body if isinstance(node, ast.Assign)
+                  and any(isinstance(target, ast.Name) and target.id == 'COMMAND' for target in node.targets)]
+        return len(values) == 1 and ast.literal_eval(values[0]) == SEMGREP_COMMAND
+    except (OSError, SyntaxError, ValueError, TypeError):
+        return False
 
 DESIGN_COMMANDS = inventory.DESIGN_COMMANDS
 CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -49,6 +78,80 @@ COMMANDS = {
     ('bootstrap', 'validate'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
         'schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'),
 }
+
+
+SETUP_PYTHON = 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
+TOKEN = '${{ secrets.SEMGREP_APP_TOKEN }}'
+ROUTE_ENV = {'ROUTE_JSON': '${{ needs.route.outputs.route }}'}
+PREPARE_ROUTE = ("python -B - <<'PY'\n"
+                 "import os, pathlib\n"
+                 "(pathlib.Path(os.environ['RUNNER_TEMP']) / 'route.json').write_text(os.environ['ROUTE_JSON'])\n"
+                 "PY\n")
+
+
+def scanner_command(unit, phase):
+    suffix = '-' + phase if phase in ('preflight', 'admission') else ''
+    return (f'python -B scripts/ci/security_scan.py {unit} --phase {phase} --root . '
+            f'--route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-{unit}{suffix}"')
+
+
+def scanner_job(unit):
+    """Closed workflow recipe: token-free admission precedes the sole scan step."""
+    steps = [
+        {'uses': CHECKOUT, 'with': {'persist-credentials': 'false', 'fetch-depth': '0',
+                                  'ref': '${{ fromJSON(needs.route.outputs.route).testedSha }}'}},
+        {'uses': SETUP_PYTHON, 'with': {'python-version': '3.14.8'}},
+        {'id': 'preflight', 'shell': 'bash', 'working-directory': '.', 'env': ROUTE_ENV,
+         'run': PREPARE_ROUTE + scanner_command(unit, 'preflight') + '\n'},
+    ]
+    if unit == 'semgrep':
+        steps.append({'id': 'admission', 'shell': 'bash', 'working-directory': '.',
+                      'run': scanner_command(unit, 'admission')})
+    scan = {'id': 'scan', 'shell': 'bash', 'working-directory': '.',
+            'run': scanner_command(unit, 'scan')}
+    if unit == 'semgrep': scan['env'] = {'SEMGREP_APP_TOKEN': TOKEN}
+    steps.append(scan)
+    phases = ['-preflight', '-admission', ''] if unit == 'semgrep' else ['-preflight', '']
+    steps.append({'id': 'diagnostics', 'if': '${{ always() }}', 'uses': UPLOAD,
+                  'with': {'name': 'security-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-' + unit,
+                           'path': '\n'.join('${{ runner.temp }}/security-' + unit + phase + '/diagnostics.json'
+                                             for phase in phases),
+                           'retention-days': '30', 'if-no-files-found': 'error'}})
+    checks = json.dumps(inventory.checks(unit))
+    steps.append({'id': 'proof', 'shell': 'bash', 'working-directory': '.',
+                  'run': scanner_command(unit, 'verify') + '\n' +
+                         'python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" '
+                         f"--emit-unit {unit} --checks '{checks}' " +
+                         '--out "$RUNNER_TEMP/ci-proof/receipt.json"\n'})
+    steps.append({'uses': UPLOAD, 'with': {
+        'name': '${{ steps.proof.outputs.artifact }}', 'path': '${{ runner.temp }}/ci-proof/receipt.json',
+        'retention-days': '30', 'if-no-files-found': 'error'}})
+    return {'needs': ['route'], 'runs-on': 'ubuntu-24.04',
+            'timeout-minutes': '20' if unit == 'semgrep' else '15', 'steps': steps}
+
+
+def secret_errors(data, name):
+    """Allow one literal credential leaf; deny every other secret use or mapping."""
+    errors = []
+    allowed = ('jobs', 'semgrep', 'steps', 'scan', 'env', 'SEMGREP_APP_TOKEN')
+    def walk(value, path=()):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                child_path = path + (key,)
+                if key == 'secrets': errors.append('secret mappings and inheritance are forbidden')
+                if key == 'SEMGREP_APP_TOKEN' and not (name == 'ci' and child_path == allowed and child == TOKEN):
+                    errors.append('token environment is outside the sole scan scope')
+                if re.search(r'\bsecrets\b', str(key), re.I): errors.append('secret expression in mapping key')
+                walk(child, child_path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                identifier = child.get('id', index) if path == ('jobs', 'semgrep', 'steps') and isinstance(child, dict) else index
+                walk(child, path + (identifier,))
+        elif re.search(r'\bsecrets\b|SEMGREP_APP_TOKEN', str(value), re.I):
+            if not (name == 'ci' and path == allowed and value == TOKEN):
+                errors.append('secret reference is outside the sole scan environment')
+    walk(data)
+    return errors
 
 
 def group_condition(groups, source):
@@ -137,7 +240,7 @@ def check(root: Path) -> list[str]:
     for path in sorted((root / '.github/workflows').glob('*.yml')):
         name = path.stem
         try:
-            data = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+            data = yaml.load(path.read_text(), Loader=WorkflowLoader)
             if not isinstance(data, dict): raise ValueError('not a mapping')
             workflows[name] = data
         except (ValueError, yaml.YAMLError):
@@ -145,9 +248,9 @@ def check(root: Path) -> list[str]:
         for error in cache_errors(data): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
+        for error in secret_errors(data, name): fail(name, error)
         if name == 'copilot-code-review': continue
         if data.get('permissions') != {'contents': 'read'}: fail(name, 'read-only permissions required')
-        if re.search(r'\bsecrets\b', str(data), re.I): fail(name, 'secrets are forbidden')
         if set(data.get('on', {})) - {'push', 'pull_request', 'workflow_call'}: fail(name, 'unsupported event')
         for jid, job in data.get('jobs', {}).items():
             if 'concurrency' in job: fail(name, f'{jid}: job concurrency forbidden')
@@ -179,6 +282,8 @@ def check(root: Path) -> list[str]:
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}
     for name in required_names - set(workflows): fail(name, 'missing required workflow')
     if not required_names <= set(workflows): return errors
+    if not observer_command_valid(root):
+        errors.append('scripts/ci/semgrep_observer.py: exact Code/Supply Chain Pro command required')
     ci = workflows['ci']
     events = ci.get('on', {})
     if events != {'push': {'branches': ['master']}, 'pull_request': {'branches': ['master'], 'types': ['opened', 'synchronize', 'reopened', 'ready_for_review', 'edited']}}:
@@ -187,9 +292,14 @@ def check(root: Path) -> list[str]:
         fail('ci', 'unsafe cancellation')
     jobs = ci.get('jobs', {})
     if set(jobs) != set(NEEDS) | {'ci-required'}: fail('ci', 'caller job set mismatch')
+    for unit in ('gitleaks', 'semgrep'):
+        if jobs.get(unit) != scanner_job(unit):
+            fail('ci', f'{unit}: exact unconditional scanner recipe required')
+    if ci.get('env') or ci.get('defaults') not in (None, {'run': {'shell': 'bash'}}):
+        fail('ci', 'scanner workflow environment and defaults overrides forbidden')
     aggregate = jobs.get('ci-required', {})
     if aggregate.get('name') != 'ci-required' or aggregate.get('needs') != list(NEEDS) or aggregate.get('if') != '${{ always() }}':
-        fail('ci', 'required aggregate must unconditionally need all seven jobs')
+        fail('ci', 'required aggregate must unconditionally need every required job')
     for name, groups in CALLERS.items():
         caller = jobs.get(name, {})
         ordered = [g for g in inventory.GROUPS if g in groups]

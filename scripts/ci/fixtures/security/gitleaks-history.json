@@ -1,0 +1,132 @@
+[
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 18,
+    "EndLine": 18,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:18"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 44,
+    "EndLine": 44,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:44"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 70,
+    "EndLine": 70,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:70"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 96,
+    "EndLine": 96,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:96"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 122,
+    "EndLine": 122,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:122"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 148,
+    "EndLine": 148,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:148"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 174,
+    "EndLine": 174,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:174"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 187,
+    "EndLine": 187,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:187"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 213,
+    "EndLine": 213,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:213"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 226,
+    "EndLine": 226,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:226"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 239,
+    "EndLine": 239,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:239"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 252,
+    "EndLine": 252,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:252"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "File": "schemas/dsse/v1/vectors.json",
+    "StartLine": 265,
+    "EndLine": 265,
+    "StartColumn": 9,
+    "EndColumn": 30,
+    "Commit": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e",
+    "Fingerprint": "c9e1db5bf4c6f6431d5a88a07f0b0469969f515e:schemas/dsse/v1/vectors.json:generic-api-key:265"
+  }
+]

@@ -286,9 +286,9 @@ export async function scanOSV(
   const complete = new Set<string>()
   const malformed = new Set<string>()
   const incomplete: string[] = []
-  const unique = [...new Map(packages.map((pkg) => [pairKey(pkg), pkg])).values()]
-  for (let start = 0; start < unique.length; start += 100) {
-    let pending = unique.slice(start, start + 100).map((pkg) => ({
+  const uniquePackages = [...new Map(packages.map((pkg) => [pairKey(pkg), pkg])).values()]
+  for (let start = 0; start < uniquePackages.length; start += 100) {
+    let pending = uniquePackages.slice(start, start + 100).map((pkg) => ({
       package: { name: pkg.name, ecosystem: 'npm' },
       version: pkg.version,
       page_token: '',
@@ -353,7 +353,7 @@ export async function scanOSV(
   }
   const diagnostics: string[] = []
   let unlisted = false
-  for (const pkg of unique) {
+  for (const pkg of uniquePackages) {
     for (const id of findings.get(pairKey(pkg)) ?? []) {
       const paths = graph?.paths(pkg) ?? []
       for (const item of paths.length
@@ -381,7 +381,7 @@ export async function scanOSV(
     if (graph?.classErrors.length) reasons.push(...graph.classErrors)
     if (complete.has(pair) && !findings.get(pair)?.has(entry.advisoryId))
       reasons.push('advisory absent from complete OSV result')
-    if (!unique.some((pkg) => pairKey(pkg) === pair))
+    if (!uniquePackages.some((pkg) => pairKey(pkg) === pair))
       reasons.push('package/version absent from lockfile audit')
     if (reasons.length)
       parsed.errors.push(

@@ -21,3 +21,9 @@ The project holds the Apple developer team, granted sensor entitlements and Wind
 | Release | macOS app and nested executables use Developer ID Application signing, installer packages use Developer ID Installer, required entitlements and provisioning profiles are present, and distribution uses hardened runtime, notarization and stapling. The Windows driver passes HLK qualification and receives the production Microsoft signature through the project's WHCP submission (AG-01). The production push-certificate signing service runs under the company's MDM Vendor CSR Signing Certificate; a personal-account grant serves testing only. Apple Business Manager and Microsoft Virus Initiative are needed for the capabilities deferred to v2.0.0 (`platform-support.md`). |
 
 Vendor requirements and primary sources are in `platform-support.md`. A signing approval is a prerequisite; the exact shipped package still needs functional and security qualification on every declared configuration.
+
+## CI analysis service
+
+The owner authorizes Semgrep Code and Semgrep Supply Chain for this repository's CI through an owner-managed Semgrep account and the GitHub Actions secret `SEMGREP_APP_TOKEN`. This service is a development-only dependency. Ricevanta deployments and self-builders need no Semgrep account, subscription or runtime connection. Gitleaks runs as a local CLI without an Action license. [The scan contract](specs/ci-security-scanning.md) owns product selection, credential isolation and fork handling.
+
+[Semgrep service terms](https://semgrep.dev/legal/terms) govern hosted analysis and proprietary engines; [usage limits](https://semgrep.dev/docs/usage-limits/) govern account entitlement. A stored token does not establish product access. The owner controls account membership, token scope, product enablement and billing; CI cannot accept new terms, create an account or purchase access. This CI authorization adds no endpoint vendor-program requirement.

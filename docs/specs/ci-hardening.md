@@ -6,7 +6,7 @@ Authorities: SH-04, PF-01, PF-04, AG-09, BE-13 and BE-14 in [decisions](../decis
 
 ## 1. Scope and limits
 
-The slice owns `.github/workflows/ci.yml`, shared component workflows, `scripts/ci/` helpers, test-harness proof, validator dependencies and CI instructions. It introduces no runtime API, permission or signing key. Owner settings are separate in section 10. No additional account, vendor program, hosted analysis service or package registry publishing credential is required.
+The slice owns `.github/workflows/ci.yml`, shared component workflows, `scripts/ci/` helpers, test-harness proof, validator dependencies and CI instructions. It introduces no runtime API, permission or signing key. Owner settings are separate in section 10. The core hardening mechanisms require no additional account or vendor program. [CI security scanning](ci-security-scanning.md) separately defines the owner-authorized Semgrep analysis service and its sole step-scoped credential exception; no package registry publishing credential is required.
 
 Keep the native macOS ARM64, Windows x64 and Linux x64 checks. Hosted Windows Server runners do not qualify Windows 11, and hosted codec tests do not qualify sensors. [Platform support](../platform-support.md) and its release gates remain authoritative. Every blueprint feature remains required at v1.0.0 except its two listed v2.0.0 capabilities.
 
@@ -46,7 +46,7 @@ The route object has `kind: route`, `version: 1`, `event`, `baseSha`, `headSha`,
 | `console` | `console`; `console.yml`: existing gates plus extended properties and evidence |
 | `bootstrap` | `bootstrap:linux-x64`, `bootstrap:windows-x64`, `bootstrap:macos-arm64`; new `bootstrap.yml` |
 
-`design` and `ci-contracts` are always selected. The following union is the routing floor; overlapping matches add groups. Full-group selection intentionally favors coverage over narrowly routing each Go package.
+`design` and `ci-contracts` are always selected. The [security scanning contract](ci-security-scanning.md#5-required-result-and-policy-checker) adds two always-selected direct leaves and their check inventories. The following union is the routing floor; overlapping matches add groups. Full-group selection intentionally favors coverage over narrowly routing each Go package.
 
 | Changed inputs | Additional groups |
 |---|---|
@@ -64,7 +64,7 @@ A `route.py --full --event-name push ...` mode admits validated tag events only 
 
 ## 4. One required result
 
-The entry has caller jobs `design`, `server`, `agent`, `console`, `bootstrap`, its own `route` and `ci-contracts`, and one terminal job with both ID and display name `ci-required`. Its `needs` lists all seven predecessors literally; it uses `if: ${{ always() }}`. Caller jobs use route group membership. Component leaf jobs use the same route; matrix `fail-fast` is false and required jobs never use `continue-on-error`.
+The entry has caller jobs `design`, `server`, `agent`, `console`, `bootstrap`, its own `route` and `ci-contracts`, the direct `gitleaks` and `semgrep` jobs defined by the security scanning contract, and one terminal job with both ID and display name `ci-required`. Its `needs` lists these seven predecessors and both direct security scanner jobs literally; it uses `if: ${{ always() }}`. Caller jobs use route group membership. Component leaf jobs use the same route; matrix `fail-fast` is false and required jobs never use `continue-on-error`.
 
 Each successful leaf emits exactly one receipt after all checks pass and uploads it as `ci-proof-<runId>-<runAttempt>-<safe-unit-id>`, with 30-day retention and missing-file upload treated as failure. The receipt has `kind: receipt`, `version: 1`, the route's run binding and tested SHA, its exact `unit`, `result: success`, and a nonempty list of executed check IDs in `checks`. Encode artifact unit names with a collision-free hex encoding of UTF-8 bytes. Upload raw logs and measurements beside the receipt, never executable artifacts that the aggregate will run.
 
@@ -183,6 +183,8 @@ Benefits: one required result covers every PR, evidence exposes omitted work, fr
 Alternatives rejected: workflow-level path filters can leave required checks absent; API polling across independent runs admits stale results; always-success wrappers hide skipped jobs; dispatch cannot satisfy the PR gate; revision-only catalogue checks miss changed semantics; setup-action pins alone leave payload bytes unpinned; compiled caches retain the audit's reuse threat. A dedicated external attestation service adds accounts and is unnecessary for this slice.
 
 ## 12. Release-build handoff
+
+Full tag routing includes the security scanner groups; release consumers remain blocked on the separate [tag scanner contract prerequisite](ci-security-scanning.md#1-boundary-and-admission). PR/master scanner credentials and receipts cannot satisfy that contract.
 
 [Release plan Task 2](../plans/release-builds.md#task-2-consume-the-audited-ci-trust-boundary) consumes `route.py`, `inventory.py`, `required.py`, `run_selected.py`, `targets.toml`, `catalogue_compat.py`, `fresh_go.py`, `python_env.py`, `bootstrap.py`, `toolchains.lock.json`, `.github/requirements-design.txt` and the CI schema. Their CLIs are fixed above. `scripts/ci/check_policy.py --root PATH` checks workflow safety, input coverage, matrices, allowed caches and bootstrap coverage, and exits nonzero with each offending path. It exposes `check(root: pathlib.Path) -> list[str]` for fixture-based release tests.
 

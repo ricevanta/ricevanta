@@ -192,4 +192,106 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(check_policy.check(self.root))
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
 
+class SecurityPolicyTests(PolicyTests):
+    def test_scanners_are_direct_unconditional_and_token_is_single_scope(self):
+        data = yaml.load((ROOT/'.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertIn('semgrep', data['jobs'])
+        self.assertIn('gitleaks', data['jobs'])
+        for unit in ('gitleaks', 'semgrep'):
+            job = data['jobs'][unit]
+            self.assertNotIn('if', job)
+            self.assertEqual(job['needs'], ['route'])
+            self.assertEqual(job['runs-on'], 'ubuntu-24.04')
+        token = [step for step in data['jobs']['semgrep']['steps'] if 'SEMGREP_APP_TOKEN' in step.get('env', {})]
+        self.assertEqual([step['id'] for step in token], ['scan'])
+
+    def test_scanner_boundary_mutations_rejected(self):
+        mutations = [
+            lambda d: d['jobs']['semgrep'].update(env={'SEMGREP_APP_TOKEN': '${{ secrets.SEMGREP_APP_TOKEN }}'}),
+            lambda d: d['jobs']['semgrep'].update(**{'if': '${{ false }}'}),
+            lambda d: d['jobs']['semgrep']['steps'].append({'run': 'echo extra', 'env': {'SEMGREP_APP_TOKEN': '${{ secrets.SEMGREP_APP_TOKEN }}'}}),
+            lambda d: d['jobs']['ci-required']['needs'].remove('semgrep'),
+            lambda d: d['on'].update(pull_request_target={}),
+        ]
+        for mutation in mutations:
+            self.mutate('ci', mutation)
+            self.assertTrue(check_policy.check(self.root))
+            shutil.copyfile(ROOT/'.github/workflows/ci.yml', self.root/'.github/workflows/ci.yml')
+        for identifier in ('preflight', 'admission', 'scan', 'proof'):
+            for key, val in (('if', '${{ false }}'), ('continue-on-error', 'true'), ('run', 'echo forged-success')):
+                def mutate(data):
+                    next(s for s in data['jobs']['semgrep']['steps'] if s.get('id') == identifier)[key] = val
+                self.mutate('ci', mutate)
+                self.assertTrue(check_policy.check(self.root))
+                shutil.copyfile(ROOT/'.github/workflows/ci.yml', self.root/'.github/workflows/ci.yml')
+
+    def test_security_mutations_have_a_valid_baseline(self):
+        self.assertEqual(check_policy.check(self.root), [])
+        def step(data, unit, identifier):
+            return next(s for s in data['jobs'][unit]['steps'] if s.get('id') == identifier)
+        mutations = [
+            ('workflow token', lambda d: d.update(env={'SEMGREP_APP_TOKEN': '${{ secrets.SEMGREP_APP_TOKEN }}'})),
+            ('inherited secrets', lambda d: d['jobs']['server'].update(secrets='inherit')),
+            ('other secret', lambda d: step(d, 'semgrep', 'scan')['env'].update(EXTRA='${{ secrets.OTHER }}')),
+            ('token in run', lambda d: step(d, 'semgrep', 'scan').update(run='echo "${{ secrets.SEMGREP_APP_TOKEN }}"')),
+            ('token renamed', lambda d: step(d, 'semgrep', 'scan').update(env={'OTHER': '${{ secrets.SEMGREP_APP_TOKEN }}'})),
+            ('shallow history', lambda d: d['jobs']['gitleaks']['steps'][0]['with'].update({'fetch-depth': '1'})),
+            ('wrong SHA', lambda d: d['jobs']['semgrep']['steps'][0]['with'].update(ref='master')),
+            ('unsafe mount', lambda d: d['jobs']['semgrep'].update(container={'image': 'unsafe', 'volumes': ['/var/run/docker.sock:/var/run/docker.sock']})),
+            ('local builds', lambda d: step(d, 'semgrep', 'scan').update(run=step(d, 'semgrep', 'scan')['run'] + ' --allow-local-builds')),
+            ('product flag', lambda d: step(d, 'semgrep', 'scan').update(run=step(d, 'semgrep', 'scan')['run'] + ' --secrets')),
+            ('fake completion', lambda d: step(d, 'gitleaks', 'proof').update(run='echo success')),
+            ('proof before scan', lambda d: d['jobs']['semgrep']['steps'].reverse()),
+            ('raw diagnostic', lambda d: step(d, 'semgrep', 'diagnostics')['with'].update(path='${{ runner.temp }}/security-semgrep/*')),
+            ('diagnostic proof', lambda d: d['jobs']['gitleaks']['steps'][-1]['with'].update(path='${{ runner.temp }}/security-gitleaks/diagnostics.json')),
+            ('extra token command', lambda d: d['jobs']['semgrep']['steps'].insert(3, {'run': 'echo extra'})),
+            ('defaults working directory', lambda d: d.update(defaults={'run': {'working-directory': '/tmp'}})),
+        ]
+        for label, mutation in mutations:
+            with self.subTest(mutation=label):
+                self.mutate('ci', mutation)
+                self.assertTrue(check_policy.check(self.root))
+                shutil.copyfile(ROOT / '.github/workflows/ci.yml', self.root / '.github/workflows/ci.yml')
+
+    def test_duplicate_mapping_keys_cannot_hide_credentials(self):
+        path = self.root / '.github/workflows/ci.yml'
+        path.write_text(path.read_text() + "env: {HIDDEN: '${{ secrets.OTHER }}'}\nenv: {}\n")
+        self.assertTrue(check_policy.check(self.root))
+
+    def test_observer_product_and_engine_flags_are_required(self):
+        self.assertEqual(check_policy.check(self.root), [])
+        path = self.root / 'scripts/ci/semgrep_observer.py'
+        original = path.read_text()
+        for flag in ('--code', '--supply-chain', '--pro', '--no-suppress-errors', '--verbose'):
+            with self.subTest(flag=flag):
+                path.write_text(original.replace("'" + flag + "'", "'--secrets'", 1))
+                self.assertTrue(check_policy.check(self.root))
+        path.write_text(original)
+
+    def test_native_skipped_paths_require_verbose_observer_command(self):
+        path = self.root / 'scripts/ci/semgrep_observer.py'
+        command = [
+            'semgrep', 'ci', '--code', '--supply-chain', '--pro', '--no-suppress-errors',
+            '--verbose', '--disable-nosem', '--disable-version-check',
+            '--metrics=off', '--json-output=/out/semgrep.json',
+        ]
+        path.write_text('COMMAND = ' + repr(command) + '\n')
+        self.assertTrue(check_policy.observer_command_valid(self.root))
+        command.remove('--verbose')
+        path.write_text('COMMAND = ' + repr(command) + '\n')
+        self.assertFalse(check_policy.observer_command_valid(self.root))
+
+    def test_production_observer_rejects_unsupported_strict(self):
+        path = self.root / 'scripts/ci/semgrep_observer.py'
+        command = [
+            'semgrep', 'ci', '--code', '--supply-chain', '--pro', '--no-suppress-errors',
+            '--verbose', '--disable-nosem', '--disable-version-check',
+            '--metrics=off', '--json-output=/out/semgrep.json',
+        ]
+        path.write_text('COMMAND = ' + repr(command) + '\n')
+        self.assertTrue(check_policy.observer_command_valid(self.root))
+        command.insert(6, '--strict')
+        path.write_text('COMMAND = ' + repr(command) + '\n')
+        self.assertFalse(check_policy.observer_command_valid(self.root))
+
 if __name__ == '__main__': unittest.main()

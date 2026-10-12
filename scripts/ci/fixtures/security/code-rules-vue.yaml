@@ -1,0 +1,6 @@
+rules:
+- id: qualification-vue
+  languages: [typescript]
+  message: Synthetic Vue script qualification expression
+  severity: WARNING
+  pattern: $X == $X

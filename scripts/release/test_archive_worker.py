@@ -44,9 +44,9 @@ class ArchiveWorkerTests(unittest.TestCase):
     def run_control(self, source, error, seconds=2):
         launched = []
 
-        def launch(request, result):
+        def launch(request_path, result):
             child = subprocess.Popen([sys.executable, '-I', '-B', '-c', source,
-                                      str(request), str(result)],
+                                      str(request_path), str(result)],
                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL)
             launched.append(child)

@@ -557,10 +557,10 @@ def _worker_environment():
     return {key: value for key, value in os.environ.items() if key.upper() in allowed}
 
 
-def _launch_worker(request, result):
+def _launch_worker(request_path, result):
     worker = Path(__file__).resolve().with_name('archive_worker.py')
     return subprocess.Popen([sys.executable, '-I', '-B', str(worker),
-                             str(request), str(result)],
+                             str(request_path), str(result)],
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, env=_worker_environment())
 
@@ -572,19 +572,19 @@ def check(path, kind, wanted, expected, limits=None):
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix='ricevanta-archive-worker-') as directory:
         root = Path(directory).resolve()
-        request = root / 'request.json'
+        request_path = root / 'request.json'
         result = root / 'result.json'
         values = dict(path=str(path), kind=kind, wanted=list(wanted), expected=expected,
                       limits=asdict(limits))
         written = 0
-        with request.open('xb') as stream:
+        with request_path.open('xb') as stream:
             for text in json.JSONEncoder(allow_nan=False).iterencode(values):
                 data = text.encode('utf-8')
                 if len(data) > _REQUEST_LIMIT - written:
                     fail(path.name, 'archive worker request byte limit exceeded')
                 stream.write(data)
                 written += len(data)
-        process = _launch_worker(request, result)
+        process = _launch_worker(request_path, result)
         try:
             try:
                 process.wait(timeout=max(0, limits.seconds - (time.monotonic() - started)))

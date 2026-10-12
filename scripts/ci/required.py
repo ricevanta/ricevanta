@@ -6,7 +6,7 @@ from pathlib import Path
 import inventory
 import route as routing
 
-NEEDS = ('route', 'ci-contracts', 'design', 'server', 'agent', 'console', 'bootstrap')
+NEEDS = ('route', 'ci-contracts', 'design', 'server', 'agent', 'console', 'bootstrap', 'gitleaks', 'semgrep')
 CALLERS = {'design': {'design'}, 'server': {'server', 'loader', 'ocsf'},
            'agent': {'agent', 'interop'}, 'console': {'console'}, 'bootstrap': {'bootstrap'}}
 
@@ -34,7 +34,7 @@ def validate_route(value, *, shape=True):
     if shape: schema(value)
     if value['kind'] != 'route': raise ValueError('expected route')
     groups = value['groups']
-    if groups != sorted(set(groups)) or not {'design', 'ci-contracts'} <= set(groups):
+    if groups != sorted(set(groups)) or not {'design', 'ci-contracts', 'gitleaks', 'semgrep'} <= set(groups):
         raise ValueError('invalid selected groups')
     if value['units'] != inventory.units(groups): raise ValueError('route inventory mismatch')
     for key in ('baseSha', 'headSha', 'testedSha'): routing.sha(value[key])
@@ -56,7 +56,7 @@ def verify(value, needs, receipts):
     validate_route(value)
     if not isinstance(needs, dict) or set(needs) != set(NEEDS): raise ValueError('needs set mismatch')
     for name in NEEDS:
-        selected = name in ('route', 'ci-contracts') or bool(CALLERS.get(name, set()) & set(value['groups']))
+        selected = name in ('route', 'ci-contracts', 'gitleaks', 'semgrep') or bool(CALLERS.get(name, set()) & set(value['groups']))
         expected = 'success' if selected else 'skipped'
         if not isinstance(needs[name], dict) or needs[name].get('result') != expected:
             raise ValueError(f'{name}: required result is {expected}')

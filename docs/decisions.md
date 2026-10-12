@@ -34,6 +34,12 @@ Why: policy and extension consumers need identical Go and Rust byte contracts, a
 Rejected: per-module parsers, hashes of re-encoded envelopes and accept-any-signature recovery checks, which permit parser disagreements, byte substitution or quorum weakening.
 Detail: [DSSE envelope spec](specs/dsse-envelope.md) and [implementation plan](plans/dsse-envelope.md). [Ed25519 key admission](specs/ed25519-key-admission.md) and [its plan](plans/ed25519-key-admission.md) define the shared canonical prime-subgroup predicate and DSSE revalidation.
 
+### SH-06. Required CI security scans
+Decision: Gitleaks scans repository secrets; authenticated Semgrep Code and Semgrep Supply Chain scan source and supported dependencies. Semgrep Secrets is excluded, and each required scan proves completion for the same tested commit, run and attempt before `ci-required` succeeds.
+Why: explicit products and execution evidence prevent unavailable or suppressed scans from appearing successful.
+Rejected: fork skips accepted as success, privileged fork scans and replacing the console OSV audit without equivalent coverage, because they weaken credential isolation or existing checks.
+Detail: [CI security scanning](specs/ci-security-scanning.md) and [implementation plan](plans/ci-security-scanning.md).
+
 ## Platform (PF)
 
 ### PF-01. v1.0.0 targets

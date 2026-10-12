@@ -1,0 +1,19 @@
+version = 1
+
+[gitleaks]
+version = "8.30.1"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+bytes = 8230402
+sha256 = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+[semgrep]
+version = "1.178.0"
+image = "semgrep/semgrep"
+manifest = "sha256:fbba1f23d2ef94630c828e8692758f8bc6353a8089841a396a5c041451966ffb"
+config = "sha256:490afa6660c696d5588d1b285325277f97cc41ca2cd8a08b7ce83f925fb99476"
+
+[pro]
+path = "/usr/lib/python3.12/site-packages/semgrep/bin/semgrep-core-proprietary"
+marker = "1.178.0\n"
+bytes = 399642553
+sha256 = "acde62f2dfb45edb1ea695daf8efb04b2d6cce7939eaab971471208226dee71e"

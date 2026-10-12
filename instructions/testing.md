@@ -130,3 +130,9 @@ Type checking includes application, tooling and test projects. Lint includes cat
 `test:fuzz` runs 10,000 seeded cases per foundation property target. Save minimized failures in the console fixture corpus. CI must run the seed fixtures in ordinary unit tests; the bounded run is required before review. Frozen install, type check, lint, formatting, dependency audit, unit tests, component tests, build, reproducibility and the CSP gate must run in `.github/workflows/console.yml`.
 
 Two clean builds must have identical sorted path/SHA-256 manifests. Report measured Brotli budgets, asset checks and font notices. Dependency changes also require a resolved-license review and OSV scan under the implementation plan. These checks qualify only the static foundation in the tested engines; login, sessions, CSRF, change streams, Go serving, extension isolation and the full supported browser/OS matrix require their own tests.
+
+## CI security scans
+
+CI requires Gitleaks, Semgrep Code and Semgrep Supply Chain on every PR/master event under [the scan contract](../docs/specs/ci-security-scanning.md). Semgrep Secrets is excluded. The existing console OSV audit remains required. Missing credentials, unsupported input parsing or incomplete scan execution fail the required check; documented limits of the scanner's analysis remain visible in its coverage report.
+
+Local and CI, repository root: run focused scanner and workflow contract tests through `python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v`, then `python -B scripts/ci/check_policy.py --root .`. Live authenticated scan qualification belongs in normal PR CI. Never print the token or raw scan reports. A fork PR cannot receive the token; use the spec's reviewed maintainer-owned replacement PR procedure and keep the fork result failed.

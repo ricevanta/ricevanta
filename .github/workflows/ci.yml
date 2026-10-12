@@ -122,6 +122,115 @@ jobs:
     uses: ./.github/workflows/bootstrap.yml
     with:
       route: ${{ needs.route.outputs.route }}
+  gitleaks:
+    needs:
+    - route
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+        ref: ${{ fromJSON(needs.route.outputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - id: preflight
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ needs.route.outputs.route }}
+      run: |
+        python -B - <<'PY'
+        import os, pathlib
+        (pathlib.Path(os.environ['RUNNER_TEMP']) / 'route.json').write_text(os.environ['ROUTE_JSON'])
+        PY
+        python -B scripts/ci/security_scan.py gitleaks --phase preflight --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-gitleaks-preflight"
+    - id: scan
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/security_scan.py gitleaks --phase scan --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-gitleaks"
+    - id: diagnostics
+      if: ${{ always() }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: security-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-gitleaks
+        path: |-
+          ${{ runner.temp }}/security-gitleaks-preflight/diagnostics.json
+          ${{ runner.temp }}/security-gitleaks/diagnostics.json
+        retention-days: 30
+        if-no-files-found: error
+    - id: proof
+      shell: bash
+      working-directory: .
+      run: |
+        python -B scripts/ci/security_scan.py gitleaks --phase verify --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-gitleaks"
+        python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" --emit-unit gitleaks --checks '["gitleaks-admission", "gitleaks-history", "gitleaks-tree", "gitleaks-gate"]' --out "$RUNNER_TEMP/ci-proof/receipt.json"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+  semgrep:
+    needs:
+    - route
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+        ref: ${{ fromJSON(needs.route.outputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - id: preflight
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ needs.route.outputs.route }}
+      run: |
+        python -B - <<'PY'
+        import os, pathlib
+        (pathlib.Path(os.environ['RUNNER_TEMP']) / 'route.json').write_text(os.environ['ROUTE_JSON'])
+        PY
+        python -B scripts/ci/security_scan.py semgrep --phase preflight --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-semgrep-preflight"
+    - id: admission
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/security_scan.py semgrep --phase admission --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-semgrep-admission"
+    - id: scan
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/security_scan.py semgrep --phase scan --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-semgrep"
+      env:
+        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+    - id: diagnostics
+      if: ${{ always() }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: security-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-semgrep
+        path: |-
+          ${{ runner.temp }}/security-semgrep-preflight/diagnostics.json
+          ${{ runner.temp }}/security-semgrep-admission/diagnostics.json
+          ${{ runner.temp }}/security-semgrep/diagnostics.json
+        retention-days: 30
+        if-no-files-found: error
+    - id: proof
+      shell: bash
+      working-directory: .
+      run: |
+        python -B scripts/ci/security_scan.py semgrep --phase verify --root . --route "$RUNNER_TEMP/route.json" --output "$RUNNER_TEMP/security-semgrep"
+        python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" --emit-unit semgrep --checks '["semgrep-admission", "semgrep-code", "semgrep-supply-chain", "semgrep-gate"]' --out "$RUNNER_TEMP/ci-proof/receipt.json"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
   ci-required:
     name: ci-required
     needs:
@@ -132,6 +241,8 @@ jobs:
     - agent
     - console
     - bootstrap
+    - gitleaks
+    - semgrep
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

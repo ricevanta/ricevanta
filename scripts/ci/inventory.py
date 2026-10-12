@@ -5,7 +5,7 @@ from pathlib import Path
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
-GROUPS = ('design', 'ci-contracts', 'server', 'loader', 'ocsf', 'agent', 'interop', 'console', 'bootstrap')
+GROUPS = ('design', 'ci-contracts', 'server', 'loader', 'ocsf', 'agent', 'interop', 'console', 'bootstrap', 'gitleaks', 'semgrep')
 HOSTS = {'ubuntu-24.04': 'linux-x64', 'windows-2025': 'windows-x64', 'macos-15': 'macos-arm64'}
 # These inputs reach design on every event, even without component routing.
 CONSUMER_INPUTS = {'design': ('.github/requirements-design.txt', 'docs/specs/ocsf-profile.md',
@@ -21,6 +21,8 @@ DESIGN_COMMANDS = (
     'if not result.wasSuccessful() or result.skipped or result.testsRun != expected:',
 )
 CHECKS = {
+    'gitleaks': ['gitleaks-admission', 'gitleaks-history', 'gitleaks-tree', 'gitleaks-gate'],
+    'semgrep': ['semgrep-admission', 'semgrep-code', 'semgrep-supply-chain', 'semgrep-gate'],
     'design': ['ocsf-schemas', 'policy-schemas', 'export-schemas', 'report-schemas',
                'permission-schema', 'fixture-contracts', 'ci-schema', 'document-limits',
                'release-contracts'],
@@ -73,7 +75,7 @@ def checks(unit):
 
 
 def select_groups(paths):
-    selected = {'design', 'ci-contracts'}
+    selected = {'design', 'ci-contracts', 'gitleaks', 'semgrep'}
     for path in paths:
         if isinstance(path, bytes):
             try: path = path.decode('utf-8')

@@ -67,11 +67,11 @@ class RouteTests(unittest.TestCase):
                      '.github/workflows/ci.yml', '.github/workflows/bootstrap.yml', 'scripts/ci/targets.toml',
                      'scripts/ci/toolchains.lock.json', 'schemas/ci/v1/contracts.schema.json',
                      'instructions/testing.md', 'instructions/workflow.md', 'docs/licensing.md', 'unknown', 'unicode-雪\nfile'):
-            cases[path] = set(inventory.GROUPS) - {'design', 'ci-contracts'}
+            cases[path] = set(inventory.GROUPS) - {'design', 'ci-contracts', 'gitleaks', 'semgrep'}
         for path, extra in cases.items():
             with self.subTest(path=path):
                 groups = inventory.select_groups([path])
-                self.assertEqual(groups, sorted(extra | {'design', 'ci-contracts'}))
+                self.assertEqual(groups, sorted(extra | {'design', 'ci-contracts', 'gitleaks', 'semgrep'}))
                 self.assertEqual(inventory.units(groups), sorted(set(inventory.units(groups))))
                 if '\n' not in path:
                     before = self.git('rev-parse', 'HEAD')
@@ -82,7 +82,7 @@ class RouteTests(unittest.TestCase):
                     routed = self.push(before)
                     self.assertEqual(routed['groups'], groups)
                     self.assertEqual(routed['units'], inventory.units(groups))
-        self.assertEqual(inventory.select_groups([]), ['ci-contracts', 'design'])
+        self.assertEqual(inventory.select_groups([]), ['ci-contracts', 'design', 'gitleaks', 'semgrep'])
         self.assertEqual(inventory.select_groups([b'\xff']), sorted(inventory.GROUPS))
 
     def test_unicode_newline_git_path(self):
@@ -110,10 +110,10 @@ class RouteTests(unittest.TestCase):
         old = self.git('rev-parse', 'HEAD')
         self.git('rm', 'docs/moved.md')
         self.commit()
-        self.assertEqual(self.push(old)['groups'], ['ci-contracts', 'design'])
+        self.assertEqual(self.push(old)['groups'], ['ci-contracts', 'design', 'gitleaks', 'semgrep'])
 
     def test_push_binding_empty_and_bad_base(self):
-        self.assertEqual(self.push()['groups'], ['ci-contracts', 'design'])
+        self.assertEqual(self.push()['groups'], ['ci-contracts', 'design', 'gitleaks', 'semgrep'])
         for base in ('0' * 40, 'f' * 40, 'INVALID'):
             with self.subTest(base=base), self.assertRaises(ValueError): self.push(base)
         self.write('docs/a.md'); head = self.commit()
@@ -131,7 +131,7 @@ class RouteTests(unittest.TestCase):
         event = {'pull_request': {'base': {'sha': base, 'ref': 'master'}, 'head': {'sha': head, 'repo': {'fork': True}}}}
         result = self.admit(event, 'pull_request')
         self.assertEqual((result['baseSha'], result['headSha'], result['testedSha']), (base, head, tested))
-        self.assertEqual(result['groups'], ['agent', 'ci-contracts', 'design', 'interop'])
+        self.assertEqual(result['groups'], ['agent', 'ci-contracts', 'design', 'gitleaks', 'interop', 'semgrep'])
         event['pull_request']['base']['sha'] = self.base
         with self.assertRaises(ValueError): self.admit(event, 'pull_request')
         with self.assertRaises(ValueError): self.admit(event, 'pull_request', sha=head)
@@ -168,7 +168,7 @@ class RouteTests(unittest.TestCase):
         event.write_text(json.dumps({'ref': 'refs/heads/master', 'before': self.base, 'after': head}))
         supplied = self.root / 'route.json'; supplied.write_text(json.dumps(data))
         needs = self.root / 'needs.json'
-        needs.write_text(json.dumps({name: {'result': 'success' if name in ('route', 'ci-contracts', 'design') else 'skipped'} for name in required.NEEDS}))
+        needs.write_text(json.dumps({name: {'result': 'success' if name in ('route', 'ci-contracts', 'design', 'gitleaks', 'semgrep') else 'skipped'} for name in required.NEEDS}))
         receipts = self.root / 'receipts'; receipts.mkdir()
         for unit in data['units']:
             child = receipts / required.artifact_name(data, unit); child.mkdir()
@@ -196,7 +196,7 @@ class RouteTests(unittest.TestCase):
         expected = json.loads((Path(__file__).parent / 'fixtures/fuzz-targets.json').read_text())
         self.assertEqual(inventory.fuzz_targets(), expected)
         self.assertEqual(len(inventory.fuzz_targets()), 20)
-        self.assertEqual(len(inventory.units(inventory.GROUPS)), 38)
+        self.assertEqual(len(inventory.units(inventory.GROUPS)), 40)
         for unit in inventory.units(inventory.GROUPS): self.assertTrue(inventory.checks(unit))
 
 if __name__ == '__main__': unittest.main()

@@ -55,6 +55,8 @@ The verification job derives `--expected-identity` independently through the val
 
 ## Task 2. Consume the audited CI trust boundary
 
+Prerequisite: full tag routing selects security scanner groups. Obtain the separate reviewed [tag scanner consumer contract](../specs/ci-security-scanning.md#1-boundary-and-admission) before enabling tag jobs; do not omit those groups or reuse PR/master credentials or receipts.
+
 Owner: implementer, coordinated with the CI-audit owner. Size: one integration PR after the separate fixes. Own `scripts/release/test_ci_contract.py`, new release workflow configuration and the affected build instructions; reuse the existing audit helpers under `scripts/ci/`. Do not rewrite the separate trigger/race work.
 
 Consumes: [CI hardening section 12](../specs/ci-hardening.md#12-release-build-handoff), through these exact interfaces:

@@ -10,6 +10,7 @@ Never edit files under dist/ by hand; change the master and rerun.
 import json, re, subprocess, sys, xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
+from defusedxml import ElementTree as DefusedET
 
 if sys.flags.optimize:
     sys.exit('run without -O: the validation uses assert')
@@ -20,14 +21,14 @@ SVG, PNG, WEB, PREVIEW = (ROOT / 'dist' / d for d in ('svg', 'png', 'web', 'prev
 IND, GOLD, IVORY = '#173B54', '#DDB85C', '#F6F2E7'
 ORDER = ['arc', 'grain-1', 'grain-2', 'grain-3']
 
-root = ET.parse(MASTER).getroot()
+root = DefusedET.parse(MASTER, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
 VW, VH = (float(v) for v in root.attrib['viewBox'].split()[2:])
 D = {el.attrib['id']: el.attrib['d'] for el in root.iter() if el.tag.endswith('path')}
 assert list(D) == ORDER, f'master path IDs must be {ORDER}, got {list(D)}'
 
 
 def text_master(name):
-    r = ET.parse(ROOT / 'source' / name).getroot()
+    r = DefusedET.parse(ROOT / 'source' / name, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
     x, y, w, h = (float(v) for v in r.attrib['viewBox'].split())
     d = next(el.attrib['d'] for el in r.iter() if el.tag.endswith('path'))
     return d, x, y, w, h, float(r.attrib.get('data-cap-height', h))
