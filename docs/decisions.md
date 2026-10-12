@@ -231,7 +231,7 @@ Detail: `design/edr.md` section 8.
 ## DLP
 
 ### DLP-01. Browser extension and session helpers
-Decision: every browser gate must bind one verdict to exact bytes and one transfer; Safari exact-transfer mediation and established-session mediation for Chrome without Chrome Enterprise Core on every required OS and Edge on Linux remain required release blockers (`design/dlp.md` section 6.5). Clipboard blocking remains a release blocker on every required session until the native mechanism mediates the first and every later read; delayed or promised rendering and watcher-based re-ownership do not establish that contract. Cloud sync clients remain part of the file channel.
+Decision: every browser gate must bind one verdict to exact bytes and one transfer; Firefox external-agent mediation on macOS and Linux, Safari exact-transfer mediation and established-session mediation for Chrome without Chrome Enterprise Core on every required OS and Edge on Linux remain required release blockers (`design/dlp.md` section 6.5). Clipboard blocking remains a release blocker on every required session until the native mechanism mediates the first and every later read; delayed or promised rendering and watcher-based re-ownership do not establish that contract. Cloud sync clients remain part of the file channel.
 Why: blocking requires mediation before every transfer or clipboard read, including later consumers, rather than a notification or a reusable destination allowance (C5).
 Rejected: TLS interception, which contradicts the privacy principle and breaks pinning; clearing or replacing the clipboard after access; treating delayed or promised rendering as a per-read authorization hook; a tab-wide or timed Safari allowance.
 Detail: `platform-support.md`, `design/agent.md` section 3, `design/extensions.md` section 7, `specs/platform-qualification.md`.
@@ -525,7 +525,7 @@ Rejected: floors collected from returning devices; elapsed restore timers; a dat
 Detail: `design/backend.md` section 6.1, `design/pki.md` section 4 and `specs/policy-envelope.md` sections 6 and 7.
 
 ### BE-13. Console foundation boundary and browser gate
-Decision: the first console code slice is a static Vue shell under `console/`, with generated brand tokens, precompiled English and Vietnamese catalogues, exact toolchain and dependency pins, and an enforcing production CSP test with Trusted Types negative controls in Chromium, Firefox and WebKit; frames and workers remain denied until reviewed consumers exist.
+Decision: the first console code slice is a static Vue shell under `console/`, with generated brand tokens, precompiled English and Vietnamese catalogues, exact toolchain and dependency pins, and an enforcing production CSP test with Trusted Types negative controls in pinned Chromium, Firefox and WebKit engines; release browser and OS qualification remains separate, and frames and workers remain denied until reviewed consumers exist.
 Why: the foundation can prove its own build and browser boundary without inventing the absent identity, API and change-stream contracts.
 Rejected: mock authenticated state and a permissive development-server smoke test, which establish neither backend authority nor production CSP enforcement.
 Detail: [console foundation spec](specs/console-foundation.md) and [implementation plan](plans/console-foundation.md).
@@ -569,8 +569,8 @@ Rejected: in-process server plugins on any of those four, to revisit when `wazer
 Detail: `design/extensions.md` section 6.
 
 ### EXT-06. Browser adapters
-Decision: browser support is adapter data constrained by a separately approved registration for one browser. The registration owns exact canonical OS policy and native-host targets and a bounded engine-specific policy-name allow list; server and agent intersect the adapter request, registration and grant, reject reserved namespaces and aliases, and permit only agent-generated values. First-party registrations and adapters for Chrome, Edge, Firefox and Safari are required qualification units; other registered adapters remain community status until qualified.
-Why: Chrome and Edge read Chromium policy and native-host conventions, Brave reads Chromium policy, and Waterfox and Zen ship the Firefox policy engine (verify), so browsers of one engine family differ in paths and keys rather than in code, and a registration preserves that data-only addition while preventing an adapter from turning the privileged agent into a writer for arbitrary OS policy, filesystem, plist or registry namespaces.
+Decision: endpoint browser support is adapter data constrained by a separately approved registration for one browser product, with capability evidence for each OS and eligible version; `platform-support.md` owns the separate console browser window. The registration owns exact canonical OS policy and native-host targets and a bounded engine-specific policy-name allow list; server and agent intersect the adapter request, registration and grant, reject reserved namespaces and aliases, and permit only agent-generated values. First-party registrations and adapters for Chrome, Edge, Firefox and Safari are required qualification units; other registered adapters remain community status until qualified.
+Why: shared engine code does not establish equal product, policy or connector support, and a registration lets compatible browsers reuse the extension build while preventing arbitrary privileged writes to OS policy, filesystem, plist or registry namespaces.
 Rejected: a fixed browser list in the agent, which makes every new browser a core change; qualifying an adapter because it loads, since only the bypass self-test shows that the gate holds a transfer until the decision.
 Detail: `design/extensions.md` section 7.
 
