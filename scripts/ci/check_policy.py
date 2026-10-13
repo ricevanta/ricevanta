@@ -45,7 +45,7 @@ VERIFIER_COMMAND = ('python -B scripts/ci/required.py --route "$RUNNER_TEMP/rout
 LEAVES = {'design': {'validate': 'design'},
           'server': {'validate': 'server-validate', 'race': 'server-race',
                      'fuzz': 'server-fuzz:${{ matrix.package }}:${{ matrix.target }}',
-                     'loader-gate-a': 'loader', 'ocsf-native': 'ocsf'},
+                     'loader-gate-a': 'loader', 'loader-gate-b': 'loader-gate-b', 'ocsf-native': 'ocsf'},
           'agent': {'validate': 'agent', 'rustinterop': 'interop'},
           'console': {'validate': 'console'}, 'bootstrap': {'validate': 'bootstrap'},
           'ci': {'ci-contracts': 'ci-contracts'}}
@@ -60,6 +60,7 @@ COMMANDS = {
     ('server', 'loader-gate-a'): ("go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended",
         "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50",
         "go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2"),
+    ('server', 'loader-gate-b'): ("go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetExtended$' -v -args -loader-budget-extended",),
     ('server', 'ocsf-native'): ('go test -count=1 ./internal/events/ocsf',),
     ('agent', 'validate'): ('cargo metadata --locked --format-version 1', 'python tools/generate-spool-fixtures.py --check',
         'cargo fmt --all -- --check', 'cargo clippy --locked --workspace --all-targets -vv -- -D warnings',
@@ -233,6 +234,87 @@ def cache_errors(data):
     return errors
 
 
+def fuzz_evidence_errors(job, native_parser=False):
+    """Preserve exact fuzz selection, failure exit and minimized corpora."""
+    command = COMMANDS[('server', 'loader-gate-a' if native_parser else 'fuzz')][-1]
+    selected = [step for step in job.get('steps', []) if '-fuzz=' in step.get('run', '')]
+    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'run': command} if native_parser else
+                {'name': 'Fuzz for 60 seconds', 'env': {'FUZZ_PACKAGE': '${{ matrix.package }}',
+                                                      'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
+    errors = []
+    if selected != [expected]: errors.append('exact unconditional fuzz command required')
+    corpus = {'name': 'Upload failing corpus', 'if': 'failure()', 'uses': UPLOAD,
+              'with': {'name': 'loader-gate-a-${{ matrix.os }}' if native_parser else 'go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}',
+                       'path': 'server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**' if native_parser else 'server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**',
+                       'if-no-files-found': 'ignore', 'retention-days': '30'}}
+    if sum(step == corpus for step in job.get('steps', [])) != 1:
+        errors.append('exact failure corpus upload required')
+    return errors
+
+
+def loader_qualification_errors(job, gate):
+    """Keep qualification commands and diagnostic success gates closed."""
+    errors = []
+    steps = job.get('steps', [])
+    jid = 'loader-gate-' + gate
+    def fail(message): errors.append(jid + ': ' + message)
+    if job.get('name') != 'loader Gate ' + gate.upper() + ' (${{ matrix.os }})' or job.get('runs-on') != '${{ matrix.os }}':
+        fail('exact native job identity required')
+    if job.get('timeout-minutes') != ('15' if gate == 'a' else '20'):
+        fail('qualification timeout mismatch')
+    if job.get('defaults') != {'run': {'shell': 'bash', 'working-directory': 'server'}}:
+        fail('qualification requires literal Bash in server')
+    if job.get('strategy') != {'fail-fast': 'false', 'matrix': {'os': list(inventory.HOSTS)}}:
+        fail('qualification requires all three independent native rows')
+    recipes = ([('Extended parser budget', 'extended', COMMANDS[('server', jid)][0]),
+                ('Repeat affected parser measurement 50 times', 'repeat', COMMANDS[('server', jid)][1])]
+               if gate == 'a' else [('Extended loader budget', 'extended', COMMANDS[('server', jid)][0])])
+    indices = []
+    for name, log, command in recipes:
+        run = ('set -euo pipefail\n'
+               f'mkdir -p "$RUNNER_TEMP/loader-measurements-gate-{gate}"\n'
+               f'{command} 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-{gate}/{log}.log"\n')
+        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'run': run}]
+        if len(matches) != 1: fail('exact unconditional measurement pipeline required: ' + log)
+        else: indices += matches
+    log_paths = [f'${{{{ runner.temp }}}}/loader-measurements-gate-{gate}/{log}.log' for _, log, _ in recipes]
+    verify_run = 'set -euo pipefail\n' + ''.join(
+        f'test -s "$RUNNER_TEMP/loader-measurements-gate-{gate}/{log}.log"\n' for _, log, _ in recipes)
+    verify = {'name': 'Verify loader measurement logs', 'if': 'always()', 'run': verify_run}
+    upload = {'name': 'Upload loader measurements', 'if': 'always()', 'uses': UPLOAD,
+              'with': {'name': 'loader-measurements-${{ github.run_id }}-${{ github.run_attempt }}-gate-' + gate + '-${{ matrix.os }}',
+                       'path': '\n'.join(log_paths) + ('\n' if len(log_paths) > 1 else ''),
+                       'retention-days': '30', 'if-no-files-found': 'error'}}
+    verify_indices = [i for i, step in enumerate(steps) if step == verify]
+    uploads = [i for i, step in enumerate(steps) if step == upload]
+    proof_indices = [i for i, step in enumerate(steps) if step.get('id') == 'proof']
+    if len(verify_indices) != 1 or len(uploads) != 1 or len(proof_indices) != 1:
+        fail('mandatory complete measurement logs and diagnostic upload required')
+    elif not (max(indices, default=-1) < verify_indices[0] < uploads[0] < proof_indices[0] == len(steps) - 2):
+        fail('diagnostic verification/upload must precede terminal success proof')
+    if len(proof_indices) == 1:
+        proof = steps[proof_indices[0]]
+        unit = 'loader' if gate == 'a' else 'loader-gate-b'
+        if proof.get('env') != {'ROUTE_JSON': '${{ inputs.route }}', 'UNIT': unit,
+                                'CHECKS': json.dumps(inventory.checks(unit + ':linux-x64')),
+                                'HOST_OS': '${{ matrix.os }}'}:
+            fail('exact native receipt identity required')
+    host_run = ("python - <<'PY'\n"
+                "import os, platform, sys\n"
+                "sys.path.insert(0, 'scripts/ci')\n"
+                "from inventory import HOSTS\n"
+                "expected = HOSTS[os.environ['HOST_OS']]\n"
+                "actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]\n"
+                "arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]\n"
+                "assert actual + '-' + arch == expected, (actual, arch, expected)\n"
+                "PY\n")
+    host = {'name': 'Assert native receipt host', 'shell': 'bash', 'working-directory': '.',
+            'env': {'HOST_OS': '${{ matrix.os }}'}, 'run': host_run}
+    if sum(step == host for step in steps) != 1:
+        fail('exact native host assertion required')
+    return errors
+
+
 def check(root: Path) -> list[str]:
     errors = []
     def fail(name, message): errors.append(f'.github/workflows/{name}.yml: {message}')
@@ -342,7 +424,7 @@ def check(root: Path) -> list[str]:
                 if not matches or any('if' in step or 'continue-on-error' in step for step in matches):
                     fail(name, f'{jid}: missing unconditional command: {command}')
             proofs = [s for s in steps if s.get('id') == 'proof']
-            native = unit in ('loader', 'ocsf', 'agent', 'bootstrap')
+            native = unit in ('loader', 'loader-gate-b', 'ocsf', 'agent', 'bootstrap')
             wanted = (['go-fuzz:${{ matrix.package }}:${{ matrix.target }}'] if jid == 'fuzz' else
                       inventory.checks(unit + ':linux-x64' if native else unit))
             if len(proofs) != 1 or proofs[0].get('env', {}).get('UNIT') != unit:
@@ -366,7 +448,7 @@ def check(root: Path) -> list[str]:
                 if len(host_steps) != 1 or host_steps[0] >= first_check:
                     fail(name, f'{jid}: native host admission must precede checks')
             if name in ('server', 'agent'):
-                group = {'validate': 'server', 'race': 'server', 'fuzz': 'server', 'loader-gate-a': 'loader', 'ocsf-native': 'ocsf'}.get(jid) if name == 'server' else ('agent' if jid == 'validate' else 'interop')
+                group = {'validate': 'server', 'race': 'server', 'fuzz': 'server', 'loader-gate-a': 'loader', 'loader-gate-b': 'loader', 'ocsf-native': 'ocsf'}.get(jid) if name == 'server' else ('agent' if jid == 'validate' else 'interop')
                 if job.get('if') != group_condition([group], 'inputs.route'): fail(name, f'{jid}: route selection mismatch')
             expected_needs = 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
             if job.get('needs') != expected_needs: fail(name, f'{jid}: needs mismatch')
@@ -378,6 +460,12 @@ def check(root: Path) -> list[str]:
     for path in ('schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'):
         if path not in text: fail('design', 'missing CI schema validation: ' + path)
     server = workflows['server']['jobs']
+    for gate in ('a', 'b'):
+        for error in loader_qualification_errors(server.get('loader-gate-' + gate, {}), gate):
+            fail('server', error)
+    for jid, native_parser in (('fuzz', False), ('loader-gate-a', True)):
+        for error in fuzz_evidence_errors(server.get(jid, {}), native_parser):
+            fail('server', jid + ': ' + error)
     matrix_job = server.get('fuzz-targets', {})
     if matrix_job.get('if') != group_condition(['server'], 'inputs.route') or 'scripts/ci/inventory.py --fuzz-matrix' not in str(matrix_job):
         fail('server', 'fuzz matrix must come from inventory')

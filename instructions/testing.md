@@ -1,6 +1,6 @@
 # Testing
 
-Before review, run light checks for the touched component. For the Go server, run from `server/`:
+Before review, run light checks for the touched component. Local, Go server, `server/`:
 
 ```sh
 gofmt -l .
@@ -18,38 +18,40 @@ Cargo caches only the registry index and `.crate` archives. The same helper's Ca
 
 The `CI` entry routes the full ordinary suite, race tests and timed fuzzing on pull requests targeting `master` and pushes to `master` from the full Git diff. Design and CI contract checks always run. `ci-required` requires successful selected callers and one same-run receipt per expected leaf; missing matrix rows fail even when other rows pass. A push to `wip/<slice>` needs an open PR for normal CI. Draft PRs run checks. Superseding pushes cancel only the same PR's runs; master pushes use unique run-ID groups and never cancel running or pending master work.
 
-Server jobs `validate` and `race` run separately, each with a 20-minute timeout. `validate` keeps ordinary tests, formatting, vet and the key-admission benchmark. `race` runs `go test -race -count=1 ./...` from `server/`.
+CI, `server/`: server jobs `validate` and `race` run separately, each with a 20-minute timeout. `validate` keeps ordinary tests, formatting, vet and the key-admission benchmark. `race` runs `go test -race -count=1 ./...` from `server/`.
 
-Ordinary `go test -count=1 ./...` keeps running every fuzz target's seed corpus. The primary agent reads the CI results before merging and does not merge failed checks.
+CI, `server/`: ordinary `go test -count=1 ./...` keeps running every fuzz target's seed corpus. The primary agent reads the CI results before merging and does not merge failed checks.
 
-The following commands are the CI fuzz target list. Each target gets one matrix entry and runs for 60 seconds from `server/`:
+The complete CI fuzz inventory is [scripts/ci/targets.toml](../scripts/ci/targets.toml). Each of its 23 main package/target pairs gets one matrix entry with an anchored selector, 60-second duration and two workers from `server/`. The separate Gate A selector stays outside that main matrix. CI uploads each target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
+
+Local and CI, repository root, for loader CI integration:
 
 ```sh
-go test -count=1 ./internal/events/eventid -fuzz=FuzzParse -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/batch -fuzz=FuzzDescriptor -fuzztime=60s -parallel=2
-go test -count=1 ./internal/signing/dsse -fuzz='^FuzzVerify$' -fuzztime=60s -parallel=2
-go test -count=1 ./internal/signing/ed25519key -fuzz='^FuzzValidate$' -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/wire -fuzz=FuzzParseHeader -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/wire -fuzz=FuzzDecode -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/body -fuzz=FuzzExtractLine -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/body -fuzz=FuzzDecode -fuzztime=60s -parallel=2
-go test -count=1 ./internal/policy/celdecl -fuzz=FuzzParse -fuzztime=60s -parallel=2
-go test -count=1 ./internal/policy/celdecl -fuzz=FuzzLoad -fuzztime=60s -parallel=2
-go test -count=1 ./internal/authz/catalogue -fuzz=FuzzValidateName -fuzztime=60s -parallel=2
-go test -count=1 ./internal/authz/catalogue -fuzz=FuzzParse -fuzztime=60s -parallel=2
-go test -count=1 ./internal/extensions/manifest -fuzz=FuzzValidate -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/exportdest -fuzz=FuzzValidate -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/exportdest -fuzz=FuzzDecoded -fuzztime=60s -parallel=2
-go test -count=1 ./internal/mdm/resourcevalidate -fuzz=FuzzValidate -fuzztime=60s -parallel=2
-go test -count=1 ./internal/mdm/resourcevalidate -fuzz=FuzzBudget -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/reportvalidate -fuzz=FuzzValidate -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/reportvalidate -fuzz=FuzzBudget -fuzztime=60s -parallel=2
-go test -count=1 ./internal/events/ocsf -fuzz='^FuzzValidate$' -fuzztime=60s -parallel=2
+python -B -m unittest discover -s scripts/ci -p test_route.py -v
+python -B -m unittest discover -s scripts/ci -p test_required.py -v
+python -B -m unittest discover -s scripts/ci -p test_policy.py -v
+python -B -m unittest discover -s scripts/ci -p test_fresh_go.py -v
+python -B scripts/ci/inventory.py --fuzz-matrix
+python -B scripts/ci/check_policy.py --root .
+actionlint .github/workflows/*.yml
+git diff --check
 ```
 
-The single target inventory is `scripts/ci/targets.toml`; `.github/workflows/server.yml` generates its fuzz matrix from that inventory. Keep these documented commands aligned with the inventory. CI anchors the target names to select exactly one fuzz target. CI uploads the target's corpus on failure, including new failing entries. Commit useful minimized inputs to the target's seed corpus. Report the command, duration and result from CI.
+Local, `server/`, focused complete-loader checks:
 
-The extension loader's Gate A job runs natively on Linux x64, Windows x64 and macOS ARM64 in `.github/workflows/server.yml` (`loader-gate-a`), from `server/`:
+```sh
+go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetSmoke$'
+```
+
+CI, `server/`, complete-loader native qualification on Linux x64, Windows x64 and macOS ARM64 (`loader-gate-b`):
+
+```sh
+go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetExtended$' -v -args -loader-budget-extended
+```
+
+The [native receipt and measurement contract](../docs/specs/ci-hardening.md#loader-qualification-inventory) requires all six loader leaves, exact same-run checks, separate retained measurement logs and all 23 main fuzz leaves. Gate A and Gate B commands capture combined output with Bash `set -euo pipefail` and `tee`. Diagnostics upload even after failure; complete nonempty logs are required before success receipts. Both gates keep fresh compiler caches and cold measurement children. These receipts prove step success; qualification review also checks the retained measurements. The existing server-wide race job covers the loader.
+
+CI, `server/`: the extension loader's Gate A job runs natively on Linux x64, Windows x64 and macOS ARM64 in `.github/workflows/server.yml` (`loader-gate-a`), from `server/`:
 
 ```sh
 go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
@@ -59,7 +61,7 @@ go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' 
 
 Keep these commands aligned with that job; it uploads the fuzz corpus on failure.
 
-CI reports key-admission time and allocations without a pass/fail latency threshold:
+CI, `server/`: key admission reports time and allocations without a pass/fail latency threshold:
 
 ```sh
 go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key

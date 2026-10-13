@@ -2,6 +2,9 @@
 from pathlib import Path
 import shutil
 import tempfile
+import subprocess
+from copy import deepcopy
+import inventory
 import unittest
 import yaml
 import check_policy
@@ -23,6 +26,124 @@ class PolicyTests(unittest.TestCase):
         path.write_text(yaml.safe_dump(data, sort_keys=False))
 
     def test_current_policy(self): self.assertEqual(check_policy.check(ROOT), [])
+
+    def test_loader_gate_b_mutations_require_valid_baseline(self):
+        path = self.root / '.github/workflows/server.yml'
+        baseline = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+        self.assertIn('loader-gate-b', baseline['jobs'])
+        self.assertEqual(check_policy.check(self.root), [])
+        self.assertTrue(any(s.get('name') == 'Verify loader measurement logs' for s in baseline['jobs']['loader-gate-b']['steps']))
+        def measurement(job):
+            return next(s for s in job['steps'] if 'TestLoaderBudgetExtended' in s.get('run', ''))
+        def logs(job):
+            return next(s for s in job['steps'] if s.get('name') == 'Upload loader measurements')
+        mutations = [
+            ('job', lambda d: d['jobs'].pop('loader-gate-b')),
+            ('route', lambda d: d['jobs']['loader-gate-b'].update({'if': '${{ false }}'})),
+            ('command', lambda d: measurement(d['jobs']['loader-gate-b']).update(run='echo success')),
+            ('conditional', lambda d: measurement(d['jobs']['loader-gate-b']).update({'if': 'false'})),
+            ('ignored failure', lambda d: measurement(d['jobs']['loader-gate-b']).update({'continue-on-error': 'true'})),
+            ('pipefail', lambda d: measurement(d['jobs']['loader-gate-b']).update(run=measurement(d['jobs']['loader-gate-b'])['run'].replace('set -euo pipefail', 'set -eu'))),
+            ('hidden failure', lambda d: measurement(d['jobs']['loader-gate-b']).update(run=measurement(d['jobs']['loader-gate-b'])['run'] + ' || true')),
+            ('check', lambda d: next(s for s in d['jobs']['loader-gate-b']['steps'] if s.get('id') == 'proof')['env'].update(CHECKS='[]')),
+            ('host', lambda d: d['jobs']['loader-gate-b']['steps'].remove(next(s for s in d['jobs']['loader-gate-b']['steps'] if s.get('name') == 'Assert native receipt host'))),
+            ('upload', lambda d: d['jobs']['loader-gate-b']['steps'].remove(logs(d['jobs']['loader-gate-b']))),
+            ('log verification', lambda d: d['jobs']['loader-gate-b']['steps'].remove(next(s for s in d['jobs']['loader-gate-b']['steps'] if s.get('name') == 'Verify loader measurement logs'))),
+            ('missing logs', lambda d: logs(d['jobs']['loader-gate-b'])['with'].update({'if-no-files-found': 'ignore'})),
+            ('conditional logs', lambda d: logs(d['jobs']['loader-gate-b']).update({'if': 'success()'})),
+            ('proof before logs', lambda d: d['jobs']['loader-gate-b']['steps'].insert(-1, d['jobs']['loader-gate-b']['steps'].pop(next(i for i,s in enumerate(d['jobs']['loader-gate-b']['steps']) if s.get('name') == 'Upload loader measurements')))),
+        ]
+        for key, value in (('timeout-minutes', '10'), ('runs-on', 'ubuntu-24.04'), ('name', 'loader Gate A'), ('needs', ['validate'])):
+            mutations.append((key, lambda d, key=key, value=value: d['jobs']['loader-gate-b'].update({key: value})))
+        for host in ('ubuntu-24.04', 'windows-2025', 'macos-15'):
+            mutations.append((host, lambda d, host=host: d['jobs']['loader-gate-b']['strategy']['matrix']['os'].remove(host)))
+        for label, mutate in mutations:
+            with self.subTest(mutation=label):
+                data = deepcopy(baseline)
+                mutate(data)
+                path.write_text(yaml.safe_dump(data, sort_keys=False))
+                self.assertTrue(check_policy.check(self.root))
+        path.write_text(yaml.safe_dump(baseline, sort_keys=False))
+
+    def test_loader_measurement_pipeline_preserves_failure(self):
+        data = yaml.load((ROOT / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertIn('loader-gate-b', data['jobs'])
+        for gate, selectors in (('a', ('TestParserBudgetExtended', 'TestParserBudgetSmoke')), ('b', ('TestLoaderBudgetExtended',))):
+            for selector in selectors:
+                with self.subTest(gate=gate, selector=selector), tempfile.TemporaryDirectory() as tmp:
+                    run = next(s['run'] for s in data['jobs']['loader-gate-' + gate]['steps'] if selector in s.get('run', ''))
+                    command = next(line for line in run.splitlines() if line.startswith('go test '))
+                    pipe = command.index(' 2>&1 | tee ')
+                    failing = run.replace(command[:pipe], "bash -c 'echo failed-sample; exit 7'")
+                    result = subprocess.run(['bash', '-c', failing], env={'RUNNER_TEMP': tmp}, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 7, result.stderr)
+                    logs = list(Path(tmp).glob('loader-measurements-*/*.log'))
+                    self.assertEqual(len(logs), 1)
+                    self.assertEqual(logs[0].read_text(), 'failed-sample\n')
+
+    def test_measurement_log_completeness(self):
+        data = yaml.load((ROOT / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)
+        for gate, names in (('a', ('extended.log', 'repeat.log')), ('b', ('extended.log',))):
+            job = data['jobs']['loader-gate-' + gate]
+            checks = [s for s in job['steps'] if s.get('name') == 'Verify loader measurement logs']
+            self.assertEqual(len(checks), 1)
+            for missing in (None, *names):
+                with self.subTest(gate=gate, missing=missing), tempfile.TemporaryDirectory() as tmp:
+                    logs = Path(tmp) / ('loader-measurements-gate-' + gate)
+                    logs.mkdir()
+                    for name in names:
+                        if name != missing: (logs / name).write_text('sample\n')
+                    run = subprocess.run(['bash', '-c', checks[0]['run']], env={'RUNNER_TEMP': tmp}, capture_output=True)
+                    self.assertEqual(run.returncode == 0, missing is None)
+
+    def test_gate_a_identity_commands_and_selector_are_preserved(self):
+        import tomllib
+        data = yaml.load((ROOT / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)
+        job = data['jobs']['loader-gate-a']
+        self.assertEqual(job['strategy'], {'fail-fast': 'false', 'matrix': {'os': ['ubuntu-24.04', 'windows-2025', 'macos-15']}})
+        self.assertEqual(next(s for s in job['steps'] if s.get('id') == 'proof')['env']['CHECKS'], '["loader-extended", "loader-repeat", "loader-fuzz"]')
+        commands = [
+            "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended",
+            "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50",
+            "go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2",
+        ]
+        for command in commands:
+            self.assertEqual(sum(command in s.get('run', '') for s in job['steps']), 1)
+        self.assertEqual(tomllib.loads((ROOT / 'scripts/ci/targets.toml').read_text())['loader'],
+                         {'package': './internal/extensions/loader', 'target': 'FuzzParserQualification', 'fuzztime': '60s', 'parallel': 2})
+
+    def test_loader_targets_cannot_be_removed_or_substituted(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        for target in ('FuzzLoad', 'FuzzVerifiedYAML', 'FuzzTar'):
+            block = ('[[fuzz]]\npackage = "./internal/extensions/loader"\ntarget = "' + target + '"\nfuzztime = "60s"\nparallel = 2\n')
+            self.assertIn(block, baseline)
+            for replacement in ('', block.replace(target, 'FuzzSubstitute')):
+                with self.subTest(target=target, replacement=replacement):
+                    path.write_text(baseline.replace(block, replacement))
+                    with self.assertRaises(ValueError): inventory.fuzz_targets(self.root)
+                    self.assertTrue(check_policy.check(self.root))
+        path.write_text(baseline)
+
+    def test_fuzz_corpus_and_failure_propagation_controls(self):
+        self.assertEqual(check_policy.check(self.root), [])
+        path = self.root / '.github/workflows/server.yml'
+        baseline = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+        for jid in ('fuzz', 'loader-gate-a'):
+            for mutation in ('removed corpus', 'wrong corpus', 'conditional corpus', 'hidden failure'):
+                with self.subTest(job=jid, mutation=mutation):
+                    data = deepcopy(baseline)
+                    job = data['jobs'][jid]
+                    corpus = next(s for s in job['steps'] if s.get('name') == 'Upload failing corpus')
+                    if mutation == 'removed corpus': job['steps'].remove(corpus)
+                    elif mutation == 'wrong corpus': corpus['with']['path'] = 'missing/**'
+                    elif mutation == 'conditional corpus': corpus['if'] = 'success()'
+                    else:
+                        step = next(s for s in job['steps'] if '-fuzz=' in s.get('run', ''))
+                        step['run'] += ' || true'
+                    path.write_text(yaml.safe_dump(data, sort_keys=False))
+                    self.assertTrue(check_policy.check(self.root))
+        path.write_text(yaml.safe_dump(baseline, sort_keys=False))
 
     def test_each_design_consumer_is_required(self):
         for command in check_policy.DESIGN_COMMANDS:

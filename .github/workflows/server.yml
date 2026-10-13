@@ -297,10 +297,15 @@ jobs:
         go mod download
         go mod verify
     - name: Extended parser budget
-      run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/loader-measurements-gate-a"
+        go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/extended.log"
     - name: Repeat affected parser measurement 50 times
-      run: go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined
-        -loader-budget-repeat-count=50
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/loader-measurements-gate-a"
+        go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/repeat.log"
     - name: Fuzz parser qualification for 60 seconds
       run: go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
     - name: Upload failing corpus
@@ -311,6 +316,22 @@ jobs:
         path: server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**
         if-no-files-found: ignore
         retention-days: 30
+    - name: Verify loader measurement logs
+      if: always()
+      run: |
+        set -euo pipefail
+        test -s "$RUNNER_TEMP/loader-measurements-gate-a/extended.log"
+        test -s "$RUNNER_TEMP/loader-measurements-gate-a/repeat.log"
+    - name: Upload loader measurements
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: loader-measurements-${{ github.run_id }}-${{ github.run_attempt }}-gate-a-${{ matrix.os }}
+        path: |
+          ${{ runner.temp }}/loader-measurements-gate-a/extended.log
+          ${{ runner.temp }}/loader-measurements-gate-a/repeat.log
+        retention-days: 30
+        if-no-files-found: error
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -319,6 +340,109 @@ jobs:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: loader
         CHECKS: '["loader-extended", "loader-repeat", "loader-fuzz"]'
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: 30
+        if-no-files-found: error
+    if: ${{ contains(fromJSON(inputs.route).groups, 'loader') }}
+  loader-gate-b:
+    name: loader Gate B (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: server
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-24.04
+        - windows-2025
+        - macos-15
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.8
+    - name: Assert native receipt host
+      shell: bash
+      working-directory: .
+      env:
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import os, platform, sys
+        sys.path.insert(0, 'scripts/ci')
+        from inventory import HOSTS
+        expected = HOSTS[os.environ['HOST_OS']]
+        actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]
+        arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+        assert actual + '-' + arch == expected, (actual, arch, expected)
+        PY
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: false
+    - name: Create fresh Go caches
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
+    - name: Extended loader budget
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/loader-measurements-gate-b"
+        go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetExtended$' -v -args -loader-budget-extended 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-b/extended.log"
+    - name: Verify loader measurement logs
+      if: always()
+      run: |
+        set -euo pipefail
+        test -s "$RUNNER_TEMP/loader-measurements-gate-b/extended.log"
+    - name: Upload loader measurements
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: loader-measurements-${{ github.run_id }}-${{ github.run_attempt }}-gate-b-${{ matrix.os }}
+        path: ${{ runner.temp }}/loader-measurements-gate-b/extended.log
+        retention-days: 30
+        if-no-files-found: error
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: loader-gate-b
+        CHECKS: '["loader-gate-b-extended"]'
         HOST_OS: ${{ matrix.os }}
       run: |
         python - <<'PY'

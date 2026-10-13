@@ -35,6 +35,37 @@ class RequiredTests(unittest.TestCase):
         self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
         self.verify()
 
+    def test_expanded_route_schema_and_omissions(self):
+        from jsonschema import Draft202012Validator
+        self.route['groups'] = sorted(inventory.GROUPS)
+        self.route['units'] = inventory.units(self.route['groups'])
+        self.needs = {n: {'result': 'success'} for n in required.NEEDS}
+        rows = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        validator = Draft202012Validator(json.loads((Path(inventory.ROOT) / 'schemas/ci/v1/contracts.schema.json').read_text()))
+        validator.validate(self.route)
+        for row in rows: validator.validate(row)
+        required.verify(self.route, self.needs, rows)
+        new_units = ['loader-gate-b:' + h for h in ('linux-x64', 'windows-x64', 'macos-arm64')]
+        new_units += ['server-fuzz:./internal/extensions/loader:' + t for t in ('FuzzLoad', 'FuzzVerifiedYAML', 'FuzzTar')]
+        for unit in new_units:
+            with self.subTest(unit=unit):
+                self.assertIn(unit, self.route['units'])
+                with self.assertRaises(ValueError):
+                    required.verify(self.route, self.needs, [r for r in rows if r['unit'] != unit])
+        self.assertTrue(set(new_units) <= set(self.route['units']))
+        for host in ('linux-x64', 'windows-x64', 'macos-arm64'):
+            unit = 'loader-gate-b:' + host
+            self.assertEqual(inventory.checks(unit), ['loader-gate-b-extended'])
+            for substitute in (False, True):
+                changed = deepcopy(rows)
+                index = next(i for i, row in enumerate(changed) if row['unit'] == unit)
+                if substitute:
+                    changed[index] = required.receipt(self.route, 'loader:' + host, inventory.checks('loader:' + host))
+                else:
+                    changed[index]['checks'] = []
+                with self.subTest(host=host, substitute=substitute), self.assertRaises(ValueError):
+                    required.verify(self.route, self.needs, changed)
+
     def test_every_result_and_missing_needs(self):
         for n in required.NEEDS:
             for value in ('failure', 'cancelled', 'skipped', 'neutral', '', None, 'unknown', 'success'):

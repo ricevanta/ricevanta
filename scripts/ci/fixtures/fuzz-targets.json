@@ -118,5 +118,23 @@
     "target": "FuzzValidate",
     "fuzztime": "60s",
     "parallel": 2
+  },
+  {
+    "package": "./internal/extensions/loader",
+    "target": "FuzzLoad",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/extensions/loader",
+    "target": "FuzzVerifiedYAML",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/extensions/loader",
+    "target": "FuzzTar",
+    "fuzztime": "60s",
+    "parallel": 2
   }
 ]
