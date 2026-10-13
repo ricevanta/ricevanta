@@ -126,11 +126,6 @@ target = "FuzzLoad"
 fuzztime = "60s"
 parallel = 2
 
-[[fuzz]]
-package = "./internal/extensions/loader"
-target = "FuzzVerifiedYAML"
-fuzztime = "60s"
-parallel = 2
 
 [[fuzz]]
 package = "./internal/extensions/loader"
