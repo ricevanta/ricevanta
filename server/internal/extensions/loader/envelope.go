@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ricevanta/ricevanta/server/internal/signing/dsse"
 )
@@ -61,7 +62,10 @@ func walkEnvelopeValue(d *json.Decoder, token json.Token, depth int) error {
 		}
 		if rootPayload {
 			if text, ok := value.(string); ok {
-				if len(text) > maxPayloadCharacters || (len(text) == maxPayloadCharacters && !strings.HasSuffix(text, "==")) {
+				// Token has decoded JSON escapes. Count Unicode characters without
+				// copying or allocating; DSSE owns malformed Unicode/base64 checks.
+				characters := utf8.RuneCountInString(text)
+				if characters > maxPayloadCharacters || (characters == maxPayloadCharacters && !strings.HasSuffix(text, "==")) {
 					return ErrPayloadLimit
 				}
 			}

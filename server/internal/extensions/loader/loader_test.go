@@ -152,6 +152,7 @@ func TestLoadPrecedence(t *testing.T) {
 	}
 }
 func TestLoadPayloadPreflight(t *testing.T) {
+	t.Run("decoded-character-regressions", testPayloadDecodedCharacters)
 	const capChars = 1398104
 	padded := strings.Repeat("A", capChars-2) + "=="
 	for _, tc := range []struct {
@@ -442,6 +443,71 @@ func TestLoadManifestSentinels(t *testing.T) {
 			payload := jsonPayload(t, v.Manifest)
 			p, e := loadBytes(packageArchive(t, payload, signedEnvelope(t, payload), fixtureFiles(t)...), keyPublic(t), Options{})
 			assertLoadError(t, p, e, sentinels[v.Error])
+		})
+	}
+}
+
+// Byte counting would reject these below-character-cap malformed base64 values
+// before DSSE can classify their base64 or Unicode defects.
+func testPayloadDecodedCharacters(t *testing.T) {
+	v := corpus(t).Cases[0]
+	start := strings.Index(v.Envelope, `"payload":"`) + len(`"payload":"`)
+	end := start + strings.Index(v.Envelope[start:], `"`)
+	envelopeFor := func(text string) string { return v.Envelope[:start] + text + v.Envelope[end:] }
+	prefix := strings.Repeat("A", maxPayloadCharacters-2)
+	for _, tc := range []struct {
+		name, encoded string
+		dsseError     error
+	}{
+		{"raw-accent", prefix + "é", dsse.ErrBase64},
+		{"escaped-accent", prefix + `\u00e9`, dsse.ErrBase64},
+		{"raw-emoji", prefix + "😀", dsse.ErrBase64},
+		{"escaped-pair", prefix + `\ud83d\ude00`, dsse.ErrBase64},
+		{"unpaired-high", prefix + `\ud800`, dsse.ErrEnvelope},
+		{"unpaired-low", prefix + `\udc00`, dsse.ErrEnvelope},
+		{"accent-at-padded-cap", strings.Repeat("A", maxPayloadCharacters-3) + "é==", dsse.ErrBase64},
+		{"emoji-at-padded-cap", strings.Repeat("A", maxPayloadCharacters-3) + `\ud83d\ude00==`, dsse.ErrBase64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := []byte(envelopeFor(tc.encoded))
+			if _, e := dsse.Verify(env, dsse.TypeExtensionManifest, keyPublic(t)); e != tc.dsseError {
+				t.Fatalf("DSSE oracle %v, want %v", e, tc.dsseError)
+			}
+			t.Run("preflight", func(t *testing.T) {
+				if e := checkPayloadBudget(env); e != nil {
+					t.Fatalf("below character ceiling: %v", e)
+				}
+			})
+			t.Run("load", func(t *testing.T) {
+				p, e := loadBytes(packageArchive(t, []byte(v.Payload), env, fixtureFiles(t)...), keyPublic(t), Options{})
+				assertLoadError(t, p, e, tc.dsseError)
+			})
+		})
+	}
+	over := strings.Repeat("A", maxPayloadCharacters) + "é"
+	short := prefix + `\ud800`
+	for _, tc := range []struct {
+		name, env string
+		want      error
+	}{
+		{"accent-at-unpadded-cap", envelopeFor(strings.Repeat("A", maxPayloadCharacters-1) + "é"), ErrPayloadLimit},
+		{"emoji-above-cap", envelopeFor(strings.Repeat("A", maxPayloadCharacters) + `\ud83d\ude00`), ErrPayloadLimit},
+		{"short-multibyte-before-syntax", `{"payload":"` + prefix + `é","bad":]}`, dsse.ErrEnvelope},
+		{"syntax-before-multibyte-limit", `{"bad":],"payload":"` + over + `"}`, dsse.ErrEnvelope},
+		{"multibyte-limit-before-syntax", `{"payload":"` + over + `","bad":]}`, ErrPayloadLimit},
+		{"short-surrogate-before-duplicate-limit", `{"payload":"\ud800","payload":"` + over + `"}`, ErrPayloadLimit},
+		{"short-surrogate-before-depth", `{"payload":"` + short + `","nested":[[[[]]]]}`, dsse.ErrEnvelope},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("preflight", func(t *testing.T) {
+				if e := checkPayloadBudget([]byte(tc.env)); e != tc.want {
+					t.Fatalf("%v want %v", e, tc.want)
+				}
+			})
+			t.Run("load", func(t *testing.T) {
+				p, e := loadBytes(packageArchive(t, []byte(v.Payload), []byte(tc.env), fixtureFiles(t)...), keyPublic(t), Options{})
+				assertLoadError(t, p, e, tc.want)
+			})
 		})
 	}
 }
