@@ -168,7 +168,7 @@ Require exit 0, no formatting output and PASS. Benchmark execution stays in CI w
 
 The independent Astra xhigh reviewer, `gpt-6-astra`, `xhigh`, attacks the full slice against every Review focus item and spec section 5 and confirms code fixes. Check the parallel loader's merged contract for compatible raw-key validation, DSSE precedence and bounded candidate handling. An unavailable loader branch does not authorize implementing it or claiming it is covered. Record that integration question separately.
 
-The primary agent follows `instructions/workflow.md`. CI runs the full ordinary suite, `cd server && go test -race -count=1 ./...`, and these timed targets:
+The primary agent follows `instructions/workflow.md`. CI runs the full ordinary suite, [the server-wide race command and package deadline](../specs/ci-hardening.md#5-fresh-go-compilation-and-dependency-caches-ci-03), and these timed targets:
 
 ```sh
 cd server && go test -count=1 ./internal/signing/ed25519key -fuzz='^FuzzValidate$' -fuzztime=60s -parallel=2

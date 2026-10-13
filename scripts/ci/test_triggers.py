@@ -15,7 +15,7 @@ WORKFLOWS = ("ci",)
 REUSABLES = ("design", "server", "agent", "console", "bootstrap")
 PR_TYPES = {"opened", "synchronize", "reopened", "ready_for_review", "edited"}
 PR_CANCEL = "${{ github.event_name == 'pull_request' }}"
-RACE_COMMAND = "go test -race -count=1 ./..."
+RACE_COMMAND = "go test -race -count=1 -timeout=15m ./..."
 
 
 def load_workflow(path):

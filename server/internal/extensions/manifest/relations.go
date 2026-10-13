@@ -11,29 +11,35 @@ func relations(document map[string]any, options Options) error {
 	spec := document["spec"].(map[string]any)
 	components := spec["components"].([]any)
 	files := document["files"].([]any)
-	names := make(map[string]bool, len(components))
-	listing := make(map[string]bool, len(files))
-	for _, v := range components {
-		name := v.(map[string]any)["name"].(string)
-		if names[name] {
+	names := make([]string, len(components))
+	listing := make([]string, len(files))
+	for i, v := range components {
+		names[i] = v.(map[string]any)["name"].(string)
+	}
+	sortStrings(names)
+	for i := 1; i < len(names); i++ {
+		if names[i-1] == names[i] {
 			return ErrDuplicate
 		}
-		names[name] = true
 	}
-	for _, v := range files {
-		path := v.(map[string]any)["path"].(string)
-		if listing[path] {
+	for i, v := range files {
+		listing[i] = v.(map[string]any)["path"].(string)
+	}
+	sortStrings(listing)
+	for i := 1; i < len(listing); i++ {
+		if listing[i-1] == listing[i] {
 			return ErrDuplicate
 		}
-		listing[path] = true
 	}
-	for path := range listing {
+	for _, path := range listing {
 		if !portable(path) || path == "extension.yaml" || strings.HasPrefix(path, "extension.yaml/") || path == "envelope.json" || strings.HasPrefix(path, "envelope.json/") {
 			return ErrPath
 		}
 		for i := 0; i < len(path); i++ {
-			if path[i] == '/' && listing[path[:i]] {
-				return ErrPath
+			if path[i] == '/' {
+				if _, found := findString(listing, path[:i]); found {
+					return ErrPath
+				}
 			}
 		}
 	}
@@ -90,26 +96,29 @@ func relations(document map[string]any, options Options) error {
 			}
 		}
 	}
-	owners := make(map[string]bool, len(files))
-	for _, v := range components {
+	owners := make([]byte, len(listing))
+	for componentIndex, v := range components {
 		c := v.(map[string]any)
-		own := make(map[string]bool)
+		owner := byte(componentIndex + 1)
 		for _, v := range c["files"].([]any) {
 			p := v.(string)
-			if !listing[p] || owners[p] || strings.HasPrefix(p, "attestations/") {
+			index, found := findString(listing, p)
+			if !found || owners[index] != 0 || strings.HasPrefix(p, "attestations/") {
 				return ErrReference
 			}
-			own[p] = true
-			owners[p] = true
+			owners[index] = owner
 		}
 		for _, key := range []string{"file", "entry", "row_schema"} {
-			if p, ok := c[key].(string); ok && !own[p] {
-				return ErrReference
+			if p, ok := c[key].(string); ok {
+				index, found := findString(listing, p)
+				if !found || owners[index] != owner {
+					return ErrReference
+				}
 			}
 		}
 	}
-	for p := range listing {
-		if !owners[p] && !strings.HasPrefix(p, "attestations/") {
+	for i, p := range listing {
+		if owners[i] == 0 && !strings.HasPrefix(p, "attestations/") {
 			return ErrReference
 		}
 	}

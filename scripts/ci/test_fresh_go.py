@@ -141,6 +141,9 @@ class CachePolicyTests(unittest.TestCase):
 
     def test_unsafe_cache_and_environment_mutations(self):
         mutations = [
+            ('server', 'loader-gate-b', lambda j: j['steps'].remove(next(s for s in j['steps'] if s.get('run') == check_policy.GO_FRESH))),
+            ('server', 'loader-gate-b', lambda j: next(s for s in j['steps'] if s.get('name') == 'Download and verify Go modules').update(run='go mod download')),
+            ('server', 'loader-gate-b', lambda j: j['steps'].append({'run': 'go env', 'env': {'GOFLAGS': '-mod=mod'}})),
             ('server', 'race', lambda j: j['steps'].remove(next(s for s in j['steps'] if s.get('run') == check_policy.GO_FRESH))),
             ('server', 'ocsf-native', lambda j: next(s for s in j['steps'] if s.get('name') == 'Download and verify Go modules').update(run='go mod download')),
             ('agent', 'validate', lambda j: j['steps'].remove(next(s for s in j['steps'] if s.get('run') == check_policy.CARGO_FRESH))),
@@ -159,6 +162,7 @@ class CachePolicyTests(unittest.TestCase):
                 shutil.copytree(ROOT / 'scripts/ci', root / 'scripts/ci')
                 path = root / f'.github/workflows/{workflow}.yml'
                 data = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+                self.assertIn(job, data['jobs'])
                 mutate(data['jobs'][job])
                 path.write_text(yaml.safe_dump(data, sort_keys=False))
                 self.assertTrue(any('cache' in e.lower() or 'environment' in e.lower()

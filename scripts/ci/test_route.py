@@ -192,11 +192,59 @@ class RouteTests(unittest.TestCase):
         self.git('remote', 'add', 'origin', str(origin))
         with self.assertRaises(ValueError): self.push('f' * 40)
 
+    def test_loader_source_selects_complete_qualification(self):
+        groups = inventory.select_groups(['server/internal/extensions/loader/loader.go'])
+        self.assertEqual(groups, ['ci-contracts', 'design', 'gitleaks', 'interop', 'loader', 'ocsf', 'semgrep', 'server'])
+        self.assertEqual(inventory.units(['loader']), sorted([
+            'loader:linux-x64', 'loader:windows-x64', 'loader:macos-arm64',
+            'loader-gate-b:linux-x64', 'loader-gate-b:windows-x64', 'loader-gate-b:macos-arm64']))
+
+    def test_exact_main_target_inventory(self):
+        expected = {
+            ('./internal/authz/catalogue', 'FuzzParse'),
+            ('./internal/authz/catalogue', 'FuzzValidateName'),
+            ('./internal/events/batch', 'FuzzDescriptor'),
+            ('./internal/events/body', 'FuzzDecode'),
+            ('./internal/events/body', 'FuzzExtractLine'),
+            ('./internal/events/eventid', 'FuzzParse'),
+            ('./internal/events/exportdest', 'FuzzDecoded'),
+            ('./internal/events/exportdest', 'FuzzValidate'),
+            ('./internal/events/ocsf', 'FuzzValidate'),
+            ('./internal/events/reportvalidate', 'FuzzBudget'),
+            ('./internal/events/reportvalidate', 'FuzzValidate'),
+            ('./internal/events/wire', 'FuzzDecode'),
+            ('./internal/events/wire', 'FuzzParseHeader'),
+            ('./internal/extensions/loader', 'FuzzLoad'),
+            ('./internal/extensions/loader', 'FuzzTar'),
+            ('./internal/extensions/loader', 'FuzzVerifiedYAML'),
+            ('./internal/extensions/manifest', 'FuzzValidate'),
+            ('./internal/mdm/resourcevalidate', 'FuzzBudget'),
+            ('./internal/mdm/resourcevalidate', 'FuzzValidate'),
+            ('./internal/policy/celdecl', 'FuzzLoad'),
+            ('./internal/policy/celdecl', 'FuzzParse'),
+            ('./internal/signing/dsse', 'FuzzVerify'),
+            ('./internal/signing/ed25519key', 'FuzzValidate'),
+        }
+        rows = inventory.fuzz_targets()
+        self.assertEqual({(r['package'], r['target']) for r in rows}, expected)
+        self.assertTrue(all(r['fuzztime'] == '60s' and r['parallel'] == 2 for r in rows))
+        leaves = {
+            'design', 'ci-contracts', 'gitleaks', 'semgrep', 'interop', 'console',
+            'server-validate', 'server-race',
+            'agent:linux-x64', 'agent:windows-x64', 'agent:macos-arm64',
+            'bootstrap:linux-x64', 'bootstrap:windows-x64', 'bootstrap:macos-arm64',
+            'ocsf:linux-x64', 'ocsf:windows-x64', 'ocsf:macos-arm64',
+            'loader:linux-x64', 'loader:windows-x64', 'loader:macos-arm64',
+            'loader-gate-b:linux-x64', 'loader-gate-b:windows-x64', 'loader-gate-b:macos-arm64',
+        }
+        leaves.update('server-fuzz:' + package + ':' + target for package, target in expected)
+        self.assertEqual(inventory.units(inventory.GROUPS), sorted(leaves))
+
     def test_inventory_checks_and_fuzz(self):
         expected = json.loads((Path(__file__).parent / 'fixtures/fuzz-targets.json').read_text())
         self.assertEqual(inventory.fuzz_targets(), expected)
-        self.assertEqual(len(inventory.fuzz_targets()), 20)
-        self.assertEqual(len(inventory.units(inventory.GROUPS)), 40)
+        self.assertEqual(len(inventory.fuzz_targets()), 23)
+        self.assertEqual(len(inventory.units(inventory.GROUPS)), 46)
         for unit in inventory.units(inventory.GROUPS): self.assertTrue(inventory.checks(unit))
 
 if __name__ == '__main__': unittest.main()

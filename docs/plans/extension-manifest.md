@@ -6,6 +6,8 @@ Goal: implement the decoded manifest validator in [the spec](../specs/extension-
 
 Architecture: one leaf package under `server/internal/extensions/manifest` accepts an immutable decoded tree and trusted caller options. Its success means structural validity only. The spec owns the API, bounds, algorithms and error order; the schema owns the field inventory.
 
+The [loader plan's Task 5 prerequisite](extension-loader.md#task-5-prerequisite-bound-validator-membership-and-read-errors) owns the deterministic membership-storage remediation required by [manifest section 6.1](../specs/extension-manifest.md#61-deterministic-validator-membership-storage), including its narrow helper-test ownership exception. The completed validator tasks below do not qualify that remediation or the complete loader's allocation envelope.
+
 ## Global constraints
 
 - An independent Sol xhigh reviewer (`gpt-6.1-sol`, `xhigh`) must approve the spec, plan, schemas and fixtures before code. The design author does not implement or review code for this slice.

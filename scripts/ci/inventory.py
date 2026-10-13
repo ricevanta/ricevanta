@@ -36,10 +36,40 @@ CHECKS = {
 }
 
 
+FUZZ_PAIRS = {
+    ('./internal/events/eventid', 'FuzzParse'),
+    ('./internal/events/batch', 'FuzzDescriptor'),
+    ('./internal/signing/dsse', 'FuzzVerify'),
+    ('./internal/signing/ed25519key', 'FuzzValidate'),
+    ('./internal/events/wire', 'FuzzParseHeader'),
+    ('./internal/events/wire', 'FuzzDecode'),
+    ('./internal/events/body', 'FuzzExtractLine'),
+    ('./internal/events/body', 'FuzzDecode'),
+    ('./internal/policy/celdecl', 'FuzzParse'),
+    ('./internal/policy/celdecl', 'FuzzLoad'),
+    ('./internal/authz/catalogue', 'FuzzValidateName'),
+    ('./internal/authz/catalogue', 'FuzzParse'),
+    ('./internal/extensions/manifest', 'FuzzValidate'),
+    ('./internal/events/exportdest', 'FuzzValidate'),
+    ('./internal/events/exportdest', 'FuzzDecoded'),
+    ('./internal/mdm/resourcevalidate', 'FuzzValidate'),
+    ('./internal/mdm/resourcevalidate', 'FuzzBudget'),
+    ('./internal/events/reportvalidate', 'FuzzValidate'),
+    ('./internal/events/reportvalidate', 'FuzzBudget'),
+    ('./internal/events/ocsf', 'FuzzValidate'),
+    ('./internal/extensions/loader', 'FuzzLoad'),
+    ('./internal/extensions/loader', 'FuzzVerifiedYAML'),
+    ('./internal/extensions/loader', 'FuzzTar'),
+}
+
 def fuzz_targets(root=ROOT):
-    data = tomllib.loads((root / 'scripts/ci/targets.toml').read_text())['fuzz']
-    if len(data) != 20 or len({(r['package'], r['target']) for r in data}) != 20:
-        raise ValueError('expected 20 unique fuzz targets')
+    targets = tomllib.loads((root / 'scripts/ci/targets.toml').read_text())
+    data = targets['fuzz']
+    if len(data) != 23 or {(r['package'], r['target']) for r in data} != FUZZ_PAIRS:
+        raise ValueError('expected exact 23 unique fuzz targets')
+    if targets['loader'] != {'package': './internal/extensions/loader',
+                             'target': 'FuzzParserQualification', 'fuzztime': '60s', 'parallel': 2}:
+        raise ValueError('changed Gate A fuzz selector or budget')
     for row in data:
         if row['fuzztime'] != '60s' or row['parallel'] != 2:
             raise ValueError('changed fuzz budget')
@@ -56,6 +86,8 @@ def units(groups):
             result += [f"server-fuzz:{r['package']}:{r['target']}" for r in fuzz_targets()]
         elif group in ('agent', 'loader', 'ocsf', 'bootstrap'):
             result += [f'{group}:{host}' for host in HOSTS.values()]
+            if group == 'loader':
+                result += [f'loader-gate-b:{host}' for host in HOSTS.values()]
         else: result.append(group)
     return sorted(result)
 
@@ -66,6 +98,7 @@ def checks(unit):
         return ['go-fuzz:' + unit.removeprefix('server-fuzz:')]
     group, _, host = unit.partition(':')
     if host not in HOSTS.values(): raise ValueError('unknown leaf: ' + unit)
+    if group == 'loader-gate-b': return ['loader-gate-b-extended']
     if group == 'loader': return ['loader-extended', 'loader-repeat', 'loader-fuzz']
     if group == 'ocsf': return ['ocsf-native']
     if group == 'agent': return ['agent-host', 'agent-pins', 'agent-fixtures', 'agent-format',

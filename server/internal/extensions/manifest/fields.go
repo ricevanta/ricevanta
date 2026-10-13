@@ -177,13 +177,18 @@ func fields(v any, r *rule) bool {
 		if uint64(len(x)) < r.min || uint64(len(x)) > r.max {
 			return false
 		}
-		seen := make(map[string]bool, len(x))
-		for _, v := range x {
-			s := encoding(v)
-			if seen[s] || !fields(v, r.item) {
+		seen := make([]string, len(x))
+		for i, v := range x {
+			if !fields(v, r.item) {
 				return false
 			}
-			seen[s] = true
+			seen[i] = encoding(v)
+		}
+		sortStrings(seen)
+		for i := 1; i < len(seen); i++ {
+			if seen[i-1] == seen[i] {
+				return false
+			}
 		}
 	case "number":
 		n := unsigned(v)

@@ -25,3 +25,10 @@ var (
 	ErrFileSize        = errors.New("extension file size")
 	ErrFileDigest      = errors.New("extension file digest")
 )
+
+// readError preserves caller-owned cause identity without formatting its text.
+type readError struct{ cause error }
+
+func (e *readError) Error() string        { return "extension read" }
+func (e *readError) Is(target error) bool { return target == ErrRead }
+func (e *readError) Unwrap() error        { return e.cause }

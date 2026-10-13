@@ -2,7 +2,6 @@ package loader
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
@@ -71,14 +70,14 @@ func readSnapshot(body *io.LimitedReader, ceiling uint64) ([]byte, error) {
 		} else if err == nil {
 			zeros++
 			if zeros == 100 {
-				return nil, fmt.Errorf("%w: %w", ErrRead, io.ErrNoProgress)
+				return nil, &readError{cause: io.ErrNoProgress}
 			}
 		}
 		if err == io.EOF {
 			return out, nil
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrRead, err)
+			return nil, &readError{cause: err}
 		}
 	}
 }
