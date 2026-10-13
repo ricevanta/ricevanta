@@ -34,11 +34,11 @@
 
 ## Owned implementation files
 
-Tasks 0 to 3 are implemented; Task 1 supplies the qualified parser, Task 2 the bounded archive reader and Task 3 the isolated converter candidate. [Task 1's current state](#task-1-qualify-bounded-yaml-under-gate-a) records Gate A qualification and the remaining production gates.
+Tasks 0 to 4 are implemented and independently reviewed; Task 1 supplies the bounded parser, Task 2 the archive reader, Task 3 the converter and Task 4 the authenticated package pipeline. Task 5 implements qualification accounting and requires renewed Gate A evidence before Gate B acceptance. [Task 1's current state](#task-1-qualify-bounded-yaml-under-gate-a) records Gate A qualification and the remaining production gates.
 
 | Path | Responsibility |
 |---|---|
-| `server/internal/extensions/loader/loader.go`, `errors.go` | Public API, pipeline, results and sentinels |
+| `server/internal/extensions/loader/loader.go`, `envelope.go`, `errors.go` | Public API, envelope preflight, pipeline, results and sentinels |
 | `server/internal/extensions/loader/frame.go`, `tar.go` | Bounded read, zstd frame and physical USTAR checks |
 | `server/internal/extensions/loader/yaml.go`, `tree.go` | Preflight bridge, one Node decode, tree checks and conversion |
 | `server/internal/extensions/loader/internal/yamltokens/` | Exact-pin reader/scanner/event parser, budgeted Node builder/resolver, allocation ledger, license texts and `PROVENANCE.md` |
@@ -96,7 +96,7 @@ The primary agent coordinates the separate [Task 5 CI integration](#task-5-ci-in
 
 ### Task 3: Convert verified YAML without losing evidence
 
-**State:** The converter is implemented and independently reviewed as an isolated candidate, including its allocation bounds and ownership checks. Final acceptance requires final-head CI and independent confirmation of Task 5's measurement ownership. Tasks 4 and 5 supply `Load` and Gate B qualification; production use remains blocked.
+**State:** The converter is implemented and independently reviewed as an isolated candidate, including its allocation bounds and ownership checks. Final acceptance requires final-head CI and independent confirmation of Task 5's measurement ownership. Task 4 supplies the implemented `Load` pipeline; Task 5 supplies Gate B qualification. Production use remains blocked.
 
 **Files:** Create `yaml.go`, `tree.go`, `yaml_test.go` and `tree_test.go` under the loader.
 
@@ -113,16 +113,18 @@ The primary agent coordinates the separate [Task 5 CI integration](#task-5-ci-in
 
 ### Task 4: Verify and bind the complete package
 
+**State:** The authenticated package pipeline is implemented and independently reviewed, including adversarial review and fix confirmation. Gate B qualification remains open.
+
 **Files:** Create `loader.go`, `envelope.go`, `loader_test.go`, `vectors_test.go` and `ownership_test.go`; extend `errors.go` under the loader.
 
 **Interfaces:** Implement the exact exported API and sentinels in spec sections 2 and 5, consuming Tasks 2 and 3, `dsse.Verify` and `manifest.Validate` unchanged. The candidate `Load` is callable only by loader tests and qualification harnesses until Task 5 obtains Gate B approval; do not wire a production consumer.
 
-- [ ] Write `TestLoadVectors`, `TestLoadOrder`, `TestPublisherBinding`, `TestFileCommitments`, `TestLoadPrecedence`, `TestLoadResultOwnership` and `TestLoadZeroOnError`. Use every signed fixture as bytes, not a reconstructed envelope. Assert invalid signature plus tag returns only `dsse.ErrSignature`; payload mismatch prevents all YAML processing; schema errors precede publisher errors; set/size/digest precedence holds across reordered files. Use private test counters to prove zero YAML calls on verification failure.
-- [ ] Run from `server/`: `go test -count=1 ./internal/extensions/loader -run 'Test(Load|PublisherBinding|FileCommitments)'`. Record the expected failure.
-- [ ] Implement private `checkPayloadBudget(envelope []byte) error` in `envelope.go` and the pipeline in spec order. Test maximum base64 length/padding, escaped characters, duplicate root payloads and excessive JSON nesting before calling DSSE; no payload decode belongs in the preflight. Pass `dsse.TypeExtensionManifest` from caller intent. Bind the raw public-key fingerprint after structural validation. Copy exact bytes into independent exported storage only after every check succeeds. Do not parse KeyID to select a key or retain it as authority.
-- [ ] Test changed valid hints, same manifest with different archive encoding, signed wrong publisher, zero-length bodies, control-member substitution, small key lengths and caller options. Exercise all five manifest kinds using valid decoded fixtures rendered into JSON syntax and signed by the fixed fixture key. Opaque body files need matching commitments, not valid runtime content.
-- [ ] Rerun the focused command and require PASS. Assert no output slice aliases another output slice or input; mutate each independently and check peers. Assert `errors.Is` for each loader/DSSE/manifest failure and absence of publisher-controlled text. I/O failures additionally preserve their cause.
-- [ ] Obtain independent adversarial review and fix confirmation. Review admission handoff explicitly: callers still need current prefix, ownership, tombstone, grant and recovery checks; no persistence or publication occurs here.
+- [x] Write `TestLoadVectors`, `TestLoadOrder`, `TestPublisherBinding`, `TestFileCommitments`, `TestLoadPrecedence`, `TestLoadResultOwnership` and `TestLoadZeroOnError`. Use every signed fixture as bytes, not a reconstructed envelope. Assert invalid signature plus tag returns only `dsse.ErrSignature`; payload mismatch prevents all YAML processing; schema errors precede publisher errors; set/size/digest precedence holds across reordered files. Use private test counters to prove zero YAML calls on verification failure.
+- [x] Run from `server/`: `go test -count=1 ./internal/extensions/loader -run 'Test(Load|PublisherBinding|FileCommitments)'`. Record the expected failure.
+- [x] Implement private `checkPayloadBudget(envelope []byte) error` in `envelope.go` and the pipeline in spec order. Test maximum base64 length/padding, escaped characters, duplicate root payloads and excessive JSON nesting before calling DSSE; no payload decode belongs in the preflight. Pass `dsse.TypeExtensionManifest` from caller intent. Bind the raw public-key fingerprint after structural validation. Copy exact bytes into independent exported storage only after every check succeeds. Do not parse KeyID to select a key or retain it as authority.
+- [x] Test changed valid hints, same manifest with different archive encoding, signed wrong publisher, zero-length bodies, control-member substitution, small key lengths and caller options. Exercise all five manifest kinds using valid decoded fixtures rendered into JSON syntax and signed by the fixed fixture key. Opaque body files need matching commitments, not valid runtime content.
+- [x] Rerun the focused command and require PASS. Assert no output slice aliases another output slice or input; mutate each independently and check peers. Assert `errors.Is` for each loader/DSSE/manifest failure and absence of publisher-controlled text. I/O failures additionally preserve their cause.
+- [x] Obtain independent adversarial review and fix confirmation. Review admission handoff explicitly: callers still need current prefix, ownership, tombstone, grant and recovery checks; no persistence or publication occurs here.
 
 ### Task 5: Qualify the complete loader under Gate B and pin CI coverage
 
