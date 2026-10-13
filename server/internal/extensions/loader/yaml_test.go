@@ -141,7 +141,7 @@ func TestDecodeVerifiedYAMLCallCounts(t *testing.T) {
 			}
 			target := ""
 			if s, ok := call.Fun.(*ast.SelectorExpr); ok {
-				if p, ok := s.X.(*ast.Ident); ok && p.Name == "yamltokens" && s.Sel.Name == "Decode" {
+				if p, ok := s.X.(*ast.Ident); ok && p.Name == "yamltokens" && s.Sel.Name == "DecodeAccounted" {
 					target = "countedYAMLDecode"
 				}
 			}
@@ -189,7 +189,7 @@ var yamlDecodeCalls, yamlContainers int
 
 func countedYAMLDecode(payload []byte) (*yaml.Node, *yamltokens.Budget, error) {
 	yamlDecodeCalls++
-	return yamltokens.Decode(payload)
+	return yamltokens.DecodeAccounted(payload)
 }
 func countedYAMLValue(n *yaml.Node, b *yamltokens.Budget) (any, error) {
 	v, err := yamlValue(n, b)

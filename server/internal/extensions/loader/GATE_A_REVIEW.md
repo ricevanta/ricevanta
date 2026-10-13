@@ -1,6 +1,6 @@
 # Gate A parser qualification
 
-Gate A is qualified for the budgeted YAML candidate at `de01cc0` on Linux x64, Windows x64 and macOS ARM64. [Native evidence](#native-evidence) and [independent verification](#verification) cover the exact candidate at commit `de01cc0`. Task 2 onward may start under the [loader plan](../../../../docs/plans/extension-loader.md). Production consumers still wait for Gate B, canonical/non-small-order key admission and stateful admission. No production consumer imports the candidate. Gate B remains unqualified.
+Gate A evidence qualifies only the budgeted YAML candidate at `de01cc0` on Linux x64, Windows x64 and macOS ARM64. The Task 5 observation adapter candidate is awaiting renewed source/API/provenance review and fresh native evidence. [Native evidence](#native-evidence) and [independent verification](#verification) cover the exact candidate at commit `de01cc0`. The recorded qualified candidate authorized isolated Tasks 2 onward under the [loader plan](../../../../docs/plans/extension-loader.md). Production consumers still wait for Gate B, canonical/non-small-order key admission and stateful admission. No production consumer imports the candidate. Gate B remains unqualified.
 
 The candidate reads the unchanged payload twice, discards presentation comment storage, records flat arities, builds exact Node/Content arenas and retains a cumulative allocation ledger. Production Decode failure returns no partial tree or ledger. The measurement harness retains its own budget for every measured parser call, including rejected combined calls. Explicit tags return ErrTag; anchors, aliases and directives return ErrSyntax under the profile mapping.
 
@@ -91,3 +91,11 @@ The [independent review report](/tmp/claude-1000/-home-danny-src-ricevanta/735de
 The reviewer's four-field inline `python3 - <<'PY'` checksum helper has a recorded FAIL with exit 1 and `ValueError: not enough values to unpack (expected 4, got 3)`: its Markdown parser expects four backticked fields per row, but the source-range column has no backticks. The three-field parser has a recorded PASS with exit 0, verifying all 16 upstream/adapted checksum rows, both patch digests and the 6,454-input comparison counts. The review's layout-overlay command above also records PASS in 0.001s. These review checks are read-only.
 
 The `de01cc0` native evidence retains all 50 `comment-collections/262144/combined` fresh-child samples per target. Every sample passes raw ledger, ceiling and runtime-setting validation with zero allowance. Gate A qualification permits Task 2 onward. Gate B and the separate key-admission and stateful-admission gates still block production consumers.
+
+## Task 5 adapter renewal
+
+The isolated Task 5 candidate adds DecodeAccounted and read-only Budget.Usage, and the shared accounted converter in yaml.go. Every accounted decode retains the same fresh ledger on failure; legacy Decode failure results stay nil. Existing parser semantics, limits, scanner/Node bodies and provenance source ranges stay unchanged. The current allocation/provenance audits describe the adapter and exact source checksums.
+
+Focused observation regressions pass on Go 1.27.1 Linux amd64 after intended missing-API and behavioral failures. Cold finite Gate B smoke passes locally, including rejected same-call YAML usage. These checks do not renew Gate A qualification. The native evidence above and its independent approval remain scoped to the named qualified source candidate and measurement method.
+
+Renewal requires complete Linux x64, Windows x64 and macOS ARM64 loader-gate-a jobs, all required 50-repeat batches, exact-head receipts, retained measurement logs and independent source/API/provenance confirmation. None is supplied by the implementer. Gate B source proof, native evidence and independent adversarial approval are also pending. No production consumer is authorized.

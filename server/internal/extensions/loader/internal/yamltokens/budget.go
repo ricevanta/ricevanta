@@ -151,3 +151,5 @@ func (b *Budget) begin() error {
 	b.begun = true
 	return nil
 }
+
+func (b *Budget) Usage() (bytes, objects uint64) { return b.bytes, b.objects }

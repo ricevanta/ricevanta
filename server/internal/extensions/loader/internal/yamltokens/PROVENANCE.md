@@ -22,7 +22,7 @@ Checksums in the upstream column identify complete pinned source files. The rang
 | `yamlprivateh.go` | all | `4e2195c00895d14965430b8326595e287ed23a7923ea3a7d43cfa95d0d359958` | `61ac7a4c7d26c4b678fbd5a704c101f7611789cf1a25fe6ac162dba5c763a863` |
 | `LICENSE` | all | `d18f6323b71b0b768bb5e9616e36da390fbd39369a81807cca352de4e4e6aa0b` | `d18f6323b71b0b768bb5e9616e36da390fbd39369a81807cca352de4e4e6aa0b` |
 | `NOTICE` | all | `f6c2dd3a67b576eafb89b80200b8b1627230bf3821a0c14cb99a22ac19107d00` | `f6c2dd3a67b576eafb89b80200b8b1627230bf3821a0c14cb99a22ac19107d00` |
-| `node.go` | decode.go: 1-15, 31-308 | `5531e688b99fa695342c41f3a41d0376e10b64bca635da1156b61bd53a2485da` | `e9dd82b52d810ea7194c1d2b53df15584eb4e235355e3e7a27fcd8bdd75b004d` |
+| `node.go` | decode.go: 1-15, 31-308 | `5531e688b99fa695342c41f3a41d0376e10b64bca635da1156b61bd53a2485da` | `c636b8eb85e685972aeb8820918a17d57e3b2df3cda1b241194580ab68b0ab90` |
 | `resolve.go` | resolve.go: 1-267, 290-326 | `69b6069012fef0a518e379222007f6ea7622cb1c235a35b1355bb5641ab16d26` | `452bce29fde12a2f0d0262f1a934160bb97a21ba0c5cca745305a048c3ad92cb` |
 | `../../oracle_apic_test.go` | apic.go (apic: 1-103; others: all) | `0ba66e8a481340e9b9e1719efef7a2026736b53b07d369d6b140328f1d8f4b07` | `d5f85b88dd68f4fbc55c4ea1d43619e088ac3cc59495387ea414c9da5d39b499` |
 | `../../oracle_readerc_test.go` | readerc.go (apic: 1-103; others: all) | `ad43815c77785337e2f980aa8e28d1ac89a25d1642187039aa1f451328a58527` | `7662876bf4f3d48e3d09dce8c4fc757b52a5cc2df6ddf5a54e208d0be028a036` |
@@ -31,7 +31,7 @@ Checksums in the upstream column identify complete pinned source files. The rang
 | `../../oracle_yamlh_test.go` | yamlh.go (apic: 1-103; others: all) | `6a8105eedd934f55399d786feb6acfd5c13b4cae4a80e58c0fff7a300921e06f` | `a05af5f86b45362cc16acabec0392c29a4a302ce6678bb2bdcc7b763d6c99f42` |
 | `../../oracle_yamlprivateh_test.go` | yamlprivateh.go (apic: 1-103; others: all) | `4e2195c00895d14965430b8326595e287ed23a7923ea3a7d43cfa95d0d359958` | `fffd3812a42dc6b91ec9291988ae44f49ea6d4e1e8efaff1e068ba0005529394` |
 
-Deterministic unified patch SHA-256: `9b362d51cf15f55db6bfaa6d50da14a273780fa72094ad49eed50028bfd96380`.
+Deterministic unified patch SHA-256: `39db62ed7caf0b73be9b767546211d66c30271c457a3a8b33c2fcd4bfc1e0154`.
 
 Rebuild the patch in table order with Python `difflib.unified_diff`, `splitlines(True)` and UTF-8 encoding. For the first eight rows, use full upstream/adapted text and names `upstream/<name>` and `adapted/<name>`. For `node.go` and `resolve.go`, concatenate the listed inclusive source ranges and use those adapted basenames. For oracle rows, compare the complete upstream source with its test copy, using `upstream/oracle_<upstream basename>` and `adapted/oracle_<upstream basename>`. Preserve LF newlines and concatenate without separators. New budget, preflight, test and fixture helpers are outside this patch.
 
@@ -46,3 +46,9 @@ Rebuild the patch in table order with Python `difflib.unified_diff`, `splitlines
 - The `_test.go` oracle copies preserve upstream comment storage and scalar scanning. Separate profile counters and lexical restrictions classify every fixture/fuzz input before the candidate. The reference independently checks required-key expiration before token classification and removes expired token-number entries. Oracle Node semantics come from the unmodified pinned module. No production file imports or calls the oracle.
 
 [Allocation source audit](ALLOCATION_AUDIT.md) records charges, allocator sources, capacities and recursion. [Gate A evidence](../../GATE_A_REVIEW.md) records finite measurements and pending checks. Source/provenance approval and native evidence remain Gate A blockers.
+
+## Task 5 observation source
+
+The node.go adapter adds DecodeAccounted around one unchanged decodeBudget call. It retains its local fresh ledger on failure; Decode delegates while preserving nil failure results. Budget.Usage copies cumulative scalar counters without mutation or allocation. These entry changes introduce no scanner, Node construction, resolver, source-range, dependency or licensing change. The table and deterministic patch digest above identify the current adapted files, including the node.go entry change. The project-owned budget.go is outside the upstream patch; its complete SHA-256 is `03ccddb6d86daa47cdf09de9330ec4f54be9648aff7d7d89703764ce61310aa1`.
+
+Renewed independent source/API/provenance review and full native Gate A evidence are pending for this adapter. Prior native approval remains scoped to the exact qualified source candidate named in GATE_A_REVIEW.md. The parser audit records unchanged entry coverage and compiler escape evidence; the complete-loader audit records remaining Gate B proof obligations.

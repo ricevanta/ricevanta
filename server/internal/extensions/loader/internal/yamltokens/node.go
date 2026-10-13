@@ -22,7 +22,20 @@ import (
 
 // Decode preflights unchanged authenticated bytes before one arena construction.
 // A failed call returns neither a partial tree nor a ledger.
-func Decode(payload []byte) (*yaml.Node, *Budget, error) { return decodeBudget(payload, newBudget()) }
+func Decode(payload []byte) (*yaml.Node, *Budget, error) {
+	n, b, err := DecodeAccounted(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	return n, b, nil
+}
+
+// DecodeAccounted retains the fresh same-call ledger, including on failure.
+func DecodeAccounted(payload []byte) (*yaml.Node, *Budget, error) {
+	b := newBudget()
+	n, _, err := decodeBudget(payload, b)
+	return n, b, err
+}
 func decodeBudget(payload []byte, b *Budget) (*yaml.Node, *Budget, error) {
 	s, _, err := prepare(payload, b)
 	if err != nil {
