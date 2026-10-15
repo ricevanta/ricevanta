@@ -12,6 +12,8 @@
 //! `// SAFETY:` comment; nothing raw is public. On other targets the crate
 //! is empty, so the workspace builds everywhere.
 
+pub mod acl;
+
 #[cfg(target_os = "macos")]
 mod platform;
 #[cfg(target_os = "macos")]

@@ -1,7 +1,9 @@
 //! Descriptor-based file protection on macOS (spec section 3.1).
 //!
 //! A path is used only to reach a parent directory, opened with
-//! `O_DIRECTORY | O_NOFOLLOW` and checked on its descriptor. Everything below
+//! `O_DIRECTORY | O_NOFOLLOW` and checked on its descriptor. Every checked
+//! or created object is also checked for an extended ACL: xnu evaluates an
+//! ACL before the mode bits, so only deny entries are accepted. Everything below
 //! a checked directory goes through `openat`, `mkdirat`, `renameat` and
 //! `unlinkat` on that descriptor, never through the directory's path.
 
@@ -59,7 +61,8 @@ impl MacPlatform {
         let _ = mode;
         let facts = facts(file, Object::ConfigFile)?;
         check_config_file(&facts, self.euid)
-            .map_err(|r| ProtectionError::new(Object::ConfigFile, r))
+            .map_err(|r| ProtectionError::new(Object::ConfigFile, r))?;
+        check_acl(file, Object::ConfigFile)
     }
 }
 
@@ -103,6 +106,15 @@ fn open_failure(diagnostic: &Path, error: io::Error, object: Object) -> Protecti
         Reason::io(error)
     };
     ProtectionError::new(object, reason)
+}
+
+/// The extended-ACL part of the rule (spec section 3.1), on the opened
+/// descriptor: a failed call or any entry other than a deny entry is
+/// `insecure_acl`.
+fn check_acl(file: &File, object: Object) -> Result<(), ProtectionError> {
+    let insecure = || ProtectionError::new(object, Reason::InsecureAcl { sid: None });
+    let reply = sys::extended_security(file).map_err(|_| insecure())?;
+    crate::acl::check_extended_security(&reply.0).map_err(|_| insecure())
 }
 
 fn path_form(object: Object) -> ProtectionError {
@@ -167,6 +179,7 @@ impl MacPlatform {
         let dir = open_dir(&path).map_err(|e| open_failure(&path, e, object))?;
         check_parent(&facts(&dir, object)?, group_write_allowed, mode, self.euid)
             .map_err(|r| ProtectionError::new(object, r))?;
+        check_acl(&dir, object)?;
         Ok(CheckedDir::new(dir, object, path))
     }
 }
@@ -198,6 +211,7 @@ impl Platform for MacPlatform {
         };
         check_config_parent(&facts(&parent_dir, Object::ConfigParent)?, mode, self.euid)
             .map_err(|r| ProtectionError::new(Object::ConfigParent, r))?;
+        check_acl(&parent_dir, Object::ConfigParent)?;
         let file = match sys::openat(&parent_dir, &c, libc::O_RDONLY | FILE_FLAGS, 0) {
             Ok(file) => file,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -258,6 +272,7 @@ impl Platform for MacPlatform {
             }
         }
         check_dir(&facts(&dir, object)?, kind, mode, self.euid).map_err(fail)?;
+        check_acl(&dir, object)?;
         Ok(CheckedDir::new(dir, object, diagnostic))
     }
 
@@ -283,6 +298,10 @@ impl Platform for MacPlatform {
         .map_err(|e| open_failure(&dir.path().join(name), e, object))?;
         check_created_file(&facts(&file, object)?, self.euid)
             .map_err(|r| ProtectionError::new(object, r))?;
+        // A new file inherits its parent's inheritable entries; the parent
+        // was checked to carry none but deny entries, so this recheck
+        // proves the file did not gain an allow entry either.
+        check_acl(&file, object)?;
         set_mode(&file, kind.unix_mode(), object)?;
         if kind == FileKind::HealthDocument {
             file.set_len(0)

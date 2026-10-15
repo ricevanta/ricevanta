@@ -536,10 +536,13 @@ pub trait Platform: Send + Sync {
     /// The OS whose rules this platform applies.
     fn os(&self) -> Os;
 
-    /// The data root to create or verify before the other directories:
-    /// macOS `/Library/Application Support/Ricevanta`, Windows
-    /// `<ProgramData>\Ricevanta`; `None` on Linux, where systemd creates the
-    /// directories.
+    /// The data root to create or verify as an object of its own before the
+    /// other directories: macOS `/Library/Application Support/Ricevanta`.
+    /// `None` on Linux, where systemd creates the directories, and on
+    /// Windows, where the installer creates `<ProgramData>\Ricevanta` and
+    /// it is checked only as the parent of `agent.json` and the three
+    /// directories, so `<ProgramData>` itself is never checked (spec
+    /// section 3.1).
     fn data_root(&self) -> Result<Option<PathBuf>, ProtectionError>;
 
     /// The `FOLDERID_ProgramData` known folder on Windows, `None` elsewhere.

@@ -54,8 +54,13 @@ struct Tree(PathBuf);
 
 impl Tree {
     fn new() -> Tree {
+        Tree::new_in(&std::env::temp_dir())
+    }
+
+    /// A prepared data root inside `outer`.
+    fn new_in(outer: &Path) -> Tree {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("rv-os-windows-{}-{n}", std::process::id()));
+        let root = outer.join(format!("rv-os-windows-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir(&root).unwrap();
         icacls(
@@ -430,6 +435,58 @@ fn service_mode_never_creates_a_missing_directory() {
 }
 
 #[test]
+fn program_data_like_parent_is_never_checked() {
+    // An outer directory with the default `<ProgramData>` grant that lets
+    // Users create folders: the rule would refuse it. A data root inside it,
+    // prepared like the installer's, must still start, because the default
+    // sequence checks the data root only as a parent and never its parent.
+    let p = platform();
+    let outer = std::env::temp_dir().join(format!(
+        "rv-os-windows-outer-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = fs::remove_dir_all(&outer);
+    fs::create_dir(&outer).unwrap();
+    // Only SYSTEM, Administrators and the Users create grant, owned by
+    // Administrators, so the Users entry is the one thing the rule refuses.
+    icacls(
+        &outer,
+        &[
+            "/inheritance:r",
+            "/grant",
+            "*S-1-5-18:(OI)(CI)F",
+            "/grant",
+            "*S-1-5-32-544:(OI)(CI)F",
+            "/grant",
+            "*S-1-5-32-545:(CI)(WD,AD,WEA,WA)",
+        ],
+    );
+    icacls(&outer, &["/setowner", "*S-1-5-32-544"]);
+    let tree = Tree::new_in(&outer);
+    // The default service sequence: agent.json, then each directory.
+    p.open_config(&tree.join("agent.json"), Mode::Service)
+        .unwrap()
+        .unwrap();
+    for (name, kind) in [
+        ("state", DirKind::State),
+        ("run", DirKind::Runtime),
+        ("logs", DirKind::Log),
+    ] {
+        checked(&p, &tree.join(name), kind).unwrap();
+    }
+    assert_eq!(p.data_root(), Ok(None));
+    // The outer directory really fails the rule when it is the one checked.
+    let got = reason(
+        checked(&p, &outer.join("state"), DirKind::State),
+        Object::StateParent,
+    );
+    assert_eq!(got, insecure(USERS));
+    drop(tree);
+    let _ = fs::remove_dir_all(&outer);
+}
+
+#[test]
 fn platform_constants() {
     let p = platform();
     assert_eq!(p.os(), ricevanta_os::Os::Windows);
@@ -439,10 +496,8 @@ fn platform_constants() {
     );
     let program_data = p.program_data().unwrap().unwrap();
     assert!(program_data.is_absolute());
-    assert_eq!(
-        p.data_root().unwrap().unwrap(),
-        program_data.join("Ricevanta")
-    );
+    // The data root is never a separately checked object on Windows.
+    assert_eq!(p.data_root(), Ok(None));
     let paths = p.default_paths().unwrap().unwrap();
     assert_eq!(
         paths.state_dir,

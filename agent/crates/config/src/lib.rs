@@ -768,10 +768,12 @@ pub fn is_normal_form(os: Os, text: &str) -> bool {
 /// On Windows, following Microsoft's naming rules: none of `<`, `>`, `:`,
 /// `"`, `/`, `\`, `|`, `?`, `*` or characters 0 to 31, not ending in a
 /// period or space (which Win32 normalisation would strip, so the name
-/// opened would differ from the name checked), and not a reserved device
-/// name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`,
-/// `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³`), in any case, alone or
-/// followed by an extension.
+/// opened would differ from the name checked), and not a device name: the
+/// text before the first period, trailing spaces removed and compared
+/// case-insensitively, is none of `CON`, `PRN`, `AUX`, `NUL`, `COM1` to
+/// `COM9`, `LPT1` to `LPT9`, `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³`,
+/// `CONIN$` or `CONOUT$`, so `CON.txt`, `CON .txt` and `conout$.log` are
+/// refused.
 pub fn is_plain_name(os: Os, name: &str) -> bool {
     match os {
         Os::Linux | Os::MacOs => unix_segment(name),
@@ -806,13 +808,23 @@ fn windows_segment(name: &str) -> bool {
     {
         return false;
     }
-    let base = name.split('.').next().unwrap_or_default();
+    // The text before the first period, trailing spaces removed: Win32
+    // device-name detection ignores both, so `CON.txt` and `CON .txt` name
+    // the console device.
+    let base = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ');
     !is_reserved_device(base)
 }
 
 fn is_reserved_device(base: &str) -> bool {
     let upper = base.to_ascii_uppercase();
-    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
         return true;
     }
     match (upper.get(..3), upper.get(3..)) {

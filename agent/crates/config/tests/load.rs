@@ -508,6 +508,9 @@ fn normal_form_paths() {
         r"C:\a b\c.d",
         r"C:\COM10\CONSOLE\nul0\LPT0\x.CON",
         r"C:\CON x",
+        r"C:\CONIN",
+        r"C:\CONOUT$x",
+        r"C:\x\CON$",
     ];
     let windows_bad = [
         r"C:\",
@@ -543,6 +546,12 @@ fn normal_form_paths() {
         "C:\\x\\COM\u{b9}",
         "C:\\x\\lpt\u{b3}.log",
         r"C:\x\NUL.",
+        r"C:\x\CON .txt",
+        r"C:\x\COM1 .log",
+        r"C:\x\com1  .log",
+        r"C:\x\CONIN$",
+        r"C:\x\conout$.log",
+        r"C:\x\Conin$ .x",
         "/a",
     ];
     for good in windows_good {
@@ -564,7 +573,18 @@ fn normal_form_paths() {
         assert!(!is_plain_name(Os::Linux, name), "{name:?}");
         assert!(!is_plain_name(Os::Windows, name), "{name:?}");
     }
-    for name in ["logs.", "...", "x ", "a\\b", "CON", "com2.log", "a:b"] {
+    for name in [
+        "logs.",
+        "...",
+        "x ",
+        "a\\b",
+        "CON",
+        "com2.log",
+        "a:b",
+        "CON .txt",
+        "conin$",
+        "CONOUT$.log",
+    ] {
         assert!(!is_plain_name(Os::Windows, name), "{name:?}");
     }
     assert!(is_plain_name(Os::Linux, "logs."));

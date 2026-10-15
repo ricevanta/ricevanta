@@ -41,7 +41,17 @@ fn expected_violation(id: &str, error: &Error) -> bool {
         "dot-segment" | "windows-reserved-name-with-extension" => {
             matches!(error, Error::InvalidValue { pointer } if pointer == "/paths/runtime_dir")
         }
-        "dotdot-segment" | "windows-unc-path" | "windows-reserved-device-name" => {
+        "windows-com-port-space-before-extension" => {
+            matches!(error, Error::InvalidValue { pointer } if pointer == "/paths/state_dir")
+        }
+        "windows-console-input-device" => {
+            matches!(error, Error::InvalidValue { pointer } if pointer == "/paths/runtime_dir")
+        }
+        "dotdot-segment"
+        | "windows-unc-path"
+        | "windows-reserved-device-name"
+        | "windows-device-name-space-before-extension"
+        | "windows-console-output-device" => {
             matches!(error, Error::InvalidValue { pointer } if pointer == "/paths/log_dir")
         }
         // The strict reader rejects a fraction before any member is typed.
@@ -58,7 +68,7 @@ fn schema_cases_agree() {
     let root = oracle::parse(CASES);
     assert_eq!(root.get("schema").str(), "config.schema.json");
     let cases = root.get("cases").items();
-    assert_eq!(cases.len(), 20, "a new case needs an expected verdict here");
+    assert_eq!(cases.len(), 24, "a new case needs an expected verdict here");
     for case in cases {
         let id = case.get("id").str();
         let instance = case.get("instance").raw(CASES);

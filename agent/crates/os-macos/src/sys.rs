@@ -188,3 +188,39 @@ pub(crate) fn timebase() -> io::Result<(u32, u32)> {
     }
     Ok((info.numer, info.denom))
 }
+
+/// The `fgetattrlist` reply buffer, aligned for the `u_int32_t` and
+/// `attrreference_t` fields at its start.
+#[repr(C, align(8))]
+pub(crate) struct AttrBuffer(pub(crate) [u8; crate::acl::ATTR_BUFFER_BYTES]);
+
+#[expect(
+    unsafe_code,
+    reason = "fgetattrlist: the descriptor is borrowed open for the call; the attrlist and the reply buffer are stack values whose exact size is passed"
+)]
+pub(crate) fn extended_security(file: &File) -> io::Result<AttrBuffer> {
+    let mut request = libc::attrlist {
+        bitmapcount: libc::ATTR_BIT_MAP_COUNT,
+        reserved: 0,
+        commonattr: libc::ATTR_CMN_EXTENDED_SECURITY,
+        volattr: 0,
+        dirattr: 0,
+        fileattr: 0,
+        forkattr: 0,
+    };
+    let mut reply = AttrBuffer([0; crate::acl::ATTR_BUFFER_BYTES]);
+    // SAFETY: the descriptor stays open while `file` is borrowed; `request`
+    // is a valid attrlist and `reply` a writable buffer of exactly the size
+    // passed; options 0 request no following and no extra attributes.
+    let code = unsafe {
+        libc::fgetattrlist(
+            file.as_raw_fd(),
+            (&raw mut request).cast(),
+            (&raw mut reply.0).cast(),
+            reply.0.len(),
+            0,
+        )
+    };
+    result(code)?;
+    Ok(reply)
+}

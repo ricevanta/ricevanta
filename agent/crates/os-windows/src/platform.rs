@@ -1,7 +1,9 @@
 //! File protection on Windows (spec section 3.1).
 //!
-//! In `service` mode every object (`agent.json`, the data root, the
-//! directories and their parents) is opened with `FILE_FLAG_OPEN_REPARSE_POINT`
+//! In `service` mode every checked object (`agent.json`, its parent, the
+//! state, runtime and log directories and each directory's parent; in the
+//! default layout the data root is that parent, and `<ProgramData>` is never
+//! checked) is opened with `FILE_FLAG_OPEN_REPARSE_POINT`
 //! (and `FILE_FLAG_BACKUP_SEMANTICS` for directories) and
 //! `READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_READ_DATA`, refused when it is
 //! a reparse point, and judged by its owner and DACL read with
@@ -112,7 +114,10 @@ impl Platform for WindowsPlatform {
     }
 
     fn data_root(&self) -> Result<Option<PathBuf>, ProtectionError> {
-        Ok(Some(self.program_data.join("Ricevanta")))
+        // Checked only as the parent of `agent.json` and the directories;
+        // a separate check would open `<ProgramData>` as its parent, whose
+        // default DACL lets Users create folders (spec section 3.1).
+        Ok(None)
     }
 
     fn program_data(&self) -> Result<Option<PathBuf>, ProtectionError> {
