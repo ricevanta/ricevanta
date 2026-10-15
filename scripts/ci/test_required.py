@@ -67,6 +67,10 @@ class RequiredTests(unittest.TestCase):
         required.verify(self.route, self.needs, rows)
         new_units = ['loader-gate-b:' + h for h in ('linux-x64', 'windows-x64', 'macos-arm64')]
         new_units += ['server-fuzz:./internal/extensions/loader:' + t for t in ('FuzzLoad', 'FuzzVerifiedYAML', 'FuzzTar')]
+        new_units += ['server-fuzz:./internal/extensions/admission:' + t for t in ('FuzzDecide', 'FuzzParse')]
+        new_units += ['server-fuzz:./internal/platform/config:FuzzLoad',
+                      'server-fuzz:./internal/transport/console:FuzzPath',
+                      'server-fuzz:./internal/transport/console:FuzzAcceptEncoding']
         for unit in new_units:
             with self.subTest(unit=unit):
                 self.assertIn(unit, self.route['units'])

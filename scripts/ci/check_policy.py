@@ -70,6 +70,8 @@ SELECTED_COMMANDS = {
     'server-race': ("go test -race -list '.*' ./...", 'go test -json -race -count=1 -timeout=15m ./...'),
     'key-admission-bench': ("go test -list '^BenchmarkValidate$' ./internal/signing/ed25519key",
                             "go test -json -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key"),
+    'ingest-cost-model': ("go test -list '^(TestDecodeCostModel)$' ./internal/events/body",
+                          "go test -json -count=1 -timeout=15m ./internal/events/body -run '^(TestDecodeCostModel)$'"),
     'loader-extended': ("go test -list '^(TestParserBudgetExtended)$' ./internal/extensions/loader",
                         "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetExtended)$' -args -loader-budget-extended"),
     'loader-repeat': ("go test -list '^(TestParserBudgetSmoke)$' ./internal/extensions/loader",
@@ -102,12 +104,15 @@ INTEROP_PROOF = {
 # Where and how each selected ID executes; a row may not move its command elsewhere.
 SELECTED_PLACES = {
     'server-unit': ('server', 'go-suite'), 'server-race': ('server', 'go-suite'), 'key-admission-bench': ('server', 'go-bench'),
+    'ingest-cost-model': ('server', 'go-cost-model'),
     'loader-extended': ('server', 'go-selected'), 'loader-repeat': ('server', 'go-selected'), 'loader-fuzz': ('server', 'go-fuzz'),
     'loader-gate-b-extended': ('server', 'go-selected'), 'ocsf-native': ('server', 'go-suite'), 'agent-unit': ('agent', 'rust-suite'),
     'spool-extended': ('agent', 'rust-selected'), 'batch-extended': ('agent', 'rust-selected'),
     'interop-unit': ('server', 'go-interop'), 'interop-race': ('server', 'go-interop'),
 }
 SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
+                    'ingest-cost-model': {'cases': 34, 'benchmark': 'BenchmarkDecodeCost', 'operations': 3,
+                                          'benchmark_flags': ['-benchmem', '-benchtime=3x', '-timeout=15m']},
                     'loader-extended': {'marker': 'PARSER_MEASUREMENT'}, 'loader-gate-b-extended': {'marker': 'LOADER_MEASUREMENT'},
                     'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
                     'batch-extended': {'seed': '0x5249564241544348', 'cases': 20000},
@@ -120,6 +125,8 @@ LOADER = 'github.com/ricevanta/ricevanta/server/internal/extensions/loader'
 YAMLTOKENS = LOADER + '/internal/yamltokens'
 GO_SKIP_MODES = ['server-unit', 'server-race', 'go-fuzz']
 SKIP_ALLOWANCES = [
+    {'package': 'github.com/ricevanta/ricevanta/server/internal/events/body', 'test': 'TestDecodeCostModel',
+     'reason': 'full ingest cost model runs separately without race instrumentation', 'proof': 'ingest-cost-model', 'modes': GO_SKIP_MODES},
     {'package': LOADER, 'test': 'TestParserBudgetExtended', 'reason': 'native extended parser corpus',
      'proof': 'loader-extended', 'modes': GO_SKIP_MODES},
     {'package': LOADER, 'test': 'TestLoaderBudgetExtended', 'reason': 'native extended complete-loader corpus',
@@ -239,7 +246,8 @@ def selected_errors(root):
             if target.get(key) != value: errors.append('scripts/ci/targets.toml: selected budget mismatch: ' + target_id)
     for package, name in inventory.FUZZ_PAIRS:
         target = targets.get(f'go-fuzz:{package}:{name}')
-        if target is None or (target['cwd'], target['mode']) != ('server', 'go-fuzz') or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2":
+        minimize = ' -fuzzminimizetime=3s' if package == './internal/extensions/admission' else ''
+        if target is None or (target['cwd'], target['mode']) != ('server', 'go-fuzz') or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2{minimize}":
             errors.append(f'scripts/ci/targets.toml: fuzz command mismatch: {package} {name}')
     for row in targets.values():
         for allowance in row['skips'].values():
@@ -251,7 +259,7 @@ def selected_errors(root):
 
 
 COMMANDS = {
-    ('server', 'validate'): ('gofmt -l .', wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench')),
+    ('server', 'validate'): ('gofmt -l .', wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench'), wrapper('ingest-cost-model')),
     ('server', 'race'): (wrapper('server-race'),),
     ('server', 'fuzz'): (FUZZ_WRAPPER,),
     ('server', 'loader-gate-a'): (wrapper('loader-extended'), wrapper('loader-repeat'), wrapper('loader-fuzz')),
@@ -877,7 +885,7 @@ def fuzz_evidence_errors(job, root, native_parser=False):
     if selected != [expected]: errors.append('exact unconditional fuzz command required')
     corpus = {'name': 'Upload failing corpus', 'if': 'failure()', 'uses': UPLOAD,
               'with': {'name': 'loader-gate-a-${{ matrix.os }}' if native_parser else 'go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}',
-                       'path': 'server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**' if native_parser else 'server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**',
+                       'path': 'server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**' if native_parser else '${{ matrix.corpus }}',
                        'if-no-files-found': 'ignore', 'retention-days': '30'}}
     if sum(step == corpus for step in job.get('steps', [])) != 1:
         errors.append('exact failure corpus upload required')

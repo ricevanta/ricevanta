@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import inventory
 import run_selected
@@ -77,7 +78,7 @@ class InventoryTests(unittest.TestCase):
         self.assertTrue(fixed <= set(TARGETS), fixed - set(TARGETS))
         fuzz = {t for t in TARGETS if t.startswith('go-fuzz:')}
         self.assertEqual(fuzz, {f'go-fuzz:{p}:{n}' for p, n in inventory.FUZZ_PAIRS})
-        self.assertEqual(len(fuzz), 23)
+        self.assertEqual(len(fuzz), 28)
         for unit in inventory.units(sorted(inventory.GROUPS)):
             for check in inventory.checks(unit):
                 if check.startswith('go-fuzz:'):
@@ -110,7 +111,8 @@ class InventoryTests(unittest.TestCase):
         for target_id, target in TARGETS.items():
             if target_id.startswith('go-fuzz:'):
                 package, name = target_id.split(':')[1:]
-                self.assertEqual(join(run_selected.run_command(target)), f'go test -json -count=1 {package} -fuzz=^{name}$ -fuzztime=60s -parallel=2')
+                minimize = ' -fuzzminimizetime=3s' if package == './internal/extensions/admission' else ''
+                self.assertEqual(join(run_selected.run_command(target)), f'go test -json -count=1 {package} -fuzz=^{name}$ -fuzztime=60s -parallel=2{minimize}')
                 self.assertEqual(join(run_selected.discovery_command(target)), f'go test -list ^{name}$ {package}')
         self.assertEqual(join(run_selected.run_command(TARGETS['spool-extended'])),
                          'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --nocapture --test-threads=1')
@@ -129,7 +131,7 @@ class InventoryTests(unittest.TestCase):
         for target_id in ('server-unit', 'server-race', 'ocsf-native'):
             pairs = TARGETS[target_id]['fuzz_inventory']
             self.assertEqual(set(map(tuple, pairs)), inventory.FUZZ_PAIRS | {('./internal/extensions/loader', 'FuzzParserQualification')})
-            self.assertEqual(len(pairs), 24)
+            self.assertEqual(len(pairs), 29)
         for target_id in ('interop-unit', 'loader-extended', 'key-admission-bench'):
             self.assertNotIn('fuzz_inventory', TARGETS[target_id])
 
@@ -138,7 +140,7 @@ class InventoryTests(unittest.TestCase):
             skips = TARGETS[target_id]['skips']
             self.assertEqual({t for _, t in skips}, {'TestParserBudgetExtended', 'TestLoaderBudgetExtended', 'TestLoaderMeasurementChild',
                                                     'TestDecodeVerifiedYAMLInstrumented', 'TestAgreementOutcomeChild',
-                                                    'TestParserBudgetHarness', 'TestParserMeasurementChild'})
+                                                    'TestParserBudgetHarness', 'TestParserMeasurementChild', 'TestDecodeCostModel'})
             parents = {}
             for (package, test), row in skips.items():
                 self.assertTrue(row['reason'], row)
@@ -432,6 +434,90 @@ class GoFuzzTests(unittest.TestCase):
             self.assertEqual(run_selected.go_seconds(text), seconds, text)
         for text in ('', 'soon', '60', 'm'):
             with self.subTest(text=text), self.assertRaises(EvidenceError): run_selected.go_seconds(text)
+
+    def test_body_cost_model_skip_has_a_separate_required_proof(self):
+        package = 'github.com/ricevanta/ricevanta/server/internal/events/body'
+        target = TARGETS['go-fuzz:./internal/events/body:FuzzDecode']
+        allowance = run_selected.check_skip(target, {}, package, 'TestDecodeCostModel')
+        self.assertEqual(allowance['proof'], 'ingest-cost-model')
+        self.assertIn('ingest-cost-model', inventory.checks('server-validate'))
+        with self.assertRaises(EvidenceError):
+            run_selected.check_skip(target, {}, package, 'TestOtherCostModel')
+
+
+class GoCostModelTests(unittest.TestCase):
+    def setUp(self):
+        self.package = 'github.com/ricevanta/ricevanta/server/internal/events/body'
+        self.target = {'mode': 'go-cost-model', 'tests': ['TestDecodeCostModel'], 'cases': 34}
+        self.listing = 'TestDecodeCostModel\nok  \t' + self.package + '\t0.002s\n'
+        self.events = event('run', self.package, 'TestDecodeCostModel')
+        for n in range(34):
+            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_MEASUREMENT case=case{n}\n')
+        self.events += event('output', self.package, 'TestDecodeCostModel', 'COST_MODEL_CASES n=34\n')
+        self.events += event('pass', self.package, 'TestDecodeCostModel') + event('pass', self.package)
+
+    def test_complete_measurements_and_negative_controls(self):
+        summary = run_selected.verify(self.target, self.listing, self.events, b'', 0, None)
+        self.assertEqual(summary['measurements'], 34)
+        for name, data, status in (
+            ('missing measurement', drop_lines(self.events, 'case=case0'), 0),
+            ('extra measurement', duplicate_line(self.events, 'case=case0'), 0),
+            ('missing total', drop_lines(self.events, 'COST_MODEL_CASES'), 0),
+            ('wrong total', self.events.replace(b'n=34', b'n=33'), 0),
+            ('duplicate total', duplicate_line(self.events, 'COST_MODEL_CASES'), 0),
+            ('wrong attribution', self.events.replace(b'"Test": "TestDecodeCostModel", "Output"', b'"Test": "TestOther", "Output"'), 0),
+            ('skipped proof', self.events.replace(b'"Action": "pass", "Package": "' + self.package.encode() + b'", "Test"', b'"Action": "skip", "Package": "' + self.package.encode() + b'", "Test"'), 0),
+            ('failed process', self.events, 1),
+        ):
+            with self.subTest(name=name), self.assertRaises(EvidenceError):
+                run_selected.verify(self.target, self.listing, data, b'', status, None)
+
+    def test_catalogue_sets_full_model_and_pinned_budgets(self):
+        target = TARGETS['ingest-cost-model']
+        command = run_selected.run_command(target)
+        self.assertIn('-timeout=15m', command)
+        self.assertEqual(run_selected.child_environment(target, {})['RICEVANTA_COST_MODEL'], 'full')
+        self.assertEqual(run_selected.child_environment(target, {})['GOGC'], '100')
+        bench = run_selected.cost_model_benchmark(target)
+        self.assertEqual(bench['operations'], 3)
+        self.assertIn('-benchtime=3x', run_selected.run_command(bench))
+        self.assertIn('-timeout=15m', run_selected.run_command(bench))
+
+    def test_run_retains_both_phases_and_requires_benchmark_success(self):
+        bench = 'BenchmarkDecodeCost'
+        output = event('run', self.package, bench)
+        output += event('output', self.package, bench, bench + '-2 3 10 ns/op 4 B/op 1 allocs/op\n')
+        output += event('pass', self.package)
+        for benchmark_exit in (0, 1):
+            with self.subTest(benchmark_exit=benchmark_exit), tempfile.TemporaryDirectory() as temp:
+                calls = []
+                def execute(command, cwd, env, stdout, stderr):
+                    calls.append(command)
+                    self.assertEqual(env['RICEVANTA_COST_MODEL'], 'full')
+                    self.assertEqual(env['GOGC'], '100')
+                    is_bench = any(bench in arg for arg in command)
+                    if '-list' in command:
+                        data = ((bench if is_bench else 'TestDecodeCostModel') + '\nok  \t' + self.package + '\t0.002s\n').encode()
+                    else:
+                        data = output if is_bench else self.events
+                    stdout.write_bytes(data)
+                    stderr.write_bytes(b'benchmark diagnostic\n' if is_bench and '-list' not in command else b'')
+                    return benchmark_exit if is_bench and '-list' not in command else 0
+                evidence = Path(temp) / 'evidence'
+                with patch.object(run_selected, 'execute', side_effect=execute):
+                    if benchmark_exit:
+                        with self.assertRaises(EvidenceError):
+                            run_selected.run('ingest-cost-model', evidence, env={'RUNNER_TEMP': temp})
+                    else:
+                        record = run_selected.run('ingest-cost-model', evidence, env={'RUNNER_TEMP': temp})
+                        self.assertEqual(record['summary']['benchmark']['operations'], 3)
+                self.assertEqual(len(calls), 4)
+                log = (Path(temp) / 'ingest-measurements/cost-model.log').read_text()
+                self.assertEqual(log.count('COST_MEASUREMENT '), 34)
+                self.assertIn(bench + '-2 3 10 ns/op', log)
+                self.assertIn('benchmark diagnostic', log)
+                verified = evidence / run_selected.evidence_name('ingest-cost-model') / 'verified.json'
+                self.assertEqual(verified.exists(), benchmark_exit == 0)
 
 
 class GoBenchTests(unittest.TestCase):
