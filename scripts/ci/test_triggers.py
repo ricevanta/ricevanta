@@ -215,8 +215,11 @@ class TriggerTests(unittest.TestCase):
                         "-benchmem -benchtime=100x ./internal/signing/ed25519key"):
             self.assertIn(command, validate_runs)
         self.assertTrue(any("gofmt -l ." in run for run in validate_runs))
-        self.assertTrue(any(step.get("uses", "").startswith("actions/setup-go@")
-                            for step in race["steps"]))
+        self.assertTrue(any("scripts/ci/bootstrap.py" in step.get("run", "")
+                            and "go" in step.get("env", {}).get("CI_TOOLS", "").split(",")
+                            for step in race["steps"]), "race installs Go through the admitted bootstrap")
+        self.assertFalse(any(step.get("uses", "").startswith("actions/setup-")
+                             for step in race["steps"]), "setup actions download unchecked payloads")
 
     def test_workflows_keep_read_only_tokens_and_pinned_checkouts(self):
         for name in WORKFLOWS + REUSABLES:

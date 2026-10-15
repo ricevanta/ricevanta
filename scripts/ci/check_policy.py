@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import json
 import yaml
+import bootstrap
 import inventory
 import python_env
 from required import NEEDS, CALLERS
@@ -73,17 +74,34 @@ COMMANDS = {
         "go test -v -race -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1"),
     ('console', 'validate'): ('pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm lint',
         'pnpm format:check', 'pnpm audit:deps', 'pnpm test:unit', 'pnpm test:component',
-        'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz',
-        'pnpm exec playwright install --with-deps chromium firefox webkit'),
+        'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz'),
     ('ci', 'ci-contracts'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
         'python -B scripts/ci/check_policy.py --root .'),
     ('bootstrap', 'validate'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
-        'schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'),
+        'schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json', 'scripts/ci/toolchains.lock.json'),
 }
 
 
-SETUP_PYTHON = 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
-PYTHON_SETUP = {'python-version-file': python_env.PYTHON_VERSION_FILE}
+CACHE = 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+# Every toolchain comes from the reviewed lock through one exact bootstrap step; setup actions and
+# ad hoc installers fetch unchecked payloads and are forbidden everywhere.
+BOOTSTRAP_COMMAND = ('python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
+                     '--tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"')
+EVIDENCE_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
+                    '--tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"')
+CONTROLS_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
+                    '--tools "$CI_TOOLS" --work "$RUNNER_TEMP/bootstrap-controls"')
+PLATFORM_EXPRESSION = '${{ fromJSON(\'{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}\')[matrix.os] }}'
+ALLOWED_ACTIONS = (CHECKOUT, UPLOAD, DOWNLOAD, CACHE)
+UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b|\bapt(?:-get)?\s+install\b|\bbrew\s+install\b|\bchoco\b|'
+                                r'\bwinget\b|\bcurl\b|\bwget\b|Invoke-WebRequest|\biwr\b|\bnpm\s+(?:i|install|exec)\b|\bnpx\b|'
+                                r'\bgo\s+(?:install|get)\b|\bcargo\s+install\b|\bpip\s+download\b')
+TOOL_CONSUMERS = (('python', re.compile(r'\bpython3?\b')), ('go', re.compile(r'\bgo(?:fmt)?\s')),
+                  ('rust', re.compile(r'\bcargo\b|\brustc\b|\brustfmt\b')), ('node', re.compile(r'\bnode\b|\bpnpm\b')),
+                  ('pnpm', re.compile(r'\bpnpm\b')), ('playwright', re.compile(r'pnpm test:(?:component|csp)|\bplaywright\b')))
+BOOTSTRAP_NAME = 'Bootstrap admitted toolchains'
+EVIDENCE_NAME = 'Verify admitted toolchain evidence'
+CONTROLS_NAME = 'Reject corrupted payloads before any extraction or execution'
 # Any other installer or environment manager would bypass the hash-locked closure.
 AD_HOC_PYTHON = re.compile(r'\bpip3?\s+(?:install|download|wheel)\b|\bpython[0-9.]*\s+-m\s+(?:venv|ensurepip)\b|'
                            r'\bvirtualenv\b|\buv\s+(?:pip|venv|sync|tool)\b|\bpipx\b|\bconda\b|\bpoetry\b')
@@ -112,7 +130,7 @@ def scanner_job(unit):
     steps = [
         {'uses': CHECKOUT, 'with': {'persist-credentials': 'false', 'fetch-depth': '0',
                                   'ref': '${{ fromJSON(needs.route.outputs.route).testedSha }}'}},
-        {'uses': SETUP_PYTHON, 'with': dict(PYTHON_SETUP)},
+        *bootstrap_steps('linux-x64', 'python'),
         {'id': 'preflight', 'shell': 'bash', 'working-directory': '.', 'env': ROUTE_ENV,
          'run': PREPARE_ROUTE + scanner_command(unit, 'preflight') + '\n'},
     ]
@@ -140,6 +158,87 @@ def scanner_job(unit):
         'retention-days': '30', 'if-no-files-found': 'error'}})
     return {'needs': ['route'], 'runs-on': 'ubuntu-24.04',
             'timeout-minutes': '20' if unit == 'semgrep' else '15', 'steps': steps}
+
+
+def bootstrap_steps(platform, tools):
+    env = {'CI_PLATFORM': platform, 'CI_TOOLS': tools}
+    return [{'name': BOOTSTRAP_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': BOOTSTRAP_COMMAND},
+            {'name': EVIDENCE_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': EVIDENCE_COMMAND}]
+
+
+def consumer_tools(steps):
+    text = '\n'.join(s.get('run', '') for s in steps)
+    return {tool for tool, pattern in TOOL_CONSUMERS if pattern.search(text)}
+
+
+def resolve_tools(value, job):
+    """A literal comma list, or `${{ matrix.tools }}` over literal include rows (tools common to every row)."""
+    if value == '${{ matrix.tools }}':
+        matrix = job.get('strategy', {}).get('matrix', {})
+        rows = matrix.get('include', []) if isinstance(matrix, dict) else []
+        values = [row.get('tools') for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        if not values or len(values) != len(rows): return None
+        common = None
+        for row_value in values:
+            tools = resolve_tools(row_value, job)
+            if tools is None: return None
+            common = tools if common is None else common & tools
+        return common
+    if not isinstance(value, str) or '${{' in value: return None
+    try:
+        bootstrap.expand_tools(value)
+    except bootstrap.BootstrapError:
+        return None
+    return set(value.split(','))
+
+
+def bootstrap_errors(data, name):
+    """One exact admitted bootstrap per job, first after checkout, covering every tool the job runs; no unchecked fetch."""
+    errors = []
+    for jid, job in data.get('jobs', {}).items():
+        if 'uses' in job: continue
+        steps = job.get('steps', [])
+        def fail(message): errors.append(f'{jid}: {message}')
+        for step in steps:
+            action = step.get('uses', '')
+            if action and not action.startswith('./') and action not in ALLOWED_ACTIONS: fail('unchecked setup action: ' + action)
+            if UNCHECKED_DOWNLOAD.search(step.get('run', '')): fail('unchecked download or install command')
+        for scope in (data, job):
+            env = scope.get('env', {})
+            if isinstance(env, dict) and {'CI_PLATFORM', 'CI_TOOLS'} & set(env): fail('bootstrap inputs must be literal step env')
+        bootstraps = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
+        if any('scripts/ci/bootstrap.py' in s.get('run', '') for i, s in enumerate(steps) if i not in bootstraps):
+            fail('missing exact bootstrap command')
+        helpers = {BOOTSTRAP_COMMAND, EVIDENCE_COMMAND, CONTROLS_COMMAND}
+        consumers = [s for s in steps if s.get('run') not in helpers]
+        required = consumer_tools(consumers)
+        if not bootstraps and not required: continue
+        if len(bootstraps) != 1:
+            fail('exactly one admitted bootstrap step required'); continue
+        index = bootstraps[0]
+        step = steps[index]
+        env = step.get('env', {})
+        if (set(step) != {'name', 'shell', 'working-directory', 'env', 'run'} or step.get('name') != BOOTSTRAP_NAME or step.get('shell') != 'bash'
+                or step.get('working-directory') != '.' or not isinstance(env, dict) or set(env) != {'CI_PLATFORM', 'CI_TOOLS'}):
+            fail('bootstrap step must be unconditional at root with bash and literal CI_PLATFORM and CI_TOOLS'); continue
+        runner = job.get('runs-on', '')
+        expected_platform = PLATFORM_EXPRESSION if '${{' in str(runner) else inventory.HOSTS.get(runner)
+        if env['CI_PLATFORM'] != expected_platform: fail('CI_PLATFORM must come from the fixed runner matrix')
+        selected = resolve_tools(env['CI_TOOLS'], job)
+        if selected is None:
+            fail('CI_TOOLS must be a literal tool list from the workflow'); selected = set()
+        expanded = set(bootstrap.expand_tools(','.join(sorted(selected)))) if selected else set()
+        for tool in sorted(required):
+            if {'rust': 'rustc', 'playwright': 'chromium'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
+        if not (index + 1 < len(steps) and steps[index + 1] == {**step, 'name': EVIDENCE_NAME, 'run': EVIDENCE_COMMAND}):
+            fail('admitted toolchain evidence step must follow the bootstrap step')
+        controls = {**step, 'name': CONTROLS_NAME, 'run': CONTROLS_COMMAND}
+        for s in steps[:index]:
+            if s.get('uses', '').startswith('actions/checkout@') or (name == 'bootstrap' and s == controls): continue
+            fail('bootstrap must precede every step except checkout')
+        if name == 'bootstrap' and sum(s == controls for s in steps) != 1:
+            fail('exact corruption controls must precede the cold install')
+    return errors
 
 
 def secret_errors(data, name):
@@ -259,10 +358,7 @@ def python_errors(data):
     for jid, job in data.get('jobs', {}).items():
         steps = job.get('steps', [])
         def fail(message): errors.append(f'{jid}: {message}')
-        setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-python@')]
-        for i in setups:
-            if steps[i].get('uses') != SETUP_PYTHON or steps[i].get('with') != PYTHON_SETUP:
-                fail('Python setup must read .github/python-version through the pinned action without caches')
+        setups = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
         venvs = [i for i, s in enumerate(steps) if s.get('run') == python_env.VENV_COMMAND]
         installs = [i for i, s in enumerate(steps) if s.get('run') == python_env.INSTALL_COMMAND]
         for i, step in enumerate(steps):
@@ -273,7 +369,7 @@ def python_errors(data):
         consumers = [i for i, s in enumerate(steps) if any(c in s.get('run', '') for c in CLOSURE_CONSUMERS)]
         if venvs or installs or consumers:
             if len(venvs) != 1 or len(installs) != 1 or not setups or not setups[0] < venvs[0] < installs[0]:
-                fail('closure consumer requires pinned Python setup, one fresh venv and one hash-locked install in order')
+                fail('closure consumer requires the admitted bootstrap, one fresh venv and one hash-locked install in order')
             elif any(i < installs[0] for i in consumers):
                 fail('validator runs before the hash-locked closure is admitted')
             for i in venvs + installs:
@@ -378,6 +474,7 @@ def check(root: Path) -> list[str]:
             fail(name, 'malformed workflow'); continue
         for error in cache_errors(data): fail(name, error)
         for error in python_errors(data): fail(name, error)
+        for error in bootstrap_errors(data, name): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
         for error in secret_errors(data, name): fail(name, error)
@@ -412,6 +509,7 @@ def check(root: Path) -> list[str]:
     except (OSError, ValueError, KeyError, TypeError):
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
     errors += python_env.lock_errors(root)
+    errors += bootstrap.lock_errors(root)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}
     for name in required_names - set(workflows): fail(name, 'missing required workflow')
     if not required_names <= set(workflows): return errors
@@ -508,7 +606,7 @@ def check(root: Path) -> list[str]:
         matches = [s for s in design_steps if command in s.get('run', '') and '--check-sources' not in s.get('run', '')]
         if not matches or any('if' in s or 'continue-on-error' in s for s in matches): fail('design', 'missing blocking consumer: ' + command)
     text = '\n'.join(s.get('run', '') for s in design_steps)
-    for path in ('schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'):
+    for path in ('schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json', 'scripts/ci/toolchains.lock.json'):
         if path not in text: fail('design', 'missing CI schema validation: ' + path)
     server = workflows['server']['jobs']
     race = server.get('race', {})
@@ -545,7 +643,7 @@ def check(root: Path) -> list[str]:
     for job in server.values():
         if 'permission-schema-venv' in str(job) or 'schemas/export/v1alpha1/validate.py' in str(job): fail('server', 'duplicate Python validator')
     if 'pnpm test:fuzz' not in str(workflows['console']): fail('console', 'missing bounded properties')
-    # Task 7 adds payload admission; Task 3 admits compiler caches above.
+    # Payload admission is checked per job in bootstrap_errors; Task 3 admits compiler caches above.
     for name, data in workflows.items():
         if name not in required_names: continue
         for jid, job in data.get('jobs', {}).items():

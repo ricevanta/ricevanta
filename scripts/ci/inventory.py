@@ -103,7 +103,7 @@ def checks(unit):
     if group == 'ocsf': return ['ocsf-native']
     if group == 'agent': return ['agent-host', 'agent-pins', 'agent-fixtures', 'agent-format',
                                  'agent-clippy', 'agent-unit', 'spool-extended', 'batch-extended']
-    if group == 'bootstrap': return ['bootstrap-host', 'ci-unit', 'ci-schema']
+    if group == 'bootstrap': return ['bootstrap-host', 'bootstrap-controls', 'bootstrap-cold-install', 'ci-unit', 'ci-schema']
     raise ValueError('unknown leaf: ' + unit)
 
 

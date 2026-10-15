@@ -6,6 +6,7 @@ name: Copilot review environment
     paths:
       - '.github/workflows/copilot-code-review.yml'
       - '.github/requirements-design.txt'
+      - 'scripts/ci/toolchains.lock.json'
       - 'server/go.mod'
       - 'server/go.sum'
       - 'console/package.json'
@@ -25,13 +26,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version-file: .github/python-version
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: false
+      - name: Bootstrap admitted toolchains
+        shell: bash
+        working-directory: .
+        env:
+          CI_PLATFORM: linux-x64
+          CI_TOOLS: python,go,rust,node,pnpm
+        run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"
+      - name: Verify admitted toolchain evidence
+        shell: bash
+        working-directory: .
+        env:
+          CI_PLATFORM: linux-x64
+          CI_TOOLS: python,go,rust,node,pnpm
+        run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
       - name: Create fresh Go caches
         shell: bash
         working-directory: .
@@ -42,16 +50,6 @@ jobs:
         run: |
           go mod download
           go mod verify
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: 11.18.0
-          run_install: false
-          package_json_file: console/package.json
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: console/.node-version
-          cache: pnpm
-          cache-dependency-path: console/pnpm-lock.yaml
       - name: Install console dependencies without lifecycle scripts
         working-directory: console
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -66,9 +64,6 @@ jobs:
           python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
           python -m pip check
           python -B scripts/ci/python_env.py --check
-      - name: Install Rust
-        if: ${{ hashFiles('agent/rust-toolchain', 'agent/rust-toolchain.toml') != '' }}
-        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
       - name: Admit Cargo downloads and fresh target
         shell: bash
         working-directory: .

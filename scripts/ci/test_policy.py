@@ -315,8 +315,10 @@ class PolicyTests(unittest.TestCase):
     def test_python_closure_mutations_are_rejected(self):
         import python_env
         self.assertEqual(check_policy.check(self.root), [])
-        def setup(data, jid='validate'):
-            return next(s for s in data['jobs'][jid]['steps'] if s.get('uses', '').startswith('actions/setup-python@'))
+        def admitted(data, jid='validate'):
+            return next(s for s in data['jobs'][jid]['steps'] if s.get('run') == check_policy.BOOTSTRAP_COMMAND)
+        setup_python = {'uses': 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97',
+                        'with': {'python-version-file': '.github/python-version'}}
         def step(data, run, jid='validate'):
             return next(s for s in data['jobs'][jid]['steps'] if s.get('run') == run)
         def swap_install_after_validator(data):
@@ -326,9 +328,9 @@ class PolicyTests(unittest.TestCase):
             steps.insert(next(i for i, s in enumerate(steps) if 'schema_test.py' in s.get('run', '')) + 1, install)
         unhashed = 'python -m pip install --disable-pip-version-check -r .github/requirements-design.txt'
         mutations = [
-            ('design', 'floating Python', lambda d: setup(d).update({'with': {'python-version': '3.14.8'}}), 'Python setup must read .github/python-version'),
-            ('design', 'minor pin', lambda d: setup(d).update({'with': {'python-version': '3.14'}}), 'Python setup must read .github/python-version'),
-            ('design', 'pip cache', lambda d: setup(d)['with'].update(cache='pip'), 'Python setup must read .github/python-version'),
+            ('design', 'setup action', lambda d: d['jobs']['validate']['steps'].insert(1, dict(setup_python)), 'unchecked setup action'),
+            ('design', 'bootstrap without python', lambda d: admitted(d)['env'].update(CI_TOOLS='go'), 'bootstrap tools omit python'),
+            ('design', 'tools from PR text', lambda d: admitted(d)['env'].update(CI_TOOLS='${{ github.event.pull_request.title }}'), 'CI_TOOLS must be a literal'),
             ('design', 'unhashed install', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=unhashed), 'ad hoc Python environment or package installation forbidden'),
             ('design', 'source fallback', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace(' --only-binary=:all:', '')), 'ad hoc Python environment'),
             ('design', 'skipped check', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace('python -B scripts/ci/python_env.py --check\n', '')), 'ad hoc Python environment'),
@@ -338,9 +340,9 @@ class PolicyTests(unittest.TestCase):
             ('design', 'install after validator', swap_install_after_validator, 'validator runs before the hash-locked closure is admitted'),
             ('design', 'duplicate environment', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'python -m venv "$RUNNER_TEMP/other"'}), 'ad hoc Python environment'),
             ('server', 'ad hoc jsonschema', lambda d: d['jobs']['validate']['steps'].insert(2, {'run': 'python -m pip install jsonschema==4.25.1'}), 'ad hoc Python environment'),
-            ('server', 'validator without closure', lambda d: d['jobs']['validate']['steps'].insert(2, {'run': 'python schemas/export/v1alpha1/validate.py'}), 'closure consumer requires pinned Python setup'),
-            ('agent', 'divergent agent Python', lambda d: setup(d).update({'with': {'python-version': '3.13.7'}}), 'Python setup must read .github/python-version'),
-            ('copilot-code-review', 'Copilot floating Python', lambda d: setup(d, 'copilot-setup-steps').update({'with': {'python-version': '3.14.8'}}), 'Python setup must read .github/python-version'),
+            ('server', 'validator without closure', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'python schemas/export/v1alpha1/validate.py'}), 'closure consumer requires the admitted bootstrap'),
+            ('agent', 'divergent agent Python', lambda d: admitted(d)['env'].update(CI_TOOLS='rust'), 'bootstrap tools omit python'),
+            ('copilot-code-review', 'Copilot setup action', lambda d: d['jobs']['copilot-setup-steps']['steps'].insert(1, dict(setup_python)), 'unchecked setup action'),
             ('copilot-code-review', 'Copilot unhashed install', lambda d: step(d, python_env.INSTALL_COMMAND, 'copilot-setup-steps').update(run=unhashed), 'ad hoc Python environment'),
         ]
         for name, label, change, expected in mutations:
@@ -372,6 +374,56 @@ class PolicyTests(unittest.TestCase):
         licensing.write_text(rows.replace(row + '\n', ''))
         self.assertTrue(any('attrs 26.1.0: no licensing row' in e for e in check_policy.check(self.root)))
         licensing.write_text(rows)
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_bootstrap_admission_mutations_are_rejected(self):
+        self.assertEqual(check_policy.check(self.root), [])
+        def admitted(data, jid):
+            return next(s for s in data['jobs'][jid]['steps'] if s.get('run') == check_policy.BOOTSTRAP_COMMAND)
+        def evidence(data, jid):
+            return next(s for s in data['jobs'][jid]['steps'] if s.get('run') == check_policy.EVIDENCE_COMMAND)
+        def move_after_fresh_go(data):
+            steps = data['jobs']['validate']['steps']
+            step = admitted(data, 'validate'); steps.remove(step)
+            steps.insert(next(i for i, s in enumerate(steps) if s.get('run') == check_policy.GO_FRESH) + 1, step)
+        setup_go = {'uses': 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e', 'with': {'go-version-file': 'server/go.mod', 'cache': 'false'}}
+        mutations = [
+            ('server', 'missing bootstrap', lambda d: d['jobs']['validate']['steps'].remove(admitted(d, 'validate')), 'exactly one admitted bootstrap'),
+            ('server', 'setup-go', lambda d: d['jobs']['validate']['steps'].insert(1, dict(setup_go)), 'unchecked setup action'),
+            ('agent', 'rustup', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'rustup toolchain install 1.99.0 --profile minimal'}), 'unchecked download'),
+            ('console', 'playwright install', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'pnpm exec playwright install --with-deps chromium firefox webkit'}), 'unchecked download'),
+            ('console', 'curl pipe', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'curl -fsSL https://example.invalid/tool.sh | sh'}), 'unchecked download'),
+            ('console', 'setup-node', lambda d: d['jobs']['validate']['steps'].insert(1, {'uses': 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1', 'with': {'node-version-file': 'console/.node-version'}}), 'unchecked setup action'),
+            ('console', 'omit playwright', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python,node,pnpm'), 'bootstrap tools omit playwright'),
+            ('server', 'omit go', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python'), 'bootstrap tools omit go'),
+            ('server', 'tools from PR text', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='${{ github.event.pull_request.title }}'), 'CI_TOOLS must be a literal'),
+            ('server', 'foreign platform', lambda d: admitted(d, 'validate')['env'].update(CI_PLATFORM='windows-x64'), 'CI_PLATFORM must come from the fixed runner matrix'),
+            ('server', 'platform from PR text', lambda d: admitted(d, 'loader-gate-a')['env'].update(CI_PLATFORM='${{ github.head_ref }}'), 'CI_PLATFORM must come from the fixed runner matrix'),
+            ('server', 'sources cache mode', lambda d: admitted(d, 'validate').update(run=check_policy.BOOTSTRAP_COMMAND.replace('--cache-mode none', '--cache-mode sources')), 'missing exact bootstrap command'),
+            ('server', 'conditional bootstrap', lambda d: admitted(d, 'validate').update({'if': 'false'}), 'bootstrap step must be unconditional'),
+            ('server', 'bootstrap after consumer', move_after_fresh_go, 'bootstrap must precede every step except checkout'),
+            ('server', 'missing evidence', lambda d: d['jobs']['validate']['steps'].remove(evidence(d, 'validate')), 'evidence step must follow'),
+            ('server', 'job env tools', lambda d: d['jobs']['validate'].update(env={'CI_TOOLS': 'python,go'}), 'bootstrap inputs must be literal step env'),
+            ('bootstrap', 'missing controls', lambda d: d['jobs']['validate']['steps'].remove(next(s for s in d['jobs']['validate']['steps'] if s.get('run') == check_policy.CONTROLS_COMMAND)), 'corruption controls must precede'),
+            ('bootstrap', 'controls after install', lambda d: d['jobs']['validate']['steps'].insert(4, d['jobs']['validate']['steps'].pop(1)), 'corruption controls must precede'),
+            ('bootstrap', 'removed matrix tools', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][0].update(tools='python,go'), 'bootstrap tools omit rust'),
+        ]
+        for name, label, change, expected in mutations:
+            with self.subTest(mutation=label):
+                self.mutate(name, change)
+                errors = check_policy.check(self.root)
+                self.assertTrue(any(expected in error for error in errors), (label, errors))
+                shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
+        self.assertEqual(check_policy.check(self.root), [])
+        lock = self.root / 'scripts/ci/toolchains.lock.json'
+        baseline = lock.read_text()
+        for label, text in (('tampered digest', baseline.replace('63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445', 'f' * 64)),
+                            ('http mirror', baseline.replace('https://go.dev/dl/go1.27.1.linux-amd64.tar.gz', 'http://go.dev/dl/go1.27.1.linux-amd64.tar.gz')),
+                            ('removed Windows Go', baseline.replace('"id": "go-1.27.1-windows-x64"', '"id": "go-1.27.1-windows-x64", "mirror": "x"'))):
+            with self.subTest(lock=label):
+                lock.write_text(text)
+                self.assertTrue(any('toolchains.lock.json' in error for error in check_policy.check(self.root)), label)
+        lock.write_text(baseline)
         self.assertEqual(check_policy.check(self.root), [])
 
     def test_windows_runner_selection(self):

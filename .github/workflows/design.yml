@@ -16,9 +16,20 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version-file: .github/python-version
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create validator environment
       shell: bash
       working-directory: .
@@ -107,6 +118,7 @@ jobs:
         Draft202012Validator.check_schema(schema)
         for example in json.load(open('schemas/ci/v1/examples.json')):
             Draft202012Validator(schema).validate(example)
+        Draft202012Validator(schema).validate(json.load(open('scripts/ci/toolchains.lock.json')))
         PY
     - name: Write successful leaf receipt
       id: proof
