@@ -95,9 +95,9 @@ jobs:
         cargo metadata --locked --format-version 1 | python -c '
         import json, sys
         data = json.load(sys.stdin)
-        expected = {("cc", "1.4.5"), ("cfg-if", "1.0.4"), ("crc32c", "0.6.8"), ("find-msvc-tools", "0.1.12"), ("getrandom", "0.4.3"), ("jobserver", "0.1.35"), ("libc", "0.2.189"), ("pkg-config", "0.3.34"), ("r-efi", "6.0.0"), ("ricevanta-batch", "0.1.0"), ("ricevanta-spool", "0.1.0"), ("rustc_version", "0.4.1"), ("semver", "1.0.27"), ("shlex", "2.0.1"), ("zstd", "0.13.3"), ("zstd-safe", "7.2.2"), ("zstd-sys", "2.0.16+zstd.1.5.7")}
+        expected = {("cc", "1.4.5"), ("cfg-if", "1.0.4"), ("crc32c", "0.6.8"), ("find-msvc-tools", "0.1.12"), ("getrandom", "0.4.3"), ("jobserver", "0.1.35"), ("libc", "0.2.189"), ("pkg-config", "0.3.34"), ("r-efi", "6.0.0"), ("ricevanta-batch", "0.1.0"), ("ricevanta-config", "0.1.0"), ("ricevanta-json", "0.1.0"), ("ricevanta-os", "0.1.0"), ("ricevanta-os-linux", "0.1.0"), ("ricevanta-os-macos", "0.1.0"), ("ricevanta-os-windows", "0.1.0"), ("ricevanta-spool", "0.1.0"), ("rustc_version", "0.4.1"), ("semver", "1.0.27"), ("shlex", "2.0.1"), ("windows-link", "0.2.1"), ("windows-sys", "0.61.2"), ("zstd", "0.13.3"), ("zstd-safe", "7.2.2"), ("zstd-sys", "2.0.16+zstd.1.5.7")}
         actual = {(p["name"], p["version"]) for p in data["packages"]}
-        assert actual == expected and len(data["packages"]) == 17, "unexpected dependency closure"
+        assert actual == expected and len(data["packages"]) == 25, "unexpected dependency closure"
         print("Locked dependency pins verified")
         '
     - name: Check fixture drift

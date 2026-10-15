@@ -1,0 +1,216 @@
+{
+  "schema": "health.schema.json",
+  "cases": [
+    {
+      "id": "windows-handle-count",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 1200,
+        "state": "ready",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 15000,
+        "interval_ms": 100,
+        "process": {
+          "footprint_bytes": 12582912,
+          "footprint_metric": "private_working_set",
+          "cpu_user_ms": 15,
+          "cpu_system_ms": 31,
+          "threads": 8,
+          "handle_count": 120
+        },
+        "counters": { "samples": 150, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "errors": []
+      }
+    },
+    {
+      "id": "sampler-failed-null-process",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "ready",
+        "version": "0.1.0-alpha.1",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "prerelease",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 60000,
+        "interval_ms": 60000,
+        "process": null,
+        "counters": { "samples": 1, "sample_failures": 1, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "errors": ["sampler_failed"]
+      }
+    },
+    {
+      "id": "health-write-failed-still-running",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "ready",
+        "version": "0.1.0-alpha.1",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "prerelease",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 240000,
+        "interval_ms": 60000,
+        "process": { "footprint_bytes": 9437184, "footprint_metric": "pss", "cpu_user_ms": 120, "cpu_system_ms": 80, "threads": 6, "fd_count": 14 },
+        "counters": { "samples": 4, "sample_failures": 0, "log_errors": 0, "health_write_failures": 2, "stop_requests": 0 },
+        "errors": ["health_write_failed"]
+      }
+    },
+    {
+      "id": "stopped-with-timeout",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "stopped",
+        "version": "0.1.0-alpha.1",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "prerelease",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 60000,
+        "interval_ms": 60000,
+        "process": null,
+        "counters": { "samples": 1, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 2 },
+        "errors": ["shutdown_timeout"]
+      }
+    },
+    {
+      "id": "windows-metric-with-fd-count",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 1200,
+        "state": "ready",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 15000,
+        "interval_ms": 100,
+        "process": {
+          "footprint_bytes": 12582912,
+          "footprint_metric": "private_working_set",
+          "cpu_user_ms": 15,
+          "cpu_system_ms": 31,
+          "threads": 8,
+          "fd_count": 120
+        },
+        "counters": { "samples": 150, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "errors": []
+      }
+    },
+    {
+      "id": "both-descriptor-kinds",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 1200,
+        "state": "ready",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 15000,
+        "interval_ms": 100,
+        "process": {
+          "footprint_bytes": 12582912,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 15,
+          "cpu_system_ms": 31,
+          "threads": 8,
+          "fd_count": 12,
+          "handle_count": 120
+        },
+        "counters": { "samples": 150, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "errors": []
+      }
+    },
+    {
+      "id": "unknown-state",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "degraded",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 0,
+        "interval_ms": 60000,
+        "process": null,
+        "counters": { "samples": 0, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "errors": []
+      }
+    },
+    {
+      "id": "free-text-error",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "ready",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 0,
+        "interval_ms": 60000,
+        "process": null,
+        "counters": { "samples": 0, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "errors": ["failed to open /var/lib/ricevanta: permission denied"]
+      }
+    },
+    {
+      "id": "missing-counters",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "ready",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 0,
+        "interval_ms": 60000,
+        "process": null,
+        "errors": []
+      }
+    },
+    {
+      "id": "missing-health-write-failures",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 7,
+        "state": "ready",
+        "version": "0.0.0-local",
+        "commit": "unknown",
+        "channel": "local",
+        "mode": "run",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 0,
+        "interval_ms": 60000,
+        "process": null,
+        "counters": { "samples": 0, "sample_failures": 0, "log_errors": 0, "stop_requests": 0 },
+        "errors": []
+      }
+    }
+  ]
+}

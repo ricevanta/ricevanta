@@ -23,6 +23,8 @@ server/internal/
 └── platform     configuration, database, blob store, in-process bus, jobs, metrics, secrets
 ```
 
+The executable entry point, role admission, configuration file, health and readiness endpoints, logging and the console serving contract of the `transport` module are specified in [the server runtime spec](../specs/server-runtime.md) (BE-15).
+
 Rules:
 
 - A module owns one PostgreSQL schema named after it and is the only code that reads or writes those tables.

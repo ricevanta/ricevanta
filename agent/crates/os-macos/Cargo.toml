@@ -1,0 +1,20 @@
+[package]
+name = "ricevanta-os-macos"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ricevanta-os = { path = "../os", version = "=0.1.0" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc.workspace = true
+
+# Native bindings live here under spec section 1.1: unsafe is denied, not
+# forbidden, and each unsafe block sits in a private function carrying
+# `#[expect(unsafe_code, reason = "...")]` and a `// SAFETY:` comment.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"

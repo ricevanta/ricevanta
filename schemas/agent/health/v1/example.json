@@ -1,0 +1,28 @@
+{
+  "schema": "ricevanta-agent-health-v1",
+  "pid": 4242,
+  "state": "ready",
+  "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "channel": "master",
+  "mode": "service",
+  "written_unix_ms": 1760000000000,
+  "uptime_ms": 3600000,
+  "interval_ms": 60000,
+  "process": {
+    "footprint_bytes": 9437184,
+    "footprint_metric": "pss",
+    "cpu_user_ms": 120,
+    "cpu_system_ms": 80,
+    "threads": 6,
+    "fd_count": 14
+  },
+  "counters": {
+    "samples": 60,
+    "sample_failures": 0,
+    "log_errors": 0,
+    "health_write_failures": 0,
+    "stop_requests": 0
+  },
+  "errors": []
+}

@@ -47,7 +47,7 @@ The core owns the server connection, the device identity, the policy cache, the 
 
 ### 3.1 One binary, selectable roles
 
-`ricevanta-server` is a Go modular monolith. A process runs the roles named in its configuration; the default is all roles, which is what Docker Compose runs. Helm runs separate deployments per role group.
+`ricevanta-server` is a Go modular monolith. A process runs exactly the roles named in its configuration and refuses to start without that list; Docker Compose names all five roles in one process, and Helm runs separate deployments per role group. Role admission, health endpoints and console serving are in [the server runtime spec](specs/server-runtime.md) (BE-15).
 
 | Role | Listeners | State and keys |
 |---|---|---|
@@ -133,7 +133,7 @@ Observability: Prometheus metrics on `/metrics`, structured JSON logs, health an
 
 ```
 ricevanta/
-├── agent/        Rust workspace: crates (core, updater, os-macos, os-windows, os-linux, scan, ext, session, nmhost), bpf/ (dual MIT/GPL), app bundles, packaging
+├── agent/        Rust workspace: crates (core, json, config, os, os-macos, os-windows, os-linux, spool, batch, updater, scan, ext, session, nmhost), bpf/ (dual MIT/GPL), app bundles, packaging
 ├── driver/       Windows kernel driver (C), WDK build, HLK test configuration
 ├── browser/      Browser extension (TypeScript, WebExtensions) built per engine family: chromium (Manifest V3), gecko, webkit with the Safari handler sources
 ├── server/       Go module: cmd/ricevanta-server, cmd/ricevanta, internal/<module>
@@ -154,7 +154,7 @@ One repository, one version number per release for server, console, agent, brows
 - Versioning: SemVer for the product; `/api/v1` and `/agent/v1` change additively within a major; the policy envelope is `apiVersion: ricevanta.io/v1alpha1` throughout v0.x and `v1` from v1.0.0. The v1.0.0 server migration relabels stored resources; agents receive compiled bundles whose format is versioned with `/agent/v1`, so the envelope label never reaches them. Extension interfaces carry their own versions (`ext.ricevanta.io/<kind or contract>/v1`, WIT package versions, the console bridge schema version, connector contract versions), change additively within a major and are the compatibility key for extensions, not the product version (EXT-07).
 - Failure behaviour: every policy declares its fail mode for each enforcement point (`design/agent.md`); every unsupported capability is reported, never silently skipped.
 - Privacy: classification runs on the endpoint; only the evidence DLP-02 allows leaves the device.
-- Configuration: the server reads environment variables and one YAML file; the agent reads the enrollment configuration (`design/pki.md`) plus server-delivered signed policy. Ricevanta rejects unsigned local configuration changes and requires authorization on its own uninstall paths; OS and administrator escape paths follow the limits in `design/agent.md` section 9.
+- Configuration: the server reads environment variables and one YAML file; the agent reads one root-only operational file (`agent.json`: logging, paths and intervals, never a policy, identity, server, trust or token value, [agent runtime](specs/agent-runtime.md) section 3), the enrollment configuration (`design/pki.md`) and server-delivered signed policy. Policy, identity and trust reach the agent only signed; Ricevanta rejects unsigned local changes to them and requires authorization on its own uninstall paths; OS and administrator escape paths follow the limits in `design/agent.md` section 9.
 - Tamper resistance against a local administrator is prevention only where the OS provides it and reporting elsewhere; the preconditions per OS are in `design/agent.md` and `platform-support.md`.
 - Time: the server is the clock of record; agent events carry monotonic sequence numbers and the agent's clock, and the server records receipt time.
 - Internationalization: console strings through `vue-i18n` from the first component (`project.md`).
