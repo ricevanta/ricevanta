@@ -762,12 +762,25 @@ fn is_drive_absolute(text: &str) -> bool {
 /// resolve its preceding component as a directory and follow a symbolic link
 /// there before `O_NOFOLLOW` or `FILE_FLAG_OPEN_REPARSE_POINT` applies.
 fn absolute_for(os: Os, text: &str) -> bool {
-    let (absolute, separators): (bool, &[char]) = match os {
-        Os::Linux | Os::MacOs => (is_unix_absolute(text), &['/']),
-        Os::Windows => (is_drive_absolute(text), &['\\', '/']),
+    let absolute = match os {
+        Os::Linux | Os::MacOs => is_unix_absolute(text),
+        Os::Windows => is_drive_absolute(text),
+    };
+    absolute && ends_in_plain_name(os, Path::new(text))
+}
+
+/// Whether `path` ends in a plain name for `os`: not empty, not `.` or
+/// `..`, and without a trailing separator. The core applies it to
+/// `--config` so that a path the platform would refuse is a configuration
+/// error (exit 2), as for directory values and flags.
+pub fn ends_in_plain_name(os: Os, path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    let separators: &[char] = match os {
+        Os::Linux | Os::MacOs => &['/'],
+        Os::Windows => &['\\', '/'],
     };
     let last = text.rsplit(separators).next().unwrap_or_default();
-    absolute && !matches!(last, "" | "." | "..")
+    !matches!(last, "" | "." | "..")
 }
 
 fn os_path(os: Os, pointer: &str, value: &Option<String>) -> Result<Option<PathBuf>, Error> {

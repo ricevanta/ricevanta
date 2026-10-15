@@ -267,6 +267,22 @@ impl DirKind {
         }
     }
 
+    /// The object this directory's parent is reported as.
+    pub const fn parent_object(self) -> Object {
+        match self {
+            DirKind::DataRoot => Object::DataRootParent,
+            DirKind::State => Object::StateParent,
+            DirKind::Runtime => Object::RuntimeParent,
+            DirKind::Log => Object::LogParent,
+        }
+    }
+
+    /// Whether the parent may grant write to its group (spec section 3.1:
+    /// the log directory's parent only, for distribution log roots).
+    pub const fn parent_group_write_allowed(self) -> bool {
+        matches!(self, DirKind::Log)
+    }
+
     /// The object this directory is reported as.
     pub const fn object(self) -> Object {
         match self {
@@ -325,6 +341,14 @@ pub enum Object {
     HealthDocument,
     /// A log file.
     LogFile,
+    /// The parent of the data root.
+    DataRootParent,
+    /// The parent of the state directory.
+    StateParent,
+    /// The parent of the runtime directory.
+    RuntimeParent,
+    /// The parent of the log directory.
+    LogParent,
 }
 
 impl Object {
@@ -339,6 +363,10 @@ impl Object {
             Object::LogDir => "log_dir",
             Object::HealthDocument => "health_document",
             Object::LogFile => "log_file",
+            Object::DataRootParent => "data_root_parent",
+            Object::StateParent => "state_parent",
+            Object::RuntimeParent => "runtime_parent",
+            Object::LogParent => "log_parent",
         }
     }
 }
@@ -453,9 +481,50 @@ impl std::error::Error for ProtectionError {
     }
 }
 
+/// A directory that passed its protection check, held open.
+///
+/// Everything below it is reached through [`CheckedDir::file`], the opened
+/// descriptor or handle, by name. `path` is the path it was opened by, kept
+/// for diagnostics and for Windows, where spec section 3.1 creates files by
+/// path because the checked access control leaves no other principal a way
+/// to redirect it. Only [`Platform`] implementations construct it.
+#[derive(Debug)]
+pub struct CheckedDir {
+    file: File,
+    object: Object,
+    path: PathBuf,
+}
+
+impl CheckedDir {
+    /// Wraps a directory that `object`'s rule accepted. For [`Platform`]
+    /// implementations only.
+    pub fn new(file: File, object: Object, path: PathBuf) -> CheckedDir {
+        CheckedDir { file, object, path }
+    }
+
+    /// The open directory.
+    pub fn file(&self) -> &File {
+        &self.file
+    }
+
+    /// The object the directory was checked as.
+    pub fn object(&self) -> Object {
+        self.object
+    }
+
+    /// The path the directory was opened by; never used on Unix to reach
+    /// anything below it.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
 /// Per-OS locations and the descriptor-based protection checks of spec
 /// section 3.1. Every check runs on the opened descriptor or handle, never on
-/// a path; no method falls back to defaults or a weaker mode.
+/// a path; no method falls back to defaults or a weaker mode. A path is
+/// accepted only to reach a checked parent; nothing below a checked parent
+/// takes a path. Every path and name must end in a plain name, not empty,
+/// `.` or `..`, and a name contains no separator ([`Reason::PathForm`]).
 pub trait Platform: Send + Sync {
     /// The OS whose rules this platform applies.
     fn os(&self) -> Os;
@@ -481,30 +550,59 @@ pub trait Platform: Send + Sync {
     fn footprint_metric(&self) -> FootprintMetric;
 
     /// Opens `agent.json` read-only without following a final symbolic link
-    /// and without blocking, checks its parent directory and then the opened
-    /// file, and returns it for reading. The file is opened relative to the
-    /// checked parent, so the checked parent is the file's parent.
-    /// `Ok(None)` when the file or its parent does not exist. Every path
-    /// argument of this trait must end in a plain name ([`Reason::PathForm`]).
+    /// and without blocking: opens and checks its parent by path (the strict
+    /// parent rule), then opens the file relative to that parent's
+    /// descriptor and checks the opened file. `Ok(None)` when the file or its
+    /// parent does not exist.
     fn open_config(&self, path: &Path, mode: Mode) -> Result<Option<File>, ProtectionError>;
 
-    /// Opens the directory `path`, creating it when missing (never its
-    /// parents), and checks owner and exact mode. A created directory is
-    /// given its exact mode on the opened descriptor; an existing one is
-    /// never re-moded.
-    fn open_or_create_dir(
+    /// Splits the path of a `kind` directory into its parent and plain final
+    /// name, opens the parent by path and checks it with the parent rule for
+    /// `kind`: owned by root, or by the effective user in `run` mode, and
+    /// writable by neither group nor others, except that the log directory's
+    /// parent may grant write to its group.
+    fn open_parent(
         &self,
         path: &Path,
         kind: DirKind,
         mode: Mode,
+    ) -> Result<(CheckedDir, std::ffi::OsString), ProtectionError>;
+
+    /// Opens the directory `name` inside the checked `parent`, creating it
+    /// relative to the parent when missing, and checks owner and exact mode.
+    /// A directory is given its exact mode only when this call created it
+    /// and it is still empty; one that already existed is never re-moded.
+    fn open_or_create_dir(
+        &self,
+        parent: &CheckedDir,
+        name: &std::ffi::OsStr,
+        kind: DirKind,
+        mode: Mode,
+    ) -> Result<CheckedDir, ProtectionError>;
+
+    /// Creates or opens the file `name` inside the checked `dir`, without
+    /// following a final symbolic link and without truncating, checks the
+    /// opened descriptor, sets the file's exact mode on it, and only then
+    /// truncates it ([`FileKind::HealthDocument`]) or leaves it for appending
+    /// ([`FileKind::Log`]). A file that fails the check is left unmodified.
+    fn create_file(
+        &self,
+        dir: &CheckedDir,
+        name: &std::ffi::OsStr,
+        kind: FileKind,
     ) -> Result<File, ProtectionError>;
 
-    /// Creates or opens a file the agent writes, without following a final
-    /// symbolic link, checks the opened descriptor, sets the file's exact
-    /// mode on it, and only then truncates it ([`FileKind::HealthDocument`])
-    /// or leaves it for appending ([`FileKind::Log`]). A file that fails the
-    /// check is left unmodified.
-    fn create_file(&self, path: &Path, kind: FileKind) -> Result<File, ProtectionError>;
+    /// Renames `from` to `to` inside the checked `dir`, replacing `to`.
+    fn rename_in(
+        &self,
+        dir: &CheckedDir,
+        from: &std::ffi::OsStr,
+        to: &std::ffi::OsStr,
+    ) -> Result<(), ProtectionError>;
+
+    /// Deletes the file `name` inside the checked `dir`; an absent file is
+    /// success, so rotation can delete unconditionally.
+    fn remove_in(&self, dir: &CheckedDir, name: &std::ffi::OsStr) -> Result<(), ProtectionError>;
 }
 
 /// Unix ownership and mode rules over facts from an opened descriptor.
@@ -569,19 +667,36 @@ pub mod unix {
         }
     }
 
-    /// The parent of `agent.json`: a directory owned by the effective user
-    /// or root that is neither group- nor world-writable.
-    pub fn check_config_parent(facts: &Facts, euid: u32) -> Result<(), Reason> {
+    /// A checked parent directory: owned by root, or in `run` mode also by
+    /// the effective user, and writable by others never and by its group
+    /// only when `group_write_allowed` (the log directory's parent). The
+    /// sticky bit does not make a world-writable parent acceptable.
+    pub fn check_parent(
+        facts: &Facts,
+        group_write_allowed: bool,
+        mode: Mode,
+        euid: u32,
+    ) -> Result<(), Reason> {
         if facts.kind != Kind::Directory {
             return Err(Reason::NotDirectory);
         }
-        if facts.uid != euid && facts.uid != 0 {
+        let owner_ok = match mode {
+            Mode::Service => facts.uid == 0,
+            Mode::Run => facts.uid == 0 || facts.uid == euid,
+        };
+        if !owner_ok {
             return Err(Reason::Owner { uid: facts.uid });
         }
-        if facts.perm() & 0o022 != 0 {
+        let forbidden = if group_write_allowed { 0o002 } else { 0o022 };
+        if facts.perm() & forbidden != 0 {
             return Err(Reason::ParentWritable { mode: facts.perm() });
         }
         Ok(())
+    }
+
+    /// The parent of `agent.json`: [`check_parent`] without group write.
+    pub fn check_config_parent(facts: &Facts, mode: Mode, euid: u32) -> Result<(), Reason> {
+        check_parent(facts, false, mode, euid)
     }
 
     /// An agent directory: owned by [`dir_owner`] with exactly

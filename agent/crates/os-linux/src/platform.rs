@@ -1,14 +1,22 @@
 //! Descriptor-based file protection on Linux (spec section 3.1).
+//!
+//! A path is used only to reach a parent directory, which is opened with
+//! `O_DIRECTORY | O_NOFOLLOW` and checked on its descriptor. Everything below
+//! a checked directory is reached as `/proc/self/fd/<descriptor>/<name>`: the
+//! descriptor entry is a magic link to the open directory itself, so the name
+//! is looked up in the directory that was checked, never by resolving the
+//! directory's path again, and only the standard library is needed.
 
 use crate::procfs::{STATUS, open, status_euid};
 use ricevanta_os::unix::{
     Facts, Kind, check_config_file, check_config_parent, check_created_file, check_dir,
-    check_dir_owner,
+    check_dir_owner, check_parent,
 };
 use ricevanta_os::{
-    DirKind, FileKind, FootprintMetric, Mode, Object, Os, Platform, ProtectionError, Reason,
+    CheckedDir, DirKind, FileKind, FootprintMetric, Mode, Object, Os, Platform, ProtectionError,
+    Reason,
 };
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File, OpenOptions, Permissions};
 use std::io;
 use std::os::fd::AsRawFd;
@@ -96,17 +104,44 @@ fn open_failure(path: &Path, error: io::Error, object: Object) -> ProtectionErro
     ProtectionError::new(object, reason)
 }
 
-/// The final component of `path` when it is a plain name. A path that is
-/// empty, ends in `/`, or ends in `.` or `..` has none: the kernel would
-/// resolve the preceding component as a directory, following a symbolic
-/// link there, before `O_NOFOLLOW` applies.
-fn plain_name(path: &Path, object: Object) -> Result<&OsStr, ProtectionError> {
+fn path_form(object: Object) -> ProtectionError {
+    ProtectionError::new(object, Reason::PathForm)
+}
+
+/// Splits `path` into its parent and plain final name. A path that is
+/// empty, ends in `/`, or ends in `.` or `..` has no plain final name: the
+/// kernel would resolve the preceding component as a directory, following a
+/// symbolic link there, before `O_NOFOLLOW` applies. A path without a parent
+/// component has the current directory as parent.
+fn split(path: &Path, object: Object) -> Result<(PathBuf, OsString), ProtectionError> {
     let bytes = path.as_os_str().as_bytes();
-    let last = bytes.rsplit(|&b| b == b'/').next().unwrap_or_default();
-    match last {
-        b"" | b"." | b".." => Err(ProtectionError::new(object, Reason::PathForm)),
-        _ => Ok(OsStr::from_bytes(last)),
+    let (parent, name) = match bytes.iter().rposition(|&b| b == b'/') {
+        Some(0) => (&b"/"[..], &bytes[1..]),
+        Some(at) => (&bytes[..at], &bytes[at + 1..]),
+        None => (&b"."[..], bytes),
+    };
+    check_name(OsStr::from_bytes(name), object)?;
+    Ok((
+        PathBuf::from(OsStr::from_bytes(parent)),
+        OsStr::from_bytes(name).to_os_string(),
+    ))
+}
+
+/// A name inside a checked directory: not empty, `.` or `..`, and without a
+/// separator.
+fn check_name(name: &OsStr, object: Object) -> Result<(), ProtectionError> {
+    let bytes = name.as_bytes();
+    if matches!(bytes, b"" | b"." | b"..") || bytes.contains(&b'/') {
+        return Err(path_form(object));
     }
+    Ok(())
+}
+
+/// `/proc/self/fd/<fd>/<name>`: `name` looked up inside the open directory.
+fn relative(dir: &File, name: &OsStr) -> PathBuf {
+    let mut path = PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
+    path.push(name);
+    path
 }
 
 fn open_dir(path: &Path) -> io::Result<File> {
@@ -119,6 +154,29 @@ fn open_dir(path: &Path) -> io::Result<File> {
 fn set_mode(file: &File, mode: u32, object: Object) -> Result<(), ProtectionError> {
     file.set_permissions(Permissions::from_mode(mode))
         .map_err(|e| ProtectionError::new(object, Reason::io(e)))
+}
+
+/// Whether the open directory has no entries.
+fn is_empty(dir: &File, object: Object) -> Result<bool, ProtectionError> {
+    let mut entries = std::fs::read_dir(format!("/proc/self/fd/{}", dir.as_raw_fd()))
+        .map_err(|e| ProtectionError::new(object, Reason::io(e)))?;
+    Ok(entries.next().is_none())
+}
+
+impl LinuxPlatform {
+    /// Opens the directory at `path` and checks it with the parent rule.
+    fn checked_parent(
+        &self,
+        path: PathBuf,
+        group_write_allowed: bool,
+        mode: Mode,
+        object: Object,
+    ) -> Result<CheckedDir, ProtectionError> {
+        let dir = open_dir(&path).map_err(|e| open_failure(&path, e, object))?;
+        check_parent(&facts(&dir, object)?, group_write_allowed, mode, self.euid)
+            .map_err(|r| ProtectionError::new(object, r))?;
+        Ok(CheckedDir::new(dir, object, path))
+    }
 }
 
 impl Platform for LinuxPlatform {
@@ -139,74 +197,91 @@ impl Platform for LinuxPlatform {
     }
 
     fn open_config(&self, path: &Path, mode: Mode) -> Result<Option<File>, ProtectionError> {
-        let name = plain_name(path, Object::ConfigFile)?;
-        let parent = match path.parent() {
-            Some(p) if !p.as_os_str().is_empty() => p,
-            _ => Path::new("."),
-        };
-        let parent_dir = match open_dir(parent) {
+        let (parent, name) = split(path, Object::ConfigFile)?;
+        let parent_dir = match open_dir(&parent) {
             Ok(dir) => dir,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(open_failure(parent, e, Object::ConfigParent)),
+            Err(e) => return Err(open_failure(&parent, e, Object::ConfigParent)),
         };
-        let parent_facts = facts(&parent_dir, Object::ConfigParent)?;
-        check_config_parent(&parent_facts, self.euid)
+        check_config_parent(&facts(&parent_dir, Object::ConfigParent)?, mode, self.euid)
             .map_err(|r| ProtectionError::new(Object::ConfigParent, r))?;
-        // Resolve the name inside the directory that was just checked, not
-        // through `path` again, so a parent swapped after the check cannot
-        // supply the file. `/proc/self/fd/<fd>` names the checked descriptor.
-        let mut relative = PathBuf::from(format!("/proc/self/fd/{}", parent_dir.as_raw_fd()));
-        relative.push(name);
+        let target = relative(&parent_dir, &name);
         let file = match OpenOptions::new()
             .read(true)
             .custom_flags(FILE_FLAGS)
-            .open(&relative)
+            .open(&target)
         {
             Ok(file) => file,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(open_failure(&relative, e, Object::ConfigFile)),
+            Err(e) => return Err(open_failure(&target, e, Object::ConfigFile)),
         };
         self.check_opened_config(&file, mode)?;
         Ok(Some(file))
     }
 
-    fn open_or_create_dir(
+    fn open_parent(
         &self,
         path: &Path,
         kind: DirKind,
         mode: Mode,
-    ) -> Result<File, ProtectionError> {
-        let object = kind.object();
-        plain_name(path, object)?;
-        let fail = |reason| ProtectionError::new(object, reason);
-        let existing = match open_dir(path) {
-            Ok(dir) => Some(dir),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-            Err(e) => return Err(open_failure(path, e, object)),
-        };
-        if let Some(dir) = existing {
-            check_dir(&facts(&dir, object)?, kind, mode, self.euid).map_err(fail)?;
-            return Ok(dir);
-        }
-        let created = match DirBuilder::new().mode(kind.unix_mode()).create(path) {
-            Ok(()) => true,
-            // Another process created it first: judge it as existing.
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => false,
-            Err(e) => return Err(fail(Reason::io(e))),
-        };
-        let dir = open_dir(path).map_err(|e| open_failure(path, e, object))?;
-        if created {
-            check_dir_owner(&facts(&dir, object)?, mode, self.euid).map_err(fail)?;
-            // mkdir applied the umask; set the exact mode on the descriptor.
-            set_mode(&dir, kind.unix_mode(), object)?;
-        }
-        check_dir(&facts(&dir, object)?, kind, mode, self.euid).map_err(fail)?;
-        Ok(dir)
+    ) -> Result<(CheckedDir, OsString), ProtectionError> {
+        let (parent, name) = split(path, kind.object())?;
+        let dir = self.checked_parent(
+            parent,
+            kind.parent_group_write_allowed(),
+            mode,
+            kind.parent_object(),
+        )?;
+        Ok((dir, name))
     }
 
-    fn create_file(&self, path: &Path, kind: FileKind) -> Result<File, ProtectionError> {
+    fn open_or_create_dir(
+        &self,
+        parent: &CheckedDir,
+        name: &OsStr,
+        kind: DirKind,
+        mode: Mode,
+    ) -> Result<CheckedDir, ProtectionError> {
         let object = kind.object();
-        plain_name(path, object)?;
+        check_name(name, object)?;
+        let fail = |reason| ProtectionError::new(object, reason);
+        let target = relative(parent.file(), name);
+        let mut created = false;
+        let dir = match open_dir(&target) {
+            Ok(dir) => dir,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                match DirBuilder::new().mode(kind.unix_mode()).create(&target) {
+                    Ok(()) => created = true,
+                    // Another process created it first: judge it as existing.
+                    Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(e) => return Err(fail(Reason::io(e))),
+                }
+                open_dir(&target).map_err(|e| open_failure(&target, e, object))?
+            }
+            Err(e) => return Err(open_failure(&target, e, object)),
+        };
+        if created {
+            check_dir_owner(&facts(&dir, object)?, mode, self.euid).map_err(fail)?;
+            // mkdir applied the umask. Set the exact mode on the descriptor,
+            // but only on the empty directory this call made: a directory
+            // swapped in or filled since is judged as it is.
+            if is_empty(&dir, object)? {
+                set_mode(&dir, kind.unix_mode(), object)?;
+            }
+        }
+        check_dir(&facts(&dir, object)?, kind, mode, self.euid).map_err(fail)?;
+        Ok(CheckedDir::new(dir, object, parent.path().join(name)))
+    }
+
+    fn create_file(
+        &self,
+        dir: &CheckedDir,
+        name: &OsStr,
+        kind: FileKind,
+    ) -> Result<File, ProtectionError> {
+        let object = kind.object();
+        check_name(name, object)?;
+        let target = relative(dir.file(), name);
         let mut options = OpenOptions::new();
         options
             .create(true)
@@ -218,8 +293,8 @@ impl Platform for LinuxPlatform {
             FileKind::Log => options.append(true),
         };
         let file = options
-            .open(path)
-            .map_err(|e| open_failure(path, e, object))?;
+            .open(&target)
+            .map_err(|e| open_failure(&target, e, object))?;
         check_created_file(&facts(&file, object)?, self.euid)
             .map_err(|r| ProtectionError::new(object, r))?;
         set_mode(&file, kind.unix_mode(), object)?;
@@ -228,5 +303,23 @@ impl Platform for LinuxPlatform {
                 .map_err(|e| ProtectionError::new(object, Reason::io(e)))?;
         }
         Ok(file)
+    }
+
+    fn rename_in(&self, dir: &CheckedDir, from: &OsStr, to: &OsStr) -> Result<(), ProtectionError> {
+        let object = dir.object();
+        check_name(from, object)?;
+        check_name(to, object)?;
+        std::fs::rename(relative(dir.file(), from), relative(dir.file(), to))
+            .map_err(|e| ProtectionError::new(object, Reason::io(e)))
+    }
+
+    fn remove_in(&self, dir: &CheckedDir, name: &OsStr) -> Result<(), ProtectionError> {
+        let object = dir.object();
+        check_name(name, object)?;
+        match std::fs::remove_file(relative(dir.file(), name)) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(ProtectionError::new(object, Reason::io(e))),
+        }
     }
 }

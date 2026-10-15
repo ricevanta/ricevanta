@@ -10,9 +10,26 @@ const FD_DIR: &str = "/proc/self/fd";
 
 /// Samples the own process from `/proc/self`: `Pss` from `smaps_rollup`,
 /// `utime` and `stime` from `stat`, `Threads` from `status` and the entry
-/// count of `fd`. `smaps_rollup` and `stat` are read whole into one fixed
-/// stack buffer, `status` is scanned line by line through another, and only
-/// the directory iteration allocates, a small amount per entry.
+/// count of `fd`.
+///
+/// Memory bound (spec section 7), the property code review checks:
+///
+/// - Every reader uses a fixed stack buffer of [`BUFFER_BYTES`] (4 KiB):
+///   `smaps_rollup` and `stat` are read whole into one, a source that does
+///   not fit is a format error, and `status` is scanned line by line through
+///   another.
+/// - No collection is kept or grown: nothing scales with the number of
+///   mappings, descriptors or threads; the descriptor count is a counter.
+/// - At most one directory enumeration is open at a time, `/proc/self/fd`;
+///   its buffer is allocated and freed by the C library within the call, and
+///   each entry's name is freed before the next is read.
+/// - Each source file is opened and closed within the call; nothing is
+///   cached between calls.
+///
+/// The steady-state proof is the `growth` test binary: after 1,000 warm-up
+/// samples, 10,000 more raise `Anonymous` in `/proc/self/smaps_rollup` by at
+/// most 64 KiB. The transient peak inside one call is bounded by this review,
+/// not measured.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LinuxSampler {
     _private: (),

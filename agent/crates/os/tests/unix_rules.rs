@@ -2,7 +2,8 @@
 //! facts read from an opened descriptor.
 
 use ricevanta_os::unix::{
-    Facts, Kind, check_config_file, check_config_parent, check_created_file, check_dir, dir_owner,
+    Facts, Kind, check_config_file, check_config_parent, check_created_file, check_dir,
+    check_parent, dir_owner,
 };
 use ricevanta_os::{
     DirKind, FileKind, FootprintMetric, LifecycleState, Mode, ProcessSample, Reason,
@@ -64,24 +65,24 @@ fn config_file_rules() {
 fn config_parent_rules() {
     for mode in [0o755, 0o700, 0o555, 0o1755] {
         assert_eq!(
-            check_config_parent(&facts(Kind::Directory, mode, 0), EUID),
+            check_config_parent(&facts(Kind::Directory, mode, 0), Mode::Service, EUID),
             Ok(()),
             "{mode:o}"
         );
     }
     for mode in [0o775, 0o757, 0o777, 0o1777] {
         assert_eq!(
-            check_config_parent(&facts(Kind::Directory, mode, 0), EUID),
+            check_config_parent(&facts(Kind::Directory, mode, 0), Mode::Service, EUID),
             Err(Reason::ParentWritable { mode }),
             "{mode:o}"
         );
     }
     assert_eq!(
-        check_config_parent(&facts(Kind::Directory, 0o755, 4242), EUID),
+        check_config_parent(&facts(Kind::Directory, 0o755, 4242), Mode::Run, EUID),
         Err(Reason::Owner { uid: 4242 })
     );
     assert_eq!(
-        check_config_parent(&facts(Kind::Regular, 0o755, 0), EUID),
+        check_config_parent(&facts(Kind::Regular, 0o755, 0), Mode::Run, EUID),
         Err(Reason::NotDirectory)
     );
 }
@@ -213,5 +214,54 @@ fn io_causes_are_kept_as_source() {
     assert_ne!(
         IoCause::new(io::Error::from_raw_os_error(2)),
         IoCause::new(io::Error::from_raw_os_error(13))
+    );
+}
+
+#[test]
+fn parent_rules() {
+    let dir = |mode, uid| facts(Kind::Directory, mode, uid);
+    // Owner: root always; the effective user only in `run` mode.
+    assert_eq!(
+        check_parent(&dir(0o755, 0), false, Mode::Service, EUID),
+        Ok(())
+    );
+    assert_eq!(
+        check_parent(&dir(0o755, EUID), false, Mode::Run, EUID),
+        Ok(())
+    );
+    assert_eq!(
+        check_parent(&dir(0o755, EUID), false, Mode::Service, EUID),
+        Err(Reason::Owner { uid: EUID })
+    );
+    assert_eq!(
+        check_parent(&dir(0o755, 4242), true, Mode::Run, EUID),
+        Err(Reason::Owner { uid: 4242 })
+    );
+    // Others may never write; the sticky bit does not help.
+    for mode in [0o777, 0o1777, 0o757, 0o703] {
+        for group in [false, true] {
+            assert_eq!(
+                check_parent(&dir(mode, 0), group, Mode::Service, EUID),
+                Err(Reason::ParentWritable { mode }),
+                "{mode:o} {group}"
+            );
+        }
+    }
+    // Group write: refused unless allowed (the log directory's parent).
+    assert_eq!(
+        check_parent(&dir(0o775, 0), false, Mode::Service, EUID),
+        Err(Reason::ParentWritable { mode: 0o775 })
+    );
+    assert_eq!(
+        check_parent(&dir(0o775, 0), true, Mode::Service, EUID),
+        Ok(())
+    );
+    assert!(!DirKind::State.parent_group_write_allowed());
+    assert!(!DirKind::Runtime.parent_group_write_allowed());
+    assert!(!DirKind::DataRoot.parent_group_write_allowed());
+    assert!(DirKind::Log.parent_group_write_allowed());
+    assert_eq!(
+        check_parent(&facts(Kind::Symlink, 0o755, 0), false, Mode::Run, EUID),
+        Err(Reason::NotDirectory)
     );
 }

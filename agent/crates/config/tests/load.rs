@@ -1,7 +1,8 @@
 //! Precedence, bounds and per-OS rules of the configuration loader.
 
 use ricevanta_config::{
-    AgentConfig, Error, LoadOptions, LogLevel, LogSink, Mode, Os, SCHEMA, default_paths, load,
+    AgentConfig, Error, LoadOptions, LogLevel, LogSink, Mode, Os, SCHEMA, default_paths,
+    ends_in_plain_name, load,
 };
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -465,5 +466,34 @@ fn host_os_matches_target() {
         assert_eq!(host, Os::MacOs);
     } else if cfg!(windows) {
         assert_eq!(host, Os::Windows);
+    }
+}
+
+#[test]
+fn config_path_form() {
+    for good in [
+        "/etc/ricevanta/agent.json",
+        "agent.json",
+        "./agent.json",
+        "/a/.json",
+    ] {
+        assert!(ends_in_plain_name(Os::Linux, Path::new(good)), "{good}");
+    }
+    for bad in [
+        "",
+        "/",
+        "/etc/ricevanta/",
+        "/etc/ricevanta/agent.json/.",
+        "a/..",
+        ".",
+    ] {
+        assert!(!ends_in_plain_name(Os::Linux, Path::new(bad)), "{bad}");
+    }
+    assert!(ends_in_plain_name(
+        Os::Windows,
+        Path::new(r"C:\r\agent.json")
+    ));
+    for bad in [r"C:\r\", r"C:\r\.", r"C:\r\..", "C:/r/"] {
+        assert!(!ends_in_plain_name(Os::Windows, Path::new(bad)), "{bad}");
     }
 }

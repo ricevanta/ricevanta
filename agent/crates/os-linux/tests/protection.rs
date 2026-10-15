@@ -1,8 +1,11 @@
 //! Descriptor-based file protection of spec section 3.1 on Linux.
 #![cfg(target_os = "linux")]
 
-use ricevanta_os::{DirKind, FileKind, Mode, Object, Platform, ProtectionError, Reason};
+use ricevanta_os::{
+    CheckedDir, DirKind, FileKind, Mode, Object, Platform, ProtectionError, Reason,
+};
 use ricevanta_os_linux::LinuxPlatform;
+use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions, Permissions};
 use std::io::{Read, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt, symlink};
@@ -64,6 +67,28 @@ fn platform() -> LinuxPlatform {
     LinuxPlatform::new().unwrap()
 }
 
+/// Opens the parent of `path` and then the directory itself, as the core
+/// does for each configured directory.
+fn checked(
+    p: &LinuxPlatform,
+    path: &Path,
+    kind: DirKind,
+    mode: Mode,
+) -> Result<CheckedDir, ProtectionError> {
+    let (parent, name) = p.open_parent(path, kind, mode)?;
+    p.open_or_create_dir(&parent, &name, kind, mode)
+}
+
+/// A checked `run`-mode runtime directory `name` inside `scratch`, the
+/// directory files are created in.
+fn runtime_in(p: &LinuxPlatform, scratch: &Scratch, name: &str) -> CheckedDir {
+    checked(p, &scratch.join(name), DirKind::Runtime, Mode::Run).unwrap()
+}
+
+fn os(name: &str) -> &OsStr {
+    OsStr::new(name)
+}
+
 fn reason(result: Result<impl std::fmt::Debug, ProtectionError>, object: Object) -> Reason {
     let error = result.expect_err("check must fail");
     assert_eq!(error.object, object, "{error:?}");
@@ -111,10 +136,9 @@ fn config_mode_must_grant_nothing_to_group_or_others() {
     for mode in [0o600, 0o400] {
         let path = dir.join(&format!("good-{mode:o}.json"));
         write_file(&path, mode, b"{\"k\":1}");
-        let mut file = platform()
-            .open_config(&path, Mode::Service)
-            .unwrap()
-            .unwrap();
+        // `run` mode: the scratch parent belongs to the effective user,
+        // which `service` mode refuses unless that user is root.
+        let mut file = platform().open_config(&path, Mode::Run).unwrap().unwrap();
         let mut body = String::new();
         file.read_to_string(&mut body).unwrap();
         assert_eq!(body, "{\"k\":1}");
@@ -163,17 +187,66 @@ fn service_mode_refuses_a_directory_not_owned_by_root() {
     fs::set_permissions(&state, Permissions::from_mode(0o700)).unwrap();
     // As a non-root user the directory belongs to that user; as root it is
     // handed to an unprivileged uid. Both branches assert a real refusal.
+    // The parent is checked in `run` mode so that a non-root run reaches the
+    // directory rule.
     let owner = if p.euid() == 0 {
         std::os::unix::fs::chown(&state, Some(65534), None).unwrap();
         65534
     } else {
         p.euid()
     };
+    let (parent, name) = p.open_parent(&state, DirKind::State, Mode::Run).unwrap();
     let got = reason(
-        p.open_or_create_dir(&state, DirKind::State, Mode::Service),
+        p.open_or_create_dir(&parent, &name, DirKind::State, Mode::Service),
         Object::StateDir,
     );
     assert_eq!(got, Reason::Owner { uid: owner });
+}
+
+#[test]
+fn directory_parent_rules() {
+    let p = platform();
+    let scratch = Scratch::new();
+    let cases = [
+        (DirKind::State, Object::StateParent),
+        (DirKind::Runtime, Object::RuntimeParent),
+        (DirKind::Log, Object::LogParent),
+    ];
+    for (kind, object) in cases {
+        let parent = scratch.join(&format!("{object:?}"));
+        fs::create_dir(&parent).unwrap();
+        let child = parent.join("dir");
+        // World-writable, with or without the sticky bit: always refused.
+        for mode in [0o777, 0o1777, 0o757] {
+            fs::set_permissions(&parent, Permissions::from_mode(mode)).unwrap();
+            let got = reason(checked(&p, &child, kind, Mode::Run), object);
+            assert_eq!(got, Reason::ParentWritable { mode }, "{kind:?} {mode:o}");
+        }
+        // Group-writable: refused for state and runtime, accepted for logs.
+        fs::set_permissions(&parent, Permissions::from_mode(0o775)).unwrap();
+        let result = checked(&p, &child, kind, Mode::Run);
+        if kind == DirKind::Log {
+            result.unwrap();
+        } else {
+            let got = reason(result, object);
+            assert_eq!(got, Reason::ParentWritable { mode: 0o775 }, "{kind:?}");
+        }
+        fs::set_permissions(&parent, Permissions::from_mode(0o755)).unwrap();
+        checked(&p, &child, kind, Mode::Run).unwrap();
+        // A parent that is not a directory.
+        let not_dir = scratch.join(&format!("{object:?}-file"));
+        write_file(&not_dir, 0o755, b"");
+        let got = reason(checked(&p, &not_dir.join("dir"), kind, Mode::Run), object);
+        assert_eq!(got, Reason::NotDirectory);
+    }
+    // In `service` mode a parent owned by a non-root user is refused.
+    if p.euid() != 0 {
+        let got = reason(
+            p.open_parent(&scratch.join("svc"), DirKind::Runtime, Mode::Service),
+            Object::RuntimeParent,
+        );
+        assert_eq!(got, Reason::Owner { uid: p.euid() });
+    }
 }
 
 /// Fails, never passes, without root. Task 6 runs it in the Linux
@@ -208,6 +281,41 @@ fn root_foreign_owner_of_config_and_parent_fails() {
 
 #[test]
 #[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+fn root_directory_parent_owner_and_group_rules() {
+    let p = platform();
+    require_root(&p);
+    let scratch = Scratch::new();
+    for (kind, object) in [
+        (DirKind::State, Object::StateParent),
+        (DirKind::Runtime, Object::RuntimeParent),
+        (DirKind::Log, Object::LogParent),
+    ] {
+        let parent = scratch.join(&format!("{object:?}"));
+        fs::create_dir(&parent).unwrap();
+        let child = parent.join("dir");
+        // Root-owned 0775: refused for state and runtime, accepted for logs.
+        fs::set_permissions(&parent, Permissions::from_mode(0o775)).unwrap();
+        let result = checked(&p, &child, kind, Mode::Service);
+        if kind == DirKind::Log {
+            result.unwrap();
+        } else {
+            assert_eq!(
+                reason(result, object),
+                Reason::ParentWritable { mode: 0o775 }
+            );
+        }
+        // Owned by another user, even with mode 0755: refused in both modes.
+        fs::set_permissions(&parent, Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::chown(&parent, Some(65534), None).unwrap();
+        for mode in [Mode::Service, Mode::Run] {
+            let got = reason(checked(&p, &child, kind, mode), object);
+            assert_eq!(got, Reason::Owner { uid: 65534 });
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
 fn root_service_mode_refuses_unprivileged_directory_owner() {
     let p = platform();
     require_root(&p);
@@ -221,10 +329,10 @@ fn root_service_mode_refuses_unprivileged_directory_owner() {
         fs::create_dir(&path).unwrap();
         fs::set_permissions(&path, Permissions::from_mode(kind.unix_mode())).unwrap();
         std::os::unix::fs::chown(&path, Some(65534), None).unwrap();
-        let got = reason(p.open_or_create_dir(&path, kind, Mode::Service), object);
+        let got = reason(checked(&p, &path, kind, Mode::Service), object);
         assert_eq!(got, Reason::Owner { uid: 65534 });
         std::os::unix::fs::chown(&path, Some(0), None).unwrap();
-        p.open_or_create_dir(&path, kind, Mode::Service).unwrap();
+        checked(&p, &path, kind, Mode::Service).unwrap();
     }
 }
 
@@ -233,12 +341,13 @@ fn root_service_mode_refuses_unprivileged_directory_owner() {
 fn root_foreign_health_file_is_refused_untouched() {
     let p = platform();
     require_root(&p);
-    let dir = Scratch::new();
-    let tmp = dir.join("health.json.tmp");
+    let scratch = Scratch::new();
+    let run = runtime_in(&p, &scratch, "run");
+    let tmp = scratch.join("run/health.json.tmp");
     write_file(&tmp, 0o644, b"planted");
     std::os::unix::fs::chown(&tmp, Some(65534), None).unwrap();
     let got = reason(
-        p.create_file(&tmp, FileKind::HealthDocument),
+        p.create_file(&run, os("health.json.tmp"), FileKind::HealthDocument),
         Object::HealthDocument,
     );
     assert_eq!(got, Reason::Owner { uid: 65534 });
@@ -247,7 +356,7 @@ fn root_foreign_health_file_is_refused_untouched() {
 }
 
 #[test]
-fn paths_must_end_in_a_plain_name() {
+fn paths_and_names_must_be_plain() {
     let p = platform();
     let dir = Scratch::new();
     let real = dir.join("real");
@@ -260,12 +369,14 @@ fn paths_must_end_in_a_plain_name() {
         format!("{base}/"),
         format!("{base}/."),
         format!("{base}/sub/.."),
+        "/".to_owned(),
+        String::new(),
     ] {
         let got = reason(
-            p.open_or_create_dir(Path::new(&spelled), DirKind::State, Mode::Run),
+            p.open_parent(Path::new(&spelled), DirKind::State, Mode::Run),
             Object::StateDir,
         );
-        assert_eq!(got, Reason::PathForm, "{spelled}");
+        assert_eq!(got, Reason::PathForm, "{spelled:?}");
     }
     let config = dir.join("agent.json");
     write_file(&config, 0o600, b"{}");
@@ -275,14 +386,75 @@ fn paths_must_end_in_a_plain_name() {
         Object::ConfigFile,
     );
     assert_eq!(got, Reason::PathForm);
-    let got = reason(
-        p.create_file(Path::new(&format!("{base}/")), FileKind::Log),
-        Object::LogFile,
-    );
-    assert_eq!(got, Reason::PathForm);
+    let run = runtime_in(&p, &dir, "run");
+    for bad in ["", ".", "..", "a/b", "../agent.log"] {
+        let got = reason(p.create_file(&run, os(bad), FileKind::Log), Object::LogFile);
+        assert_eq!(got, Reason::PathForm, "{bad:?}");
+        let got = reason(
+            p.open_or_create_dir(&run, os(bad), DirKind::State, Mode::Run),
+            Object::StateDir,
+        );
+        assert_eq!(got, Reason::PathForm, "{bad:?}");
+        assert_eq!(
+            p.rename_in(&run, os(bad), os("x")).unwrap_err().reason,
+            Reason::PathForm
+        );
+        assert_eq!(
+            p.remove_in(&run, os(bad)).unwrap_err().reason,
+            Reason::PathForm
+        );
+    }
     // Nothing was created or re-moded through the link.
     assert_eq!(mode_of(&real), 0o700);
     assert_eq!(fs::read_dir(&real).unwrap().count(), 0);
+}
+
+#[test]
+fn writes_land_in_the_checked_directory_not_at_its_path() {
+    let p = platform();
+    let scratch = Scratch::new();
+    let run = runtime_in(&p, &scratch, "run");
+    // Rename the checked directory away and put a new one at its path.
+    fs::rename(scratch.join("run"), scratch.join("moved")).unwrap();
+    fs::create_dir(scratch.join("run")).unwrap();
+    fs::set_permissions(scratch.join("run"), Permissions::from_mode(0o755)).unwrap();
+
+    p.create_file(&run, os("health.json.tmp"), FileKind::HealthDocument)
+        .unwrap()
+        .write_all(b"{\"state\":\"ready\"}")
+        .unwrap();
+    p.rename_in(&run, os("health.json.tmp"), os("health.json"))
+        .unwrap();
+    p.create_file(&run, os("agent.log"), FileKind::Log)
+        .unwrap()
+        .write_all(b"line\n")
+        .unwrap();
+    p.rename_in(&run, os("agent.log"), os("agent.log.1"))
+        .unwrap();
+    p.create_file(&run, os("agent.log"), FileKind::Log).unwrap();
+
+    let moved = scratch.join("moved");
+    assert_eq!(
+        fs::read(moved.join("health.json")).unwrap(),
+        b"{\"state\":\"ready\"}"
+    );
+    assert!(!moved.join("health.json.tmp").exists());
+    assert_eq!(fs::read(moved.join("agent.log.1")).unwrap(), b"line\n");
+    assert!(moved.join("agent.log").exists());
+    assert_eq!(fs::read_dir(scratch.join("run")).unwrap().count(), 0);
+
+    // Deletion is relative too, and an absent name is success.
+    p.remove_in(&run, os("agent.log.1")).unwrap();
+    p.remove_in(&run, os("agent.log.1")).unwrap();
+    assert!(!moved.join("agent.log.1").exists());
+    // The rename replaces an existing target.
+    p.create_file(&run, os("health.json.tmp"), FileKind::HealthDocument)
+        .unwrap()
+        .write_all(b"2")
+        .unwrap();
+    p.rename_in(&run, os("health.json.tmp"), os("health.json"))
+        .unwrap();
+    assert_eq!(fs::read(moved.join("health.json")).unwrap(), b"2");
 }
 
 #[test]
@@ -409,19 +581,20 @@ fn existing_directories_must_match_exactly() {
     let dir = Scratch::new();
     let state = dir.join("state");
     fs::create_dir(&state).unwrap();
+    write_file(&state.join("kept"), 0o600, b"");
     fs::set_permissions(&state, Permissions::from_mode(0o750)).unwrap();
     let got = reason(
-        p.open_or_create_dir(&state, DirKind::State, Mode::Run),
+        checked(&p, &state, DirKind::State, Mode::Run),
         Object::StateDir,
     );
     assert_eq!(got, Reason::Mode { mode: 0o750 });
-    // A failing directory is never re-moded.
+    // A pre-existing non-empty directory is never re-moded.
     assert_eq!(mode_of(&state), 0o750);
     fs::set_permissions(&state, Permissions::from_mode(0o700)).unwrap();
-    let handle = p
-        .open_or_create_dir(&state, DirKind::State, Mode::Run)
-        .unwrap();
-    assert!(handle.metadata().unwrap().is_dir());
+    let handle = checked(&p, &state, DirKind::State, Mode::Run).unwrap();
+    assert!(handle.file().metadata().unwrap().is_dir());
+    assert_eq!(handle.object(), Object::StateDir);
+    assert_eq!(mode_of(&state), 0o700);
 }
 
 #[test]
@@ -433,16 +606,13 @@ fn symbolic_link_in_place_of_a_directory_fails() {
     fs::set_permissions(&real, Permissions::from_mode(0o700)).unwrap();
     let logs = dir.join("logs");
     symlink(&real, &logs).unwrap();
-    let got = reason(
-        p.open_or_create_dir(&logs, DirKind::Log, Mode::Run),
-        Object::LogDir,
-    );
+    let got = reason(checked(&p, &logs, DirKind::Log, Mode::Run), Object::LogDir);
     assert!(matches!(got, Reason::SymbolicLink { .. }), "{got:?}");
     // A regular file is not a directory either.
     let file = dir.join("file");
     write_file(&file, 0o700, b"");
     let got = reason(
-        p.open_or_create_dir(&file, DirKind::Runtime, Mode::Run),
+        checked(&p, &file, DirKind::Runtime, Mode::Run),
         Object::RuntimeDir,
     );
     assert_eq!(got, Reason::NotDirectory);
@@ -454,8 +624,8 @@ fn missing_parent_is_not_created() {
     let dir = Scratch::new();
     let nested = dir.join("a/b");
     let got = reason(
-        p.open_or_create_dir(&nested, DirKind::State, Mode::Run),
-        Object::StateDir,
+        checked(&p, &nested, DirKind::State, Mode::Run),
+        Object::StateParent,
     );
     assert!(
         matches!(&got, Reason::Io(cause) if cause.kind() == std::io::ErrorKind::NotFound),
@@ -468,12 +638,12 @@ fn missing_parent_is_not_created() {
 fn created_file_refuses_a_symbolic_link() {
     let p = platform();
     let dir = Scratch::new();
+    let run = runtime_in(&p, &dir, "run");
     let target = dir.join("elsewhere");
     write_file(&target, 0o600, b"keep");
-    let health = dir.join("health.json.tmp");
-    symlink(&target, &health).unwrap();
+    symlink(&target, dir.join("run/health.json.tmp")).unwrap();
     let got = reason(
-        p.create_file(&health, FileKind::HealthDocument),
+        p.create_file(&run, os("health.json.tmp"), FileKind::HealthDocument),
         Object::HealthDocument,
     );
     assert!(matches!(got, Reason::SymbolicLink { .. }), "{got:?}");
@@ -484,22 +654,23 @@ fn created_file_refuses_a_symbolic_link() {
 fn created_files_truncate_or_append_by_kind() {
     let p = platform();
     let dir = Scratch::new();
-    let health = dir.join("health.json.tmp");
-    p.create_file(&health, FileKind::HealthDocument)
+    let run = runtime_in(&p, &dir, "run");
+    let health = dir.join("run/health.json.tmp");
+    p.create_file(&run, os("health.json.tmp"), FileKind::HealthDocument)
         .unwrap()
         .write_all(b"first")
         .unwrap();
-    p.create_file(&health, FileKind::HealthDocument)
+    p.create_file(&run, os("health.json.tmp"), FileKind::HealthDocument)
         .unwrap()
         .write_all(b"2")
         .unwrap();
     assert_eq!(fs::read(&health).unwrap(), b"2");
-    let log = dir.join("agent.log");
-    p.create_file(&log, FileKind::Log)
+    let log = dir.join("run/agent.log");
+    p.create_file(&run, os("agent.log"), FileKind::Log)
         .unwrap()
         .write_all(b"a\n")
         .unwrap();
-    p.create_file(&log, FileKind::Log)
+    p.create_file(&run, os("agent.log"), FileKind::Log)
         .unwrap()
         .write_all(b"b\n")
         .unwrap();
@@ -552,18 +723,16 @@ fn umask_child_narrow() {
     let p = platform();
     let dir = Scratch::new();
     let runtime = dir.join("run");
-    let handle = p
-        .open_or_create_dir(&runtime, DirKind::Runtime, Mode::Run)
-        .unwrap();
-    assert_eq!(handle.metadata().unwrap().mode() & 0o7777, 0o755);
+    let handle = checked(&p, &runtime, DirKind::Runtime, Mode::Run).unwrap();
+    assert_eq!(handle.file().metadata().unwrap().mode() & 0o7777, 0o755);
     assert_eq!(mode_of(&runtime), 0o755);
-    let health = runtime.join("health.json.tmp");
-    let file = p.create_file(&health, FileKind::HealthDocument).unwrap();
-    assert_eq!(file.metadata().unwrap().mode() & 0o7777, 0o644);
-    assert_eq!(mode_of(&health), 0o644);
-    // The second open of an existing directory checks, never re-modes.
-    p.open_or_create_dir(&runtime, DirKind::Runtime, Mode::Run)
+    let file = p
+        .create_file(&handle, os("health.json.tmp"), FileKind::HealthDocument)
         .unwrap();
+    assert_eq!(file.metadata().unwrap().mode() & 0o7777, 0o644);
+    assert_eq!(mode_of(&runtime.join("health.json.tmp")), 0o644);
+    // The second open of an existing directory checks, never re-modes.
+    checked(&p, &runtime, DirKind::Runtime, Mode::Run).unwrap();
 }
 
 #[test]
@@ -573,15 +742,13 @@ fn umask_child_open() {
     let p = platform();
     let dir = Scratch::new();
     let state = dir.join("state");
-    p.open_or_create_dir(&state, DirKind::State, Mode::Run)
-        .unwrap();
+    checked(&p, &state, DirKind::State, Mode::Run).unwrap();
     assert_eq!(mode_of(&state), 0o700);
     let logs = dir.join("logs");
-    p.open_or_create_dir(&logs, DirKind::Log, Mode::Run)
+    let handle = checked(&p, &logs, DirKind::Log, Mode::Run).unwrap();
+    p.create_file(&handle, os("agent.log"), FileKind::Log)
         .unwrap();
-    let log = logs.join("agent.log");
-    p.create_file(&log, FileKind::Log).unwrap();
-    assert_eq!(mode_of(&log), 0o600);
+    assert_eq!(mode_of(&logs.join("agent.log")), 0o600);
 }
 
 #[test]
