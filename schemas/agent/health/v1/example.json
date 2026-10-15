@@ -15,14 +15,17 @@
     "cpu_user_ms": 120,
     "cpu_system_ms": 80,
     "threads": 6,
-    "fd_count": 14
+    "fd_count": 14,
+    "sampled_unix_ms": 1760000000000,
+    "sampled_uptime_ms": 3600000
   },
   "counters": {
     "samples": 60,
     "sample_failures": 0,
     "log_errors": 0,
     "health_write_failures": 0,
-    "stop_requests": 0
+    "stop_requests": 0,
+    "log_rotations": 0
   },
   "errors": []
 }
