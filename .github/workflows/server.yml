@@ -19,13 +19,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -44,9 +55,13 @@ jobs:
           exit 1
         fi
     - name: Test
-      run: go test -count=1 ./...
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id server-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Benchmark key admission
-      run: go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id key-admission-bench --evidence "$RUNNER_TEMP/evidence"
     - name: Vet
       run: go vet ./...
     - name: Write successful leaf receipt
@@ -67,7 +82,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -93,13 +108,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -111,7 +137,9 @@ jobs:
         go mod download
         go mod verify
     - name: Test with race detector
-      run: go test -race -count=1 -timeout=15m ./...
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id server-race --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -130,7 +158,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -155,9 +183,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Discover fuzz matrix
       id: matrix
       shell: bash
@@ -181,13 +224,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -199,10 +253,12 @@ jobs:
         go mod download
         go mod verify
     - name: Fuzz for 60 seconds
+      shell: bash
+      working-directory: .
       env:
         FUZZ_PACKAGE: ${{ matrix.package }}
         FUZZ_TARGET: ${{ matrix.target }}
-      run: go test -count=1 "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2
+      run: python -B scripts/ci/run_selected.py --id "go-fuzz:${FUZZ_PACKAGE}:${FUZZ_TARGET}" --evidence "$RUNNER_TEMP/evidence"
     - name: Upload failing corpus
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -229,7 +285,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -264,9 +320,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
       shell: bash
       working-directory: .
@@ -282,10 +353,6 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -297,17 +364,23 @@ jobs:
         go mod download
         go mod verify
     - name: Extended parser budget
+      shell: bash
+      working-directory: .
       run: |
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/loader-measurements-gate-a"
-        go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/extended.log"
+        python -B scripts/ci/run_selected.py --id loader-extended --evidence "$RUNNER_TEMP/evidence" 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/extended.log"
     - name: Repeat affected parser measurement 50 times
+      shell: bash
+      working-directory: .
       run: |
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/loader-measurements-gate-a"
-        go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/repeat.log"
+        python -B scripts/ci/run_selected.py --id loader-repeat --evidence "$RUNNER_TEMP/evidence" 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/repeat.log"
     - name: Fuzz parser qualification for 60 seconds
-      run: go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id loader-fuzz --evidence "$RUNNER_TEMP/evidence"
     - name: Upload failing corpus
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -350,7 +423,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -385,9 +458,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
       shell: bash
       working-directory: .
@@ -403,10 +491,6 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -418,10 +502,12 @@ jobs:
         go mod download
         go mod verify
     - name: Extended loader budget
+      shell: bash
+      working-directory: .
       run: |
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/loader-measurements-gate-b"
-        go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetExtended$' -v -args -loader-budget-extended 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-b/extended.log"
+        python -B scripts/ci/run_selected.py --id loader-gate-b-extended --evidence "$RUNNER_TEMP/evidence" 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-b/extended.log"
     - name: Verify loader measurement logs
       if: always()
       run: |
@@ -453,7 +539,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -493,9 +579,24 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
       shell: bash
       working-directory: .
@@ -511,10 +612,6 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -534,7 +631,9 @@ jobs:
         test "$(go env GOOS)" = "$EXPECTED_GOOS"
         test "$(go env GOARCH)" = "$EXPECTED_GOARCH"
     - name: Test OCSF shared corpus
-      run: go test -count=1 ./internal/events/ocsf
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id ocsf-native --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -553,7 +652,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')

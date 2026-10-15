@@ -1,0 +1,18 @@
+{
+	"Dir": "/fixtures/tiny-go",
+	"ImportPath": "example.com/tiny",
+	"TestGoFiles": [
+		"tiny_test.go"
+	]
+}
+{
+	"Dir": "/fixtures/tiny-go/notest",
+	"ImportPath": "example.com/tiny/notest"
+}
+{
+	"Dir": "/fixtures/tiny-go/sub",
+	"ImportPath": "example.com/tiny/sub",
+	"TestGoFiles": [
+		"sub_test.go"
+	]
+}

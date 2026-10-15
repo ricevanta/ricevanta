@@ -10,25 +10,50 @@ permissions:
 jobs:
   validate:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
     strategy:
       fail-fast: false
       matrix:
-        os:
-        - ubuntu-24.04
-        - windows-2025
-        - macos-15
+        include:
+        - os: ubuntu-24.04
+          tools: python,go,rust,node,pnpm,playwright
+        - os: windows-2025
+          tools: python,go,rust
+        - os: macos-15
+          tools: python,go,rust
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
+    - name: Reject corrupted payloads before any extraction or execution
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: ${{ matrix.tools }}
+      run: python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --work "$RUNNER_TEMP/bootstrap-controls"
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: ${{ matrix.tools }}
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: ${{ matrix.tools }}
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
       shell: bash
       working-directory: .
@@ -44,10 +69,22 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
+    - name: Record runner compilers, SDKs and admitted tool versions
+      shell: bash
+      working-directory: .
+      run: |
+        echo "image ${ImageOS:-?} ${ImageVersion:-?}"
+        git --version
+        case "$RUNNER_OS" in
+          Linux) cc --version; ldd --version | head -1;;
+          macOS) cc --version; xcodebuild -version; sw_vers;;
+          Windows) pwsh -File agent/tools/check-msvc.ps1;;
+        esac
+        # bootstrap.py executed every admitted tool once and logged its version; this records the PATH resolution.
+        command -v python; python --version
+        command -v go; go version
+        command -v rustc; rustc -vV; cargo -V; rustfmt --version; cargo-clippy --version
+        if [ "$RUNNER_OS" = Linux ]; then ls "$PLAYWRIGHT_BROWSERS_PATH"; fi
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -58,8 +95,17 @@ jobs:
       run: |
         go mod download
         go mod verify
-    - name: Install contract dependencies
-      run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+    - name: Create validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -I -S -B scripts/ci/python_env.py --check
     - name: Contract unit tests
       run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
     - name: CI schema fixtures
@@ -72,7 +118,19 @@ jobs:
         Draft202012Validator.check_schema(schema)
         for example in json.load(open('schemas/ci/v1/examples.json')):
             Draft202012Validator(schema).validate(example)
+        Draft202012Validator(schema).validate(json.load(open('scripts/ci/toolchains.lock.json')))
         PY
+    - name: Upload bootstrap evidence
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: bootstrap-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.os }}
+        path: ${{ runner.temp }}/admitted/bootstrap-evidence.json
+        retention-days: 30
+        if-no-files-found: error
+    - name: Re-verify validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -I -S -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -80,7 +138,7 @@ jobs:
       env:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: bootstrap
-        CHECKS: '["bootstrap-host", "ci-unit", "ci-schema"]'
+        CHECKS: '["bootstrap-host", "bootstrap-controls", "bootstrap-cold-install", "ci-unit", "ci-schema"]'
         HOST_OS: ${{ matrix.os }}
       run: |
         python - <<'PY'

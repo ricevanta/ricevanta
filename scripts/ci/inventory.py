@@ -15,6 +15,7 @@ DESIGN_COMMANDS = (
     'schemas/policy/v1alpha1/validate.py', 'schemas/export/v1alpha1/validate.py',
     'schemas/report/v1alpha1/validate.py', 'server/internal/authz/catalogue/schema_test.py',
     'scripts/ci/validate_contracts.py',
+    'python -B scripts/ci/catalogue_compat.py --root . --base-sha "$BASE_SHA" --candidate-sha "$CANDIDATE_SHA"',
     "suite = unittest.defaultTestLoader.discover('scripts/release', pattern='test_*.py')",
     'expected = suite.countTestCases()', 'if expected == 0:',
     'result = unittest.TextTestRunner(verbosity=2).run(suite)',
@@ -25,8 +26,8 @@ CHECKS = {
     'semgrep': ['semgrep-admission', 'semgrep-code', 'semgrep-supply-chain', 'semgrep-gate'],
     'design': ['ocsf-schemas', 'policy-schemas', 'export-schemas', 'report-schemas',
                'permission-schema', 'fixture-contracts', 'ci-schema', 'document-limits',
-               'release-contracts'],
-    'ci-contracts': ['ci-unit', 'ci-policy'],
+               'release-contracts', 'catalogue-compat'],
+    'ci-contracts': ['ci-go-helper', 'ci-unit', 'ci-policy'],
     'server-validate': ['server-format', 'server-unit', 'key-admission-bench', 'server-vet'],
     'server-race': ['server-race'],
     'interop': ['interop-build', 'interop-unit', 'interop-race'],
@@ -103,7 +104,7 @@ def checks(unit):
     if group == 'ocsf': return ['ocsf-native']
     if group == 'agent': return ['agent-host', 'agent-pins', 'agent-fixtures', 'agent-format',
                                  'agent-clippy', 'agent-unit', 'spool-extended', 'batch-extended']
-    if group == 'bootstrap': return ['bootstrap-host', 'ci-unit', 'ci-schema']
+    if group == 'bootstrap': return ['bootstrap-host', 'bootstrap-controls', 'bootstrap-cold-install', 'ci-unit', 'ci-schema']
     raise ValueError('unknown leaf: ' + unit)
 
 

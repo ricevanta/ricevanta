@@ -45,7 +45,8 @@ def verify_cargo(home, lock):
 def prepare(root, env_out, cargo_home=None, cargo_lock=None):
     create_root(root)
     if cargo_home is None:
-        env = {'GOTOOLCHAIN': 'local', 'GOFLAGS': '-mod=readonly'}
+        # GOENV=off: no per-user `go env -w` file can supply CC, flags or a toolchain to any later Go step.
+        env = {'GOTOOLCHAIN': 'local', 'GOFLAGS': '-mod=readonly', 'GOENV': 'off'}
         for key, name in (('GOCACHE', 'build'), ('GOMODCACHE', 'modules')):
             path = root / name
             path.mkdir(mode=0o700)

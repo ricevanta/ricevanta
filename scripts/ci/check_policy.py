@@ -1,11 +1,18 @@
 """Check the reviewed workflow graph, routing inputs and receipt obligations."""
 import argparse
 import ast
+import fnmatch
+import os
 from pathlib import Path
 import re
 import json
+import shlex
 import yaml
+import bootstrap
 import inventory
+import python_env
+import run_selected
+import rust_env
 from required import NEEDS, CALLERS
 
 
@@ -50,38 +57,360 @@ LEAVES = {'design': {'validate': 'design'},
           'console': {'validate': 'console'}, 'bootstrap': {'validate': 'bootstrap'},
           'ci': {'ci-contracts': 'ci-contracts'}}
 
-# Task 2 receipts prove step success. Keep the existing commands behind each
-# declared ID until Task 4 replaces selected execution with audited wrappers.
+# Selected tests, benchmarks, fuzzing and property runs execute only through the
+# wrapper; targets.toml holds their exact commands, pinned in SELECTED_COMMANDS.
+def wrapper(target_id):
+    return f'python -B scripts/ci/run_selected.py --id {target_id} --evidence "$RUNNER_TEMP/evidence"'
+
+
+FUZZ_WRAPPER = 'python -B scripts/ci/run_selected.py --id "go-fuzz:${FUZZ_PACKAGE}:${FUZZ_TARGET}" --evidence "$RUNNER_TEMP/evidence"'
+RECEIPT_WITH_EVIDENCE = "required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')"
+SELECTED_COMMANDS = {
+    'server-unit': ("go test -list '.*' ./...", 'go test -json -count=1 ./...'),
+    'server-race': ("go test -race -list '.*' ./...", 'go test -json -race -count=1 -timeout=15m ./...'),
+    'key-admission-bench': ("go test -list '^BenchmarkValidate$' ./internal/signing/ed25519key",
+                            "go test -json -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key"),
+    'loader-extended': ("go test -list '^(TestParserBudgetExtended)$' ./internal/extensions/loader",
+                        "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetExtended)$' -args -loader-budget-extended"),
+    'loader-repeat': ("go test -list '^(TestParserBudgetSmoke)$' ./internal/extensions/loader",
+                      "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetSmoke)$' -args "
+                      "-loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50"),
+    'loader-fuzz': ("go test -list '^FuzzParserQualification$' ./internal/extensions/loader",
+                    "go test -json -count=1 ./internal/extensions/loader '-fuzz=^FuzzParserQualification$' -fuzztime=60s -parallel=2"),
+    'loader-gate-b-extended': ("go test -list '^(TestLoaderBudgetExtended)$' ./internal/extensions/loader",
+                               "go test -json -count=1 ./internal/extensions/loader -run '^(TestLoaderBudgetExtended)$' -args -loader-budget-extended"),
+    'ocsf-native': ("go test -list '.*' ./internal/events/ocsf", 'go test -json -count=1 ./internal/events/ocsf'),
+    'agent-unit': ('cargo test --locked --workspace -- --list', 'cargo test --locked --workspace'),
+    'spool-extended': ('cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --list',
+                       'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --nocapture --test-threads=1'),
+    'batch-extended': ('cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact --list',
+                       'cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact --nocapture --test-threads=1'),
+    'interop-unit': ("go test -tags rustinterop -list '^TestRustWriter' ./internal/events/body",
+                     "go test -json -tags rustinterop -count=1 ./internal/events/body -run '^TestRustWriter'"),
+    'interop-race': ("go test -race -tags rustinterop -list '^TestRustWriter' ./internal/events/body",
+                     "go test -json -race -tags rustinterop -count=1 ./internal/events/body -run '^TestRustWriter'"),
+}
+INTEROP_PROOF = {
+    'tests': ['TestRustWriterFixtures', 'TestRustWriterBoundaries', 'TestRustWriterMutations', 'TestRustWriterCaptureOverflow'],
+    'helpers': ['TestRustWriterPrecondition', 'TestRustWriterCaptureChild'],
+    'subtests': ['TestRustWriterCaptureOverflow/stdout', 'TestRustWriterCaptureOverflow/stderr'],
+    'subtest_prefixes': ['TestRustWriterFixtures/body/', 'TestRustWriterFixtures/header/', 'TestRustWriterFixtures/descriptor/'],
+    'children': [{'parent': 'TestRustWriterMutations', 'Helper': 'TestRustWriterPrecondition', 'Pipe': '', 'Outcome': 'rejected'},
+                 {'parent': 'TestRustWriterCaptureOverflow/stdout', 'Helper': 'TestRustWriterCaptureChild', 'Pipe': 'stdout', 'Outcome': 'overflow'},
+                 {'parent': 'TestRustWriterCaptureOverflow/stderr', 'Helper': 'TestRustWriterCaptureChild', 'Pipe': 'stderr', 'Outcome': 'overflow'}],
+}
+# Where and how each selected ID executes; a row may not move its command elsewhere.
+SELECTED_PLACES = {
+    'server-unit': ('server', 'go-suite'), 'server-race': ('server', 'go-suite'), 'key-admission-bench': ('server', 'go-bench'),
+    'loader-extended': ('server', 'go-selected'), 'loader-repeat': ('server', 'go-selected'), 'loader-fuzz': ('server', 'go-fuzz'),
+    'loader-gate-b-extended': ('server', 'go-selected'), 'ocsf-native': ('server', 'go-suite'), 'agent-unit': ('agent', 'rust-suite'),
+    'spool-extended': ('agent', 'rust-selected'), 'batch-extended': ('agent', 'rust-selected'),
+    'interop-unit': ('server', 'go-interop'), 'interop-race': ('server', 'go-interop'),
+}
+SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
+                    'loader-extended': {'marker': 'PARSER_MEASUREMENT'}, 'loader-gate-b-extended': {'marker': 'LOADER_MEASUREMENT'},
+                    'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
+                    'batch-extended': {'seed': '0x5249564241544348', 'cases': 20000},
+                    'interop-unit': INTEROP_PROOF, 'interop-race': INTEROP_PROOF}
+# Ordinary suites whose discovered Fuzz* names must equal the fuzz inventory.
+FUZZ_INVENTORY_SUITES = ('server-unit', 'server-race', 'ocsf-native')
+LOADER_FUZZ = ('./internal/extensions/loader', 'FuzzParserQualification')
+# The closed skip allowance: each row names its separate proving unit or parent test.
+LOADER = 'github.com/ricevanta/ricevanta/server/internal/extensions/loader'
+YAMLTOKENS = LOADER + '/internal/yamltokens'
+GO_SKIP_MODES = ['server-unit', 'server-race', 'go-fuzz']
+SKIP_ALLOWANCES = [
+    {'package': LOADER, 'test': 'TestParserBudgetExtended', 'reason': 'native extended parser corpus',
+     'proof': 'loader-extended', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestLoaderBudgetExtended', 'reason': 'native extended complete-loader corpus',
+     'proof': 'loader-gate-b-extended', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestLoaderMeasurementChild', 'reason': 'fresh measurement child entry point',
+     'proof': 'loader-gate-b-extended', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestDecodeVerifiedYAMLInstrumented',
+     'reason': 'instrumented child entry point driven by TestDecodeVerifiedYAMLCallCounts',
+     'parent': 'TestDecodeVerifiedYAMLCallCounts', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestAgreementOutcomeChild',
+     'reason': 'negative-control child entry point driven by TestAgreementRejectsOutcomeMismatch',
+     'parent': 'TestAgreementRejectsOutcomeMismatch', 'modes': GO_SKIP_MODES},
+    {'package': YAMLTOKENS, 'test': 'TestParserBudgetHarness', 'reason': 'nested harness entry point run by the loader root tests',
+     'proof': 'loader-extended', 'modes': ['server-unit', 'server-race']},
+    {'package': YAMLTOKENS, 'test': 'TestParserMeasurementChild', 'reason': 'fresh measurement child entry point',
+     'proof': 'loader-extended', 'modes': ['server-unit', 'server-race']},
+    {'package': 'ricevanta-spool', 'test': 'fuzz_recover_extended', 'reason': 'extended 100,000-case native property budget',
+     'target': 'fuzz_recover', 'proof': 'spool-extended', 'modes': ['agent-unit']},
+    {'package': 'ricevanta-batch', 'test': 'fuzz_seal_extended', 'reason': 'extended 20,000-case native property budget',
+     'target': 'fuzz_seal', 'proof': 'batch-extended', 'modes': ['agent-unit']},
+]
+
+
+# test2json treats a stdout line starting with 0x16 as its own framing, so a test
+# that prints the byte can forge run/pass events. This is a partial tripwire, not
+# a closed gap: it rejects the literal byte and its string escapes in the sources
+# compiled into selected Go test binaries (server/ outside testdata, and the
+# wrapper's Go fixtures), but a byte computed at run time, an integer literal, or
+# data read from testdata, embedded files or assembly is not detected. Spec
+# section 11 covers that residual: a PR author can falsify their own tests.
+FRAMING_BYTE = re.compile(rb'\x16|\\x16|\\u0016|\\U00000016|\\026')
+
+
+def framing_errors(root):
+    errors = []
+    paths = [p for p in (root / 'server').rglob('*.go') if 'testdata' not in p.relative_to(root).parts]
+    paths += list((root / 'scripts').rglob('*_test.go'))
+    for path in sorted(paths):
+        try: data = path.read_bytes()
+        except OSError: continue
+        if FRAMING_BYTE.search(data):
+            errors.append(path.relative_to(root).as_posix() + ': test2json framing byte 0x16 is forbidden in selected Go sources')
+    return errors
+
+
+def cargo_config_errors(root):
+    """No Cargo configuration may live in the tree: a runner or wrapper replaces harness execution."""
+    errors = []
+    for directory, subdirectories, files in os.walk(root):
+        # Cargo reads only the working directory's ancestors; ignored build trees are skipped.
+        subdirectories[:] = [d for d in subdirectories if d not in ('.git', 'node_modules', 'target')]
+        if os.path.basename(directory) == '.cargo':
+            for name in ('config', 'config.toml'):
+                if name in files or name in subdirectories:
+                    errors.append(Path(directory, name).relative_to(root).as_posix() + ': repository Cargo configuration is forbidden')
+    return errors
+
+
+# Shell-style assignments (`NAME=value cmd`, `export NAME=`, `env NAME=` or a GITHUB_ENV line); cc reads target-suffixed
+# names with hyphens, which `env` can pass.
+SHELL_ASSIGNMENT = re.compile(r'(?<![\w$.-])([A-Za-z_][A-Za-z0-9_-]*)\+?=')
+
+
+def cargo_override_errors(data):
+    """Closed allowlists (rust_env) for Cargo/rustc and C toolchain variables in workflow env, run scripts and GITHUB_ENV writes.
+
+    Workflows may set only rust_env.WORKFLOW_RUST_ENV; CARGO_HOME and CARGO_TARGET_DIR come solely from the bootstrap's env
+    file and fresh_go.py (see cache_errors). No workflow sets a C compiler, archiver, flag or SDK variable that cc or cgo reads.
+    """
+    errors = []
+    def check(name):
+        if rust_env.CONTROLLED.search(name.upper()) and name.upper() not in rust_env.WORKFLOW_RUST_ENV:
+            errors.append(f'{jid}: unreviewed Cargo or rustc variable {name} forbidden')
+        if rust_env.is_c_toolchain_name(name):
+            errors.append(f'{jid}: C toolchain variable {name} forbidden')
+    for jid, job in data.get('jobs', {}).items():
+        for scope in (data, job, *job.get('steps', [])):
+            env = scope.get('env', {})
+            for key in (env if isinstance(env, dict) else {}): check(str(key))
+        for step in job.get('steps', []):
+            names = set(re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*=', str(step.get('run', ''))))
+            names |= set(SHELL_ASSIGNMENT.findall(str(step.get('run', ''))))
+            for name in sorted(names): check(name)
+    return errors
+
+
+def selected_errors(root):
+    """targets.toml must resolve every wrapper ID to its exact reviewed command."""
+    try:
+        targets = run_selected.inventory(root)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return ['scripts/ci/targets.toml: invalid selected inventory: ' + str(error)]
+    errors = []
+    for target_id, target in targets.items():
+        # No other wrapper ID may exist; console IDs are pinned here when Task 8 adds them.
+        if target_id not in SELECTED_COMMANDS and not (target_id.startswith('go-fuzz:') and target['mode'] == 'go-fuzz'):
+            errors.append('scripts/ci/targets.toml: unreviewed selected target ' + target_id)
+    fuzz_pairs = sorted(map(list, inventory.FUZZ_PAIRS | {LOADER_FUZZ}))
+    for target_id, target in targets.items():
+        expected = fuzz_pairs if target_id in FUZZ_INVENTORY_SUITES else None
+        if sorted(target.get('fuzz_inventory') or []) != (expected or []) or (expected is None) == ('fuzz_inventory' in target):
+            errors.append('scripts/ci/targets.toml: fuzz inventory cross-check mismatch: ' + target_id)
+    try: skips = run_selected.load_targets(root).get('skips', [])
+    except (OSError, ValueError): skips = None
+    canonical = lambda rows: sorted(json.dumps(row, sort_keys=True) for row in rows)
+    if not isinstance(skips, list) or canonical(skips) != canonical(SKIP_ALLOWANCES):
+        errors.append('scripts/ci/targets.toml: skip allowances differ from the reviewed set')
+    for target_id, (discovery, command) in SELECTED_COMMANDS.items():
+        target = targets.get(target_id)
+        if target is None:
+            errors.append('scripts/ci/targets.toml: missing selected target ' + target_id); continue
+        if shlex.join(run_selected.discovery_command(target)) != discovery or shlex.join(run_selected.run_command(target)) != command:
+            errors.append('scripts/ci/targets.toml: selected command mismatch: ' + target_id)
+        if (target['cwd'], target['mode']) != SELECTED_PLACES[target_id]:
+            errors.append('scripts/ci/targets.toml: selected directory or mode mismatch: ' + target_id)
+        for key, value in SELECTED_BUDGETS.get(target_id, {}).items():
+            if target.get(key) != value: errors.append('scripts/ci/targets.toml: selected budget mismatch: ' + target_id)
+    for package, name in inventory.FUZZ_PAIRS:
+        target = targets.get(f'go-fuzz:{package}:{name}')
+        if target is None or (target['cwd'], target['mode']) != ('server', 'go-fuzz') or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2":
+            errors.append(f'scripts/ci/targets.toml: fuzz command mismatch: {package} {name}')
+    for row in targets.values():
+        for allowance in row['skips'].values():
+            proof = allowance.get('proof')
+            if ('*' in allowance['test'] or not allowance['reason'] or (proof is None) == ('parent' not in allowance)
+                    or (proof is not None and (proof not in targets or proof in allowance['modes'] or targets[proof]['mode'] in allowance['modes']))):
+                errors.append('scripts/ci/targets.toml: skip allowance must name an exact test and a separate proving unit')
+    return errors
+
+
 COMMANDS = {
-    ('server', 'validate'): ('gofmt -l .', 'go test -count=1 ./...', 'go vet ./...',
-                            "go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key"),
-    ('server', 'race'): ('go test -race -count=1 -timeout=15m ./...',),
-    ('server', 'fuzz'): ('go test -count=1 "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2',),
-    ('server', 'loader-gate-a'): ("go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended",
-        "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50",
-        "go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2"),
-    ('server', 'loader-gate-b'): ("go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetExtended$' -v -args -loader-budget-extended",),
-    ('server', 'ocsf-native'): ('go test -count=1 ./internal/events/ocsf',),
+    ('server', 'validate'): ('gofmt -l .', wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench')),
+    ('server', 'race'): (wrapper('server-race'),),
+    ('server', 'fuzz'): (FUZZ_WRAPPER,),
+    ('server', 'loader-gate-a'): (wrapper('loader-extended'), wrapper('loader-repeat'), wrapper('loader-fuzz')),
+    ('server', 'loader-gate-b'): (wrapper('loader-gate-b-extended'),),
+    ('server', 'ocsf-native'): (wrapper('ocsf-native'),),
     ('agent', 'validate'): ('cargo metadata --locked --format-version 1', 'python tools/generate-spool-fixtures.py --check',
         'cargo fmt --all -- --check', 'cargo clippy --locked --workspace --all-targets -vv -- -D warnings',
-        'cargo test --locked --workspace',
-        'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact',
-        'cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact'),
+        wrapper('agent-unit'), wrapper('spool-extended'), wrapper('batch-extended')),
     ('agent', 'rustinterop'): ('cargo build --locked -p ricevanta-batch --example seal-vector -vv',
-        "go test -v -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1",
-        "go test -v -race -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1"),
+        wrapper('interop-unit'), wrapper('interop-race')),
     ('console', 'validate'): ('pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm lint',
         'pnpm format:check', 'pnpm audit:deps', 'pnpm test:unit', 'pnpm test:component',
-        'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz',
-        'pnpm exec playwright install --with-deps chromium firefox webkit'),
-    ('ci', 'ci-contracts'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
+        'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz'),
+    ('ci', 'ci-contracts'): ('gofmt -l .', 'go vet .', "python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
         'python -B scripts/ci/check_policy.py --root .'),
     ('bootstrap', 'validate'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
-        'schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'),
+        'schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json', 'scripts/ci/toolchains.lock.json'),
 }
 
 
-SETUP_PYTHON = 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
+CACHE = 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+# Every toolchain comes from the reviewed lock through one exact bootstrap step; setup actions and
+# ad hoc installers fetch unchecked payloads and are forbidden everywhere.
+BOOTSTRAP_COMMAND = ('python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
+                     '--tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"')
+# The plan's interface writes the admitted environment to a file; one exact step then applies it for later steps.
+APPLY_COMMAND = 'cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"'
+APPLY_NAME = 'Apply admitted toolchain environment'
+EVIDENCE_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
+                    '--tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"')
+CONTROLS_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
+                    '--tools "$CI_TOOLS" --work "$RUNNER_TEMP/bootstrap-controls"')
+PLATFORM_EXPRESSION = '${{ fromJSON(\'{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}\')[matrix.os] }}'
+ALLOWED_ACTIONS = (CHECKOUT, UPLOAD, DOWNLOAD, CACHE)
+UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b|\bapt(?:-get)?\s+install\b|\bbrew\s+install\b|\bchoco\b|'
+                                r'\bwinget\b|\bcurl\b|\bwget\b|Invoke-WebRequest|Invoke-RestMethod|\biwr\b|\birm\b|Start-BitsTransfer|'
+                                r'\bbitsadmin\b|\bcertutil\b|\bnpm\s+(?:i|install|exec|x)\b|\bnpx\b|\bpnpx\b|\bpnpm\s+(?:dlx|create|env|self-update)\b|'
+                                r'\bpnpm\s+(?:add|install|i)\s+(?:-g|--global)\b|--pm-on-fail|\bgh\s+(?:release|run|attestation)\s+download\b|'
+                                r'\bgh\s+api\b|\bgit\s+clone\b|\burllib\.request\b|\burllib3\b|\burlretrieve\b|\burlopen\b|\bhttp\.client\b|\brequests\.|'
+                                # .NET and JavaScript clients count when constructed or called, not when prose names them.
+                                r'\bNet\.WebClient\b|New-Object\s+(?:-TypeName\s+)?\S*WebClient\b|\.Download(?:File|String|Data)(?:Async)?\s*\(|'
+                                r'\bNet\.Http\.HttpClient\b|\bnew\s+HttpClient\s*\(|\.Get(?:String|ByteArray|Stream)?Async\s*\(|'
+                                r'\brequire\(\s*[\'"](?:node:)?https?[\'"]\s*\)|\bimport\(\s*[\'"](?:node:)?https?[\'"]\s*\)|'
+                                r'\bfrom\s+[\'"](?:node:)?https?[\'"]|\bhttps?\.(?:get|request)\(|'
+                                r'(?<!\w)fetch\(\s*(?:[\'"`]|[A-Za-z_$][\w$.]*\s*[,)])|\bgo\s+(?:install|get)\b|\bcargo\s+(?:install|binstall)\b|\bpip\s+download\b')
+TOOL_CONSUMERS = (('python', re.compile(r'\bpython3?\b')), ('go', re.compile(r'\bgo(?:fmt)?\s')),
+                  ('rust', re.compile(r'\bcargo\b|\brustc\b|\brustfmt\b')), ('node', re.compile(r'\bnode\b|\bpnpm\b')),
+                  ('pnpm', re.compile(r'\bpnpm\b')), ('playwright', re.compile(r'pnpm test:(?:component|csp)|\bplaywright\b')))
+# Variables bootstrap.py writes through --env-out, and loader or interpreter hooks that would substitute other code
+# for an admitted tool; no other step or env mapping may set them. Whole families are closed by prefix.
+# The runner's own RUNNER_* facts (RUNNER_TEMP, RUNNER_ENVIRONMENT) and the linker are closed the same way.
+ADMITTED_ENV = frozenset({'PATH', 'Path', 'LD_LIBRARY_PATH', 'LD_PRELOAD', 'LD_AUDIT', 'DYLD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES',
+                          'DYLD_FRAMEWORK_PATH', 'RUSTC', 'RUSTDOC', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'CI_ADMITTED_ROOT',
+                          'GOROOT', 'GOTOOLCHAIN', 'GOTOOLDIR', 'LD', 'NODE_OPTIONS', 'NODE_PATH', 'COREPACK_ENABLE_STRICT'})
+ADMITTED_ENV_PREFIXES = ('PLAYWRIGHT_', 'RUSTUP_', 'COREPACK_', 'pnpm_config_', 'npm_config_', 'PNPM_', 'NPM_CONFIG_', 'RUNNER_',
+                         'LD_', 'DYLD_')
+ADMITTED_ENV_WRITE = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(sorted(ADMITTED_ENV)) + '|'
+                                + '|'.join(p + r'\w*' for p in ADMITTED_ENV_PREFIXES) + r')\s*=')
+
+
+def admitted_env_names(mapping):
+    if not isinstance(mapping, dict): return []
+    return sorted(k for k in mapping if k in ADMITTED_ENV or str(k).startswith(ADMITTED_ENV_PREFIXES))
+
+
+# The one shape of a GITHUB_ENV write outside the pinned helper and apply steps: a literal name and a value without command
+# substitution, so the reviewed name is the name the runner sets. Names built at run time (`${n}ROOT=`, printf, Python
+# string concatenation, a block redirect or the `github.env` context) cannot be reviewed and are refused.
+LITERAL_ENV_WRITE = re.compile(r'[ \t]*echo[ \t]+"([A-Za-z_][A-Za-z0-9_]*)=(?:[^"`$\n\\]|\$(?!\()\{?[A-Za-z_][A-Za-z0-9_]*\}?)*"[ \t]*>>[ \t]*"\$GITHUB_ENV"[ \t]*')
+
+
+def forbidden_env_name(name):
+    """Section 8: names no step outside the pinned helpers may set through env or GITHUB_ENV."""
+    return (name in ADMITTED_ENV or name.startswith(ADMITTED_ENV_PREFIXES) or name in CACHE_ENV
+            or rust_env.is_c_toolchain_name(name) or bool(rust_env.rust_overrides([name])) or name.upper() in ('BASH_ENV', 'ENV'))
+
+
+def env_write_errors(step):
+    """GITHUB_ENV writes outside the pinned steps: one literal echo line per write, naming a variable outside section 8's list."""
+    run = step.get('run', '')
+    if run in (APPLY_COMMAND, GO_FRESH, CARGO_FRESH): return []
+    errors = []
+    other = step_text({key: value for key, value in step.items() if key != 'run'})
+    if ENV_FILE.search(other): errors.append('environment file writes must be literal echo lines in the run script')
+    for line in str(run).splitlines():
+        if not ENV_FILE.search(line): continue
+        match = LITERAL_ENV_WRITE.fullmatch(line)
+        if not match:
+            errors.append('environment file writes must be literal echo lines naming a reviewed variable')
+        elif forbidden_env_name(match[1]):
+            errors.append('admitted tool environment override forbidden: ' + match[1])
+    return errors
+BOOTSTRAP_NAME = 'Bootstrap admitted toolchains'
+EVIDENCE_NAME = 'Verify admitted toolchain evidence'
+CONTROLS_NAME = 'Reject corrupted payloads before any extraction or execution'
+# Closure consumers are checked at two levels.
+#
+# Source level (this file): only the three exact admission steps may touch installers, environments or the helper;
+# any command or shell that names an installer, environment manager or the helper is rejected at token level, whatever
+# its flag order. Environment that would redirect imports, packages, the interpreter or the shell is rejected in `env`
+# mappings, in run scripts (inline `NAME=value cmd`, `export`, `declare -x`, `env NAME=`, `set -a`) and in custom shells.
+# The runner's PATH and environment files, the validator venv, site-packages, the scripts directory and the base
+# interpreter may be named only by their admitted steps. These rules match spellings: they cover the forms listed in
+# the patterns below, including absolute, `..`-relative and glob spellings of the venv directory, not every way a
+# script can compute or obtain a path.
+#
+# Runtime level (the terminal `--check`, run isolated and without site): the interpreter, environment, import paths,
+# every site-packages file against the admitted RECORDs, the scripts directory against its --venv manifest, the venv
+# root on Windows, sitecustomize/usercustomize and repository names that shadow closure modules. It detects divergence,
+# not deliberate tampering by job steps. Uncatchable inside the job, and left to independent review of the workflow
+# and script diff: shell indirection that hides these spellings (`bash scripts/x.sh`, escaped tokens such as `pi\p`,
+# third-party actions); a step that rewrites a RECORD or the venv marker together with the files they describe; a
+# replaced interpreter or `bash` in any PATH directory, which runs instead of the admission shell or the checker; and
+# environment set only for one validator process by such indirection.
+ADMITTED_PYTHON_RUNS = frozenset({python_env.VENV_COMMAND, python_env.INSTALL_COMMAND, python_env.CHECK_COMMAND})
+BYPASS_TOKEN = re.compile(r'(?<![\w.-])(?:pip3?|venv|ensurepip|virtualenv|uvx?|pipx|pipenv|poetry|conda|mamba|micromamba|'
+                          r'pdm|hatch|rye|pixi|python_env\.py)(?![\w-])')
+# The runner's PATH and environment files: by variable, by `github` context (`github.path`, `github['env']`, or the
+# whole context passed to a function) or by the runner's file-command directory and file names.
+PATH_FILE = re.compile(r'(?i)github_path|\bgithub\s*\.\s*path\b|_runner_file_commands|add_path_')
+ENV_FILE = re.compile(r'(?i)github_env|\bgithub\s*\.\s*env\b|_runner_file_commands|set_env_')
+WHOLE_GITHUB = re.compile(r'(?i)\bgithub\s*(?:[\[,)]|\}\})')
+# Ways to locate site-packages, the scripts directory, the base interpreter or start-up hooks without naming the venv.
+SITE_PROBE = re.compile(r'(?i)sysconfig|getsitepackages|getusersitepackages|site-packages|dist-packages|_base_executable|'
+                        r'\bsys\s*\.\s*(?:base_|exec_)*(?:prefix|executable)\b|\bcommand\s+-[vV]\b|\bwhich\b|'
+                        r'\btype\s+-[aPp]\b|\bwhereis\b|pythonlocation|python[23]?_root_dir|toolcache|\.pth\b|'
+                        r'sitecustomize|usercustomize')
+PATH_PART = re.compile(r'[^/\\\s"\'$(){};|&<>=:,`]+')
+# Environment names a closure consumer may set; shell start-up (BASH_ENV, ENV), exported functions, loader preloads,
+# PATH and interpreter or installer variables all fall outside it.
+# CI_PLATFORM and CI_TOOLS are the admitted bootstrap's literal step inputs; bootstrap_errors pins their values and forbids
+# them at job and workflow scope.
+# BASE_SHA and CANDIDATE_SHA carry the validated route's commits to the catalogue compatibility check.
+CONSUMER_ENV = python_env.ALLOWED_PYTHON_ENV | {'ROUTE_JSON', 'NEEDS_JSON', 'UNIT', 'CHECKS', 'HOST_OS', 'CI_PLATFORM', 'CI_TOOLS',
+                                                 'BASE_SHA', 'CANDIDATE_SHA'}
+RISKY_NAME = r'(PYTHON\w*|PIP_\w*|BASH_ENV|ENV|BASH_FUNC_[^\s=]*|LD_\w*|DYLD_\w*|PATH|SHELLOPTS|BASHOPTS)'
+SHELL_ASSIGN = re.compile(rf'(?i)(?<![\w$.-]){RISKY_NAME}\+?=')
+SHELL_EXPORT = re.compile(rf'(?i)\b(?:export|declare|typeset|local|readonly)\b[^\n;|&]*?(?<![\w$.-]){RISKY_NAME}(?![\w=])')
+ALLEXPORT = re.compile(r'(?i)\bset\s+(?:[-+][a-z]*a[a-z]*\b|-o\s+allexport\b)')
+CONSUMER_SHELLS = frozenset({'bash', python_env.ADMISSION_SHELL})
+
+
+def names_venv(text):
+    """True when any path component is the validator venv directory, literally or as a glob that matches it."""
+    for part in PATH_PART.findall(text.lower()):
+        if part == 'validator' or (any(c in part for c in '*?[') and fnmatch.fnmatchcase('validator', part)):
+            return True
+    return False
+
+
+def shell_env_names(text):
+    """Risky names assigned, exported or env-prefixed by shell text, except the admitted interpreter toggles."""
+    names = [m[1] for pattern in (SHELL_ASSIGN, SHELL_EXPORT) for m in pattern.finditer(text)]
+    return sorted({n for n in names if n.upper() not in python_env.ALLOWED_PYTHON_ENV})
+# These commands import the closure, so the admitted install must precede them in the job.
+CLOSURE_CONSUMERS = tuple(inventory.DESIGN_COMMANDS) + (
+    'scripts/ci/check_policy.py', 'unittest discover -s scripts/ci', 'unittest discover -s schemas', 'test_validate.py',
+    'test_key_admission_contract.py', 'required.py --route "$RUNNER_TEMP/route.json" --needs',
+    'from jsonschema import', 'import jsonschema', 'import yaml')
 TOKEN = '${{ secrets.SEMGREP_APP_TOKEN }}'
 ROUTE_ENV = {'ROUTE_JSON': '${{ needs.route.outputs.route }}'}
 PREPARE_ROUTE = ("python -B - <<'PY'\n"
@@ -101,7 +430,7 @@ def scanner_job(unit):
     steps = [
         {'uses': CHECKOUT, 'with': {'persist-credentials': 'false', 'fetch-depth': '0',
                                   'ref': '${{ fromJSON(needs.route.outputs.route).testedSha }}'}},
-        {'uses': SETUP_PYTHON, 'with': {'python-version': '3.14.8'}},
+        *bootstrap_steps('linux-x64', 'python'),
         {'id': 'preflight', 'shell': 'bash', 'working-directory': '.', 'env': ROUTE_ENV,
          'run': PREPARE_ROUTE + scanner_command(unit, 'preflight') + '\n'},
     ]
@@ -129,6 +458,168 @@ def scanner_job(unit):
         'retention-days': '30', 'if-no-files-found': 'error'}})
     return {'needs': ['route'], 'runs-on': 'ubuntu-24.04',
             'timeout-minutes': '20' if unit == 'semgrep' else '15', 'steps': steps}
+
+
+def bootstrap_steps(platform, tools):
+    env = {'CI_PLATFORM': platform, 'CI_TOOLS': tools}
+    return [{'name': BOOTSTRAP_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': BOOTSTRAP_COMMAND},
+            {'name': APPLY_NAME, 'shell': 'bash', 'working-directory': '.', 'run': APPLY_COMMAND},
+            {'name': EVIDENCE_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': EVIDENCE_COMMAND}]
+
+
+def lock_tools(root):
+    try:
+        lock = bootstrap.load_lock(root / bootstrap.LOCK)
+    except bootstrap.BootstrapError:
+        return {}
+    tools = {}
+    for entry in lock['entries']: tools.setdefault(entry['platform'], set()).add(entry['tool'])
+    return tools
+
+
+LOCK_TOOLS = {}
+# Each consuming job's literal CI_TOOLS (section 8); bootstrap.yml's rows select every lock tool for their host instead.
+JOB_TOOLS = {
+    ('agent', 'validate'): 'python,rust', ('agent', 'rustinterop'): 'python,go,rust',
+    ('ci', 'route'): 'python', ('ci', 'ci-contracts'): 'python,go', ('ci', 'gitleaks'): 'python', ('ci', 'semgrep'): 'python',
+    ('ci', 'ci-required'): 'python', ('console', 'validate'): 'python,node,pnpm,playwright',
+    ('copilot-code-review', 'copilot-setup-steps'): 'python,go,rust,node,pnpm', ('design', 'validate'): 'python',
+    ('server', 'validate'): 'python,go', ('server', 'race'): 'python,go', ('server', 'fuzz-targets'): 'python',
+    ('server', 'fuzz'): 'python,go', ('server', 'loader-gate-a'): 'python,go', ('server', 'loader-gate-b'): 'python,go',
+    ('server', 'ocsf-native'): 'python,go',
+}
+
+
+def consumer_tools(steps):
+    text = '\n'.join(s.get('run', '') for s in steps)
+    return {tool for tool, pattern in TOOL_CONSUMERS if pattern.search(text)}
+
+
+def resolve_tools(value, job):
+    """A literal comma list, or `${{ matrix.tools }}` over literal include rows (tools common to every row)."""
+    if value == '${{ matrix.tools }}':
+        matrix = job.get('strategy', {}).get('matrix', {})
+        rows = matrix.get('include', []) if isinstance(matrix, dict) else []
+        values = [row.get('tools') for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        if not values or len(values) != len(rows): return None
+        common = None
+        for row_value in values:
+            tools = resolve_tools(row_value, job)
+            if tools is None: return None
+            common = tools if common is None else common & tools
+        return common
+    if not isinstance(value, str) or '${{' in value: return None
+    try:
+        bootstrap.expand_tools(value)
+    except bootstrap.BootstrapError:
+        return None
+    return set(value.split(','))
+
+
+def bootstrap_errors(data, name):
+    """One exact admitted bootstrap per job, first after checkout, covering every tool the job runs; no unchecked fetch."""
+    errors = []
+    for jid, job in data.get('jobs', {}).items():
+        if 'uses' in job: continue
+        steps = job.get('steps', [])
+        def fail(message): errors.append(f'{jid}: {message}')
+        for step in steps:
+            action = step.get('uses', '')
+            if action and not action.startswith('./') and action not in ALLOWED_ACTIONS: fail('unchecked setup action: ' + action)
+            if UNCHECKED_DOWNLOAD.search(step.get('run', '')): fail('unchecked download or install command')
+        for scope in (data, job):
+            env = scope.get('env', {})
+            if isinstance(env, dict) and {'CI_PLATFORM', 'CI_TOOLS'} & set(env): fail('bootstrap inputs must be literal step env')
+        # Only the admitted bootstrap sets PATH and tool variables; only the admitted venv step prepends to PATH.
+        for scope in (data, job, *steps):
+            for key in admitted_env_names(scope.get('env', {})): fail('admitted tool environment override forbidden: ' + key)
+        for step in steps:
+            run = step.get('run', '')
+            # By variable, `github.path` context or runner file name, in any key of the step.
+            if PATH_FILE.search(step_text(step)) and run != python_env.VENV_COMMAND: fail('PATH changes outside the admitted bootstrap forbidden')
+            for message in env_write_errors(step): fail(message)
+            # Quotes and escapes cannot split a variable name past the check: "GO""ROOT=" is GOROOT=.
+            if 'GITHUB_ENV' in run and run != APPLY_COMMAND and ADMITTED_ENV_WRITE.search(re.sub(r'["\'\\`]', '', run)):
+                fail('admitted tool environment override forbidden')
+            if 'tools.env' in run and run not in (BOOTSTRAP_COMMAND, APPLY_COMMAND): fail('the admitted environment file is written and applied only by its exact steps')
+        bootstraps = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
+        if any('scripts/ci/bootstrap.py' in s.get('run', '') for i, s in enumerate(steps) if i not in bootstraps):
+            fail('missing exact bootstrap command')
+        helpers = {BOOTSTRAP_COMMAND, APPLY_COMMAND, EVIDENCE_COMMAND, CONTROLS_COMMAND}
+        consumers = [s for s in steps if s.get('run') not in helpers]
+        required = consumer_tools(consumers)
+        if not bootstraps and not required: continue
+        if len(bootstraps) != 1:
+            fail('exactly one admitted bootstrap step required'); continue
+        index = bootstraps[0]
+        step = steps[index]
+        env = step.get('env', {})
+        if (set(step) != {'name', 'shell', 'working-directory', 'env', 'run'} or step.get('name') != BOOTSTRAP_NAME or step.get('shell') != 'bash'
+                or step.get('working-directory') != '.' or not isinstance(env, dict) or set(env) != {'CI_PLATFORM', 'CI_TOOLS'}):
+            fail('bootstrap step must be unconditional at root with bash and literal CI_PLATFORM and CI_TOOLS'); continue
+        runner = job.get('runs-on', '')
+        expected_platform = PLATFORM_EXPRESSION if '${{' in str(runner) else inventory.HOSTS.get(runner)
+        if env['CI_PLATFORM'] != expected_platform: fail('CI_PLATFORM must come from the fixed runner matrix')
+        if name != 'bootstrap' and env['CI_TOOLS'] != JOB_TOOLS.get((name, jid)):
+            fail(f'CI_TOOLS differs from the reviewed selection {JOB_TOOLS.get((name, jid))!r}')
+        selected = resolve_tools(env['CI_TOOLS'], job)
+        if selected is None:
+            fail('CI_TOOLS must be a literal tool list from the workflow'); selected = set()
+        expanded = set(bootstrap.expand_tools(','.join(sorted(selected)))) if selected else set()
+        for tool in sorted(required):
+            if {'rust': 'rustc', 'playwright': 'chromium-headless-shell'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
+        apply = {'name': APPLY_NAME, 'shell': 'bash', 'working-directory': '.', 'run': APPLY_COMMAND}
+        if not (index + 1 < len(steps) and steps[index + 1] == apply) or sum(s.get('run') == APPLY_COMMAND for s in steps) != 1:
+            fail('the exact admitted environment step must directly follow the bootstrap step')
+        if not (index + 2 < len(steps) and steps[index + 2] == {**step, 'name': EVIDENCE_NAME, 'run': EVIDENCE_COMMAND}):
+            fail('admitted toolchain evidence step must follow the bootstrap step')
+        if name == 'bootstrap':
+            # The bootstrap leaves cold-install every payload the lock holds for their host, so dropping one is visible.
+            for row in job.get('strategy', {}).get('matrix', {}).get('include', []) or []:
+                platform = inventory.HOSTS.get(row.get('os')) if isinstance(row, dict) else None
+                try:
+                    chosen = set(bootstrap.expand_tools(row.get('tools', ''))) if platform else None
+                except bootstrap.BootstrapError:
+                    chosen = None
+                if chosen != LOCK_TOOLS.get(platform): fail(f'bootstrap matrix row {row.get("os")!r} must select every lock tool for its host')
+        controls = {**step, 'name': CONTROLS_NAME, 'run': CONTROLS_COMMAND}
+        for s in steps[:index]:
+            if s.get('uses', '').startswith('actions/checkout@') or (name == 'bootstrap' and s == controls): continue
+            fail('bootstrap must precede every step except checkout')
+        if name == 'bootstrap' and (sum(s == controls for s in steps) != 1 or index == 0 or steps[index - 1] != controls):
+            fail('exact corruption controls must precede the cold install')
+    return errors
+
+
+def package_manager_errors(root):
+    """pnpm and Node come only from the admitted bootstrap: no project setting may let pnpm switch or download either."""
+    errors = []
+    console = root / 'console'
+    try:
+        manifest = json.loads((console / 'package.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return ['console/package.json: unreadable']
+    def walk(value, path):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == 'onFail' and child != 'error': errors.append(f'console/package.json: {path}.onFail must be error')
+                walk(child, f'{path}.{key}')
+        elif isinstance(value, list):
+            for child in value: walk(child, path)
+    walk(manifest.get('devEngines', {}), 'devEngines')
+    runtime = (manifest.get('devEngines') or {}).get('runtime') if isinstance(manifest.get('devEngines'), dict) else None
+    if runtime is not None: errors.append('console/package.json: devEngines.runtime can download Node; Node comes from the admitted bootstrap')
+    for name in ('pnpm-workspace.yaml', '.npmrc'):
+        try:
+            text = (console / name).read_text(encoding='utf-8')
+        except OSError:
+            continue
+        for match in re.finditer(r'(?im)^\s*(pmOnFail|pm-on-fail|managePackageManagerVersions|manage-package-manager-versions|'
+                                 r'packageManagerStrict\w*|package-manager-strict\S*|useNodeVersion|use-node-version|nodeVersion|node-version)\s*[:=]\s*(\S+)', text):
+            key, value = match[1], match[2].strip('\'"')
+            if not (key.lower() in ('pmonfail', 'pm-on-fail') and value == 'error'):
+                errors.append(f'console/{name}: {key} {value} lets pnpm switch versions or download a runtime')
+    return errors
 
 
 def secret_errors(data, name):
@@ -184,11 +675,30 @@ def windows_rows(job):
 
 GO_FRESH = 'python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"'
 CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" '
-               '--cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"')
-CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
+               '--cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"')
+# Cargo's home is the admitted, bin-free CARGO_HOME from the bootstrap; only its registry index and archives are cached.
+CARGO_CACHE_PATHS = ['${{ runner.temp }}/admitted/cargo-home/registry/index', '${{ runner.temp }}/admitted/cargo-home/registry/cache']
+# GOENV is fresh_go.py's `off`: a per-user `go env -w` file could otherwise supply CC, flags or a toolchain.
+CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'GOENV', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
 
 
-def cache_errors(data):
+def wrapper_id(run):
+    """The selected ID a wrapper step passes with --id, or None for any other step."""
+    match = re.search(r'run_selected\.py --id (?:"([^"]+)"|(\S+))', run)
+    return (match[1] or match[2]) if match else None
+
+
+def wrapper_toolchain(run, root):
+    """Classify a wrapper step by its selected ID's toolchain in the checked tree; unknown IDs count as both."""
+    target_id = wrapper_id(run)
+    if target_id is None: return None
+    if target_id.startswith('go-fuzz:'): return 'go'
+    try: mode = run_selected.inventory(root)[target_id]['mode']
+    except (KeyError, OSError, ValueError, TypeError): return 'unknown'
+    return 'go' if mode.startswith('go') else 'cargo' if mode.startswith('rust') else 'other'
+
+
+def cache_errors(data, root):
     """Require fresh compiler environments before every workflow consumer."""
     errors = []
     for jid, job in data.get('jobs', {}).items():
@@ -198,8 +708,8 @@ def cache_errors(data):
             if CACHE_ENV & set(scope.get('env', {})):
                 fail('compiler cache environment override forbidden')
         go_setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-go@')]
-        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', ''))]
-        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', ''))]
+        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('go', 'unknown')]
+        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('cargo', 'unknown')]
         for step in steps:
             action = step.get('uses', '')
             settings = step.get('with', {})
@@ -207,10 +717,10 @@ def cache_errors(data):
                 fail('setup-go cache must be disabled')
             if action.startswith('actions/cache'):
                 paths = settings.get('path', '').strip().splitlines()
-                if paths != ['~/.cargo/registry/index', '~/.cargo/registry/cache']:
+                if paths != CARGO_CACHE_PATHS:
                     fail('cache restore may contain only Cargo index and archives')
             run = step.get('run', '')
-            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
+            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
                 fail('compiler cache environment reset forbidden')
         def admission(command, consumers):
             matching = [i for i, s in enumerate(steps) if s.get('run') == command]
@@ -242,13 +752,127 @@ def cache_errors(data):
     return errors
 
 
-def fuzz_evidence_errors(job, native_parser=False):
+def consumer_env_errors(scope):
+    """A closure consumer's `env` must be a literal mapping whose names are all in CONSUMER_ENV."""
+    if 'env' not in scope: return []
+    env = scope['env']
+    if not isinstance(env, dict): return ['environment must be a literal mapping in closure consumer']
+    return [f'environment variable outside the closure consumer allowlist: {key}' for key in env if key not in CONSUMER_ENV]
+
+
+def step_text(step):
+    """Everything a step or scope executes or passes on, as the raw strings joined by newlines; display names are not executed.
+
+    Raw strings, not JSON: escaping would turn a line start, tab or continuation into `\\n`, `\\t` or `\\\\` glued to the
+    next token, which hides `which`, `validator/` or `sys.executable` from the word-boundary patterns.
+    """
+    parts = []
+    def walk(value):
+        if isinstance(value, dict):
+            for key, child in value.items(): parts.append(str(key)); walk(child)
+        elif isinstance(value, list):
+            for child in value: walk(child)
+        else:
+            parts.append(str(value))
+    walk({key: value for key, value in step.items() if key != 'name'})
+    return '\n'.join(parts)
+
+
+def python_errors(data):
+    """One admitted Python, one fresh venv, one hash-locked install and one terminal re-check per closure consumer."""
+    errors = []
+    consuming_workflow = False
+    for jid, job in data.get('jobs', {}).items():
+        steps = job.get('steps', [])
+        def fail(message): errors.append(f'{jid}: {message}')
+        setups = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
+        venvs = [i for i, s in enumerate(steps) if s.get('run') == python_env.VENV_COMMAND]
+        installs = [i for i, s in enumerate(steps) if s.get('run') == python_env.INSTALL_COMMAND]
+        checks = [i for i, s in enumerate(steps) if s.get('run') == python_env.CHECK_COMMAND]
+        for step in steps:
+            run, shell = step.get('run', ''), step.get('shell', '')
+            if not isinstance(shell, str) or not isinstance(run, str) or BYPASS_TOKEN.search(shell):
+                fail('ad hoc Python environment or package installation forbidden')
+                continue
+            if run in ADMITTED_PYTHON_RUNS: continue
+            if BYPASS_TOKEN.search(run) or 'requirements-design.txt' in run:
+                fail('ad hoc Python environment or package installation forbidden')
+        consumers = [i for i, s in enumerate(steps) if any(c in s.get('run', '') for c in CLOSURE_CONSUMERS)]
+        if not (venvs or installs or checks or consumers): continue
+        consuming_workflow = True
+        if len(venvs) != 1 or len(installs) != 1 or not setups or not setups[0] < venvs[0] < installs[0]:
+            fail('closure consumer requires the admitted bootstrap, one fresh venv and one hash-locked install in order')
+        else:
+            if any(i < installs[0] for i in consumers):
+                fail('validator runs before the hash-locked closure is admitted')
+            if any(i > venvs[0] for i in setups):
+                fail('Python setup after the validator venv forbidden')
+            # The receipt step (the aggregate's final verifier, or the end of the Copilot job) follows the re-check
+            # directly, so no interpreter, shell or action runs between the verified state and the receipt.
+            proofs = [i for i, s in enumerate(steps) if s.get('id') == 'proof']
+            receipt = proofs[0] if proofs else len(steps) - 1 if jid == 'ci-required' else len(steps)
+            if len(checks) != 1 or checks[0] <= installs[0] or checks[0] + 1 != receipt:
+                fail('terminal re-check must immediately precede the receipt')
+        for i in venvs + installs + checks:
+            step = steps[i]
+            if (any(k in step for k in ('if', 'continue-on-error', 'env')) or step.get('shell') != python_env.ADMISSION_SHELL
+                    or step.get('working-directory') != '.'):
+                fail('closure admission steps must be unconditional at root with the privileged-mode admission shell')
+        for scope in (job, *steps):
+            for message in consumer_env_errors(scope): fail(message)
+        for message in scope_errors(step_text({key: value for key, value in job.items() if key != 'steps'})):
+            fail(f'job settings: {message}')
+        for scope in (data, job):
+            shell = (run_defaults(scope) or {}).get('shell', 'bash')
+            if shell != 'bash': fail('closure consumer default shell must be bash')
+        for step in steps:
+            run, text = step.get('run', ''), step_text(step)
+            if step.get('shell', 'bash') not in CONSUMER_SHELLS:
+                fail('closure consumer step shell must be bash or the admission shell')
+            if WHOLE_GITHUB.search(text):
+                fail('whole github context forbidden in closure consumer')
+            if PATH_FILE.search(text) and run != python_env.VENV_COMMAND:
+                fail('PATH changes outside the admitted venv step forbidden in closure consumer')
+            # Besides the fresh cache helpers, only the exact step applying the admitted bootstrap's environment file writes
+            # GITHUB_ENV; bootstrap_errors closes its name, keys, inputs and position directly after the bootstrap.
+            if ENV_FILE.search(text) and run not in (GO_FRESH, CARGO_FRESH, APPLY_COMMAND):
+                fail('environment writes outside the fresh cache helper and admitted bootstrap forbidden in closure consumer')
+            if names_venv(text) and run != python_env.VENV_COMMAND:
+                fail('validator venv named outside its admitted step in closure consumer')
+            if SITE_PROBE.search(text):
+                fail('site-packages, scripts directory, base interpreter or start-up hook located in closure consumer')
+            for script in (run, step.get('shell', '')):
+                for name in shell_env_names(script):
+                    fail(f'shell environment forbidden in closure consumer: {name}')
+                if ALLEXPORT.search(script):
+                    fail('shell allexport forbidden in closure consumer')
+    if consuming_workflow:
+        for message in consumer_env_errors(data): errors.append(f'workflow: {message}')
+        for message in scope_errors(step_text({key: value for key, value in data.items() if key != 'jobs'})):
+            errors.append(f'workflow settings: {message}')
+    return errors
+
+
+def scope_errors(text):
+    """Runner files, the whole github context, the venv or site probes named in job or workflow settings."""
+    found = [label for label, hit in (('runner PATH file', PATH_FILE.search(text)), ('runner environment file', ENV_FILE.search(text)),
+                                      ('whole github context', WHOLE_GITHUB.search(text)), ('validator venv', names_venv(text)),
+                                      ('site probe', SITE_PROBE.search(text))) if hit]
+    return [f'{label} named in closure consumer' for label in found]
+
+
+def fuzz_evidence_errors(job, root, native_parser=False):
     """Preserve exact fuzz selection, failure exit and minimized corpora."""
     command = COMMANDS[('server', 'loader-gate-a' if native_parser else 'fuzz')][-1]
-    selected = [step for step in job.get('steps', []) if '-fuzz=' in step.get('run', '')]
-    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'run': command} if native_parser else
-                {'name': 'Fuzz for 60 seconds', 'env': {'FUZZ_PACKAGE': '${{ matrix.package }}',
-                                                      'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
+    try: fuzz_ids = {i for i, t in run_selected.inventory(root).items() if t['mode'] == 'go-fuzz'}
+    except (KeyError, OSError, ValueError, TypeError): fuzz_ids = {'loader-fuzz'}
+    def fuzzing(run):
+        target_id = wrapper_id(run)
+        return '-fuzz=' in run or (target_id is not None and (target_id.startswith('go-fuzz:') or target_id in fuzz_ids))
+    selected = [step for step in job.get('steps', []) if fuzzing(step.get('run', ''))]
+    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'shell': 'bash', 'working-directory': '.', 'run': command} if native_parser else
+                {'name': 'Fuzz for 60 seconds', 'shell': 'bash', 'working-directory': '.',
+                 'env': {'FUZZ_PACKAGE': '${{ matrix.package }}', 'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
     errors = []
     if selected != [expected]: errors.append('exact unconditional fuzz command required')
     corpus = {'name': 'Upload failing corpus', 'if': 'failure()', 'uses': UPLOAD,
@@ -282,7 +906,7 @@ def loader_qualification_errors(job, gate):
         run = ('set -euo pipefail\n'
                f'mkdir -p "$RUNNER_TEMP/loader-measurements-gate-{gate}"\n'
                f'{command} 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-{gate}/{log}.log"\n')
-        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'run': run}]
+        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'shell': 'bash', 'working-directory': '.', 'run': run}]
         if len(matches) != 1: fail('exact unconditional measurement pipeline required: ' + log)
         else: indices += matches
     log_paths = [f'${{{{ runner.temp }}}}/loader-measurements-gate-{gate}/{log}.log' for _, log, _ in recipes]
@@ -325,6 +949,7 @@ def loader_qualification_errors(job, gate):
 
 def check(root: Path) -> list[str]:
     errors = []
+    LOCK_TOOLS.clear(); LOCK_TOOLS.update(lock_tools(root))
     def fail(name, message): errors.append(f'.github/workflows/{name}.yml: {message}')
     workflows = {}
     for path in sorted((root / '.github/workflows').glob('*.yml')):
@@ -335,7 +960,10 @@ def check(root: Path) -> list[str]:
             workflows[name] = data
         except (ValueError, yaml.YAMLError):
             fail(name, 'malformed workflow'); continue
-        for error in cache_errors(data): fail(name, error)
+        for error in cache_errors(data, root): fail(name, error)
+        for error in python_errors(data): fail(name, error)
+        for error in bootstrap_errors(data, name): fail(name, error)
+        for error in cargo_override_errors(data): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
         for error in secret_errors(data, name): fail(name, error)
@@ -369,6 +997,14 @@ def check(root: Path) -> list[str]:
         inventory.fuzz_targets(root)
     except (OSError, ValueError, KeyError, TypeError):
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
+    errors += python_env.lock_errors(root)
+    errors += bootstrap.lock_errors(root)
+    errors += package_manager_errors(root)
+    errors += selected_errors(root)
+    errors += framing_errors(root)
+    errors += cargo_config_errors(root)
+    try: selected_ids = set(run_selected.inventory(root))
+    except (OSError, ValueError, KeyError, TypeError): selected_ids = set(SELECTED_COMMANDS)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}
     for name in required_names - set(workflows): fail(name, 'missing required workflow')
     if not required_names <= set(workflows): return errors
@@ -442,6 +1078,9 @@ def check(root: Path) -> list[str]:
                 except ValueError: actual = None
                 if actual != wanted or 'if' in proofs[0] or 'required.receipt(' not in proofs[0].get('run', ''):
                     fail(name, f'{jid}: receipt checks mismatch')
+                elif (any(check in selected_ids or check.startswith('go-fuzz:') for check in actual)
+                      and RECEIPT_WITH_EVIDENCE not in proofs[0]['run']):
+                    fail(name, f'{jid}: receipt must bind verified selected-run evidence')
             if not steps or steps[-1].get('uses') != UPLOAD or steps[-1].get('with') != {
                     'name': '${{ steps.proof.outputs.artifact }}', 'path': '${{ runner.temp }}/ci-proof/receipt.json',
                     'retention-days': '30', 'if-no-files-found': 'error'} or 'if' in steps[-1]:
@@ -452,7 +1091,10 @@ def check(root: Path) -> list[str]:
                 if len(hosts) != 3 or set(hosts) != set(inventory.HOSTS): fail(name, f'{jid}: native matrix mismatch')
                 host_steps = [i for i, step in enumerate(steps) if step.get('name') == 'Assert native receipt host' and 'platform.machine()' in step.get('run', '')]
                 commands = COMMANDS.get((name, jid), ())
-                first_check = next((i for i, step in enumerate(steps) if any(command in step.get('run', '') for command in commands)), len(steps))
+                # The admitted bootstrap and its controls refuse a foreign host before any download, so they may precede the assertion.
+                helpers = (BOOTSTRAP_COMMAND, EVIDENCE_COMMAND, CONTROLS_COMMAND)
+                first_check = next((i for i, step in enumerate(steps) if step.get('run') not in helpers
+                                    and any(command in step.get('run', '') for command in commands)), len(steps))
                 if len(host_steps) != 1 or host_steps[0] >= first_check:
                     fail(name, f'{jid}: native host admission must precede checks')
             if name in ('server', 'agent'):
@@ -460,12 +1102,15 @@ def check(root: Path) -> list[str]:
                 if job.get('if') != group_condition([group], 'inputs.route'): fail(name, f'{jid}: route selection mismatch')
             expected_needs = 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
             if job.get('needs') != expected_needs: fail(name, f'{jid}: needs mismatch')
+    helper = [s for s in jobs.get('ci-contracts', {}).get('steps', []) if 'go vet .' in s.get('run', '')]
+    if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != 'bash' or 'if' in helper[0]:
+        fail('ci', 'ci-contracts: the Go declaration helper must be formatted and vetted in scripts/ci/gotestdecls')
     design_steps = workflows['design']['jobs']['validate']['steps']
     for command in DESIGN_COMMANDS:
         matches = [s for s in design_steps if command in s.get('run', '') and '--check-sources' not in s.get('run', '')]
         if not matches or any('if' in s or 'continue-on-error' in s for s in matches): fail('design', 'missing blocking consumer: ' + command)
     text = '\n'.join(s.get('run', '') for s in design_steps)
-    for path in ('schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'):
+    for path in ('schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json', 'scripts/ci/toolchains.lock.json'):
         if path not in text: fail('design', 'missing CI schema validation: ' + path)
     server = workflows['server']['jobs']
     race = server.get('race', {})
@@ -473,8 +1118,8 @@ def check(root: Path) -> list[str]:
     # A closed step rejects trailing flags, shell wrappers and extra test runs.
     race_checks = [step for step in race_steps
                    if step.get('name') == 'Test with race detector'
-                   or re.search(r'\bgo\s+test\b', step.get('run', ''))]
-    if race_checks != [{'name': 'Test with race detector',
+                   or re.search(r'\bgo\s+test\b|run_selected\.py', step.get('run', ''))]
+    if race_checks != [{'name': 'Test with race detector', 'shell': 'bash', 'working-directory': '.',
                         'run': COMMANDS[('server', 'race')][0]}]:
         fail('server', 'race: exact unconditional race command required')
     for scope, settings in (('workflow', workflows['server']), ('job', race)):
@@ -492,7 +1137,7 @@ def check(root: Path) -> list[str]:
         for error in loader_qualification_errors(server.get('loader-gate-' + gate, {}), gate):
             fail('server', error)
     for jid, native_parser in (('fuzz', False), ('loader-gate-a', True)):
-        for error in fuzz_evidence_errors(server.get(jid, {}), native_parser):
+        for error in fuzz_evidence_errors(server.get(jid, {}), root, native_parser):
             fail('server', jid + ': ' + error)
     matrix_job = server.get('fuzz-targets', {})
     if matrix_job.get('if') != group_condition(['server'], 'inputs.route') or 'scripts/ci/inventory.py --fuzz-matrix' not in str(matrix_job):
@@ -502,7 +1147,7 @@ def check(root: Path) -> list[str]:
     for job in server.values():
         if 'permission-schema-venv' in str(job) or 'schemas/export/v1alpha1/validate.py' in str(job): fail('server', 'duplicate Python validator')
     if 'pnpm test:fuzz' not in str(workflows['console']): fail('console', 'missing bounded properties')
-    # Task 7 adds payload admission; Task 3 admits compiler caches above.
+    # Payload admission is checked per job in bootstrap_errors; Task 3 admits compiler caches above.
     for name, data in workflows.items():
         if name not in required_names: continue
         for jid, job in data.get('jobs', {}).items():

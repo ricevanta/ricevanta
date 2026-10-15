@@ -5,7 +5,12 @@ name: Copilot review environment
   pull_request:
     paths:
       - '.github/workflows/copilot-code-review.yml'
+      - '.github/python-version'
       - '.github/requirements-design.txt'
+      - 'scripts/ci/python_env.py'
+      - 'scripts/ci/toolchains.lock.json'
+      - 'scripts/ci/bootstrap.py'
+      - 'scripts/ci/bootstrap/controls.py'
       - 'server/go.mod'
       - 'server/go.sum'
       - 'console/package.json'
@@ -25,15 +30,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.14.8'
-          cache: pip
-          cache-dependency-path: .github/requirements-design.txt
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache: false
+      - name: Bootstrap admitted toolchains
+        shell: bash
+        working-directory: .
+        env:
+          CI_PLATFORM: linux-x64
+          CI_TOOLS: python,go,rust,node,pnpm
+        run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+      - name: Apply admitted toolchain environment
+        shell: bash
+        working-directory: .
+        run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+      - name: Verify admitted toolchain evidence
+        shell: bash
+        working-directory: .
+        env:
+          CI_PLATFORM: linux-x64
+          CI_TOOLS: python,go,rust,node,pnpm
+        run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
       - name: Create fresh Go caches
         shell: bash
         working-directory: .
@@ -44,25 +58,25 @@ jobs:
         run: |
           go mod download
           go mod verify
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: 11.18.0
-          run_install: false
-          package_json_file: console/package.json
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: console/.node-version
-          cache: pnpm
-          cache-dependency-path: console/pnpm-lock.yaml
       - name: Install console dependencies without lifecycle scripts
         working-directory: console
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Install design validation dependencies
-        run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
-      - name: Install Rust
-        if: ${{ hashFiles('agent/rust-toolchain', 'agent/rust-toolchain.toml') != '' }}
-        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+      - name: Create validator environment
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        working-directory: .
+        run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+      - name: Install hash-locked validator closure
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        working-directory: .
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+          python -m pip check
+          python -I -S -B scripts/ci/python_env.py --check
       - name: Admit Cargo downloads and fresh target
         shell: bash
         working-directory: .
-        run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+        run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
+      - name: Re-verify validator environment
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        working-directory: .
+        run: python -I -S -B scripts/ci/python_env.py --check

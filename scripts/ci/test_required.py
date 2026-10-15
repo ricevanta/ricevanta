@@ -10,13 +10,33 @@ import tempfile
 import inventory
 import required
 
+def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
+    """Write verified selected-run records so emission can bind every wrapper check."""
+    import run_selected
+    selected = run_selected.inventory()
+    for check in checks:
+        if check in selected:
+            directory = root / run_selected.evidence_name(check)
+            directory.mkdir(exist_ok=True)
+            (directory / 'verified.json').write_text(json.dumps(
+                {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
+                 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}))
+
+
 class RequiredTests(unittest.TestCase):
     def setUp(self):
         self.route = dict(kind='route', version=1, event='push', baseSha='a'*40, headSha='b'*40,
                           testedSha='b'*40, runId='123', runAttempt='1', groups=['ci-contracts', 'design', 'gitleaks', 'semgrep'],
                           units=['ci-contracts', 'design', 'gitleaks', 'semgrep'])
         self.needs = {n: {'result': 'success' if n in ('route', 'ci-contracts', 'design', 'gitleaks', 'semgrep') else 'skipped'} for n in required.NEEDS}
-        self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        self.evidence = tempfile.TemporaryDirectory(prefix='ci-evidence-')
+        self.addCleanup(self.evidence.cleanup)
+        for unit in inventory.units(sorted(inventory.GROUPS)):
+            verified_evidence(Path(self.evidence.name), inventory.checks(unit))
+        self.receipts = [self.receipt(u) for u in self.route['units']]
+
+    def receipt(self, unit):
+        return required.receipt(self.route, unit, inventory.checks(unit), Path(self.evidence.name))
 
     def verify(self): required.verify(self.route, self.needs, self.receipts)
 
@@ -32,7 +52,7 @@ class RequiredTests(unittest.TestCase):
         self.route['groups'] = sorted(inventory.GROUPS)
         self.route['units'] = inventory.units(self.route['groups'])
         self.needs = {n: {'result': 'success'} for n in required.NEEDS}
-        self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        self.receipts = [self.receipt(u) for u in self.route['units']]
         self.verify()
 
     def test_expanded_route_schema_and_omissions(self):
@@ -40,7 +60,7 @@ class RequiredTests(unittest.TestCase):
         self.route['groups'] = sorted(inventory.GROUPS)
         self.route['units'] = inventory.units(self.route['groups'])
         self.needs = {n: {'result': 'success'} for n in required.NEEDS}
-        rows = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        rows = [self.receipt(u) for u in self.route['units']]
         validator = Draft202012Validator(json.loads((Path(inventory.ROOT) / 'schemas/ci/v1/contracts.schema.json').read_text()))
         validator.validate(self.route)
         for row in rows: validator.validate(row)
@@ -60,7 +80,7 @@ class RequiredTests(unittest.TestCase):
                 changed = deepcopy(rows)
                 index = next(i for i, row in enumerate(changed) if row['unit'] == unit)
                 if substitute:
-                    changed[index] = required.receipt(self.route, 'loader:' + host, inventory.checks('loader:' + host))
+                    changed[index] = self.receipt('loader:' + host)
                 else:
                     changed[index]['checks'] = []
                 with self.subTest(host=host, substitute=substitute), self.assertRaises(ValueError):
@@ -94,7 +114,7 @@ class RequiredTests(unittest.TestCase):
         self.route['groups'] = sorted(inventory.GROUPS)
         self.route['units'] = inventory.units(self.route['groups'])
         self.needs = {n: {'result': 'success'} for n in required.NEEDS}
-        self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']][:-1]
+        self.receipts = [self.receipt(u) for u in self.route['units']][:-1]
         with self.assertRaises(ValueError): self.verify()
 
     def test_artifact_directory_and_strict_json(self):
@@ -128,6 +148,39 @@ class RequiredTests(unittest.TestCase):
             row = required.load(root / 'proof/receipt.json')
             self.assertEqual(row, self.receipts[1])
             self.assertEqual(output.read_text().strip(), 'artifact=' + required.artifact_name(self.route, 'design'))
+
+    def test_selected_checks_require_verified_evidence(self):
+        import run_selected
+        self.route['groups'] = sorted(inventory.GROUPS)
+        self.route['units'] = inventory.units(self.route['groups'])
+        selected = run_selected.inventory()
+        wrapped = [u for u in self.route['units'] if any(c in selected for c in inventory.checks(u))]
+        self.assertTrue({'server-validate', 'server-race', 'interop', 'loader:linux-x64', 'loader-gate-b:macos-arm64',
+                         'ocsf:windows-x64', 'agent:linux-x64', 'server-fuzz:./internal/extensions/loader:FuzzTar'} <= set(wrapped))
+        for unit in ('design', 'ci-contracts', 'console', 'bootstrap:linux-x64', 'gitleaks'):
+            self.assertNotIn(unit, wrapped)
+            required.receipt(self.route, unit, inventory.checks(unit))
+        for unit in wrapped:
+            checks = inventory.checks(unit)
+            with self.subTest(unit=unit), tempfile.TemporaryDirectory(prefix='ci-evidence-') as tmp:
+                root = Path(tmp)
+                with self.assertRaises(ValueError): required.receipt(self.route, unit, checks)
+                with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, root)
+                verified_evidence(root, checks)
+                self.assertEqual(required.receipt(self.route, unit, checks, root)['checks'], checks)
+                victim = next(c for c in checks if c in selected)
+                (root / run_selected.evidence_name(victim) / 'verified.json').write_text(json.dumps(
+                    {'kind': 'selected-run', 'version': 1, 'id': victim, 'result': 'success', 'exit': 1,
+                     'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}))
+                with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, root)
+                # Evidence from another run, attempt or tested commit, or without a run binding, proves nothing here.
+                for run_id, attempt, sha in (('124', '1', 'b' * 40), ('123', '2', 'b' * 40), (None, None, 'b' * 40),
+                                             ('123', '1', 'c' * 40), ('123', '1', None)):
+                    other = root / ('other-%s-%s-%s' % (run_id, attempt, sha and sha[0]))
+                    other.mkdir()
+                    verified_evidence(other, checks, run_id, attempt, sha)
+                    with self.subTest(run_id=run_id, attempt=attempt, sha=sha), self.assertRaises(ValueError):
+                        required.receipt(self.route, unit, checks, other)
 
     def test_artifact_names_are_collision_free(self):
         self.assertNotEqual(required.artifact_name(self.route, 'a:b'), required.artifact_name(self.route, 'a/b'))

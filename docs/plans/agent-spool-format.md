@@ -4,7 +4,7 @@
 
 **Architecture:** One leaf package in the `agent/` virtual workspace. Encoders write explicit fields; recovery returns a borrowed, validated prefix and typed diagnostics. No process, filesystem, runtime or networking integration enters the library.
 
-**Toolchain:** Rust 1.99.0 with Cargo 1.99.0. The installed companion tools are Go 1.27.1, Node 24.21.0 and pnpm 11.18.0; this slice does not require Node or pnpm. Python fixture generation uses only the standard library; CI pins Python 3.13.7.
+**Toolchain:** Rust 1.99.0 with Cargo 1.99.0. The installed companion tools are Go 1.27.1, Node 24.21.0 and pnpm 11.18.0; this slice does not require Node or pnpm. Python fixture generation uses only the standard library; CI runs it on the single Python recorded in `.github/python-version`.
 
 ## Global constraints
 
@@ -37,7 +37,7 @@ Shared schemas and design documents are read-only implementation inputs. Report 
 
 **Interfaces:** `SpoolClass`, `Header`, constants, `Error`, and `encode_header` from spec section 3. Recovery-dependent tests wait for Task 3.
 
-- [x] Add license records before relying on tools: Rust 1.99.0 toolchain/standard library (MIT OR Apache-2.0), `rustc_version` 0.4.1 and `semver` 1.0.27 (MIT OR Apache-2.0), and `actions/cache` v6.1.0 at the commit in Task 5 (MIT). Inspect that release's `LICENSE` and bundled dependency license notices at the exact pinned commit. These license expressions remain verify checks against exact release texts. Add Python 3.13.7 as a build tool under the [PSF license and incorporated-software terms](https://docs.python.org/3.13/license.html). Verify upstream license texts and retain applicable notices. The existing `crc32c`, checkout, setup-python and Python validation-tool rows cover those named tools; refine the crc32c row with its exact version. If the resolved closure differs, stop dependent work for a reviewed pin/license correction, not a floating update.
+- [x] Add license records before relying on tools: Rust 1.99.0 toolchain/standard library (MIT OR Apache-2.0), `rustc_version` 0.4.1 and `semver` 1.0.27 (MIT OR Apache-2.0), and `actions/cache` v6.1.0 at the commit in Task 5 (MIT). Inspect that release's `LICENSE` and bundled dependency license notices at the exact pinned commit. These license expressions remain verify checks against exact release texts. The single CI Python recorded in `.github/python-version` is a build tool under the PSF license and incorporated-software terms; its existing `docs/licensing.md` row covers it. Verify upstream license texts and retain applicable notices. The existing `crc32c`, checkout, setup-python and Python validation-tool rows cover those named tools; refine the crc32c row with its exact version. If the resolved closure differs, stop dependent work for a reviewed pin/license correction, not a floating update.
 - [x] Create the workspace metadata and toolchain file exactly as [Rust instructions](../../instructions/rust.md) require. Use `members = ["crates/spool"]`. Member metadata inherits version, edition, rust-version, license and publish. Inherit workspace lints. Put `/target/` in `agent/.gitignore`; do not alter global Git configuration. Add `crc32c = "=0.6.8"` in workspace dependencies and inherit it in the member. No other direct dependency or feature override.
 - [x] Generate the lockfile once: `cd agent && cargo generate-lockfile`, then `cargo update -p rustc_version --precise 0.4.1` and `cargo update -p semver --precise 1.0.27`. Require exactly the three external packages in spec section 1. Run `cargo tree --locked --edges normal,build,dev` and inspect all licenses, sources, features and build scripts. Lockfile pins are exact even though upstream manifests use compatible ranges.
 - [x] Write `header.rs` tests first: all five enum values/names, unknown bytes across 0..=255, exact header bytes, zero epoch, zero counters, all-u64-max fields, error trait use and variant matching. Do not use Rust memory layout to construct expected bytes.
@@ -89,12 +89,11 @@ Shared schemas and design documents are read-only implementation inputs. Report 
 | `windows-2025` | `x86_64-pc-windows-msvc` | `X64` |
 | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` | `X64` |
 
-- [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python setup sets `python-version: '3.13.7'`. Rust setup runs `rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy`; subsequent Cargo commands select the checked-in toolchain file. No unpinned Rust action or downloaded install script.
+- [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python 3.14.8 and the Rust 1.99.0 rustc, rust-std, cargo, rustfmt and clippy components come from the digest-checked bootstrap in [CI hardening section 8](../specs/ci-hardening.md#8-one-validator-environment-and-admitted-tools-ci-04-to-ci-07), which pins the versions in `.github/python-version` and `agent/rust-toolchain.toml` through `scripts/ci/toolchains.lock.json`. No setup action, rustup download or install script runs.
 
 | Action | Exact commit | Basis |
 |---|---|---|
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | [v7.0.1 release](https://github.com/actions/checkout/releases/tag/v7.0.1), server and design workflow pin |
-| `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` | [v7.0.0 release](https://github.com/actions/setup-python/releases/tag/v7.0.0), design workflow pin |
 | `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | [v6.1.0 release](https://github.com/actions/cache/releases/tag/v6.1.0) |
 
 - [ ] Follow the authoritative cache boundary in [release builds](../specs/release-builds.md#4-reproducibility-and-toolchain-admission): cache only integrity-checked downloaded registry sources, never `agent/target`, other compiled output or credentials. Tag builds use no restored caches. Check `cargo metadata --locked --format-version 1` resolves the expected pins without changing the lockfile.

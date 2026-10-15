@@ -38,6 +38,8 @@ class FreshGoTests(unittest.TestCase):
         env = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
         self.assertEqual(env['GOTOOLCHAIN'], 'local')
         self.assertEqual(env['GOFLAGS'], '-mod=readonly')
+        # Every later Go step ignores the per-user `go env -w` file (CI hardening section 6).
+        self.assertEqual(env['GOENV'], 'off')
         for key in ('GOCACHE', 'GOMODCACHE'):
             path = Path(env[key])
             self.assertTrue(path.is_absolute())
@@ -99,7 +101,7 @@ class FreshGoTests(unittest.TestCase):
         self.assertEqual(safe.stdout.strip(), fresh['GOCACHE'])
         self.assertFalse(marker.exists())
         self.assertNotIn(str(prior), safe.stderr)
-        actual = subprocess.run(['go', 'env', '-json', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS'],
+        actual = subprocess.run(['go', 'env', '-json', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'GOENV'],
                                 cwd=fixture, env={**env, **fresh}, capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(actual.stdout), fresh)
 
@@ -147,8 +149,8 @@ class CachePolicyTests(unittest.TestCase):
             ('server', 'race', lambda j: j['steps'].remove(next(s for s in j['steps'] if s.get('run') == check_policy.GO_FRESH))),
             ('server', 'ocsf-native', lambda j: next(s for s in j['steps'] if s.get('name') == 'Download and verify Go modules').update(run='go mod download')),
             ('agent', 'validate', lambda j: j['steps'].remove(next(s for s in j['steps'] if s.get('run') == check_policy.CARGO_FRESH))),
-            ('server', 'validate', lambda j: next(s for s in j['steps'] if s.get('uses', '').startswith('actions/setup-go@'))['with'].update(cache='true')),
-            ('agent', 'rustinterop', lambda j: next(s for s in j['steps'] if s.get('uses', '').startswith('actions/setup-go@'))['with'].update(cache='true')),
+            ('server', 'validate', lambda j: j['steps'].insert(1, {'uses': 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e', 'with': {'go-version-file': 'server/go.mod', 'cache': 'true'}})),
+            ('agent', 'rustinterop', lambda j: j['steps'].insert(1, {'uses': 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e', 'with': {'go-version-file': 'server/go.mod', 'cache': 'true'}})),
             ('agent', 'validate', lambda j: next(s for s in j['steps'] if s.get('uses', '').startswith('actions/cache@'))['with'].update(path='agent/target')),
             ('server', 'validate', lambda j: j['steps'].append({'uses': 'actions/cache@' + 'a'*40, 'with': {'path': '~/.cache/go-build'}})),
             ('server', 'loader-gate-a', lambda j: j['steps'].append({'run': 'go env', 'env': {'GOCACHE': '/home/cache'}})),

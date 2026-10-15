@@ -26,8 +26,15 @@ type parserInput struct {
 	Name string
 	Size int
 }
+
+// Input, Size, Mode and Sample identify one measured sample; the root parent
+// requires every expected key exactly once per sample number.
 type parserMeasurement struct {
-	Input, Mode, Toolchain, OS, Arch, Status           string
+	Input                                              string
+	Size                                               int
+	Mode                                               string
+	Sample                                             int
+	Toolchain, OS, Arch, Status                        string
 	Bytes                                              int
 	Alloc, Objects, StackGrowth, RetainedHeap, PeakRSS uint64
 	Nanoseconds                                        int64
@@ -187,6 +194,10 @@ func TestParserMeasurementChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sample, err := strconv.Atoi(os.Getenv("RICEVANTA_PARSER_SAMPLE"))
+	if err != nil || sample < 1 {
+		t.Fatal("measurement child requires a positive sample identity")
+	}
 	mode := os.Getenv("RICEVANTA_PARSER_MODE")
 	payload := parserPayload(parserInput{recipe, size})
 	accepted := os.Getenv("RICEVANTA_PARSER_ACCEPTED") == "true"
@@ -272,7 +283,7 @@ func TestParserMeasurementChild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("peak resident memory: %v", err)
 	}
-	m := parserMeasurement{Input: recipe, Mode: mode, Toolchain: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, Status: status, Bytes: len(payload), Alloc: after.TotalAlloc - before.TotalAlloc, Objects: after.Mallocs - before.Mallocs, StackGrowth: stack, RetainedHeap: heap, PeakRSS: peakRSS, Nanoseconds: elapsed.Nanoseconds()}
+	m := parserMeasurement{Input: recipe, Size: size, Mode: mode, Sample: sample, Toolchain: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, Status: status, Bytes: len(payload), Alloc: after.TotalAlloc - before.TotalAlloc, Objects: after.Mallocs - before.Mallocs, StackGrowth: stack, RetainedHeap: heap, PeakRSS: peakRSS, Nanoseconds: elapsed.Nanoseconds()}
 	m.ProcsBefore, m.ProcsAfter = procsBefore, procsAfter
 	m.MemoryLimitBefore, m.MemoryLimitAfter = limitBefore, limitAfter
 	m.GCPercentBefore, m.GCPercentAfter = gcPercentBefore, gcPercentAfter
@@ -306,7 +317,7 @@ func TestParserMeasurementChild(t *testing.T) {
 	fmt.Printf("PARSER_MEASUREMENT %s\n", b)
 }
 
-func runParserBudget(t *testing.T, extended bool) {
+func runParserBudget(t *testing.T, extended bool, sample int) {
 	t.Helper()
 	for _, c := range parserCorpus(extended) {
 		for _, mode := range []string{"preflight", "node", "combined"} {
@@ -314,35 +325,43 @@ func runParserBudget(t *testing.T, extended bool) {
 				cmd := exec.Command(os.Args[0], "-test.run=^TestParserMeasurementChild$", "-test.v")
 				reference := measurementReference(t, c)
 				accepted, class := reference.Accepted, reference.Error
-				cmd.Env = append(os.Environ(), "RICEVANTA_PARSER_ACCEPTED="+strconv.FormatBool(accepted), "RICEVANTA_PARSER_ERROR="+class, "RICEVANTA_PARSER_RECIPE="+c.Name, "RICEVANTA_PARSER_SIZE="+strconv.Itoa(c.Size), "RICEVANTA_PARSER_MODE="+mode)
+				cmd.Env = append(os.Environ(), "RICEVANTA_PARSER_ACCEPTED="+strconv.FormatBool(accepted), "RICEVANTA_PARSER_ERROR="+class, "RICEVANTA_PARSER_RECIPE="+c.Name, "RICEVANTA_PARSER_SIZE="+strconv.Itoa(c.Size), "RICEVANTA_PARSER_MODE="+mode, "RICEVANTA_PARSER_SAMPLE="+strconv.Itoa(sample))
 				out, err := cmd.CombinedOutput()
 				if err != nil {
 					t.Fatalf("child: %v\n%s", err, out)
 				}
-				found := false
+				found := 0
 				for _, line := range strings.Split(string(out), "\n") {
 					if strings.HasPrefix(line, "PARSER_MEASUREMENT ") {
-						_, reportErr := decodeParserMeasurement([]byte(strings.TrimPrefix(line, "PARSER_MEASUREMENT ")))
+						m, reportErr := decodeParserMeasurement([]byte(strings.TrimPrefix(line, "PARSER_MEASUREMENT ")))
 						if reportErr != nil {
 							t.Fatal(reportErr)
 						}
-						found = true
+						if m.Input != c.Name || m.Size != c.Size || m.Mode != mode || m.Sample != sample {
+							t.Fatalf("measurement identity %s/%d/%s/%d differs from the sample %s/%d/%s/%d", m.Input, m.Size, m.Mode, m.Sample, c.Name, c.Size, mode, sample)
+						}
+						found++
 						t.Log(line)
 					}
 				}
-				if !found {
-					t.Fatal("missing measurement")
+				if found != 1 {
+					t.Fatalf("measurement records %d, want exactly one", found)
 				}
 			})
 		}
 	}
 }
 
+// harnessSamples numbers each repetition of the harness within one test
+// binary, so -count=N yields sample identities 1 through N.
+var harnessSamples int
+
 func TestParserBudgetHarness(t *testing.T) {
 	if os.Getenv("RICEVANTA_REFERENCE") == "" {
 		t.Skip("root qualification subprocess only")
 	}
-	runParserBudget(t, *budgetExtended)
+	harnessSamples++
+	runParserBudget(t, *budgetExtended, harnessSamples)
 }
 
 type measurementOracle struct {
@@ -400,6 +419,9 @@ func decodeParserMeasurement(data []byte) (parserMeasurement, error) {
 		if !present || string(value) == "null" {
 			return m, fmt.Errorf("missing measurement field %s", name)
 		}
+	}
+	if m.Sample < 1 || m.Size < 0 || m.Bytes < 0 || m.Nanoseconds < 0 {
+		return m, fmt.Errorf("measurement identity or counters out of range: %+v", m)
 	}
 	if m.ProcsBefore != 1 || m.ProcsAfter != 1 {
 		return m, fmt.Errorf("GOMAXPROCS must stay at 1: %+v", m)

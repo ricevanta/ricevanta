@@ -1,0 +1,2 @@
+BenchmarkValidate
+ok  	github.com/ricevanta/ricevanta/server/internal/signing/ed25519key	0.003s

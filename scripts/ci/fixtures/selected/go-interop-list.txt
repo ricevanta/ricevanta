@@ -1,0 +1,7 @@
+TestRustWriterFixtures
+TestRustWriterBoundaries
+TestRustWriterMutations
+TestRustWriterPrecondition
+TestRustWriterCaptureOverflow
+TestRustWriterCaptureChild
+ok  	github.com/ricevanta/ricevanta/server/internal/events/body	0.004s

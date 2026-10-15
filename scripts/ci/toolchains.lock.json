@@ -1,0 +1,249 @@
+{
+  "kind": "toolchains",
+  "version": 1,
+  "entries": [
+    {
+      "id": "go-1.27.1-linux-x64",
+      "tool": "go",
+      "version": "1.27.1",
+      "platform": "linux-x64",
+      "url": "https://go.dev/dl/go1.27.1.linux-amd64.tar.gz",
+      "size": 70553950,
+      "sha256": "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
+    },
+    {
+      "id": "go-1.27.1-windows-x64",
+      "tool": "go",
+      "version": "1.27.1",
+      "platform": "windows-x64",
+      "url": "https://go.dev/dl/go1.27.1.windows-amd64.zip",
+      "size": 78931360,
+      "sha256": "a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d"
+    },
+    {
+      "id": "go-1.27.1-macos-arm64",
+      "tool": "go",
+      "version": "1.27.1",
+      "platform": "macos-arm64",
+      "url": "https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz",
+      "size": 68100347,
+      "sha256": "ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12"
+    },
+    {
+      "id": "python-3.14.8-linux-x64",
+      "tool": "python",
+      "version": "3.14.8",
+      "platform": "linux-x64",
+      "url": "https://github.com/actions/python-versions/releases/download/3.14.8-36806082737/python-3.14.8-linux-24.04-x64.tar.gz",
+      "size": 110382248,
+      "sha256": "fa74abc70a55c10f6631967784878704eef81bbde9b8ec27469534f6ba997cb3"
+    },
+    {
+      "id": "python-3.14.8-windows-x64",
+      "tool": "python",
+      "version": "3.14.8",
+      "platform": "windows-x64",
+      "url": "https://github.com/actions/python-versions/releases/download/3.14.8-36806082737/python-3.14.8-win32-x64.zip",
+      "size": 33100332,
+      "sha256": "2b7a12a17729d1833b81f84396254fb4d5b4f239fd851e6e3f4e3407fe51599c"
+    },
+    {
+      "id": "python-3.14.8-macos-arm64",
+      "tool": "python",
+      "version": "3.14.8",
+      "platform": "macos-arm64",
+      "url": "https://github.com/actions/python-versions/releases/download/3.14.8-36806082737/python-3.14.8-darwin-arm64.tar.gz",
+      "size": 74568814,
+      "sha256": "88379ff8be11ec05986bf384205f00092b4b46975f40321d8567a16a7c2e8d5f"
+    },
+    {
+      "id": "rustc-1.99.0-linux-x64",
+      "tool": "rustc",
+      "version": "1.99.0",
+      "platform": "linux-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 84044652,
+      "sha256": "77171ba2a0345fdf2abc4fedda55d6de078dae7a68527c28be8c77dcc9604bd5"
+    },
+    {
+      "id": "rust-std-1.99.0-linux-x64",
+      "tool": "rust-std",
+      "version": "1.99.0",
+      "platform": "linux-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 31598812,
+      "sha256": "3e58dff2d0b72196b5ea4e90536e174d400de88564a52694686b81e091169933"
+    },
+    {
+      "id": "cargo-1.99.0-linux-x64",
+      "tool": "cargo",
+      "version": "1.99.0",
+      "platform": "linux-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 10954432,
+      "sha256": "d7674918d28093097614cd9728b6ca60db9ea3038f640f0bd1e9a4188c7568ce"
+    },
+    {
+      "id": "rustfmt-1.99.0-linux-x64",
+      "tool": "rustfmt",
+      "version": "1.99.0",
+      "platform": "linux-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 2484024,
+      "sha256": "b22c09ab9e258ec5571da170d88bd1624a4ea602e6d70d95720c5b47494cadce"
+    },
+    {
+      "id": "clippy-1.99.0-linux-x64",
+      "tool": "clippy",
+      "version": "1.99.0",
+      "platform": "linux-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 5232532,
+      "sha256": "982442e32ad8dd3f0bb3a30db74038da5f71fd9bf1a865cc71da8ea5d4ec71ec"
+    },
+    {
+      "id": "rustc-1.99.0-windows-x64",
+      "tool": "rustc",
+      "version": "1.99.0",
+      "platform": "windows-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-pc-windows-msvc.tar.xz",
+      "size": 77093924,
+      "sha256": "20fed82e629c1ed145f9e9bdee9aad65e790d4237a49bcfc61221eda69e35b14"
+    },
+    {
+      "id": "rust-std-1.99.0-windows-x64",
+      "tool": "rust-std",
+      "version": "1.99.0",
+      "platform": "windows-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-pc-windows-msvc.tar.xz",
+      "size": 23579412,
+      "sha256": "adadeafff137a7610884696912b853d4de259c4299ab035b66661e2e0f923ff0"
+    },
+    {
+      "id": "cargo-1.99.0-windows-x64",
+      "tool": "cargo",
+      "version": "1.99.0",
+      "platform": "windows-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-pc-windows-msvc.tar.xz",
+      "size": 9883480,
+      "sha256": "6201b8dcea8cc55ccfa12e842adf1b2c2aa96490a6cb4f129bf03f2df08c80c9"
+    },
+    {
+      "id": "rustfmt-1.99.0-windows-x64",
+      "tool": "rustfmt",
+      "version": "1.99.0",
+      "platform": "windows-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-x86_64-pc-windows-msvc.tar.xz",
+      "size": 2605844,
+      "sha256": "6aa039ed3de3bb9cc46ea7412d16463c700f4a31c3a1849ce818e84cd350ec81"
+    },
+    {
+      "id": "clippy-1.99.0-windows-x64",
+      "tool": "clippy",
+      "version": "1.99.0",
+      "platform": "windows-x64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-x86_64-pc-windows-msvc.tar.xz",
+      "size": 3824128,
+      "sha256": "b1b94d7d7717f42727eec41e70952100d865d25ebb7b1dd08041f6971237cfa9"
+    },
+    {
+      "id": "rustc-1.99.0-macos-arm64",
+      "tool": "rustc",
+      "version": "1.99.0",
+      "platform": "macos-arm64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 85303276,
+      "sha256": "2f6b9c9cdc9c2e87ab2e27335e8bb0c4dbe4daea486e39030b66980058f74353"
+    },
+    {
+      "id": "rust-std-1.99.0-macos-arm64",
+      "tool": "rust-std",
+      "version": "1.99.0",
+      "platform": "macos-arm64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 48529215,
+      "sha256": "3589b3a6c6470d590aa5aa7fa1a4af0101103847761a5372a7300b0aa85699c6"
+    },
+    {
+      "id": "cargo-1.99.0-macos-arm64",
+      "tool": "cargo",
+      "version": "1.99.0",
+      "platform": "macos-arm64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 13080990,
+      "sha256": "318b85c276b43134102fb49bbb54bfd0757e5cce47a772461149aeab5adea2ab"
+    },
+    {
+      "id": "rustfmt-1.99.0-macos-arm64",
+      "tool": "rustfmt",
+      "version": "1.99.0",
+      "platform": "macos-arm64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 2217541,
+      "sha256": "c8d86490e38920ab7783483dc828695a9a678eff541c5fa793f165b374e87312"
+    },
+    {
+      "id": "clippy-1.99.0-macos-arm64",
+      "tool": "clippy",
+      "version": "1.99.0",
+      "platform": "macos-arm64",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 4450540,
+      "sha256": "d13d16085280bd652d4a77041073264719c9ee92f33702f9dce2ee86777c92b1"
+    },
+    {
+      "id": "node-24.21.0-linux-x64",
+      "tool": "node",
+      "version": "24.21.0",
+      "platform": "linux-x64",
+      "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz",
+      "size": 31890184,
+      "sha256": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
+    },
+    {
+      "id": "pnpm-11.18.0-linux-x64",
+      "tool": "pnpm",
+      "version": "11.18.0",
+      "platform": "linux-x64",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.18.0.tgz",
+      "size": 8771179,
+      "sha256": "29c35ca8d2a287988fdee3e0f36e07d9b93783f567b579b7fd5b798a4563dd81"
+    },
+    {
+      "id": "chromium-headless-shell-1217-linux-x64",
+      "tool": "chromium-headless-shell",
+      "version": "1217",
+      "platform": "linux-x64",
+      "url": "https://cdn.playwright.dev/builds/cft/147.0.7727.15/linux64/chrome-headless-shell-linux64.zip",
+      "size": 117394312,
+      "sha256": "cf779cd5486f3fc5a18bea4ac606026a1667ae16efaee15af51bd3ad3ae01092"
+    },
+    {
+      "id": "firefox-1511-linux-x64",
+      "tool": "firefox",
+      "version": "1511",
+      "platform": "linux-x64",
+      "url": "https://cdn.playwright.dev/dbazure/download/playwright/builds/firefox/1511/firefox-ubuntu-24.04.zip",
+      "size": 108142078,
+      "sha256": "525d33daba755317d75b9fad1cfadce78336ef40f1225440493cc4045023c2e6"
+    },
+    {
+      "id": "webkit-2272-linux-x64",
+      "tool": "webkit",
+      "version": "2272",
+      "platform": "linux-x64",
+      "url": "https://cdn.playwright.dev/dbazure/download/playwright/builds/webkit/2272/webkit-ubuntu-24.04.zip",
+      "size": 103657867,
+      "sha256": "7f040a1e7a9f6946f8909af2c5708208963a9e8579a8948c20f3602ca54c624a"
+    },
+    {
+      "id": "ffmpeg-1011-linux-x64",
+      "tool": "ffmpeg",
+      "version": "1011",
+      "platform": "linux-x64",
+      "url": "https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip",
+      "size": 2376500,
+      "sha256": "ebc74fc5b94830176a3c2914ae96bd8bc7f6a91f4f33890230f84a172ee61ccc"
+    }
+  ]
+}
