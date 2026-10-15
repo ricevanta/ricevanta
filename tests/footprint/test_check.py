@@ -57,6 +57,7 @@ def make_evidence(channel="master", smoke=False, target="linux-x64"):
         for p, wp in zip(ev["phases"], windows["phases"]):
             p["metrics"] = copy.deepcopy(wp["metrics"])
             p["self_sample"] = copy.deepcopy(wp["self_sample"])
+            p["self_sample_external"] = copy.deepcopy(wp["self_sample_external"])
     return ev
 
 
@@ -75,6 +76,7 @@ def phase(ev, name):
 
 def set_self(ev, name, self_bytes, external_bytes):
     phase(ev, name)["self_sample"]["footprint_bytes"] = self_bytes
+    phase(ev, name)["self_sample_external"]["footprint_bytes"] = external_bytes
     for r in ev["results"]:
         if r["check"] == "self_sample_agreement" and r["phase"] == name:
             r["observed"] = self_bytes - external_bytes
@@ -241,7 +243,7 @@ class AbsoluteCheckTests(CheckTestCase):
         self.assertEqual(self.run_check(ev).code, 2)
 
     def test_cpu_idle_gate_and_target(self):
-        for value, expected in ((5.0, "pass"), (5.01, "fail")):
+        for value, expected in ((5.0, "recorded"), (5.01, "fail")):
             ev = make_evidence()
             phase(ev, "idle")["metrics"]["cpu_core_pct"]["mean"] = value
             run = self.run_check(ev)
@@ -342,7 +344,7 @@ class AbsoluteCheckTests(CheckTestCase):
         phase(ev, "idle")["self_sample"]["footprint_metric"] = "phys_footprint"
         self.assertEqual(self.run_check(ev).outcome("self_sample_agreement", "idle"), "fail")
         ev = make_evidence()
-        ev["results"] = [r for r in ev["results"] if r["phase"] != "idle"]
+        phase(ev, "idle")["self_sample_external"] = None
         self.assertEqual(self.run_check(ev).outcome("self_sample_agreement", "idle"), "fail")
 
     def test_prior_results_are_recomputed(self):
@@ -596,6 +598,158 @@ class ExitCodeTests(CheckTestCase):
             for key in ("check=", "phase=", "observed=", "limit=", "baseline=", "baseline_identity=", "outcome="):
                 self.assertIn(key, line)
         self.assertTrue(any(l.startswith("outcome=") for l in run.stdout.splitlines()))
+
+class WorkloadTests(CheckTestCase):
+    def test_all_expected_checks(self):
+        cases = [c for c in CASES['cases'] if 'expected_checks' in c]
+        self.assertEqual(len(cases), 19)
+        for case in cases:
+            with self.subTest(case=case['id']):
+                ev = copy.deepcopy(case['instance'])
+                self.assertEqual(check.load_evidence_validator().errors(ev), [])
+                for p in ev['phases']:
+                    p['profile']['sha256'] = PROFILE_SHA[p['profile']['name']]
+                run = self.run_check(ev)
+                self.assertIn(run.code, (0, 1), run.stdout)
+                for want in case['expected_checks']:
+                    self.assertEqual(run.outcome(want['check'], want['phase']), want['outcome'])
+                    if want['outcome'] == 'fail':
+                        self.assertEqual(run.code, 1)
+
+    def test_cadence_bounds(self):
+        for delta, expected in ((593, 'fail'), (594, 'pass'), (601, 'pass'), (602, 'fail')):
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            p['health_progress']['end']['samples'] = p['health_progress']['start']['samples'] + delta
+            self.assertEqual(self.run_check(ev).outcome('sampler_progress', 'load'), expected)
+
+    def test_freshness_boundaries(self):
+        for key, limit in (('max_write_age_ms', 2100), ('max_sample_age_ms', 2100),
+                           ('max_observation_gap_ms', 2000)):
+            for value, expected in ((limit, 'pass'), (limit + 1, 'fail')):
+                ev = make_evidence()
+                phase(ev, 'load')['health_progress'][key] = value
+                self.assertEqual(self.run_check(ev).outcome('health_freshness', 'load'), expected)
+
+    def test_untrusted_endpoint_and_summary(self):
+        mutations = [lambda p: p['health_progress']['end'].update(pid=5),
+                     lambda p: p['health_progress']['end'].update(state='stopped'),
+                     lambda p: p['health_progress']['end'].update(interval_ms=200),
+                     lambda p: p['health_progress']['end'].update(sampled_uptime_ms=999999),
+                     lambda p: p['health_progress'].update(observations=61),
+                     lambda p: p['health_progress'].update(max_sample_age_ms=0),
+                     lambda p: p.update(duration_ms=59999),
+                     lambda p: p['health_progress']['end'].update(observed_elapsed_ms=58999)]
+        for mutate in mutations:
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            # Make a nonzero endpoint age so an understated maximum is detectable.
+            p['health_progress']['end']['sampled_unix_ms'] -= 1
+            p['health_progress']['end']['sampled_uptime_ms'] -= 1
+            mutate(p)
+            self.assertEqual(self.run_check(ev).outcome('health_freshness', 'load'), 'fail')
+
+    def test_pair_recomputed_despite_forged_verdict(self):
+        ev = make_evidence()
+        p = phase(ev, 'load')
+        p['self_sample']['footprint_bytes'] = 20_000_000
+        ev['results'] = [check._row('self_sample_agreement', 'load', 0, 1, None, 'pass')]
+        self.assertEqual(self.run_check(ev).outcome('self_sample_agreement', 'load'), 'fail')
+
+    def test_known_example_difference_is_recomputed(self):
+        ev = make_evidence()
+        run = self.run_check(ev)
+        self.assertEqual(run.row('self_sample_agreement', 'idle')['observed'], 0)
+        self.assertEqual(run.row('self_sample_agreement', 'load')['observed'], 0)
+
+class AdditionalWorkloadTests(CheckTestCase):
+    def test_short_smoke_is_recorded_but_stale_or_wrong_metric_fails(self):
+        ev = make_evidence(smoke=True)
+        p = phase(ev, 'idle')
+        p['duration_ms'] = 1000
+        p['finished_unix_ms'] = p['started_unix_ms'] + 1000
+        g = p['health_progress']
+        g['end'] = dict(g['start'], observed_unix_ms=p['finished_unix_ms'], observed_elapsed_ms=1000)
+        g['observations'] = 3
+        g['max_write_age_ms'] = g['max_sample_age_ms'] = 11000
+        p['self_sample'].update({k: g['end'][k] for k in ('written_unix_ms', 'sampled_unix_ms', 'sampled_uptime_ms')})
+        run = self.run_check(ev)
+        self.assertEqual(run.outcome('sampler_progress', 'idle'), 'recorded')
+        self.assertEqual(run.outcome('self_sample_agreement', 'idle'), 'recorded')
+        p['self_sample']['footprint_metric'] = 'phys_footprint'
+        self.assertEqual(self.run_check(ev).outcome('self_sample_agreement', 'idle'), 'fail')
+        p['health_progress']['max_sample_age_ms'] = 62001
+        self.assertEqual(self.run_check(ev).outcome('health_freshness', 'idle'), 'fail')
+
+    def test_self_pair_exact_time_and_tolerance_boundaries(self):
+        for delta, expected in ((2000, 'pass'), (2001, 'fail')):
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            p['self_sample_external']['unix_ms'] -= delta
+            self.assertEqual(self.run_check(ev).outcome('self_sample_agreement', 'load'), expected)
+        for self_bytes, external_bytes, expected in ((25_165_824, 20_971_520, 'pass'),
+                                                     (25_165_825, 20_971_520, 'fail'),
+                                                     (36_000_000, 30_000_000, 'pass'),
+                                                     (36_000_001, 30_000_000, 'fail')):
+            ev = make_evidence()
+            set_self(ev, 'load', self_bytes, external_bytes)
+            self.assertEqual(self.run_check(ev).outcome('self_sample_agreement', 'load'), expected)
+
+    def test_all_counters_and_ordering_are_rechecked(self):
+        for counter in check.COUNTERS:
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            p['health_progress']['start'][counter] = p['health_progress']['end'][counter] + 1
+            self.assertEqual(self.run_check(ev).outcome('sampler_progress', 'load'), 'fail')
+        for key in ('sample_failures', 'health_write_failures'):
+            ev = make_evidence()
+            phase(ev, 'load')['health_progress']['end'][key] += 1
+            self.assertEqual(self.run_check(ev).outcome('sampler_progress', 'load'), 'fail')
+        for key in ('written_unix_ms', 'sampled_unix_ms'):
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            p['health_progress']['end'][key] = p['finished_unix_ms'] + 1
+            self.assertEqual(self.run_check(ev).outcome('health_freshness', 'load'), 'fail')
+
+    def test_log_activity_boundaries(self):
+        for key, values in (('sample_events', ((593, 'fail'), (594, 'pass'), (601, 'fail'))),
+                            ('rotations_observed', ((0, 'fail'), (1, 'fail'), (2, 'pass'), (3, 'fail'))),
+                            ('invalid_lines', ((0, 'pass'), (1, 'fail')))):
+            for value, expected in values:
+                ev = make_evidence()
+                phase(ev, 'load')['log_activity'][key] = value
+                self.assertEqual(self.run_check(ev).outcome('load_log_activity', 'load'), expected)
+        ev = make_evidence()
+        phase(ev, 'load')['health_progress']['end']['log_errors'] += 1
+        self.assertEqual(self.run_check(ev).outcome('load_log_activity', 'load'), 'fail')
+
+class DelayedBoundaryTests(CheckTestCase):
+    def test_progress_uses_endpoint_monotonic_distance(self):
+        for delta, expected in ((574, 'fail'), (575, 'pass'), (581, 'pass'), (582, 'fail')):
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            a, b = p['health_progress']['start'], p['health_progress']['end']
+            a.update(observed_elapsed_ms=1000, observed_unix_ms=p['started_unix_ms'] + 1000)
+            b.update(observed_elapsed_ms=59000, observed_unix_ms=p['finished_unix_ms'] - 1000,
+                     written_unix_ms=p['finished_unix_ms'] - 1000,
+                     sampled_unix_ms=p['finished_unix_ms'] - 1000, samples=a['samples'] + delta)
+            self.assertEqual(self.run_check(ev).outcome('sampler_progress', 'load'), expected)
+
+    def test_window_clock_discrepancy_and_boundary_positions(self):
+        for delta, expected in ((2000, 'pass'), (2001, 'fail')):
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            p['finished_unix_ms'] += delta
+            for key in ('observed_unix_ms', 'written_unix_ms', 'sampled_unix_ms'):
+                p['health_progress']['end'][key] += delta
+            self.assertEqual(self.run_check(ev).outcome('health_freshness', 'load'), expected)
+        for elapsed, expected in ((1000, 'pass'), (1001, 'fail')):
+            ev = make_evidence()
+            p = phase(ev, 'load')
+            p['health_progress']['start'].update(observed_elapsed_ms=elapsed,
+                                                observed_unix_ms=p['started_unix_ms'] + elapsed)
+            p['health_progress']['max_write_age_ms'] = p['health_progress']['max_sample_age_ms'] = elapsed
+            self.assertEqual(self.run_check(ev).outcome('health_freshness', 'load'), expected)
 
 
 if __name__ == "__main__":
