@@ -14,6 +14,9 @@
 
 pub mod acl;
 
+#[cfg(any(target_os = "macos", test))]
+mod fd_list;
+
 #[cfg(target_os = "macos")]
 mod platform;
 #[cfg(target_os = "macos")]
