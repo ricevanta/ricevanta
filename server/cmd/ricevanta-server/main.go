@@ -73,6 +73,7 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 		if args[0] == "check-config" {
 			return runtime.CheckConfig(o)
 		}
+		o.ProcessExit = os.Exit
 		return runtime.Serve(context.Background(), o)
 	case "console-manifest":
 		if code, ok := parse(newFlagSet(args[0], stderr), args[1:], stderr); !ok {

@@ -120,7 +120,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Problem(w, r, http.StatusMethodNotAllowed)
 		return
 	}
-	if !ok || h.tree == nil {
+	_, sidecar := sidecarBase(p)
+	if !ok || h.tree == nil || sidecar {
 		Problem(w, r, http.StatusNotFound)
 		return
 	}

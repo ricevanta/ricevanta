@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/ricevanta/ricevanta/server/internal/transport/console"
@@ -549,4 +550,51 @@ func TestAbsentAcceptServesIndex(t *testing.T) {
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	checkProblem(t, w, 404)
+}
+
+func TestDirectSidecarNeverFallsBack(t *testing.T) {
+	m, _ := fixture(t)
+	for _, original := range []string{"index.html", "brand/favicon.ico"} {
+		for _, suffix := range []string{".br", ".gz"} {
+			m[original+suffix] = &fstest.MapFile{Data: []byte("compressed")}
+		}
+	}
+	tree, err := console.Verify(m, manifestFor(t, m), devIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := console.NewHandler(tree, stubHealth("{}"), stubHealth("{}"))
+	for _, method := range []string{"GET", "HEAD"} {
+		for _, prefix := range []string{"/", "/assets/", "/brand/"} {
+			for _, name := range []string{"index-Bx1a2b3c.js", "index.html", "favicon.ico", "missing.js"} {
+				for _, suffix := range []string{".br", ".gz", "%2ebr", ".%67z"} {
+					for _, accept := range []string{"", "text/html"} {
+						target := prefix + name + suffix
+						headers := map[string]string{}
+						if accept != "" {
+							headers["Accept"] = accept
+						}
+						w := do(t, h, req{method: method, target: target, header: headers})
+						if w.Code != 404 || (method == "HEAD" && w.Body.Len() != 0) {
+							t.Errorf("%s %s accept=%q: %d %q", method, target, accept, w.Code, w.Body.String())
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestSidecarNegotiationRetainsOriginalMIME(t *testing.T) {
+	h := newHandler(t)
+	for _, method := range []string{"GET", "HEAD"} {
+		for _, encoding := range []string{"br", "gzip"} {
+			for name, mime := range map[string]string{"index-Bx1a2b3c.js": "text/javascript; charset=utf-8", "index-Cx9y8z7w.css": "text/css; charset=utf-8"} {
+				w := do(t, h, req{method: method, target: "/assets/" + name, header: map[string]string{"Accept-Encoding": encoding}})
+				if w.Code != 200 || w.Header().Get("Content-Encoding") != encoding || w.Header().Get("Content-Type") != mime || (method == "HEAD" && w.Body.Len() != 0) {
+					t.Fatalf("%s %s %s: %d %v", method, name, encoding, w.Code, w.Header())
+				}
+			}
+		}
+	}
 }
