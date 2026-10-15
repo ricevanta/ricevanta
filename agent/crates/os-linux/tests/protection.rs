@@ -71,11 +71,13 @@ fn reason(result: Result<impl std::fmt::Debug, ProtectionError>, object: Object)
 }
 
 #[test]
-fn effective_user_comes_from_proc() {
-    let text = fs::read_to_string("/proc/self/status").unwrap();
-    let uid_line = text.lines().find(|l| l.starts_with("Uid:")).unwrap();
-    let euid: u32 = uid_line.split_whitespace().nth(2).unwrap().parse().unwrap();
-    assert_eq!(platform().euid(), euid);
+fn effective_user_matches_the_owner_of_a_created_file() {
+    // Independent of /proc: a new file is owned by the creating process's
+    // filesystem uid, which equals the effective uid for this test.
+    let dir = Scratch::new();
+    let probe = dir.join("probe");
+    write_file(&probe, 0o600, b"");
+    assert_eq!(platform().euid(), fs::metadata(&probe).unwrap().uid());
 }
 
 #[test]
@@ -138,25 +140,11 @@ fn missing_config_is_none() {
 }
 
 #[test]
-fn foreign_owner_and_writable_parent_fail() {
+fn writable_parent_fails() {
     let p = platform();
     let dir = Scratch::new();
     let path = dir.join("agent.json");
     write_file(&path, 0o600, b"{}");
-    if p.euid() == 0 {
-        std::os::unix::fs::chown(&path, Some(65534), None).unwrap();
-        let got = reason(p.open_config(&path, Mode::Service), Object::ConfigFile);
-        assert_eq!(got, Reason::Owner { uid: 65534 });
-        std::os::unix::fs::chown(&path, Some(0), None).unwrap();
-        std::os::unix::fs::chown(&dir.0, Some(65534), None).unwrap();
-        let got = reason(p.open_config(&path, Mode::Service), Object::ConfigParent);
-        assert_eq!(got, Reason::Owner { uid: 65534 });
-        std::os::unix::fs::chown(&dir.0, Some(0), None).unwrap();
-    } else {
-        // Without root no file can be given a foreign owner; the owner rule
-        // itself is covered by ricevanta-os tests over descriptor facts.
-        eprintln!("foreign owner live check skipped: not running as root");
-    }
     assert!(p.open_config(&path, Mode::Run).unwrap().is_some());
     fs::set_permissions(&dir.0, Permissions::from_mode(0o775)).unwrap();
     let got = reason(p.open_config(&path, Mode::Run), Object::ConfigParent);
@@ -164,6 +152,189 @@ fn foreign_owner_and_writable_parent_fail() {
     fs::set_permissions(&dir.0, Permissions::from_mode(0o757)).unwrap();
     let got = reason(p.open_config(&path, Mode::Run), Object::ConfigParent);
     assert_eq!(got, Reason::ParentWritable { mode: 0o757 });
+}
+
+#[test]
+fn service_mode_refuses_a_directory_not_owned_by_root() {
+    let p = platform();
+    let dir = Scratch::new();
+    let state = dir.join("state");
+    fs::create_dir(&state).unwrap();
+    fs::set_permissions(&state, Permissions::from_mode(0o700)).unwrap();
+    // As a non-root user the directory belongs to that user; as root it is
+    // handed to an unprivileged uid. Both branches assert a real refusal.
+    let owner = if p.euid() == 0 {
+        std::os::unix::fs::chown(&state, Some(65534), None).unwrap();
+        65534
+    } else {
+        p.euid()
+    };
+    let got = reason(
+        p.open_or_create_dir(&state, DirKind::State, Mode::Service),
+        Object::StateDir,
+    );
+    assert_eq!(got, Reason::Owner { uid: owner });
+}
+
+/// Fails, never passes, without root. Task 6 runs it in the Linux
+/// `agent-unit` leaf under `sudo` (`cargo test --locked -p ricevanta-os-linux
+/// --test protection root_ -- --ignored`) and names every `root_` test in
+/// the receipt.
+fn require_root(p: &LinuxPlatform) {
+    assert_eq!(
+        p.euid(),
+        0,
+        "this test needs root: run it with sudo and --ignored"
+    );
+}
+
+#[test]
+#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+fn root_foreign_owner_of_config_and_parent_fails() {
+    let p = platform();
+    require_root(&p);
+    let dir = Scratch::new();
+    let path = dir.join("agent.json");
+    write_file(&path, 0o600, b"{}");
+    std::os::unix::fs::chown(&path, Some(65534), None).unwrap();
+    let got = reason(p.open_config(&path, Mode::Service), Object::ConfigFile);
+    assert_eq!(got, Reason::Owner { uid: 65534 });
+    std::os::unix::fs::chown(&path, Some(0), None).unwrap();
+    assert!(p.open_config(&path, Mode::Service).unwrap().is_some());
+    std::os::unix::fs::chown(&dir.0, Some(65534), None).unwrap();
+    let got = reason(p.open_config(&path, Mode::Service), Object::ConfigParent);
+    assert_eq!(got, Reason::Owner { uid: 65534 });
+}
+
+#[test]
+#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+fn root_service_mode_refuses_unprivileged_directory_owner() {
+    let p = platform();
+    require_root(&p);
+    let dir = Scratch::new();
+    for (name, kind, object) in [
+        ("state", DirKind::State, Object::StateDir),
+        ("run", DirKind::Runtime, Object::RuntimeDir),
+        ("logs", DirKind::Log, Object::LogDir),
+    ] {
+        let path = dir.join(name);
+        fs::create_dir(&path).unwrap();
+        fs::set_permissions(&path, Permissions::from_mode(kind.unix_mode())).unwrap();
+        std::os::unix::fs::chown(&path, Some(65534), None).unwrap();
+        let got = reason(p.open_or_create_dir(&path, kind, Mode::Service), object);
+        assert_eq!(got, Reason::Owner { uid: 65534 });
+        std::os::unix::fs::chown(&path, Some(0), None).unwrap();
+        p.open_or_create_dir(&path, kind, Mode::Service).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+fn root_foreign_health_file_is_refused_untouched() {
+    let p = platform();
+    require_root(&p);
+    let dir = Scratch::new();
+    let tmp = dir.join("health.json.tmp");
+    write_file(&tmp, 0o644, b"planted");
+    std::os::unix::fs::chown(&tmp, Some(65534), None).unwrap();
+    let got = reason(
+        p.create_file(&tmp, FileKind::HealthDocument),
+        Object::HealthDocument,
+    );
+    assert_eq!(got, Reason::Owner { uid: 65534 });
+    assert_eq!(fs::read(&tmp).unwrap(), b"planted");
+    assert_eq!(mode_of(&tmp), 0o644);
+}
+
+#[test]
+fn paths_must_end_in_a_plain_name() {
+    let p = platform();
+    let dir = Scratch::new();
+    let real = dir.join("real");
+    fs::create_dir(&real).unwrap();
+    fs::set_permissions(&real, Permissions::from_mode(0o700)).unwrap();
+    let link = dir.join("state");
+    symlink(&real, &link).unwrap();
+    let base = link.to_str().unwrap();
+    for spelled in [
+        format!("{base}/"),
+        format!("{base}/."),
+        format!("{base}/sub/.."),
+    ] {
+        let got = reason(
+            p.open_or_create_dir(Path::new(&spelled), DirKind::State, Mode::Run),
+            Object::StateDir,
+        );
+        assert_eq!(got, Reason::PathForm, "{spelled}");
+    }
+    let config = dir.join("agent.json");
+    write_file(&config, 0o600, b"{}");
+    let spelled = format!("{}/.", config.to_str().unwrap());
+    let got = reason(
+        p.open_config(Path::new(&spelled), Mode::Run),
+        Object::ConfigFile,
+    );
+    assert_eq!(got, Reason::PathForm);
+    let got = reason(
+        p.create_file(Path::new(&format!("{base}/")), FileKind::Log),
+        Object::LogFile,
+    );
+    assert_eq!(got, Reason::PathForm);
+    // Nothing was created or re-moded through the link.
+    assert_eq!(mode_of(&real), 0o700);
+    assert_eq!(fs::read_dir(&real).unwrap().count(), 0);
+}
+
+#[test]
+fn config_comes_from_the_checked_parent() {
+    // A renamer thread alternates a safe and a world-writable directory at
+    // the same path. Every file returned must come from the safe one: the
+    // parent that passed the check is the parent the file is opened in.
+    let p = platform();
+    let root = Scratch::new();
+    let current = root.join("current");
+    let safe = root.join("safe");
+    let unsafe_dir = root.join("open");
+    for (dir, mode, body) in [(&safe, 0o755, "safe"), (&unsafe_dir, 0o777, "open")] {
+        fs::create_dir(dir).unwrap();
+        fs::set_permissions(dir, Permissions::from_mode(mode)).unwrap();
+        write_file(&dir.join("agent.json"), 0o600, body.as_bytes());
+    }
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let renamer = {
+        let (stop, current, safe, open) = (
+            stop.clone(),
+            current.clone(),
+            safe.clone(),
+            unsafe_dir.clone(),
+        );
+        std::thread::spawn(move || {
+            while !stop.load(Ordering::Relaxed) {
+                for source in [&safe, &open] {
+                    if fs::rename(source, &current).is_ok() {
+                        let _ = fs::rename(&current, source);
+                    }
+                }
+            }
+        })
+    };
+    let config = current.join("agent.json");
+    let (mut from_safe, mut refused) = (0u32, 0u32);
+    for _ in 0..20_000 {
+        match p.open_config(&config, Mode::Run) {
+            Ok(Some(mut file)) => {
+                let mut body = String::new();
+                file.read_to_string(&mut body).unwrap();
+                assert_eq!(body, "safe", "file read through an unchecked parent");
+                from_safe += 1;
+            }
+            Ok(None) => {}
+            Err(_) => refused += 1,
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    renamer.join().unwrap();
+    eprintln!("checked-parent race: {from_safe} safe reads, {refused} refusals");
 }
 
 #[test]
@@ -287,13 +458,7 @@ fn missing_parent_is_not_created() {
         Object::StateDir,
     );
     assert!(
-        matches!(
-            got,
-            Reason::Io {
-                kind: std::io::ErrorKind::NotFound,
-                ..
-            }
-        ),
+        matches!(&got, Reason::Io(cause) if cause.kind() == std::io::ErrorKind::NotFound),
         "{got:?}"
     );
     assert!(!dir.join("a").exists());

@@ -111,6 +111,30 @@ fn offsets_name_the_offending_byte() {
 }
 
 #[test]
+fn invalid_utf8_forms() {
+    for (name, bad) in [
+        ("overlong solidus", &b"\"\xc0\xaf\""[..]),
+        ("utf-8 encoded surrogate", b"\"\xed\xa0\x80\""),
+        ("above U+10FFFF", b"\"\xf4\x90\x80\x80\""),
+        ("truncated sequence", b"\"\xe2\x82\""),
+    ] {
+        assert_eq!(parse(bad), Err(Error::Utf8 { offset: 1 }), "{name}");
+    }
+}
+
+#[test]
+fn fraction_is_reported_before_range_within_a_number() {
+    assert_eq!(
+        parse(b"99999999999999999999.5"),
+        Err(Error::NumberFormat { offset: 20 })
+    );
+    assert_eq!(
+        parse(b"99999999999999999999"),
+        Err(Error::NumberRange { offset: 0 })
+    );
+}
+
+#[test]
 fn size_limit_is_exact_and_checked_first() {
     let mut fits = vec![b'"'];
     fits.resize(MAX_INPUT_BYTES - 1, b'a');

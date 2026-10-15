@@ -165,7 +165,16 @@ fn watchdog_for_another_pid_is_disabled() {
 #[test]
 fn invalid_environment_values_are_errors() {
     let pid = std::process::id();
-    for bad in ["", "abc", "0", "-5", "18446744073709551616", " 1"] {
+    // USEC_INFINITY is not a set watchdog period.
+    for bad in [
+        "",
+        "abc",
+        "0",
+        "-5",
+        "18446744073709551615",
+        "18446744073709551616",
+        " 1",
+    ] {
         assert_eq!(
             SystemdNotifier::from_vars(None, os(bad), None, pid).err(),
             Some(NotifyError::Environment {
@@ -178,6 +187,16 @@ fn invalid_environment_values_are_errors() {
         SystemdNotifier::from_vars(None, os("1000"), os("x"), pid).err(),
         Some(NotifyError::Environment {
             variable: "WATCHDOG_PID"
+        })
+    );
+    // Like sd_watchdog_enabled: WATCHDOG_USEC is read first, and without it
+    // the watchdog is off and WATCHDOG_PID is not consulted.
+    let off = SystemdNotifier::from_vars(None, None, os("x"), pid).unwrap();
+    assert_eq!(off.watchdog_usec(), None);
+    assert_eq!(
+        SystemdNotifier::from_vars(None, os("0"), os("x"), pid).err(),
+        Some(NotifyError::Environment {
+            variable: "WATCHDOG_USEC"
         })
     );
     for bad in ["relative/socket", "", "vsock:2:1"] {
@@ -197,7 +216,7 @@ fn send_failure_is_reported() {
     let notifier =
         SystemdNotifier::from_vars(Some(missing.as_os_str()), None, None, std::process::id())
             .unwrap();
-    assert!(matches!(notifier.ready(), Err(NotifyError::Io { .. })));
+    assert!(matches!(notifier.ready(), Err(NotifyError::Io(_))));
 }
 
 #[test]

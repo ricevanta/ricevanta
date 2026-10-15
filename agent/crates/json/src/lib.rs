@@ -93,8 +93,12 @@ impl Value {
 ///
 /// Precedence: [`Error::TooLarge`] is decided from the length alone, then
 /// [`Error::ByteOrderMark`], then [`Error::Utf8`] over the whole input, then
-/// the grammar from the first byte onward, so the first offending byte in
-/// document order decides among the remaining variants.
+/// the grammar from the first byte onward: the first offending token in
+/// document order decides among the remaining variants. Within one number,
+/// the integer digits are scanned first, a following `.`, `e` or `E` is
+/// reported as [`Error::NumberFormat`], and only a number without them is
+/// checked for range ([`Error::NumberRange`] at the number's first byte), so
+/// `99999999999999999999.5` is `NumberFormat`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     /// The input is not valid UTF-8; `offset` is the first invalid byte.

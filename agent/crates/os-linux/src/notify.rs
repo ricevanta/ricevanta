@@ -40,32 +40,43 @@ impl SystemdNotifier {
 
     /// Builds a notifier from the three variable values.
     ///
-    /// Errors: [`NotifyError::Environment`] for a `WATCHDOG_PID` or
-    /// `WATCHDOG_USEC` that is not a positive decimal integer (the pid is
-    /// checked first, and `WATCHDOG_USEC` only when the watchdog applies to
-    /// `own_pid`); [`NotifyError::Address`] for a `NOTIFY_SOCKET` that is
-    /// neither a path starting with `/` nor an abstract name starting with
-    /// `@`; [`NotifyError::Io`] when the socket cannot be created.
+    /// The watchdog follows `sd_watchdog_enabled(3)`: without
+    /// `WATCHDOG_USEC` it is off and `WATCHDOG_PID` is ignored; otherwise
+    /// `WATCHDOG_USEC` must be a positive decimal integer below `u64::MAX`
+    /// (systemd's `USEC_INFINITY`), then a set `WATCHDOG_PID` must be a
+    /// positive decimal integer, and the watchdog is on only when it names
+    /// `own_pid`.
+    ///
+    /// Errors: [`NotifyError::Environment`] for an invalid `WATCHDOG_USEC`,
+    /// then for an invalid `WATCHDOG_PID`; [`NotifyError::Address`] for a
+    /// `NOTIFY_SOCKET` that is neither a path starting with `/` nor an
+    /// abstract name starting with `@`; [`NotifyError::Io`] when the socket
+    /// cannot be created.
     pub fn from_vars(
         notify_socket: Option<&OsStr>,
         watchdog_usec: Option<&OsStr>,
         watchdog_pid: Option<&OsStr>,
         own_pid: u32,
     ) -> Result<SystemdNotifier, NotifyError> {
-        let applies = match watchdog_pid {
-            None => true,
-            Some(text) => {
-                let pid = positive(text).ok_or(NotifyError::Environment {
-                    variable: "WATCHDOG_PID",
-                })?;
-                pid == u64::from(own_pid)
-            }
-        };
         let watchdog_usec = match watchdog_usec {
-            Some(text) if applies => Some(positive(text).ok_or(NotifyError::Environment {
-                variable: "WATCHDOG_USEC",
-            })?),
-            _ => None,
+            None => None,
+            Some(text) => {
+                let usec = positive(text).filter(|&usec| usec != u64::MAX).ok_or(
+                    NotifyError::Environment {
+                        variable: "WATCHDOG_USEC",
+                    },
+                )?;
+                let applies = match watchdog_pid {
+                    None => true,
+                    Some(text) => {
+                        let pid = positive(text).ok_or(NotifyError::Environment {
+                            variable: "WATCHDOG_PID",
+                        })?;
+                        pid == u64::from(own_pid)
+                    }
+                };
+                applies.then_some(usec)
+            }
         };
         let channel = match notify_socket {
             None => None,
@@ -78,7 +89,7 @@ impl SystemdNotifier {
                         .map_err(|_| NotifyError::Address)?,
                     _ => return Err(NotifyError::Address),
                 };
-                let socket = UnixDatagram::unbound().map_err(|e| NotifyError::io(&e))?;
+                let socket = UnixDatagram::unbound().map_err(NotifyError::io)?;
                 Some((socket, address))
             }
         };
@@ -100,14 +111,13 @@ impl SystemdNotifier {
         };
         let sent = socket
             .send_to_addr(message.as_bytes(), address)
-            .map_err(|e| NotifyError::io(&e))?;
+            .map_err(NotifyError::io)?;
         if sent == message.len() {
             Ok(())
         } else {
-            Err(NotifyError::Io {
-                kind: std::io::ErrorKind::WriteZero,
-                code: None,
-            })
+            Err(NotifyError::io(std::io::Error::from(
+                std::io::ErrorKind::WriteZero,
+            )))
         }
     }
 }

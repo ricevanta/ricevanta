@@ -82,6 +82,86 @@ fn oversized_file_is_rejected() {
 }
 
 #[test]
+fn read_is_bounded_for_an_endless_file() {
+    /// Yields spaces without end and counts what the loader consumed.
+    struct Endless(u64);
+    impl Read for Endless {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            buffer.fill(b' ');
+            self.0 += buffer.len() as u64;
+            Ok(buffer.len())
+        }
+    }
+    let mut endless = Endless(0);
+    let result = load(Some(&mut endless), &linux_run());
+    assert!(matches!(
+        result,
+        Err(Error::Json(ricevanta_json::Error::TooLarge { .. }))
+    ));
+    assert!(endless.0 <= 65_537, "consumed {} bytes", endless.0);
+}
+
+#[test]
+fn directory_paths_must_end_in_a_plain_name() {
+    let unix_bad = [
+        "/srv/state/",
+        "/srv/state/.",
+        "/srv/state/..",
+        "/srv/.",
+        "//",
+    ];
+    for bad in unix_bad {
+        let body = format!(r#","paths":{{"runtime_dir":"{bad}"}}"#);
+        assert!(
+            matches!(
+                load_bytes(&doc(&body), &linux_run()),
+                Err(Error::InvalidValue { pointer }) if pointer == "/paths/runtime_dir"
+            ),
+            "{bad}"
+        );
+        let mut options = LoadOptions::new(Os::MacOs, Mode::Run);
+        options.overrides.state_dir = Some(PathBuf::from(bad));
+        assert!(
+            matches!(
+                load(None, &options),
+                Err(Error::InvalidPathFlag {
+                    flag: "--state-dir"
+                })
+            ),
+            "{bad}"
+        );
+    }
+    let mut windows = LoadOptions::new(Os::Windows, Mode::Run);
+    windows.overrides.state_dir = Some(PathBuf::from(r"C:\dev\state"));
+    windows.overrides.runtime_dir = Some(PathBuf::from(r"C:\dev\run"));
+    for bad in [
+        r"C:\dev\logs\",
+        r"C:\dev\logs\.",
+        r"C:\dev\..",
+        r"C:\dev\logs/",
+    ] {
+        windows.overrides.log_dir = Some(PathBuf::from(bad));
+        assert!(
+            matches!(
+                load(None, &windows),
+                Err(Error::InvalidPathFlag { flag: "--log-dir" })
+            ),
+            "{bad}"
+        );
+    }
+    let file = doc(r#","paths":{"log_dir":"C:\\dev\\logs\\"}"#);
+    let mut service = LoadOptions::new(Os::Windows, Mode::Service);
+    service.program_data = Some(PathBuf::from(r"C:\ProgramData"));
+    assert!(matches!(
+        load_bytes(&file, &service),
+        Err(Error::InvalidValue { pointer }) if pointer == "/paths/log_dir"
+    ));
+    // A dot inside a name is still a plain name.
+    let ok = doc(r#","paths":{"state_dir":"/srv/.state","log_dir":"/srv/log.d"}"#);
+    assert!(load_bytes(&ok, &linux_run()).is_ok());
+}
+
+#[test]
 fn reader_failure_is_reported() {
     struct Failing;
     impl Read for Failing {

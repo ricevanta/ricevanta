@@ -175,3 +175,43 @@ fn tokens() {
     };
     assert_eq!(sample.clone(), sample);
 }
+
+#[test]
+fn io_causes_are_kept_as_source() {
+    use ricevanta_os::{IoCause, NotifyError, Object, ProtectionError, SampleError};
+    use std::error::Error as _;
+    use std::io;
+
+    let error = ProtectionError::new(
+        Object::StateDir,
+        Reason::io(io::Error::from_raw_os_error(13)),
+    );
+    let source = error.source().expect("source kept");
+    let io_error = source.downcast_ref::<io::Error>().expect("an io::Error");
+    assert_eq!(io_error.raw_os_error(), Some(13));
+    assert_eq!(error.reason.as_str(), "io_error");
+
+    let sample = SampleError::io(io::Error::other("injected"));
+    assert_eq!(
+        sample.source().map(ToString::to_string).as_deref(),
+        Some("injected")
+    );
+    let notify = NotifyError::io(io::Error::from(io::ErrorKind::BrokenPipe));
+    assert!(notify.source().is_some());
+    assert!(NotifyError::Address.source().is_none());
+    assert!(
+        ProtectionError::new(Object::LogDir, Reason::PathForm)
+            .source()
+            .is_none()
+    );
+
+    // Equality compares kind and OS code, not the message.
+    assert_eq!(
+        IoCause::new(io::Error::from_raw_os_error(2)),
+        IoCause::new(io::Error::from_raw_os_error(2))
+    );
+    assert_ne!(
+        IoCause::new(io::Error::from_raw_os_error(2)),
+        IoCause::new(io::Error::from_raw_os_error(13))
+    );
+}

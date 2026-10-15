@@ -757,11 +757,17 @@ fn is_drive_absolute(text: &str) -> bool {
     bytes.len() >= 4 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\'
 }
 
+/// A directory path for `os`: absolute, and ending in a plain name. A path
+/// ending in a separator, `.` or `..` is refused, because the OS would
+/// resolve its preceding component as a directory and follow a symbolic link
+/// there before `O_NOFOLLOW` or `FILE_FLAG_OPEN_REPARSE_POINT` applies.
 fn absolute_for(os: Os, text: &str) -> bool {
-    match os {
-        Os::Linux | Os::MacOs => is_unix_absolute(text),
-        Os::Windows => is_drive_absolute(text),
-    }
+    let (absolute, separators): (bool, &[char]) = match os {
+        Os::Linux | Os::MacOs => (is_unix_absolute(text), &['/']),
+        Os::Windows => (is_drive_absolute(text), &['\\', '/']),
+    };
+    let last = text.rsplit(separators).next().unwrap_or_default();
+    absolute && !matches!(last, "" | "." | "..")
 }
 
 fn os_path(os: Os, pointer: &str, value: &Option<String>) -> Result<Option<PathBuf>, Error> {

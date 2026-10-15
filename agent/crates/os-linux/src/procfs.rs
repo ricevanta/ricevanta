@@ -1,6 +1,7 @@
 //! Parsers for the `/proc/self` sources of the Linux sampler.
 //!
-//! Every parser takes a borrowed byte slice, allocates nothing and returns
+//! Every parser reads a borrowed byte slice or a reader through a fixed
+//! buffer, allocates nothing and returns
 //! [`SampleError::Format`] for any input that does not have the documented
 //! form. Numbers are ASCII decimal digits only: no sign, no whitespace.
 
@@ -10,8 +11,9 @@ use std::io::Read;
 
 /// The kernel's fixed `USER_HZ` for user interfaces (uapi `asm-generic/param.h`).
 pub const USER_HZ: u64 = 100;
-/// Size of each fixed read buffer; `/proc/self/stat` and `smaps_rollup` are
-/// far smaller, and `status` holds `Uid` and `Threads` well inside it.
+/// Size of each fixed read buffer. `/proc/self/stat` and `smaps_rollup` must
+/// fit in it whole; `status`, whose `Groups:` line grows with the number of
+/// supplementary groups, is scanned line by line through it.
 pub const BUFFER_BYTES: usize = 4096;
 
 pub(crate) const STAT: &str = "/proc/self/stat";
@@ -77,9 +79,11 @@ pub fn parse_smaps_rollup_pss(bytes: &[u8]) -> Result<u64, SampleError> {
     kib.checked_mul(1024).ok_or(format(SMAPS_ROLLUP))
 }
 
-/// The `Threads:` line of `/proc/self/status`; zero is a format error.
-pub fn parse_status_threads(bytes: &[u8]) -> Result<u32, SampleError> {
-    let value = line_value(bytes, b"Threads:").ok_or(format(STATUS))?;
+/// The `Threads:` line of `/proc/self/status`, read from `reader` line by
+/// line through one fixed buffer; zero is a format error.
+pub fn status_threads<R: Read>(reader: R) -> Result<u32, SampleError> {
+    let mut buffer = [0u8; BUFFER_BYTES];
+    let value = find_line(reader, &mut buffer, b"Threads:", STATUS)?;
     let mut parts = fields(value);
     let n = digits(parts.next().ok_or(format(STATUS))?, STATUS)?;
     if parts.next().is_some() || n == 0 {
@@ -89,9 +93,10 @@ pub fn parse_status_threads(bytes: &[u8]) -> Result<u32, SampleError> {
 }
 
 /// The effective uid, the second of the four `Uid:` fields of
-/// `/proc/self/status`.
-pub fn parse_status_euid(bytes: &[u8]) -> Result<u32, SampleError> {
-    let value = line_value(bytes, b"Uid:").ok_or(format(STATUS))?;
+/// `/proc/self/status`, read like [`status_threads`].
+pub fn status_euid<R: Read>(reader: R) -> Result<u32, SampleError> {
+    let mut buffer = [0u8; BUFFER_BYTES];
+    let value = find_line(reader, &mut buffer, b"Uid:", STATUS)?;
     let mut parts = fields(value);
     let mut ids = [0u64; 4];
     for id in &mut ids {
@@ -103,20 +108,86 @@ pub fn parse_status_euid(bytes: &[u8]) -> Result<u32, SampleError> {
     u32::try_from(ids[1]).map_err(|_| format(STATUS))
 }
 
-/// Reads at most `buffer.len()` bytes of `path` into `buffer`.
-pub(crate) fn read_bounded<'a>(
-    path: &'static str,
-    buffer: &'a mut [u8],
-) -> Result<&'a [u8], SampleError> {
-    let mut file = File::open(path).map_err(|e| SampleError::io(&e))?;
-    let mut filled = 0;
-    while filled < buffer.len() {
-        match file.read(&mut buffer[filled..]) {
-            Ok(0) => break,
-            Ok(n) => filled += n,
+/// Returns the rest of the first line of `reader` that starts with `name`,
+/// scanning line by line through `buffer` and carrying a partial line
+/// between reads, so the document may be any length.
+///
+/// A line longer than `buffer` is skipped, unless it is the requested line,
+/// which is then a format error rather than a silently cut value. A missing
+/// line is a format error.
+pub fn find_line<'b, R: Read>(
+    mut reader: R,
+    buffer: &'b mut [u8],
+    name: &[u8],
+    source: &'static str,
+) -> Result<&'b [u8], SampleError> {
+    let mut len = 0;
+    let mut skipping = false;
+    let mut eof = false;
+    loop {
+        let mut start = 0;
+        while let Some(offset) = buffer[start..len].iter().position(|&b| b == b'\n') {
+            let end = start + offset;
+            if skipping {
+                skipping = false;
+            } else if buffer[start..end].starts_with(name) {
+                return Ok(&buffer[start + name.len()..end]);
+            }
+            start = end + 1;
+        }
+        if eof {
+            if !skipping && buffer[start..len].starts_with(name) {
+                return Ok(&buffer[start + name.len()..len]);
+            }
+            return Err(format(source));
+        }
+        buffer.copy_within(start..len, 0);
+        len -= start;
+        if len == buffer.len() {
+            // One line fills the buffer.
+            if !skipping && buffer.starts_with(name) {
+                return Err(format(source));
+            }
+            skipping = true;
+            len = 0;
+        }
+        match reader.read(&mut buffer[len..]) {
+            Ok(0) => eof = true,
+            Ok(n) => len += n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-            Err(e) => return Err(SampleError::io(&e)),
+            Err(e) => return Err(SampleError::io(e)),
         }
     }
-    Ok(&buffer[..filled])
+}
+
+/// Reads all of `reader` into `buffer`. A source that does not reach end of
+/// file within `buffer.len()` bytes is a format error, never a cut document.
+pub fn read_bounded<'a, R: Read>(
+    mut reader: R,
+    buffer: &'a mut [u8],
+    source: &'static str,
+) -> Result<&'a [u8], SampleError> {
+    let mut filled = 0;
+    loop {
+        if filled == buffer.len() {
+            let mut probe = [0u8; 1];
+            match reader.read(&mut probe) {
+                Ok(0) => return Ok(&buffer[..filled]),
+                Ok(_) => return Err(format(source)),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(SampleError::io(e)),
+            }
+        }
+        match reader.read(&mut buffer[filled..]) {
+            Ok(0) => return Ok(&buffer[..filled]),
+            Ok(n) => filled += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(SampleError::io(e)),
+        }
+    }
+}
+
+/// Opens one of the `/proc/self` sources.
+pub(crate) fn open(path: &'static str) -> Result<File, SampleError> {
+    File::open(path).map_err(SampleError::io)
 }

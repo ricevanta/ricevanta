@@ -12,6 +12,7 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub use ricevanta_config::{DefaultPaths, Mode, Os};
 
@@ -63,9 +64,53 @@ pub struct ProcessSample {
     pub descriptors: Descriptors,
 }
 
+/// An underlying I/O error, kept as the cause of a typed error.
+///
+/// Two causes compare equal when their kind and raw OS error code are equal;
+/// [`IoCause::error`] returns the original error, which the typed errors
+/// return from `source()`.
+#[derive(Debug, Clone)]
+pub struct IoCause(Arc<io::Error>);
+
+impl IoCause {
+    /// Wraps `error`.
+    pub fn new(error: io::Error) -> IoCause {
+        IoCause(Arc::new(error))
+    }
+
+    /// The error kind.
+    pub fn kind(&self) -> io::ErrorKind {
+        self.0.kind()
+    }
+
+    /// The raw OS error code, when there is one.
+    pub fn code(&self) -> Option<i32> {
+        self.0.raw_os_error()
+    }
+
+    /// The original error.
+    pub fn error(&self) -> &io::Error {
+        &self.0
+    }
+}
+
+impl PartialEq for IoCause {
+    fn eq(&self, other: &IoCause) -> bool {
+        self.kind() == other.kind() && self.code() == other.code()
+    }
+}
+
+impl Eq for IoCause {}
+
+impl fmt::Display for IoCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?} ({:?})", self.kind(), self.code())
+    }
+}
+
 /// Why a sample could not be taken. The agent keeps running and reports
 /// `sampler_failed`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SampleError {
     /// An OS text source did not have the expected form.
     Format {
@@ -73,12 +118,7 @@ pub enum SampleError {
         source: &'static str,
     },
     /// Reading a source failed.
-    Io {
-        /// The I/O error kind.
-        kind: io::ErrorKind,
-        /// The raw OS error code, when there is one.
-        code: Option<i32>,
-    },
+    Io(IoCause),
     /// An OS call failed with this code.
     Os {
         /// The raw OS error code.
@@ -91,11 +131,8 @@ pub enum SampleError {
 
 impl SampleError {
     /// A [`SampleError::Io`] from an I/O error.
-    pub fn io(error: &io::Error) -> SampleError {
-        SampleError::Io {
-            kind: error.kind(),
-            code: error.raw_os_error(),
-        }
+    pub fn io(error: io::Error) -> SampleError {
+        SampleError::Io(IoCause::new(error))
     }
 }
 
@@ -103,14 +140,21 @@ impl fmt::Display for SampleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SampleError::Format { source } => write!(f, "unexpected format in {source}"),
-            SampleError::Io { kind, code } => write!(f, "sampler I/O error {kind:?} ({code:?})"),
+            SampleError::Io(cause) => write!(f, "sampler I/O error {cause}"),
             SampleError::Os { code } => write!(f, "sampler OS error {code}"),
             SampleError::Unsupported => write!(f, "metric unsupported by this OS build"),
         }
     }
 }
 
-impl std::error::Error for SampleError {}
+impl std::error::Error for SampleError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            SampleError::Io(cause) => Some(cause.error()),
+            _ => None,
+        }
+    }
+}
 
 /// Samples the agent's own process.
 pub trait ProcessSampler: Send + Sync {
@@ -146,7 +190,7 @@ impl LifecycleState {
 }
 
 /// A service-manager notification failure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotifyError {
     /// The notification address is not one this agent supports.
     Address,
@@ -155,22 +199,14 @@ pub enum NotifyError {
         /// The variable name.
         variable: &'static str,
     },
-    /// Sending failed.
-    Io {
-        /// The I/O error kind.
-        kind: io::ErrorKind,
-        /// The raw OS error code, when there is one.
-        code: Option<i32>,
-    },
+    /// Creating the socket or sending failed.
+    Io(IoCause),
 }
 
 impl NotifyError {
     /// A [`NotifyError::Io`] from an I/O error.
-    pub fn io(error: &io::Error) -> NotifyError {
-        NotifyError::Io {
-            kind: error.kind(),
-            code: error.raw_os_error(),
-        }
+    pub fn io(error: io::Error) -> NotifyError {
+        NotifyError::Io(IoCause::new(error))
     }
 }
 
@@ -179,14 +215,19 @@ impl fmt::Display for NotifyError {
         match self {
             NotifyError::Address => write!(f, "unsupported notification address"),
             NotifyError::Environment { variable } => write!(f, "invalid {variable}"),
-            NotifyError::Io { kind, code } => {
-                write!(f, "notification I/O error {kind:?} ({code:?})")
-            }
+            NotifyError::Io(cause) => write!(f, "notification I/O error {cause}"),
         }
     }
 }
 
-impl std::error::Error for NotifyError {}
+impl std::error::Error for NotifyError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            NotifyError::Io(cause) => Some(cause.error()),
+            _ => None,
+        }
+    }
+}
 
 /// Service-manager notifications (spec section 5). Every method is a no-op
 /// returning `Ok` when no service manager listens.
@@ -343,22 +384,19 @@ pub enum Reason {
         /// The offending SID in string form, when an entry names one.
         sid: Option<String>,
     },
+    /// The path's final component is not a plain name: the path is empty,
+    /// ends in a separator, or ends in `.` or `..`, any of which would make
+    /// the OS resolve the preceding component as a directory and follow a
+    /// symbolic link there despite `O_NOFOLLOW`.
+    PathForm,
     /// Opening, creating or inspecting the object failed.
-    Io {
-        /// The I/O error kind.
-        kind: io::ErrorKind,
-        /// The raw OS error code, when there is one.
-        code: Option<i32>,
-    },
+    Io(IoCause),
 }
 
 impl Reason {
     /// A [`Reason::Io`] from an I/O error.
-    pub fn io(error: &io::Error) -> Reason {
-        Reason::Io {
-            kind: error.kind(),
-            code: error.raw_os_error(),
-        }
+    pub fn io(error: io::Error) -> Reason {
+        Reason::Io(IoCause::new(error))
     }
 
     /// A stable `snake_case` token for logs.
@@ -372,7 +410,8 @@ impl Reason {
             Reason::ParentWritable { .. } => "parent_writable",
             Reason::ReparsePoint => "reparse_point",
             Reason::InsecureAcl { .. } => "insecure_acl",
-            Reason::Io { .. } => "io_error",
+            Reason::PathForm => "path_form",
+            Reason::Io(_) => "io_error",
         }
     }
 }
@@ -405,7 +444,14 @@ impl fmt::Display for ProtectionError {
     }
 }
 
-impl std::error::Error for ProtectionError {}
+impl std::error::Error for ProtectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match &self.reason {
+            Reason::Io(cause) => Some(cause.error()),
+            _ => None,
+        }
+    }
+}
 
 /// Per-OS locations and the descriptor-based protection checks of spec
 /// section 3.1. Every check runs on the opened descriptor or handle, never on
@@ -436,8 +482,10 @@ pub trait Platform: Send + Sync {
 
     /// Opens `agent.json` read-only without following a final symbolic link
     /// and without blocking, checks its parent directory and then the opened
-    /// file, and returns it for reading. `Ok(None)` when the file or its
-    /// parent does not exist.
+    /// file, and returns it for reading. The file is opened relative to the
+    /// checked parent, so the checked parent is the file's parent.
+    /// `Ok(None)` when the file or its parent does not exist. Every path
+    /// argument of this trait must end in a plain name ([`Reason::PathForm`]).
     fn open_config(&self, path: &Path, mode: Mode) -> Result<Option<File>, ProtectionError>;
 
     /// Opens the directory `path`, creating it when missing (never its
@@ -451,9 +499,11 @@ pub trait Platform: Send + Sync {
         mode: Mode,
     ) -> Result<File, ProtectionError>;
 
-    /// Creates (or truncates or appends to, by `kind`) a file the agent
-    /// writes, without following a final symbolic link, checks the opened
-    /// descriptor and sets the file's exact mode on it.
+    /// Creates or opens a file the agent writes, without following a final
+    /// symbolic link, checks the opened descriptor, sets the file's exact
+    /// mode on it, and only then truncates it ([`FileKind::HealthDocument`])
+    /// or leaves it for appending ([`FileKind::Log`]). A file that fails the
+    /// check is left unmodified.
     fn create_file(&self, path: &Path, kind: FileKind) -> Result<File, ProtectionError>;
 }
 
