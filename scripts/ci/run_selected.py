@@ -25,15 +25,19 @@ GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op\s+(\
 GO_BASELINE = re.compile(r'^fuzz: elapsed: \S+, gathering baseline coverage: (\d+)/(\d+) completed(, now fuzzing with (\d+) workers)?$')
 GO_EXECS = re.compile(r'^fuzz: elapsed: (\S+), execs: (\d+) \(\d+/sec\), new interesting: \d+ \(total: \d+\)$')
 GO_PACKAGE_FIELDS = '-json=ImportPath,Dir,TestGoFiles,XTestGoFiles'
-# Declarations go test runs: tests and fuzz targets other than TestMain, and
-# examples with an output comment (examples without one are compiled only).
-GO_RUNNABLE = re.compile(r'^func\s+((?:Test|Fuzz)\w*)\s*[\[(]', re.M)
-GO_EXAMPLE = re.compile(r'^func\s+(Example\w*)\s*\(', re.M)
-GO_OUTPUT_COMMENT = re.compile(r'^\s*//\s*(?:unordered output|output):', re.M | re.I)
+# gotestdecls parses test files with go/parser and go/doc under cmd/go's rules,
+# so comments and literals cannot hide a declaration from the cross-check.
+DECLARATIONS_TOOL = Path(__file__).resolve().parent / 'gotestdecls'
+GO_DECLARATION = re.compile(r'^(test|fuzz|benchmark|example)\t(\w+)\t(.+)$')
 SELECTED_CWD = re.compile(r'^[A-Za-z0-9_-]+$')
 RUST_RUNNING = re.compile(r'^\s+Running (.+) \((.+)\)$')
 RUST_DOCTESTS = re.compile(r'^\s+Doc-tests (\S+)$')
 RUST_SECTION = re.compile(r'^running (\d+) tests?$')
+# Cargo runs test executables through target runners and compiles through
+# wrappers taken from .cargo/config files in the working directory's ancestors
+# or from these variables; either could replace a harness with forged output.
+CARGO_OVERRIDE_ENV = re.compile(r'^(?:CARGO_TARGET_\w+_RUNNER|CARGO_BUILD_RUSTC(?:_WORKSPACE)?_WRAPPER|RUSTC(?:_WORKSPACE)?_WRAPPER'
+                                r'|CARGO_BUILD_RUSTC|CARGO_BUILD_RUSTDOC|RUSTC|RUSTDOC)$')
 GO_DURATION = re.compile(r'(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)')
 GO_DURATION_UNITS = {'ns': 1e-9, 'us': 1e-6, 'µs': 1e-6, 'ms': 1e-3, 's': 1, 'm': 60, 'h': 3600}
 SKIP_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$')
@@ -201,20 +205,20 @@ def parse_go_packages(text):
     return packages
 
 
-def runnable_declarations(paths):
-    """Names go test would run from these test files: Test/Fuzz functions and examples with output."""
-    names = []
-    for path in paths:
-        try:
-            with open(path, encoding='utf-8') as handle: source = handle.read()
-        except (OSError, UnicodeDecodeError): raise EvidenceError('cannot read test file ' + path)
-        names += [n for n in GO_RUNNABLE.findall(source) if n != 'TestMain']
-        starts = [m for m in GO_EXAMPLE.finditer(source)]
-        for index, match in enumerate(starts):
-            following = re.search(r'^(?:func|type|var|const)\b', source[match.end():], re.M)
-            body = source[match.end():match.end() + following.start()] if following else source[match.end():]
-            if GO_OUTPUT_COMMENT.search(body): names.append(match[1])
-    return sorted(names)
+def declarations_command(files):
+    return ['go', 'run', '.', *files]
+
+
+def parse_declarations(text):
+    """Map each parsed test file to the names go test derives from it."""
+    files = {}
+    for line in text.splitlines():
+        line = line.rstrip('\r')
+        if not line: continue
+        match = GO_DECLARATION.match(line)
+        if not match: raise EvidenceError('unexpected test declaration line: ' + line)
+        files.setdefault(match[3], set()).add(match[2])
+    return files
 
 
 def go_seconds(text):
@@ -340,15 +344,21 @@ def check_go_subtests(results, target):
             raise EvidenceError('subtest %s %s: %s' % (package, test, result))
 
 
-def verify_go_suite(target, discovery, events, exit_code, packages_text=None):
+def verify_go_suite(target, discovery, events, exit_code, packages_text=None, declarations_text=None):
     """An ordinary suite runs every discovered test of every package with test files.
 
-    go list supplies each package's test-file counts with the same build flags,
-    so a package whose tests are hidden from discovery and execution (for
-    example a TestMain that exits before m.Run) fails instead of passing empty.
+    go list supplies each package's test files with the same build flags, and
+    gotestdecls parses them, so discovery must report exactly the declared
+    tests, fuzz targets, benchmarks and runnable examples. A package whose tests
+    are hidden from discovery and execution (for example a TestMain that exits
+    before m.Run) fails instead of passing empty.
     """
     if packages_text is None: raise EvidenceError('package inventory missing')
+    if declarations_text is None: raise EvidenceError('test declarations missing')
     inventoried = parse_go_packages(packages_text)
+    declared_files = parse_declarations(declarations_text)
+    known_files = {f for files in inventoried.values() for f in files}
+    if set(declared_files) - known_files: raise EvidenceError('declarations for files outside the package inventory')
     no_tests = set()
     listed = parse_go_list(discovery, no_tests)
     if set(inventoried) != set(listed) | no_tests:
@@ -357,11 +367,10 @@ def verify_go_suite(target, discovery, events, exit_code, packages_text=None):
     for package, files in inventoried.items():
         if package in no_tests and files: raise EvidenceError('discovery reports no test files in ' + package)
         if package in listed and not files: raise EvidenceError('discovery lists tests in a package without test files: ' + package)
-        if package in listed and not expected[package]:
-            # Benchmarks and output-less examples are not run by a suite; anything
-            # runnable in the source but absent from discovery was hidden.
-            hidden = runnable_declarations(files)
-            if hidden: raise EvidenceError('package has test files but discovery lists no tests: %s (declares %s)' % (package, ', '.join(hidden)))
+        if package in listed:
+            declared = set().union(*(declared_files.get(f, set()) for f in files))
+            if declared != set(listed[package]) or len(listed[package]) != len(declared):
+                raise EvidenceError('declared tests %s differ from discovery %s in %s' % (sorted(declared), sorted(listed[package]), package))
     if not any(expected.values()): raise EvidenceError('discovery found no tests')
     if target['cwd'] == 'server' and 'fuzz_inventory' not in target:
         raise EvidenceError('server suites must cross-check the fuzz inventory')
@@ -695,9 +704,9 @@ def execute(command, cwd, env, stdout_path, stderr_path):
         return process.wait()
 
 
-def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=None):
+def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=None, declarations=None):
     mode = target['mode']
-    if mode == 'go-suite': return verify_go_suite(target, discovery, parse_go_events(stdout), exit_code, packages)
+    if mode == 'go-suite': return verify_go_suite(target, discovery, parse_go_events(stdout), exit_code, packages, declarations)
     if mode in ('go-selected', 'go-interop'): return verify_go_selected(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-bench': return verify_go_bench(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-fuzz': return verify_go_fuzz(target, discovery, parse_go_events(stdout), exit_code)
@@ -706,7 +715,23 @@ def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=
     return verify_console(target, evidence_dir, exit_code)
 
 
-def preconditions(target, env):
+def cargo_configs(root, cwd):
+    """Cargo configuration files inside the repository that cargo would read from cwd."""
+    found, directory, top = [], Path(os.path.abspath(cwd)), Path(os.path.abspath(root))
+    while True:
+        for name in ('config', 'config.toml'):
+            path = directory / '.cargo' / name
+            if os.path.lexists(path): found.append(path)
+        if directory == top or directory.parent == directory: return found
+        directory = directory.parent
+
+
+def preconditions(target, env, root=ROOT):
+    if target['mode'].startswith('rust'):
+        configs = cargo_configs(root, root / target['cwd'])
+        if configs: raise EvidenceError('repository Cargo configuration could replace the test runner: ' + ', '.join(map(str, configs)))
+        overrides = sorted(k for k in env if CARGO_OVERRIDE_ENV.match(k))
+        if overrides: raise EvidenceError('Cargo runner or compiler override in the environment: ' + ', '.join(overrides))
     if target['mode'] == 'go-interop':
         path = env.get('RICEVANTA_BATCH_VECTOR', '')
         if not os.path.isabs(path) or not os.path.isfile(path): raise EvidenceError('RICEVANTA_BATCH_VECTOR must name an existing absolute writer path')
@@ -717,7 +742,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     targets = inventory(root)
     if target_id not in targets: raise EvidenceError('unknown selected target: ' + target_id)
     target = targets[target_id]
-    preconditions(target, env)
+    preconditions(target, env, root)
     evidence_dir = Path(evidence_root) / evidence_name(target_id)
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
@@ -728,6 +753,15 @@ def run(target_id, evidence_root, root=ROOT, env=None):
         code = execute(packages_command, cwd, env, evidence_dir / 'packages.txt', evidence_dir / 'packages.stderr.txt')
         packages_text = (evidence_dir / 'packages.txt').read_bytes().decode('utf-8', 'replace')
         if code != 0: raise EvidenceError('package inventory exited %d' % code)
+    declarations_text = None
+    if packages_command:
+        files = sorted({f for paths in parse_go_packages(packages_text).values() for f in paths})
+        declarations_text = ''
+        if files:
+            print('declarations: go run ./scripts/ci/gotestdecls (%d test files)' % len(files), flush=True)
+            code = execute(declarations_command(files), DECLARATIONS_TOOL, env, evidence_dir / 'declarations.txt', evidence_dir / 'declarations.stderr.txt')
+            declarations_text = (evidence_dir / 'declarations.txt').read_bytes().decode('utf-8', 'replace')
+            if code != 0: raise EvidenceError('test declaration parsing exited %d' % code)
     discovery = discovery_command(target)
     discovery_text = ''
     if discovery:
@@ -739,7 +773,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     print('command:', shlex.join(command), flush=True)
     exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
     summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(),
-                     exit_code, evidence_dir, packages_text)
+                     exit_code, evidence_dir, packages_text, declarations_text)
     record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'mode': target['mode'], 'cwd': target['cwd'],
               'packages': packages_command, 'discovery': discovery, 'command': command, 'exit': exit_code, 'result': 'success',
               'summary': summary}

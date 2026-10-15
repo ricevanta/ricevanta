@@ -1,6 +1,7 @@
 """Check the reviewed workflow graph, routing inputs and receipt obligations."""
 import argparse
 import ast
+import os
 from pathlib import Path
 import re
 import json
@@ -139,18 +140,51 @@ SKIP_ALLOWANCES = [
 
 
 # test2json treats a stdout line starting with 0x16 as its own framing, so a test
-# that prints the byte could forge run/pass events. No selected Go file needs it.
+# that prints the byte can forge run/pass events. This is a partial tripwire, not
+# a closed gap: it rejects the literal byte and its string escapes in the sources
+# compiled into selected Go test binaries (server/ outside testdata, and the
+# wrapper's Go fixtures), but a byte computed at run time, an integer literal, or
+# data read from testdata, embedded files or assembly is not detected. Spec
+# section 11 covers that residual: a PR author can falsify their own tests.
 FRAMING_BYTE = re.compile(rb'\x16|\\x16|\\u0016|\\U00000016|\\026')
 
 
 def framing_errors(root):
     errors = []
-    paths = list((root / 'server').rglob('*.go')) + list((root / 'scripts').rglob('*_test.go'))
+    paths = [p for p in (root / 'server').rglob('*.go') if 'testdata' not in p.relative_to(root).parts]
+    paths += list((root / 'scripts').rglob('*_test.go'))
     for path in sorted(paths):
         try: data = path.read_bytes()
         except OSError: continue
         if FRAMING_BYTE.search(data):
-            errors.append(path.relative_to(root).as_posix() + ': test2json framing byte 0x16 is forbidden in Go sources')
+            errors.append(path.relative_to(root).as_posix() + ': test2json framing byte 0x16 is forbidden in selected Go sources')
+    return errors
+
+
+def cargo_config_errors(root):
+    """No Cargo configuration may live in the tree: a runner or wrapper replaces harness execution."""
+    errors = []
+    for directory, subdirectories, files in os.walk(root):
+        # Cargo reads only the working directory's ancestors; ignored build trees are skipped.
+        subdirectories[:] = [d for d in subdirectories if d not in ('.git', 'node_modules', 'target')]
+        if os.path.basename(directory) == '.cargo':
+            for name in ('config', 'config.toml'):
+                if name in files or name in subdirectories:
+                    errors.append(Path(directory, name).relative_to(root).as_posix() + ': repository Cargo configuration is forbidden')
+    return errors
+
+
+def cargo_override_errors(data):
+    """Workflows may not set Cargo runner or compiler overrides, directly or through GITHUB_ENV."""
+    errors = []
+    for jid, job in data.get('jobs', {}).items():
+        for scope in (data, job, *job.get('steps', [])):
+            env = scope.get('env', {})
+            for key in (env if isinstance(env, dict) else {}):
+                if run_selected.CARGO_OVERRIDE_ENV.match(str(key)): errors.append(f'{jid}: Cargo runner or compiler override {key} forbidden')
+        for step in job.get('steps', []):
+            for name in re.findall(r'\b([A-Z][A-Z0-9_]*)\s*=', str(step.get('run', ''))):
+                if run_selected.CARGO_OVERRIDE_ENV.match(name): errors.append(f'{jid}: Cargo runner or compiler override {name} forbidden')
     return errors
 
 
@@ -497,6 +531,7 @@ def check(root: Path) -> list[str]:
         except (ValueError, yaml.YAMLError):
             fail(name, 'malformed workflow'); continue
         for error in cache_errors(data, root): fail(name, error)
+        for error in cargo_override_errors(data): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
         for error in secret_errors(data, name): fail(name, error)
@@ -532,6 +567,7 @@ def check(root: Path) -> list[str]:
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
     errors += selected_errors(root)
     errors += framing_errors(root)
+    errors += cargo_config_errors(root)
     try: selected_ids = set(run_selected.inventory(root))
     except (OSError, ValueError, KeyError, TypeError): selected_ids = set(SELECTED_COMMANDS)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}

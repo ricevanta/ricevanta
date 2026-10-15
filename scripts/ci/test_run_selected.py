@@ -56,6 +56,14 @@ def go_package(path, tests=(), xtests=(), directory='/fixtures/none'):
     return json.dumps(row, indent='\t') + '\n'
 
 
+def declare(paths):
+    """Run the declaration parser on real test files, as the wrapper does."""
+    result = subprocess.run(run_selected.declarations_command([str(p) for p in paths]), cwd=run_selected.DECLARATIONS_TOOL,
+                            capture_output=True, text=True)
+    if result.returncode != 0: raise EvidenceError(result.stderr)
+    return result.stdout
+
+
 def insert_before(data, needle, extra):
     lines = data.decode().splitlines(keepends=True)
     index = next(i for i, l in enumerate(lines) if needle in l)
@@ -195,12 +203,18 @@ class GoSuiteTests(unittest.TestCase):
                        'skips': {(TINY, 'TestSkipped'): {'reason': 'helper', 'proof': 'tiny-selected'}}}
         self.listing = fixture('go-list.txt')
         self.packages = fixture('go-packages.txt')
+        self.declarations = fixture('go-declarations.txt')
         self.events = fixture('go-suite.jsonl', binary=True)
 
-    def verify(self, listing=None, events=None, exit_code=0, target=None, packages=None):
+    def verify(self, listing=None, events=None, exit_code=0, target=None, packages=None, declarations=None):
         return run_selected.verify(target or self.target, self.listing if listing is None else listing,
                                    self.events if events is None else events, b'', exit_code, None,
-                                   packages=self.packages if packages is None else packages)
+                                   packages=self.packages if packages is None else packages,
+                                   declarations=self.declarations if declarations is None else declarations)
+
+    def test_declarations_fixture_matches_the_parser(self):
+        real = declare([FIXTURES / 'tiny-go/tiny_test.go', FIXTURES / 'tiny-go/sub/sub_test.go'])
+        self.assertEqual(real.replace(str(FIXTURES), '/fixtures'), self.declarations)
 
     def test_positive_captured_output(self):
         summary = self.verify()
@@ -217,7 +231,8 @@ class GoSuiteTests(unittest.TestCase):
             'zero selector': dict(listing='ok  \t%s\t0.002s\n' % TINY),
             'renamed selector': dict(listing=self.listing.replace('TestBeta', 'TestGamma2')),
             'extra discovered test never ran': dict(listing=self.listing.replace('TestBeta\n', 'TestBeta\nTestDelta\n')),
-            'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n', packages=self.packages + go_package('example.com/other', ['other_test.go'])),
+            'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n', packages=self.packages + go_package('example.com/other', ['other_test.go']),
+                                   declarations=self.declarations + 'test\tTestOther\t/fixtures/none/other_test.go\n'),
             'undiscovered package ran': dict(listing=self.listing.replace(TINY + '/sub', TINY + '/different')),
             'unexpected skip': dict(target={**self.target, 'skips': {}}),
             'duplicate event': dict(events=duplicate_line(events, '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"')),
@@ -238,7 +253,15 @@ class GoSuiteTests(unittest.TestCase):
             'skipped fuzz seeds': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Test":"FuzzThing/seed#0"', b'"Action":"skip","Package":"example.com/tiny","Test":"FuzzThing/seed#0"')),
             'example listed but not run': dict(events=drop_lines(events, '"Test":"ExampleHello"', 4)),
             'unexpected discovery line': dict(listing=self.listing.replace('ok  ', 'go: downloading x\nok  ', 1)),
-            'hidden package with test files': dict(listing=self.listing + 'ok  \t%s/hidden\t0.001s\n' % TINY, packages=self.packages + go_package(TINY + '/hidden', ['hidden_test.go']), events=events + hidden),
+            'hidden package with test files': dict(listing=self.listing + 'ok  \t%s/hidden\t0.001s\n' % TINY, packages=self.packages + go_package(TINY + '/hidden', ['hidden_test.go']), events=events + hidden,
+                                                   declarations=self.declarations + 'test\tTestHidden\t/fixtures/none/hidden_test.go\n'),
+            'declared test missing from discovery': dict(declarations=self.declarations + 'test\tTestDelta\t/fixtures/tiny-go/tiny_test.go\n'),
+            'declared benchmark missing from discovery': dict(declarations=self.declarations + 'benchmark\tBenchmarkOther\t/fixtures/tiny-go/sub/sub_test.go\n'),
+            'listed name never declared': dict(listing=self.listing.replace('TestGamma\n', 'TestGamma\nTestUndeclared\n'),
+                                               events=insert_before(events, '"Action":"run","Package":"example.com/tiny","Test":"TestAlpha"', event('run', TINY + '/sub', 'TestUndeclared') + event('pass', TINY + '/sub', 'TestUndeclared'))),
+            'declarations for an unknown file': dict(declarations=self.declarations + 'test\tTestX\t/elsewhere/x_test.go\n'),
+            'malformed declaration line': dict(declarations=self.declarations + 'garbage\n'),
+            'missing declarations': dict(declarations=''),
             'hidden package absent from discovery': dict(packages=self.packages + go_package(TINY + '/hidden', xtests=['hidden_test.go'])),
             'package inventory missing': dict(packages=''),
             'package inventory malformed': dict(packages=self.packages + 'garbage\n'),
@@ -246,6 +269,7 @@ class GoSuiteTests(unittest.TestCase):
             'package inventory names a nested file': dict(packages=self.packages.replace('"sub_test.go"', '"../sub_test.go"')),
             'package inventory twice': dict(packages=self.packages + go_package(TINY + '/sub', ['sub_test.go'])),
             'unlisted fuzz target': dict(listing=self.listing.replace('FuzzThing\n', 'FuzzThing\nFuzzOther\n'),
+                                         declarations=self.declarations + 'fuzz\tFuzzOther\t/fixtures/tiny-go/tiny_test.go\n',
                                          events=insert_before(events, '"Action":"output","Package":"example.com/tiny","Output":"PASS',
                                                               event('run', TINY, 'FuzzOther') + event('pass', TINY, 'FuzzOther'))),
             'fuzz inventory names a missing target': dict(target={**self.target, 'fuzz_inventory': [['tiny', 'FuzzThing'], ['tiny/sub', 'FuzzMissing']]}),
@@ -255,46 +279,59 @@ class GoSuiteTests(unittest.TestCase):
         }
         for name, change in controls.items():
             with self.subTest(control=name):
-                for key, baseline in (('listing', self.listing), ('packages', self.packages), ('events', self.events)):
+                for key, baseline in (('listing', self.listing), ('packages', self.packages), ('events', self.events), ('declarations', self.declarations)):
                     if key in change: self.assertNotEqual(change[key], baseline)
                 with self.assertRaises(EvidenceError):
                     self.verify(**change)
 
     def test_packages_without_runnable_tests_follow_discovery(self):
-        """Benchmark-only and output-less example packages pass; hidden runnable tests do not."""
+        """Benchmark-only and output-less example packages pass; any declaration discovery omits fails."""
         sources = {
             'benchonly': 'package benchonly\n\nimport "testing"\n\nfunc BenchmarkX(b *testing.B) {}\n',
             'doconly': 'package doconly_test\n\nimport "fmt"\n\nfunc ExampleHi() {\n\tfmt.Println("hi")\n}\n\nfunc helper() {\n\t// Output: not an example comment\n}\n',
             'mainonly': 'package mainonly\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestMain(m *testing.M) { os.Exit(m.Run()) }\nfunc BenchmarkY(b *testing.B) {}\n',
+            'stringonly': 'package stringonly\n\nconst text = `\nfunc TestNot(t *testing.T) {}\n// Output: no\n`\n',
         }
         hidden = {
             'hiddentest': 'package hiddentest\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestMain(m *testing.M) { os.Exit(0) }\nfunc TestHidden(t *testing.T) {}\n',
             'hiddenfuzz': 'package hiddenfuzz\n\nimport "testing"\n\nfunc FuzzHidden(f *testing.F) {}\n',
             'hiddenexample': 'package hiddenexample\n\nimport "fmt"\n\nfunc ExampleHidden() {\n\tfmt.Println("hi")\n\t// Output: hi\n}\n',
             'hiddenunordered': 'package hiddenunordered\n\nimport "fmt"\n\nfunc ExampleHidden() {\n\tfmt.Println("hi")\n\t// unordered output: hi\n}\n',
+            'hiddenemptyoutput': 'package hiddenemptyoutput\n\nfunc ExampleHidden() {\n\t// Output:\n}\n',
+            'hiddentestmaint': 'package hiddentestmaint\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n',
         }
+        # Review probes: comments inside a declaration or a block-comment output directive.
+        for probe in ('leadingcomment', 'trailingcomment', 'blockoutput'):
+            hidden[probe] = (FIXTURES / 'go-hidden' / probe / 'hidden_test.go').read_text()
         with tempfile.TemporaryDirectory() as tmp:
+            paths = {}
             for name, source in {**sources, **hidden}.items():
                 (Path(tmp) / name).mkdir()
-                (Path(tmp) / name / (name + '_test.go')).write_text(source)
+                paths[name] = Path(tmp) / name / (name + '_test.go')
+                paths[name].write_text(source)
             def extend(names):
                 listing, packages, events = self.listing, self.packages, self.events
+                declarations = self.declarations + declare([paths[n] for n in names])
                 for name in names:
                     path = TINY + '/' + name
-                    listing += ('BenchmarkX\n' if name == 'benchonly' else '') + 'ok  \t%s\t0.001s\n' % path
-                    packages += go_package(path, [name + '_test.go'], directory=str(Path(tmp) / name))
+                    benchmarks = ''.join(l.split('\t')[1] + '\n' for l in declare([paths[name]]).splitlines() if l.startswith('benchmark\t'))
+                    listing += benchmarks + 'ok  \t%s\t0.001s\n' % path
+                    packages += go_package(path, [paths[name].name], directory=str(paths[name].parent))
                     events += event('start', path) + event('output', path, None, 'ok  \t%s\t0.001s [no tests to run]\n' % path) + event('pass', path)
-                return dict(listing=listing, packages=packages, events=events)
+                return dict(listing=listing, packages=packages, events=events, declarations=declarations)
             self.assertEqual(self.verify(**extend(sources))['packages'], sorted([TINY, TINY + '/sub'] + [TINY + '/' + n for n in sources]))
             for name in hidden:
                 with self.subTest(hidden=name), self.assertRaises(EvidenceError) as caught:
                     self.verify(**extend([name]))
-                self.assertIn('discovery lists no tests', str(caught.exception))
-        self.assertEqual(run_selected.runnable_declarations([str(FIXTURES / 'tiny-go/tiny_test.go')]),
-                         ['ExampleHello', 'FuzzThing', 'TestAlpha', 'TestBeta', 'TestSkipped'])
-        with self.assertRaises(EvidenceError): run_selected.runnable_declarations([str(FIXTURES / 'tiny-go/missing_test.go')])
+                self.assertIn('differ from discovery', str(caught.exception))
+            self.assertEqual(declare([paths['leadingcomment'], paths['blockoutput'], paths['hiddentestmaint'], paths['stringonly']]).replace(tmp, ''),
+                             'test\tTestHidden\t/leadingcomment/leadingcomment_test.go\nexample\tExample_hidden\t/blockoutput/blockoutput_test.go\n'
+                             'test\tTestMain\t/hiddentestmaint/hiddentestmaint_test.go\n')
+        with self.assertRaises(EvidenceError): declare([FIXTURES / 'tiny-go/missing_test.go'])
 
     def test_build_failure_is_named(self):
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(self.target, self.listing, self.events, b'', 0, None, packages=self.packages)
         with self.assertRaises(EvidenceError) as caught:
             self.verify(events=fixture('go-build-fail.jsonl', binary=True), exit_code=1)
         self.assertIn('build', str(caught.exception))
@@ -749,6 +786,13 @@ class RealToolTests(unittest.TestCase):
             run_selected.run('tiny-suite', self.root / 'evidence-hidden', root=self.root, env=self.env)
         self.assertIn('hidden', str(caught.exception))
         shutil.rmtree(hidden)
+        # Review probes: gofmt-stable comments that a source regex would miss.
+        for probe in ('leadingcomment', 'trailingcomment', 'blockoutput'):
+            shutil.copytree(FIXTURES / 'go-hidden' / probe, self.root / 'gotiny' / probe)
+            with self.subTest(probe=probe), self.assertRaises(EvidenceError) as caught:
+                run_selected.run('tiny-suite', self.root / ('evidence-' + probe), root=self.root, env=self.env)
+            self.assertIn('differ from discovery', str(caught.exception))
+            shutil.rmtree(self.root / 'gotiny' / probe)
         (self.root / 'gotiny/sub/sub_test.go').write_text('package sub\n\nimport "testing"\n\nfunc TestGamma(t *testing.T) {}\nfunc FuzzNew(f *testing.F) { f.Fuzz(func(t *testing.T, b []byte) {}) }\n')
         with self.assertRaises(EvidenceError) as caught:
             run_selected.run('tiny-suite', self.root / 'evidence-fuzz', root=self.root, env=self.env)
@@ -762,6 +806,37 @@ class RealToolTests(unittest.TestCase):
         source = self.root / 'rusttiny/tests/props.rs'
         source.write_text(source.read_text().replace('cases = 20_000usize', 'cases = 19_999usize'))
         with self.assertRaises(EvidenceError): run_selected.run('tiny-rust', self.root / 'evidence-reduced', root=self.root, env=self.env)
+
+    def test_real_cargo_runner_configuration_is_refused(self):
+        """Review probe: a repository .cargo/config.toml runner forges the selected property run."""
+        self.assertIsNotNone(shutil.which('cargo'), 'cargo is required; missing tools fail instead of skipping')
+        runner = self.root / 'rusttiny/tools/harness_runner.py'
+        runner.parent.mkdir()
+        runner.write_text('import subprocess, sys\n'
+                          'args = sys.argv[1:]\n'
+                          'if "--exact" in args and "--list" not in args:\n'
+                          '    print("\\nrunning 1 test\\ntest props_extended ... ok\\n\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\\n")\n'
+                          '    print("seed=0x5249564241544348 cases=20000 elapsed=0.00s", file=sys.stderr)\n'
+                          '    sys.exit(0)\n'
+                          'sys.exit(subprocess.call(args))\n')
+        target = run_selected.inventory(self.root)['tiny-rust']
+        for config in (self.root / 'rusttiny/.cargo/config.toml', self.root / '.cargo/config'):
+            config.parent.mkdir(exist_ok=True)
+            config.write_text("[target.'cfg(all())']\nrunner = ['%s', '%s']\n" % (sys.executable, runner))
+            with self.subTest(config=config.relative_to(self.root).as_posix()):
+                # The probe is live: cargo really runs the forger, whose output would verify.
+                forged = subprocess.run(run_selected.run_command(target), cwd=self.root / 'rusttiny', env=self.env, capture_output=True)
+                self.assertIn(b'elapsed=0.00s', forged.stderr)
+                listing = subprocess.run(run_selected.discovery_command(target), cwd=self.root / 'rusttiny', env=self.env, capture_output=True, text=True)
+                self.assertEqual(run_selected.verify(target, listing.stdout, forged.stdout, forged.stderr, forged.returncode, None)['elapsed'], '0.00s')
+                with self.assertRaises(EvidenceError) as caught:
+                    run_selected.run('tiny-rust', self.root / ('evidence-runner-' + config.name), root=self.root, env=self.env)
+                self.assertIn('Cargo configuration', str(caught.exception))
+                self.assertFalse((self.root / ('evidence-runner-' + config.name)).exists())
+            config.unlink()
+        for name in ('RUSTC_WRAPPER', 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER', 'CARGO_BUILD_RUSTC'):
+            with self.subTest(env=name), self.assertRaises(EvidenceError):
+                run_selected.run('tiny-rust', self.root / ('evidence-env-' + name), root=self.root, env={**self.env, name: 'x'})
 
 
 class VerifiedRecordTests(unittest.TestCase):

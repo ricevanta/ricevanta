@@ -357,6 +357,33 @@ class PolicyTests(unittest.TestCase):
                     self.assertTrue(any('framing byte' in error for error in check_policy.check(self.root)))
                     (package / name).unlink()
         (package / 'clean_test.go').write_text('package forged\n\nconst tls = 0x16\n')
+        # Partial tripwire: testdata is not compiled into the test binary and stays allowed.
+        (package / 'testdata').mkdir()
+        (package / 'testdata/record.go').write_text('package testdata\n\nconst record = "\\x16\\x03\\x01"\n')
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_cargo_configuration_and_overrides_are_rejected(self):
+        self.assertEqual(check_policy.cargo_config_errors(ROOT), [])
+        for relative in ('agent/.cargo/config.toml', '.cargo/config', 'agent/crates/batch/.cargo/config.toml'):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("[target.'cfg(all())']\nrunner = 'tools/harness-runner'\n")
+            with self.subTest(config=relative):
+                self.assertTrue(any(relative + ': repository Cargo configuration' in error for error in check_policy.check(self.root)))
+            path.unlink()
+        self.assertEqual(check_policy.check(self.root), [])
+        for name in ('RUSTC_WRAPPER', 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER', 'CARGO_BUILD_RUSTC_WRAPPER'):
+            with self.subTest(env=name):
+                self.mutate('agent', lambda data: data['jobs']['validate'].setdefault('env', {}).update({name: 'x'}))
+                self.assertTrue(any('Cargo runner or compiler override' in error for error in check_policy.check(self.root)))
+                shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
+            with self.subTest(github_env=name):
+                def write_env(data, name=name):
+                    step = next(s for s in data['jobs']['validate']['steps'] if 'run' in s)
+                    step['run'] = 'echo "%s=x" >> "$GITHUB_ENV"\n' % name + step['run']
+                self.mutate('agent', write_env)
+                self.assertTrue(any('Cargo runner or compiler override' in error for error in check_policy.check(self.root)))
+                shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
         self.assertEqual(check_policy.check(self.root), [])
 
     def test_wrapper_steps_are_classified_from_the_checked_root(self):
