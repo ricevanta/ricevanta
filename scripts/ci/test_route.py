@@ -246,5 +246,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(len(inventory.fuzz_targets()), 23)
         self.assertEqual(len(inventory.units(inventory.GROUPS)), 46)
         for unit in inventory.units(inventory.GROUPS): self.assertTrue(inventory.checks(unit))
+        self.assertEqual(inventory.checks('server-validate'),
+                         ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'])
 
 if __name__ == '__main__': unittest.main()

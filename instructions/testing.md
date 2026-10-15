@@ -69,6 +69,13 @@ go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./inter
 
 The first consumer owns performance qualification and its request and candidate bounds.
 
+CI, `server/`: the `validate` job proves the ingest admission cost model ([ingest admission section 9](../docs/specs/ingest-admission.md#9-ci-evidence)) and uploads the combined output as `ingest-measurements-<runId>-<runAttempt>`. Selected alone, `TestDecodeCostModel` measures every case; the ordinary suite measures two small cases.
+
+```sh
+GOGC=100 go test -count=1 ./internal/events/body -run '^TestDecodeCostModel$' -v
+go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x ./internal/events/body
+```
+
 Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in PR/master CI. Console browser checks run in `.github/workflows/console.yml`.
 
 A temporary push diagnosis workflow may target one exact `wip/<slice>` branch with distinct job names, read-only permissions and no secrets or required-check claim. Remove the diagnosis workflow before opening a landing PR to `master`; see [workflow](workflow.md#parallel-slices-and-ci).

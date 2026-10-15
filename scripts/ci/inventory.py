@@ -27,7 +27,7 @@ CHECKS = {
                'permission-schema', 'fixture-contracts', 'ci-schema', 'document-limits',
                'release-contracts'],
     'ci-contracts': ['ci-unit', 'ci-policy'],
-    'server-validate': ['server-format', 'server-unit', 'key-admission-bench', 'server-vet'],
+    'server-validate': ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'],
     'server-race': ['server-race'],
     'interop': ['interop-build', 'interop-unit', 'interop-race'],
     'console': ['console-install', 'console-typecheck', 'console-lint', 'console-format',

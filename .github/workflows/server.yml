@@ -47,6 +47,25 @@ jobs:
       run: go test -count=1 ./...
     - name: Benchmark key admission
       run: go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key
+    - name: Ingest cost model
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/ingest-measurements"
+        GOGC=100 go test -count=1 ./internal/events/body -run '^TestDecodeCostModel$' -v 2>&1 | tee "$RUNNER_TEMP/ingest-measurements/cost-model.log"
+        go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x ./internal/events/body 2>&1 | tee -a "$RUNNER_TEMP/ingest-measurements/cost-model.log"
+    - name: Verify ingest measurement log
+      if: always()
+      run: |
+        set -euo pipefail
+        test -s "$RUNNER_TEMP/ingest-measurements/cost-model.log"
+    - name: Upload ingest measurements
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ingest-measurements-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/ingest-measurements/cost-model.log
+        retention-days: 30
+        if-no-files-found: error
     - name: Vet
       run: go vet ./...
     - name: Write successful leaf receipt
@@ -56,7 +75,7 @@ jobs:
       env:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: server-validate
-        CHECKS: '["server-format", "server-unit", "key-admission-bench", "server-vet"]'
+        CHECKS: '["server-format", "server-unit", "key-admission-bench", "ingest-cost-model", "server-vet"]'
         HOST_OS: ''
       run: |
         python - <<'PY'
