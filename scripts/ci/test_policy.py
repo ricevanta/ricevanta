@@ -372,17 +372,45 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(any(relative + ': repository Cargo configuration' in error for error in check_policy.check(self.root)))
             path.unlink()
         self.assertEqual(check_policy.check(self.root), [])
-        for name in ('RUSTC_WRAPPER', 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER', 'CARGO_BUILD_RUSTC_WRAPPER'):
+        # Review probes include the fake linker and RUSTFLAGS; the allowlist closes every other name.
+        for name in ('RUSTC_WRAPPER', 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER', 'CARGO_BUILD_RUSTC_WRAPPER',
+                     'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER', 'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTDOCFLAGS',
+                     'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS', 'RUSTUP_TOOLCHAIN', 'CARGO_BUILD_TARGET', 'rustflags'):
             with self.subTest(env=name):
-                self.mutate('agent', lambda data: data['jobs']['validate'].setdefault('env', {}).update({name: 'x'}))
-                self.assertTrue(any('Cargo runner or compiler override' in error for error in check_policy.check(self.root)))
+                self.mutate('agent', lambda data: data['jobs']['validate'].setdefault('env', {}).update({name: '${{ github.workspace }}/agent/tools/link'}))
+                self.assertTrue(any('unreviewed Cargo or rustc variable' in error for error in check_policy.check(self.root)))
                 shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
             with self.subTest(github_env=name):
                 def write_env(data, name=name):
                     step = next(s for s in data['jobs']['validate']['steps'] if 'run' in s)
-                    step['run'] = 'echo "%s=x" >> "$GITHUB_ENV"\n' % name + step['run']
+                    step['run'] = 'echo "%s=-Clinker=$GITHUB_WORKSPACE/agent/tools/link" >> "$GITHUB_ENV"\n' % name + step['run']
                 self.mutate('agent', write_env)
-                self.assertTrue(any('Cargo runner or compiler override' in error for error in check_policy.check(self.root)))
+                self.assertTrue(any('unreviewed Cargo or rustc variable' in error for error in check_policy.check(self.root)))
+                shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
+        for name in sorted(check_policy.WORKFLOW_CARGO_ENV):
+            with self.subTest(allowed=name):
+                self.mutate('agent', lambda data: data['jobs']['validate'].setdefault('env', {}).update({name: '1'}))
+                self.assertFalse(any('Cargo or rustc variable' in error for error in check_policy.check(self.root)))
+                shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_ci_contracts_format_and_vet_the_declaration_helper(self):
+        self.assertEqual(inventory.checks('ci-contracts'), ['ci-go-helper', 'ci-unit', 'ci-policy'])
+        def step(data):
+            return next(s for s in data['jobs']['ci-contracts']['steps'] if 'go vet .' in s.get('run', ''))
+        mutations = {
+            'other directory': lambda data: step(data).update({'working-directory': 'server'}),
+            'conditional': lambda data: step(data).update({'if': 'false'}),
+            'no vet': lambda data: step(data).update({'run': step(data)['run'].replace('go vet .', 'true')}),
+            'no format check': lambda data: step(data).update({'run': step(data)['run'].replace('gofmt -l .', 'true')}),
+            'removed': lambda data: data['jobs']['ci-contracts']['steps'].remove(step(data)),
+            'no fresh Go caches': lambda data: data['jobs']['ci-contracts']['steps'].remove(
+                next(s for s in data['jobs']['ci-contracts']['steps'] if s.get('name') == 'Create fresh Go caches')),
+        }
+        for label, change in mutations.items():
+            with self.subTest(mutation=label):
+                self.mutate('ci', change)
+                self.assertNotEqual(check_policy.check(self.root), [])
                 shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
         self.assertEqual(check_policy.check(self.root), [])
 

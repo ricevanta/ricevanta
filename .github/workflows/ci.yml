@@ -51,6 +51,30 @@ jobs:
       with:
         python-version: 3.14.8
     - run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: server/go.mod
+        cache: false
+    - name: Create fresh Go caches
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
+    - name: Format and vet the Go test declaration helper
+      shell: bash
+      working-directory: scripts/ci/gotestdecls
+      run: |
+        unformatted="$(gofmt -l .)"
+        if [ -n "$unformatted" ]; then
+          printf '%s\n' "$unformatted"
+          exit 1
+        fi
+        go vet .
     - run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
     - run: python -B scripts/ci/check_policy.py --root .
     - name: Write successful leaf receipt
@@ -60,7 +84,7 @@ jobs:
       env:
         ROUTE_JSON: ${{ needs.route.outputs.route }}
         UNIT: ci-contracts
-        CHECKS: '["ci-unit", "ci-policy"]'
+        CHECKS: '["ci-go-helper", "ci-unit", "ci-policy"]'
         HOST_OS: ''
       run: |
         python - <<'PY'

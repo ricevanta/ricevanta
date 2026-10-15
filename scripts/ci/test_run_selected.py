@@ -834,9 +834,59 @@ class RealToolTests(unittest.TestCase):
                 self.assertIn('Cargo configuration', str(caught.exception))
                 self.assertFalse((self.root / ('evidence-runner-' + config.name)).exists())
             config.unlink()
-        for name in ('RUSTC_WRAPPER', 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER', 'CARGO_BUILD_RUSTC'):
-            with self.subTest(env=name), self.assertRaises(EvidenceError):
-                run_selected.run('tiny-rust', self.root / ('evidence-env-' + name), root=self.root, env={**self.env, name: 'x'})
+        # Review probes: the fake linker and RUSTFLAGS, plus the rest of the closed allowlist.
+        for name in ('RUSTC_WRAPPER', 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER', 'CARGO_BUILD_RUSTC',
+                     'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER', 'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTDOCFLAGS',
+                     'CARGO_BUILD_RUSTFLAGS', 'RUSTUP_TOOLCHAIN', 'CARGO_BUILD_TARGET', 'rustflags'):
+            with self.subTest(env=name), self.assertRaises(EvidenceError) as caught:
+                run_selected.run('tiny-rust', self.root / ('evidence-env-' + name), root=self.root, env={**self.env, name: '-Clinker=/tmp/fake-linker'})
+            self.assertIn('unreviewed Cargo or rustc variables', str(caught.exception))
+        self.assertEqual(run_selected.cargo_environment_overrides(['CARGO_HOME', 'CARGO_TARGET_DIR', 'CARGO_NET_OFFLINE', 'RUSTUP_HOME',
+                                                                   'RUST_BACKTRACE', 'CARGO_TERM_COLOR', 'CARGO_INCREMENTAL',
+                                                                   'CARGO_HTTP_CAINFO', 'PATH', 'GOFLAGS']), [])
+        # A config in CARGO_HOME is refused too.
+        home = self.root / 'cargo-home'
+        home.mkdir()
+        (home / 'config.toml').write_text("[target.'cfg(all())']\nrustflags = ['--cfg', 'forged']\n")
+        with self.assertRaises(EvidenceError) as caught:
+            run_selected.run('tiny-rust', self.root / 'evidence-home', root=self.root, env={**self.env, 'CARGO_HOME': str(home)})
+        self.assertIn('Cargo configuration', str(caught.exception))
+
+    def test_real_rustflags_probe_is_live_and_refused(self):
+        """RUSTFLAGS really changes what the selected harness executes; the wrapper refuses it."""
+        self.assertIsNotNone(shutil.which('cargo'), 'cargo is required; missing tools fail instead of skipping')
+        source = self.root / 'rusttiny/tests/props.rs'
+        source.write_text(source.read_text().replace('    let cases = 20_000usize;',
+                          '    #[cfg(forged)]\n    {\n        eprintln!("seed=0x{SEED:016x} cases=20000 elapsed=0.00s");\n        return;\n    }\n    let cases = 20_000usize;'))
+        target = run_selected.inventory(self.root)['tiny-rust']
+        env = {**self.env, 'RUSTFLAGS': '--cfg forged'}
+        forged = subprocess.run(run_selected.run_command(target), cwd=self.root / 'rusttiny', env=env, capture_output=True)
+        listing = subprocess.run(run_selected.discovery_command(target), cwd=self.root / 'rusttiny', env=env, capture_output=True, text=True)
+        self.assertEqual(run_selected.verify(target, listing.stdout, forged.stdout, forged.stderr, forged.returncode, None)['elapsed'], '0.00s')
+        with self.assertRaises(EvidenceError):
+            run_selected.run('tiny-rust', self.root / 'evidence-rustflags', root=self.root, env=env)
+        self.assertEqual(self.run_id('tiny-rust')['summary']['cases'], 20000)
+
+    def test_cargo_configuration_is_rechecked_before_the_run_command(self):
+        """A config written after discovery (for example by a build script) still stops the run."""
+        self.assertIsNotNone(shutil.which('cargo'), 'cargo is required; missing tools fail instead of skipping')
+        original = run_selected.execute
+        def execute(command, *args):
+            code = original(command, *args)
+            if '--list' in command:
+                (self.root / 'rusttiny/.cargo').mkdir()
+                (self.root / 'rusttiny/.cargo/config.toml').write_text("[target.'cfg(all())']\nrunner = 'forger'\n")
+            return code
+        run_selected.execute = execute
+        try:
+            with self.assertRaises(EvidenceError) as caught:
+                run_selected.run('tiny-rust', self.root / 'evidence-late', root=self.root, env=self.env)
+        finally:
+            run_selected.execute = original
+        self.assertIn('Cargo configuration', str(caught.exception))
+        directory = self.root / 'evidence-late' / run_selected.evidence_name('tiny-rust')
+        self.assertTrue((directory / 'discovery.txt').is_file())
+        self.assertFalse((directory / 'output.txt').exists())
 
 
 class VerifiedRecordTests(unittest.TestCase):

@@ -33,11 +33,20 @@ SELECTED_CWD = re.compile(r'^[A-Za-z0-9_-]+$')
 RUST_RUNNING = re.compile(r'^\s+Running (.+) \((.+)\)$')
 RUST_DOCTESTS = re.compile(r'^\s+Doc-tests (\S+)$')
 RUST_SECTION = re.compile(r'^running (\d+) tests?$')
-# Cargo runs test executables through target runners and compiles through
-# wrappers taken from .cargo/config files in the working directory's ancestors
-# or from these variables; either could replace a harness with forged output.
-CARGO_OVERRIDE_ENV = re.compile(r'^(?:CARGO_TARGET_\w+_RUNNER|CARGO_BUILD_RUSTC(?:_WORKSPACE)?_WRAPPER|RUSTC(?:_WORKSPACE)?_WRAPPER'
-                                r'|CARGO_BUILD_RUSTC|CARGO_BUILD_RUSTDOC|RUSTC|RUSTDOC)$')
+# Cargo and rustc read runners, wrappers, linkers, flags and toolchains from
+# .cargo/config files and from CARGO_*, RUST* and *RUSTFLAGS variables; any of
+# them could replace a harness with forged output. A Rust run therefore accepts
+# only this reviewed set of such variables, all of which the workflows or the
+# runner images set: cache and target locations, offline mode, terminal and
+# backtrace output, rustup's home and the proxy CA bundle for downloads.
+CARGO_CONTROLLED_ENV = re.compile(r'^(?:CARGO|RUST)|RUSTFLAGS|RUSTDOCFLAGS')
+CARGO_ALLOWED_ENV = frozenset({'CARGO_HOME', 'CARGO_TARGET_DIR', 'CARGO_NET_OFFLINE', 'CARGO_INCREMENTAL', 'CARGO_TERM_COLOR',
+                               'CARGO_HTTP_CAINFO', 'RUSTUP_HOME', 'RUST_BACKTRACE'})
+
+
+def cargo_environment_overrides(names):
+    """Controlled Cargo/rustc variables outside the reviewed set (names compare case-insensitively)."""
+    return sorted(n for n in names if CARGO_CONTROLLED_ENV.search(n.upper()) and n.upper() not in CARGO_ALLOWED_ENV)
 GO_DURATION = re.compile(r'(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)')
 GO_DURATION_UNITS = {'ns': 1e-9, 'us': 1e-6, 'µs': 1e-6, 'ms': 1e-3, 's': 1, 'm': 60, 'h': 3600}
 SKIP_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$')
@@ -726,12 +735,23 @@ def cargo_configs(root, cwd):
         directory = directory.parent
 
 
+def cargo_guard(target, env, root):
+    """Refuse a Rust run that Cargo configuration or environment could redirect.
+
+    Called before discovery and again immediately before the run command, since
+    code compiled in between (build scripts) could have written a config file.
+    """
+    if not target['mode'].startswith('rust'): return
+    configs = cargo_configs(root, root / target['cwd'])
+    home = env.get('CARGO_HOME') or os.path.join(os.path.expanduser('~'), '.cargo')
+    configs += [Path(home, name) for name in ('config', 'config.toml') if os.path.lexists(os.path.join(home, name))]
+    if configs: raise EvidenceError('Cargo configuration could replace the test runner, linker or flags: ' + ', '.join(map(str, configs)))
+    overrides = cargo_environment_overrides(env)
+    if overrides: raise EvidenceError('unreviewed Cargo or rustc variables in the environment: ' + ', '.join(overrides))
+
+
 def preconditions(target, env, root=ROOT):
-    if target['mode'].startswith('rust'):
-        configs = cargo_configs(root, root / target['cwd'])
-        if configs: raise EvidenceError('repository Cargo configuration could replace the test runner: ' + ', '.join(map(str, configs)))
-        overrides = sorted(k for k in env if CARGO_OVERRIDE_ENV.match(k))
-        if overrides: raise EvidenceError('Cargo runner or compiler override in the environment: ' + ', '.join(overrides))
+    cargo_guard(target, env, root)
     if target['mode'] == 'go-interop':
         path = env.get('RICEVANTA_BATCH_VECTOR', '')
         if not os.path.isabs(path) or not os.path.isfile(path): raise EvidenceError('RICEVANTA_BATCH_VECTOR must name an existing absolute writer path')
@@ -770,6 +790,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
         discovery_text = (evidence_dir / 'discovery.txt').read_bytes().decode('utf-8', 'replace')
         if code != 0: raise EvidenceError('discovery exited %d' % code)
     command = [part.replace('{report}', str(evidence_dir / 'report.json')) for part in run_command(target)]
+    cargo_guard(target, env, root)
     print('command:', shlex.join(command), flush=True)
     exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
     summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(),

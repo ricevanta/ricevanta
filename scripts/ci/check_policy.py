@@ -174,17 +174,23 @@ def cargo_config_errors(root):
     return errors
 
 
+# Workflows may set only these Cargo/rustc variables; CARGO_HOME and
+# CARGO_TARGET_DIR come solely from fresh_go.py (see cache_errors).
+WORKFLOW_CARGO_ENV = frozenset({'CARGO_NET_OFFLINE', 'CARGO_INCREMENTAL', 'CARGO_TERM_COLOR', 'RUST_BACKTRACE'})
+
+
 def cargo_override_errors(data):
-    """Workflows may not set Cargo runner or compiler overrides, directly or through GITHUB_ENV."""
+    """Closed allowlist for Cargo/rustc variables in workflow env and GITHUB_ENV writes."""
     errors = []
+    def check(name):
+        if run_selected.CARGO_CONTROLLED_ENV.search(name.upper()) and name.upper() not in WORKFLOW_CARGO_ENV | {'CARGO_HOME', 'CARGO_TARGET_DIR'}:
+            errors.append(f'{jid}: unreviewed Cargo or rustc variable {name} forbidden')
     for jid, job in data.get('jobs', {}).items():
         for scope in (data, job, *job.get('steps', [])):
             env = scope.get('env', {})
-            for key in (env if isinstance(env, dict) else {}):
-                if run_selected.CARGO_OVERRIDE_ENV.match(str(key)): errors.append(f'{jid}: Cargo runner or compiler override {key} forbidden')
+            for key in (env if isinstance(env, dict) else {}): check(str(key))
         for step in job.get('steps', []):
-            for name in re.findall(r'\b([A-Z][A-Z0-9_]*)\s*=', str(step.get('run', ''))):
-                if run_selected.CARGO_OVERRIDE_ENV.match(name): errors.append(f'{jid}: Cargo runner or compiler override {name} forbidden')
+            for name in re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*=', str(step.get('run', ''))): check(name)
     return errors
 
 
@@ -248,7 +254,7 @@ COMMANDS = {
         'pnpm format:check', 'pnpm audit:deps', 'pnpm test:unit', 'pnpm test:component',
         'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz',
         'pnpm exec playwright install --with-deps chromium firefox webkit'),
-    ('ci', 'ci-contracts'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
+    ('ci', 'ci-contracts'): ('gofmt -l .', 'go vet .', "python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
         'python -B scripts/ci/check_policy.py --root .'),
     ('bootstrap', 'validate'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
         'schemas/ci/v1/contracts.schema.json', 'schemas/ci/v1/examples.json'),
@@ -664,6 +670,9 @@ def check(root: Path) -> list[str]:
                 if job.get('if') != group_condition([group], 'inputs.route'): fail(name, f'{jid}: route selection mismatch')
             expected_needs = 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
             if job.get('needs') != expected_needs: fail(name, f'{jid}: needs mismatch')
+    helper = [s for s in jobs.get('ci-contracts', {}).get('steps', []) if 'go vet .' in s.get('run', '')]
+    if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != 'bash' or 'if' in helper[0]:
+        fail('ci', 'ci-contracts: the Go declaration helper must be formatted and vetted in scripts/ci/gotestdecls')
     design_steps = workflows['design']['jobs']['validate']['steps']
     for command in DESIGN_COMMANDS:
         matches = [s for s in design_steps if command in s.get('run', '') and '--check-sources' not in s.get('run', '')]
