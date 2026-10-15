@@ -2,11 +2,12 @@
 
 Tasks leave this list when committed. Milestones stay in `docs/roadmap.md`; unresolved contracts and source checks are recorded in `docs/analysis.md`.
 
-## Integration branch `claude/next-steps-8yiezc`
+## Integration branch `wip/next-steps`
 
-No GitHub CI has run on this branch; every "CI proof" step in the plans below is still open. Three commits marked `WIP:` hold unfinished, unreviewed work.
+No GitHub CI has run on this branch; every "CI proof" step in the plans below is still open. Three commits marked `WIP:` hold unfinished, unreviewed work. The design and code reviews recorded in this branch's commit messages ran in the session that wrote the branch and do not meet the [review eligibility rules](AGENTS.md#agents-and-models).
 
-- [ ] Before landing on `master`, run the full PR CI on this branch and fix what it finds, then re-sign or re-author the commits as the owner requires (they carry the container identity `Claude <noreply@anthropic.com>`).
+- [ ] Before landing on `master`, run the full PR CI on this branch and fix what it finds.
+- [ ] Have `design_reviewer` review every new or revised specification and plan on this branch, and `code_reviewer` review every implementation slice against its approved design, with the adversarial pass for enforcement code, before any slice lands.
 - [ ] Finish the CI bootstrap gap work in the `WIP: Close CI bootstrap gaps` commit: `scripts/ci/rust_env.py` with the admitted Rust environment, admitted homes, C toolchain refusal, `GOENV=off`, the Ubuntu release check, the env-file test and the receipt `GITHUB_SHA` binding. Run `python -B -m unittest discover -s scripts/ci -p 'test_*.py'` with Go 1.27.1 and the hash-locked Python 3.14 closure first on `PATH` and `PIP_CERT` and `PIP_CONFIG_FILE` unset; the suite was not green when the work stopped. Then have it reviewed.
 - [ ] Finish the footprint harness (`WIP: Add footprint harness Tasks 1-3`): `measure.py` and `fake_agent.py` of Task 3, then Task 4, then review (`docs/plans/footprint-harness.md`).
 - [ ] Finish the OpenAPI foundation, identity login, identity sessions and change stream drafts (`WIP: Draft OpenAPI ...`; `docs/specs/api-foundation.md`, `identity-login.md`, `identity-sessions.md`, `change-stream.md`, `schemas/openapi/`, BE-16 to BE-18), add their decisions entries, then run an independent design review. No implementation starts from the drafts.
