@@ -15,6 +15,7 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+        fetch-depth: 0
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
@@ -25,6 +26,13 @@ jobs:
       run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
     - name: Validate permission catalogue
       run: python server/internal/authz/catalogue/schema_test.py
+    - name: Check catalogue compatibility against the reviewed base
+      shell: bash
+      working-directory: .
+      env:
+        BASE_SHA: ${{ fromJSON(inputs.route).baseSha }}
+        CANDIDATE_SHA: ${{ fromJSON(inputs.route).testedSha }}
+      run: python -B scripts/ci/catalogue_compat.py --root . --base-sha "$BASE_SHA" --candidate-sha "$CANDIDATE_SHA"
     - name: Validate OCSF sources, schemas and events
       env:
         PYTHONDONTWRITEBYTECODE: '1'
@@ -120,7 +128,7 @@ jobs:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: design
         CHECKS: '["ocsf-schemas", "policy-schemas", "export-schemas", "report-schemas", "permission-schema", "fixture-contracts",
-          "ci-schema", "document-limits", "release-contracts"]'
+          "ci-schema", "document-limits", "release-contracts", "catalogue-compat"]'
         HOST_OS: ''
       run: |
         python - <<'PY'
