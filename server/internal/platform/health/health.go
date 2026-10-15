@@ -49,7 +49,7 @@ func NewRegistry(roles []string) *Registry {
 func (r *Registry) Set(role string, s State) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.states[role]; ok {
+	if previous, ok := r.states[role]; ok && previous != Stopping {
 		r.states[role] = s
 	}
 }
@@ -59,6 +59,9 @@ func (r *Registry) SetAll(s State) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for k := range r.states {
+		if r.states[k] == Stopping {
+			continue
+		}
 		r.states[k] = s
 	}
 }
