@@ -28,7 +28,7 @@ jobs:
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
-        python-version: 3.14.8
+        python-version-file: .github/python-version
     - name: Assert native receipt host
       shell: bash
       working-directory: .
@@ -58,8 +58,17 @@ jobs:
       run: |
         go mod download
         go mod verify
-    - name: Install contract dependencies
-      run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+    - name: Create validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      shell: bash
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -B scripts/ci/python_env.py --check
     - name: Contract unit tests
       run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
     - name: CI schema fixtures

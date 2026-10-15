@@ -27,9 +27,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14.8'
-          cache: pip
-          cache-dependency-path: .github/requirements-design.txt
+          python-version-file: .github/python-version
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
@@ -57,8 +55,17 @@ jobs:
       - name: Install console dependencies without lifecycle scripts
         working-directory: console
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Install design validation dependencies
-        run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+      - name: Create validator environment
+        shell: bash
+        working-directory: .
+        run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+      - name: Install hash-locked validator closure
+        shell: bash
+        working-directory: .
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+          python -m pip check
+          python -B scripts/ci/python_env.py --check
       - name: Install Rust
         if: ${{ hashFiles('agent/rust-toolchain', 'agent/rust-toolchain.toml') != '' }}
         run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy

@@ -6,6 +6,7 @@ import re
 import json
 import yaml
 import inventory
+import python_env
 from required import NEEDS, CALLERS
 
 
@@ -82,6 +83,16 @@ COMMANDS = {
 
 
 SETUP_PYTHON = 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
+PYTHON_SETUP = {'python-version-file': python_env.PYTHON_VERSION_FILE}
+# Any other installer or environment manager would bypass the hash-locked closure.
+AD_HOC_PYTHON = re.compile(r'\bpip3?\s+(?:install|download|wheel)\b|\bpython[0-9.]*\s+-m\s+(?:venv|ensurepip)\b|'
+                           r'\bvirtualenv\b|\buv\s+(?:pip|venv|sync|tool)\b|\bpipx\b|\bconda\b|\bpoetry\b')
+# These commands import the closure, so the admitted install must precede them in the job.
+CLOSURE_CONSUMERS = ('scripts/ci/check_policy.py', "unittest discover -s scripts/ci -p 'test_*.py'",
+                     'required.py --route "$RUNNER_TEMP/route.json" --needs', 'from jsonschema import',
+                     'scripts/ci/validate_contracts.py', 'schemas/ocsf/validate.py',
+                     'schemas/policy/v1alpha1/validate.py', 'schemas/export/v1alpha1/validate.py',
+                     'schemas/report/v1alpha1/validate.py', 'server/internal/authz/catalogue/schema_test.py')
 TOKEN = '${{ secrets.SEMGREP_APP_TOKEN }}'
 ROUTE_ENV = {'ROUTE_JSON': '${{ needs.route.outputs.route }}'}
 PREPARE_ROUTE = ("python -B - <<'PY'\n"
@@ -101,7 +112,7 @@ def scanner_job(unit):
     steps = [
         {'uses': CHECKOUT, 'with': {'persist-credentials': 'false', 'fetch-depth': '0',
                                   'ref': '${{ fromJSON(needs.route.outputs.route).testedSha }}'}},
-        {'uses': SETUP_PYTHON, 'with': {'python-version': '3.14.8'}},
+        {'uses': SETUP_PYTHON, 'with': dict(PYTHON_SETUP)},
         {'id': 'preflight', 'shell': 'bash', 'working-directory': '.', 'env': ROUTE_ENV,
          'run': PREPARE_ROUTE + scanner_command(unit, 'preflight') + '\n'},
     ]
@@ -242,6 +253,36 @@ def cache_errors(data):
     return errors
 
 
+def python_errors(data):
+    """One admitted Python, one fresh venv and one hash-locked install per closure consumer; nothing ad hoc."""
+    errors = []
+    for jid, job in data.get('jobs', {}).items():
+        steps = job.get('steps', [])
+        def fail(message): errors.append(f'{jid}: {message}')
+        setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-python@')]
+        for i in setups:
+            if steps[i].get('uses') != SETUP_PYTHON or steps[i].get('with') != PYTHON_SETUP:
+                fail('Python setup must read .github/python-version through the pinned action without caches')
+        venvs = [i for i, s in enumerate(steps) if s.get('run') == python_env.VENV_COMMAND]
+        installs = [i for i, s in enumerate(steps) if s.get('run') == python_env.INSTALL_COMMAND]
+        for i, step in enumerate(steps):
+            run = step.get('run', '')
+            if i in venvs or i in installs: continue
+            if AD_HOC_PYTHON.search(run) or 'requirements-design.txt' in run or 'python_env.py --venv' in run:
+                fail('ad hoc Python environment or package installation forbidden')
+        consumers = [i for i, s in enumerate(steps) if any(c in s.get('run', '') for c in CLOSURE_CONSUMERS)]
+        if venvs or installs or consumers:
+            if len(venvs) != 1 or len(installs) != 1 or not setups or not setups[0] < venvs[0] < installs[0]:
+                fail('closure consumer requires pinned Python setup, one fresh venv and one hash-locked install in order')
+            elif any(i < installs[0] for i in consumers):
+                fail('validator runs before the hash-locked closure is admitted')
+            for i in venvs + installs:
+                step = steps[i]
+                if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != 'bash' or step.get('working-directory') != '.':
+                    fail('closure admission steps must be unconditional at root with bash')
+    return errors
+
+
 def fuzz_evidence_errors(job, native_parser=False):
     """Preserve exact fuzz selection, failure exit and minimized corpora."""
     command = COMMANDS[('server', 'loader-gate-a' if native_parser else 'fuzz')][-1]
@@ -336,6 +377,7 @@ def check(root: Path) -> list[str]:
         except (ValueError, yaml.YAMLError):
             fail(name, 'malformed workflow'); continue
         for error in cache_errors(data): fail(name, error)
+        for error in python_errors(data): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
         for error in secret_errors(data, name): fail(name, error)
@@ -369,6 +411,7 @@ def check(root: Path) -> list[str]:
         inventory.fuzz_targets(root)
     except (OSError, ValueError, KeyError, TypeError):
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
+    errors += python_env.lock_errors(root)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}
     for name in required_names - set(workflows): fail(name, 'missing required workflow')
     if not required_names <= set(workflows): return errors

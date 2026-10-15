@@ -18,6 +18,8 @@ class PolicyTests(unittest.TestCase):
         shutil.copytree(ROOT / '.github', self.root / '.github')
         shutil.copytree(ROOT / 'scripts/ci', self.root / 'scripts/ci')
         shutil.copytree(ROOT / 'schemas/ci', self.root / 'schemas/ci')
+        (self.root / 'docs').mkdir()
+        shutil.copyfile(ROOT / 'docs/licensing.md', self.root / 'docs/licensing.md')
 
     def mutate(self, workflow, change):
         path = self.root / f'.github/workflows/{workflow}.yml'
@@ -309,6 +311,68 @@ class PolicyTests(unittest.TestCase):
                     self.mutate(name, change)
                     self.assertTrue(check_policy.check(self.root))
                     shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
+
+    def test_python_closure_mutations_are_rejected(self):
+        import python_env
+        self.assertEqual(check_policy.check(self.root), [])
+        def setup(data, jid='validate'):
+            return next(s for s in data['jobs'][jid]['steps'] if s.get('uses', '').startswith('actions/setup-python@'))
+        def step(data, run, jid='validate'):
+            return next(s for s in data['jobs'][jid]['steps'] if s.get('run') == run)
+        def swap_install_after_validator(data):
+            steps = data['jobs']['validate']['steps']
+            install = step(data, python_env.INSTALL_COMMAND)
+            steps.remove(install)
+            steps.insert(next(i for i, s in enumerate(steps) if 'schema_test.py' in s.get('run', '')) + 1, install)
+        unhashed = 'python -m pip install --disable-pip-version-check -r .github/requirements-design.txt'
+        mutations = [
+            ('design', 'floating Python', lambda d: setup(d).update({'with': {'python-version': '3.14.8'}}), 'Python setup must read .github/python-version'),
+            ('design', 'minor pin', lambda d: setup(d).update({'with': {'python-version': '3.14'}}), 'Python setup must read .github/python-version'),
+            ('design', 'pip cache', lambda d: setup(d)['with'].update(cache='pip'), 'Python setup must read .github/python-version'),
+            ('design', 'unhashed install', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=unhashed), 'ad hoc Python environment or package installation forbidden'),
+            ('design', 'source fallback', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace(' --only-binary=:all:', '')), 'ad hoc Python environment'),
+            ('design', 'skipped check', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace('python -B scripts/ci/python_env.py --check\n', '')), 'ad hoc Python environment'),
+            ('design', 'missing venv', lambda d: d['jobs']['validate']['steps'].remove(step(d, python_env.VENV_COMMAND)), 'one fresh venv and one hash-locked install in order'),
+            ('design', 'conditional install', lambda d: step(d, python_env.INSTALL_COMMAND).update({'if': 'false'}), 'closure admission steps must be unconditional'),
+            ('design', 'hidden install failure', lambda d: step(d, python_env.INSTALL_COMMAND).update({'continue-on-error': 'true'}), 'closure admission steps must be unconditional'),
+            ('design', 'install after validator', swap_install_after_validator, 'validator runs before the hash-locked closure is admitted'),
+            ('design', 'duplicate environment', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'python -m venv "$RUNNER_TEMP/other"'}), 'ad hoc Python environment'),
+            ('server', 'ad hoc jsonschema', lambda d: d['jobs']['validate']['steps'].insert(2, {'run': 'python -m pip install jsonschema==4.25.1'}), 'ad hoc Python environment'),
+            ('server', 'validator without closure', lambda d: d['jobs']['validate']['steps'].insert(2, {'run': 'python schemas/export/v1alpha1/validate.py'}), 'closure consumer requires pinned Python setup'),
+            ('agent', 'divergent agent Python', lambda d: setup(d).update({'with': {'python-version': '3.13.7'}}), 'Python setup must read .github/python-version'),
+            ('copilot-code-review', 'Copilot floating Python', lambda d: setup(d, 'copilot-setup-steps').update({'with': {'python-version': '3.14.8'}}), 'Python setup must read .github/python-version'),
+            ('copilot-code-review', 'Copilot unhashed install', lambda d: step(d, python_env.INSTALL_COMMAND, 'copilot-setup-steps').update(run=unhashed), 'ad hoc Python environment'),
+        ]
+        for name, label, change, expected in mutations:
+            with self.subTest(mutation=label):
+                self.mutate(name, change)
+                self.assertTrue(any(expected in error for error in check_policy.check(self.root)),
+                                (label, check_policy.check(self.root)))
+                shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
+        self.assertEqual(check_policy.check(self.root), [])
+        requirements = self.root / python_env.REQUIREMENTS
+        baseline = requirements.read_text()
+        for label, text in (('unhashed pin', baseline.replace(' \\\n    --hash=sha256:3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63', '')),
+                            ('floating pin', baseline.replace('jsonschema==4.25.1', 'jsonschema>=4.25.1')),
+                            ('extra package', baseline + 'requests==2.32.5 \\\n    --hash=sha256:' + 'c' * 64 + '\n'),
+                            ('url requirement', baseline.replace('six==1.17.0', 'six @ https://example.invalid/six-1.17.0-py2.py3-none-any.whl'))):
+            with self.subTest(lock=label):
+                requirements.write_text(text)
+                self.assertTrue(check_policy.check(self.root), label)
+        requirements.write_text(baseline)
+        version = self.root / python_env.PYTHON_VERSION_FILE
+        for text in ('3.14\n', '3.14.8', '3.14.8\r\n', '3.14.x\n'):
+            with self.subTest(python=text):
+                version.write_text(text)
+                self.assertTrue(any(python_env.PYTHON_VERSION_FILE in e for e in check_policy.check(self.root)))
+        version.write_text('3.14.8\n')
+        licensing = self.root / python_env.LICENSING
+        rows = licensing.read_text()
+        row = next(line for line in rows.splitlines() if line.startswith('| Python [`attrs`]'))
+        licensing.write_text(rows.replace(row + '\n', ''))
+        self.assertTrue(any('attrs 26.1.0: no licensing row' in e for e in check_policy.check(self.root)))
+        licensing.write_text(rows)
+        self.assertEqual(check_policy.check(self.root), [])
 
     def test_windows_runner_selection(self):
         jobs = (

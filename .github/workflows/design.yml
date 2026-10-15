@@ -18,28 +18,24 @@ jobs:
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
-        python-version: 3.14.8
-        cache: pip
-        cache-dependency-path: .github/requirements-design.txt
-    - name: Install validation dependencies
-      run: python -m pip install --disable-pip-version-check -r .github/requirements-design.txt
+        python-version-file: .github/python-version
+    - name: Create validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      shell: bash
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -B scripts/ci/python_env.py --check
     - name: Validate permission catalogue
       run: python server/internal/authz/catalogue/schema_test.py
     - name: Validate OCSF sources, schemas and events
       env:
         PYTHONDONTWRITEBYTECODE: '1'
       run: |
-        python - <<'PY'
-        from importlib.metadata import version
-        expected = {
-            'jsonschema': '4.25.1', 'PyYAML': '6.0.3', 'attrs': '26.1.0',
-            'jsonschema-specifications': '2025.9.1', 'referencing': '0.37.0',
-            'rpds-py': '2026.6.3', 'typing-extensions': '4.16.0',
-        }
-        for name, pin in expected.items():
-            if version(name) != pin:
-                raise SystemExit('validation dependency pin mismatch: ' + name)
-        PY
         python schemas/ocsf/generate.py --check
         python schemas/ocsf/validate.py
         python -m unittest discover -s schemas/ocsf -p 'test_*.py' -v
