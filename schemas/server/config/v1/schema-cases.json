@@ -117,6 +117,21 @@
       }
     },
     {
+      "id": "listener-without-tls",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443"
+          }
+        }
+      }
+    },
+    {
       "id": "tls-file-without-key",
       "valid": false,
       "instance": {
