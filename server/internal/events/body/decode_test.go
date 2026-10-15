@@ -237,3 +237,94 @@ func FuzzDecode(f *testing.F) {
 		}
 	})
 }
+
+func TestDecodeFrameZero(t *testing.T) {
+	f := loadFixtures(t)
+	b, _, d := fixtureBytes(t, f.Cases[0], f.Template)
+	frame, e := ReadFrame(&io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget})
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, c := range []struct {
+		name   string
+		frame  Frame
+		d      batch.Descriptor
+		device string
+		want   error
+	}{
+		{"descriptor-first", Frame{}, batch.Descriptor{}, "", batch.ErrClass},
+		{"descriptor-valid-frame", frame, batch.Descriptor{Class: batch.ClassRaw}, "device-a", batch.ErrStreamEpoch},
+		{"device-before-frame", Frame{}, d, "", ErrDevice},
+		{"device-invalid-UTF8", frame, d, string([]byte{255}), ErrDevice},
+		{"zero-frame", Frame{}, d, "device-a", ErrReaderBound},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			calls := 0
+			factory := func(r io.Reader, options ...zstd.DOption) (streamDecoder, error) {
+				calls++
+				return nil, errors.New("decoder must not start")
+			}
+			lines, e := decodeFrameWithFactory(c.frame, c.d, c.device, factory)
+			if !errors.Is(e, c.want) || lines != nil || calls != 0 {
+				t.Fatalf("err=%v calls=%d", e, calls)
+			}
+			lines, e = DecodeFrame(c.frame, c.d, c.device)
+			if !errors.Is(e, c.want) || lines != nil {
+				t.Fatalf("DecodeFrame err=%v", e)
+			}
+		})
+	}
+}
+
+func TestDecodeSplitEquivalence(t *testing.T) {
+	f := loadFixtures(t)
+	for _, c := range f.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			b, e := c.body()
+			if e != nil {
+				t.Fatal(e)
+			}
+			d, e := c.descriptor()
+			if e != nil {
+				t.Fatal(e)
+			}
+			whole := &io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget}
+			want, wantErr := Decode(whole, d, c.Device)
+			split := &io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget}
+			frame, gotErr := ReadFrame(split)
+			var got []Line
+			if gotErr == nil {
+				got, gotErr = DecodeFrame(frame, d, c.Device)
+			}
+			if split.N != whole.N {
+				t.Fatalf("consumed %d, Decode consumed %d", remainingBudget-split.N, remainingBudget-whole.N)
+			}
+			assertSameDecode(t, got, gotErr, want, wantErr)
+		})
+	}
+}
+
+func assertSameDecode(t testing.TB, got []Line, gotErr error, want []Line, wantErr error) {
+	t.Helper()
+	all := append(append([]error{}, readFrameSentinels...), ErrDevice, ErrContentSize, ErrChecksum, ErrLineLimit, ErrLineCountLimit, ErrLineFraming, ErrRecordCount)
+	for _, sentinel := range all {
+		if errors.Is(gotErr, sentinel) != errors.Is(wantErr, sentinel) {
+			t.Fatalf("split %v, Decode %v", gotErr, wantErr)
+		}
+	}
+	if (gotErr == nil) != (wantErr == nil) || (got == nil) != (want == nil) || len(got) != len(want) {
+		t.Fatalf("split %d lines %v, Decode %d lines %v", len(got), gotErr, len(want), wantErr)
+	}
+	lineErrors := []error{ErrJSON, ErrJSONKeys, ErrFields, ErrEventID, ErrSequenceRange, ErrSequencePosition, ErrDeviceBinding}
+	for i := range got {
+		g, w := got[i], want[i]
+		if g.Number != w.Number || !bytes.Equal(g.Raw, w.Raw) || g.EventID != w.EventID || g.Sequence != w.Sequence || g.DeviceUID != w.DeviceUID || g.DeviceMismatch != w.DeviceMismatch || (g.Err == nil) != (w.Err == nil) {
+			t.Fatalf("line %d differs: %+v vs %+v", i+1, g, w)
+		}
+		for _, sentinel := range lineErrors {
+			if errors.Is(g.Err, sentinel) != errors.Is(w.Err, sentinel) {
+				t.Fatalf("line %d: %v vs %v", i+1, g.Err, w.Err)
+			}
+		}
+	}
+}

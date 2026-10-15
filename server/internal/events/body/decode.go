@@ -16,38 +16,63 @@ type streamDecoder interface {
 }
 type decoderFactory func(io.Reader, ...zstd.DOption) (streamDecoder, error)
 
-// Decode consumes the canonical reader left by wire.Decode. Every batch failure
-// discards all provisional lines. The caller retains ownership of r.R.
+// Decode consumes the canonical reader left by wire.Decode. It runs the stage 1
+// preconditions in order with no read on failure, then ReadFrame, then
+// DecodeFrame. Every batch failure discards all provisional lines. The caller
+// retains ownership of r.R.
 func Decode(r *io.LimitedReader, d batch.Descriptor, authenticatedDevice string) ([]Line, error) {
-	return decodeWithFactory(r, d, authenticatedDevice, func(r io.Reader, options ...zstd.DOption) (streamDecoder, error) {
-		return zstd.NewReader(r, options...)
-	})
+	return decodeWithFactory(r, d, authenticatedDevice, newStreamDecoder)
 }
 
 func decodeWithFactory(r *io.LimitedReader, d batch.Descriptor, authenticatedDevice string, factory decoderFactory) ([]Line, error) {
 	if err := d.Validate(); err != nil {
 		return nil, err
 	}
-	if r == nil || r.R == nil || r.N != compressedBudget {
+	if !canonicalReader(r) {
 		return nil, ErrReaderBound
 	}
-	if authenticatedDevice == "" || !utf8.ValidString(authenticatedDevice) {
+	if !validDevice(authenticatedDevice) {
 		return nil, ErrDevice
 	}
-	frame, err := readCompressed(r)
+	frame, err := ReadFrame(r)
 	if err != nil {
 		return nil, err
 	}
-	size, err := inspectFrame(frame)
-	if err != nil {
+	return decodeFrameWithFactory(frame, d, authenticatedDevice, factory)
+}
+
+// DecodeFrame decodes a frame that ReadFrame returned. It repeats the
+// descriptor and device preconditions before touching the frame, and rejects
+// the zero Frame with ErrReaderBound. ReadFrame followed by DecodeFrame returns
+// the same lines and errors as Decode.
+func DecodeFrame(f Frame, d batch.Descriptor, authenticatedDevice string) ([]Line, error) {
+	return decodeFrameWithFactory(f, d, authenticatedDevice, newStreamDecoder)
+}
+
+func newStreamDecoder(r io.Reader, options ...zstd.DOption) (streamDecoder, error) {
+	return zstd.NewReader(r, options...)
+}
+
+func validDevice(device string) bool {
+	return device != "" && utf8.ValidString(device)
+}
+
+func decodeFrameWithFactory(f Frame, d batch.Descriptor, authenticatedDevice string, factory decoderFactory) ([]Line, error) {
+	if err := d.Validate(); err != nil {
 		return nil, err
 	}
-	decoder, err := factory(bytes.NewReader(frame), zstd.WithDecoderConcurrency(1), zstd.WithDecoderMaxMemory(uint64(MaxDecodedBytes)), zstd.WithDecoderMaxWindow(MaxWindowBytes), zstd.WithDecoderLowmem(true), zstd.WithDecodeBuffersBelow(0), zstd.IgnoreChecksum(false))
+	if !validDevice(authenticatedDevice) {
+		return nil, ErrDevice
+	}
+	if f.data == nil {
+		return nil, ErrReaderBound
+	}
+	decoder, err := factory(bytes.NewReader(f.data), zstd.WithDecoderConcurrency(1), zstd.WithDecoderMaxMemory(uint64(MaxDecodedBytes)), zstd.WithDecoderMaxWindow(MaxWindowBytes), zstd.WithDecoderLowmem(true), zstd.WithDecodeBuffersBelow(0), zstd.IgnoreChecksum(false))
 	if err != nil {
 		return nil, codecError(err)
 	}
 	defer decoder.Close()
-	return consume(codecReader{decoder}, size, d, authenticatedDevice)
+	return consume(codecReader{decoder}, f.size, d, authenticatedDevice)
 }
 
 type codecReader struct{ io.Reader }
@@ -72,9 +97,19 @@ func codecError(err error) error {
 	}
 }
 
+// walkerCreated observes each per-call walker; tests use it to prove that
+// Decode calls never share walker state. It is nil in production.
+var walkerCreated func(*lineWalker)
+
 func consume(decoded io.Reader, size uint64, d batch.Descriptor, authenticatedDevice string) ([]Line, error) {
 	var output [32768]byte
 	scratch := make([]byte, 0, MaxLineBytes)
+	// One walker per call, sized from the declared content size and released
+	// at return; never pooled across requests.
+	walker := newLineWalker(size)
+	if walkerCreated != nil {
+		walkerCreated(walker)
+	}
 	lines := make([]Line, 0, d.RecordCount)
 	var total int64
 	count, length := 0, 0
@@ -117,9 +152,14 @@ func consume(decoded io.Reader, size uint64, d batch.Descriptor, authenticatedDe
 				framing = ErrLineFraming
 				lines = nil
 			}
-			if framing == nil && uint32(count) <= d.RecordCount {
+			// Output beyond the declared size always ends in a batch error,
+			// so such lines are neither extracted nor retained, and the walker
+			// never sees a line longer than its sizing.
+			if uint64(total) > size {
+				lines = nil
+			} else if framing == nil && uint32(count) <= d.RecordCount {
 				raw := bytes.Clone(scratch)
-				lines = append(lines, extractLine(raw, uint32(count), d, authenticatedDevice))
+				lines = append(lines, walker.extract(raw, uint32(count), d, authenticatedDevice))
 			}
 			scratch = scratch[:0]
 			length = 0

@@ -1,6 +1,7 @@
 package body
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -111,7 +112,7 @@ func TestInspectFrameFixtures(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			size, e := inspectFrame(b)
+			size, window, e := inspectFrame(b)
 			want := ""
 			if c.Name == "compressed-over-and-magic" {
 				want = "event body frame"
@@ -122,8 +123,8 @@ func TestInspectFrameFixtures(t *testing.T) {
 			if errorName(e) != want {
 				t.Fatalf("error=%v want=%s", e, want)
 			}
-			if e != nil && size != 0 {
-				t.Fatal("nonzero size on error")
+			if e != nil && (size != 0 || window != 0) {
+				t.Fatal("nonzero size or window on error")
 			}
 		})
 	}
@@ -158,7 +159,7 @@ func TestInspectFramePrecedence(t *testing.T) {
 		{"zero", rawFrame(0, 0x24, 0, nil), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			_, e := inspectFrame(c.b)
+			_, _, e := inspectFrame(c.b)
 			if !errors.Is(e, c.want) {
 				t.Fatalf("error=%v want=%v", e, c.want)
 			}
@@ -167,11 +168,11 @@ func TestInspectFramePrecedence(t *testing.T) {
 	b := rawFrame(3, 0x24, 0, []byte{10})
 	binary.LittleEndian.PutUint32(b[6:10], 3<<3|3)
 	b[9] = 10
-	if _, e := inspectFrame(b); e != nil {
+	if _, _, e := inspectFrame(b); e != nil {
 		t.Fatalf("RLE single byte: %v", e)
 	}
 	for n := 0; n < 6; n++ {
-		if _, e := inspectFrame(rawFrame(1, 0x24, 0, []byte{0})[:n]); !errors.Is(e, ErrFrame) {
+		if _, _, e := inspectFrame(rawFrame(1, 0x24, 0, []byte{0})[:n]); !errors.Is(e, ErrFrame) {
 			t.Fatal(e)
 		}
 	}
@@ -235,3 +236,140 @@ func TestFixtureLoaderRejectsInvalid(t *testing.T) {
 		}
 	}
 }
+
+// readFrameSentinels are the stage 1 to 3 outcomes ReadFrame shares with Decode.
+var readFrameSentinels = []error{ErrReaderBound, ErrRead, ErrCompressedLimit, ErrFrame, ErrChecksumRequired, ErrContentSizeRequired, ErrDecodedLimit, ErrWindowLimit, ErrTrailingData}
+
+func TestReadFrameFixtures(t *testing.T) {
+	f := loadFixtures(t)
+	for _, c := range f.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			b, e := c.body()
+			if e != nil {
+				t.Fatal(e)
+			}
+			d, e := c.descriptor()
+			if e != nil {
+				t.Fatal(e)
+			}
+			split := &io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget}
+			frame, splitErr := ReadFrame(split)
+			whole := &io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget}
+			lines, wholeErr := Decode(whole, d, c.Device)
+			if split.N != whole.N {
+				t.Fatalf("consumed %d bytes, Decode consumed %d", remainingBudget-split.N, remainingBudget-whole.N)
+			}
+			if splitErr != nil {
+				if !zeroFrame(frame) {
+					t.Fatal("frame returned with an error")
+				}
+				if lines != nil {
+					t.Fatal("Decode returned lines")
+				}
+				for _, sentinel := range readFrameSentinels {
+					if errors.Is(splitErr, sentinel) != errors.Is(wholeErr, sentinel) {
+						t.Fatalf("ReadFrame %v, Decode %v", splitErr, wholeErr)
+					}
+				}
+				if !errors.Is(wholeErr, batchSentinel(c.Expected.Error)) {
+					t.Fatalf("ReadFrame %v, fixture %v", splitErr, *c.Expected.Error)
+				}
+				return
+			}
+			if frame.ContentSize() > uint64(MaxDecodedBytes) || frame.Window() > MaxWindowBytes {
+				t.Fatalf("frame exceeds EV-09 ceilings: size %d window %d", frame.ContentSize(), frame.Window())
+			}
+			for _, sentinel := range readFrameSentinels {
+				if errors.Is(wholeErr, sentinel) && sentinel != ErrFrame {
+					t.Fatalf("Decode failed in preflight with %v after ReadFrame accepted", wholeErr)
+				}
+			}
+		})
+	}
+}
+
+func TestReadFrameReaderPrecondition(t *testing.T) {
+	for _, c := range []struct {
+		name            string
+		nilReader, nilR bool
+		n               int64
+	}{
+		{"nil-reader", true, false, 0},
+		{"nil-R", false, true, remainingBudget},
+		{"reset", false, false, 5000001},
+		{"reduced", false, false, remainingBudget - 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := &readProbe{end: io.EOF}
+			lr := &io.LimitedReader{R: r, N: c.n}
+			if c.nilReader {
+				lr = nil
+			} else if c.nilR {
+				lr.R = nil
+			}
+			frame, e := ReadFrame(lr)
+			if !errors.Is(e, ErrReaderBound) || !zeroFrame(frame) || r.calls != 0 {
+				t.Fatalf("err=%v calls=%d", e, r.calls)
+			}
+		})
+	}
+	cause := errors.New("injected")
+	frame, e := ReadFrame(&io.LimitedReader{R: &readProbe{left: 17, end: cause}, N: remainingBudget})
+	if !errors.Is(e, ErrRead) || !errors.Is(e, cause) || !zeroFrame(frame) {
+		t.Fatalf("read failure %v", e)
+	}
+}
+
+// Expected windows follow RFC 8878 section 3.1.1.1.2 from each fixture's header
+// byte: single-segment frames use their content size.
+func TestReadFrameWindow(t *testing.T) {
+	want := map[string]struct{ window, size uint64 }{
+		"valid-one":           {101, 101},
+		"window-at-64MiB":     {64 << 20, 101},
+		"window-below-64MiB":  {60 << 20, 101},
+		"content-size-2-byte": {300, 300},
+		"content-size-4-byte": {2 << 20, 101},
+		"content-size-8-byte": {2 << 20, 101},
+	}
+	f := loadFixtures(t)
+	seen := 0
+	for _, c := range f.Cases {
+		w, ok := want[c.Name]
+		if !ok {
+			continue
+		}
+		seen++
+		b, e := c.body()
+		if e != nil {
+			t.Fatal(e)
+		}
+		frame, e := ReadFrame(&io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget})
+		if e != nil {
+			t.Fatalf("%s: %v", c.Name, e)
+		}
+		if frame.Window() != w.window || frame.ContentSize() != w.size || frame.ContentSize() != uint64(c.PlainBytes) {
+			t.Fatalf("%s: window %d size %d, want %d %d", c.Name, frame.Window(), frame.ContentSize(), w.window, w.size)
+		}
+	}
+	if seen != len(want) {
+		t.Fatalf("found %d of %d window fixtures", seen, len(want))
+	}
+	for _, c := range []struct {
+		b            []byte
+		window, size uint64
+	}{
+		{rawFrame(0, 0x24, 0, nil), 0, 0},
+		{rawFrame(4, 0x24, 0, []byte("abc\n")), 4, 4},
+		{rawFrame(4, 0x44, 0x00, []byte("abc\n")), 1 << 10, 260},
+		{rawFrame(4, 0x84, 0x07, []byte("abc\n")), 1<<10 + 7<<7, 4},
+		{rawFrame(4, 0xc4, 0x58, []byte("abc\n")), 2 << 20, 4},
+		{rawFrame(1<<26, 0xa4, 0, []byte("abc\n")), 1 << 26, 1 << 26},
+	} {
+		frame, e := ReadFrame(&io.LimitedReader{R: bytes.NewReader(c.b), N: remainingBudget})
+		if e != nil || frame.Window() != c.window || frame.ContentSize() != c.size {
+			t.Fatalf("%x: window %d size %d err %v, want %d %d", c.b[:8], frame.Window(), frame.ContentSize(), e, c.window, c.size)
+		}
+	}
+}
+
+func zeroFrame(f Frame) bool { return f.data == nil && f.size == 0 && f.window == 0 }

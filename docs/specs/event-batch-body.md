@@ -40,8 +40,19 @@ type Line struct {
     DeviceMismatch bool
 }
 
+type Frame struct {
+    // unexported: compressed bytes, declared content size, effective window
+}
+
+func (f Frame) ContentSize() uint64
+func (f Frame) Window() uint64
+
 func Decode(r *io.LimitedReader, d batch.Descriptor, authenticatedDevice string) ([]Line, error)
+func ReadFrame(r *io.LimitedReader) (Frame, error)
+func DecodeFrame(f Frame, d batch.Descriptor, authenticatedDevice string) ([]Line, error)
 ```
+
+`Decode` runs the section 3 stage 1 preconditions in their order, with no read on failure, then `ReadFrame`, then `DecodeFrame`. `ReadFrame` checks the reader precondition, then runs bounded compressed reading and the section 4 preflight; it returns the declared content size and the effective window (the content size for a single-segment frame, else the Window_Descriptor value) so [ingest admission](ingest-admission.md#3-admission-protocol) can charge the request before decompression. `DecodeFrame` repeats `d.Validate()` and the uid precondition before touching the frame, then streams and frames lines. `Frame` fields are unexported, so code outside the package can construct only the zero `Frame`, which `DecodeFrame` rejects with `ErrReaderBound`. The split moves no check and changes no limit, option or sentinel. A handler that calls the pair after `wire.Decode` has already validated the descriptor and supplies its authenticated uid, so it sees the same bytes consumed and the same client-visible errors as `Decode`; only the order of caller-bug sentinels can differ.
 
 `Number` is one-based. `Raw` preserves the exact payload bytes without LF, including whitespace and invalid UTF-8. Every returned line owns its bytes; no line aliases another line, a pooled buffer, or decoder memory. Callers may retain and mutate one line independently. `Err == nil` means only that the checks in this spec passed. It never means OCSF-valid, stored or acknowledged.
 
@@ -57,7 +68,7 @@ Declare each name below as a distinct `errors.New` sentinel; messages are the lo
 
 | Sentinel | Meaning | HTTP mapping |
 |---|---|---|
-| `ErrReaderBound` | Nil reader, nil `R`, or remaining `N` not exactly 4,999,953 | Caller bug; no client status |
+| `ErrReaderBound` | Nil reader, nil `R`, remaining `N` not exactly 4,999,953, or a zero `Frame` | Caller bug; no client status |
 | `ErrDevice` | Empty or invalid-UTF-8 authenticated uid | Caller bug; no client status |
 | `ErrRead` | Underlying compressed-body read failed | Transport outcome; never success |
 | `ErrCompressedLimit` | Descriptor plus consumed body exceeds 5,000,000 bytes | 413 |
@@ -74,7 +85,7 @@ Declare each name below as a distinct `errors.New` sentinel; messages are the lo
 | `ErrLineFraming` | Blank line, literal CR, BOM, or missing final LF | 400 |
 | `ErrRecordCount` | Completed line count differs from descriptor | 400 |
 
-Stop at the first failed stage:
+Stop at the first failed stage. `Decode` runs all of them in order. `ReadFrame` covers the reader precondition and stages 2 and 3; `DecodeFrame` covers the descriptor and uid preconditions, the zero-`Frame` check and stages 4 to 6:
 
 1. `d.Validate()`, reader precondition, authenticated uid precondition, in that order. No reads on failure. Typed-nil or contract-violating `io.Reader` implementations are caller bugs.
 2. Read the remaining compressed input in bounded chunks until genuine EOF. Count returned bytes before handling a simultaneous error: filling the overflow byte wins as `ErrCompressedLimit`; otherwise a non-EOF error is `ErrRead`, wrapping both sentinel and cause. Short reads with nil errors continue. EOF with data completes the buffer. Never read `r.R` directly. At most 4,999,953 bytes are consumed here. Budget exhaustion is overflow, not proof of EOF. A correctly bounded body leaves `N >= 1`. Use one fixed buffer of 4,999,953 bytes and reads of at most 32 KiB, slicing to received length. After 100 consecutive `(0, nil)` reads, return `ErrRead` wrapping `io.ErrNoProgress`; a positive read resets that counter.
@@ -114,7 +125,7 @@ Do not use `DecodeAll`, `WriteTo`, `io.Copy` fast paths or `WithDecodeAllCapLimi
 
 A 64 MiB window admits single-segment frames throughout the output allowance. An 8 MiB window would use less memory but reject otherwise admissible single-segment uploads; leaving the library default would permit excess history allocation. Both alternatives are rejected.
 
-The output ceiling is not a 64 MiB resident-memory promise. Live memory includes under 5 MB compressed input, at most 64 MiB raw-line bytes, one line scratch buffer capped at 1 MiB plus one byte, the bounded decoder window/block state, and bounded per-line JSON bookkeeping. Avoid retaining decoded JSON trees, duplicate raw-body copies, or key maps across lines. Aggregate request concurrency, read deadlines and process memory qualification remain handler gates.
+The output ceiling is not a 64 MiB resident-memory promise. Live memory includes under 5 MB compressed input; at most 64 MiB of raw-line bytes, which occupy up to a quarter more because each cloned line is rounded up to a Go size class or to whole 8 KiB pages; one line scratch buffer capped at 1 MiB plus one byte; the result slice, allocated once with capacity `d.RecordCount`; the decoder history buffer, which the pinned decoder sizes from the effective window at frame start (window plus 1 MiB for windows of 2 MiB and above, twice the window below, at least 1 KiB); and the fixed key-walk state of section 6. Avoid retaining decoded JSON trees, duplicate raw-body copies, or key maps across lines. [Ingest admission](ingest-admission.md#2-cost-model) measures these terms, prices each request by them and bounds request concurrency, read deadlines and the process memory limit (EV-11).
 
 ## 5. NDJSON framing
 
@@ -133,12 +144,12 @@ Declare distinct `errors.New` sentinels `ErrJSON`, `ErrJSONKeys`, `ErrFields`, `
 Validate and extract one line without a compiled schema:
 
 1. Require `utf8.Valid(raw)`, valid JSON syntax, exactly one top-level object and maximum container depth 128 (root depth 1). Reject unpaired `\uD800` through `\uDFFF` escapes, including in unknown fields; paired surrogate escapes are valid. Use a bounded string-escape pass, not replacement-character detection, since literal U+FFFD is valid. Any of these failures is `ErrJSON` and precedes all other line checks.
-2. Walk `encoding/json.Decoder.Token` with `UseNumber` and a bounded explicit container stack. Inspect every object, including objects in unknown arrays. Track each object's decoded member names; exact duplicates, including escaped spellings such as `uid` and `u\u0069d`, are `ErrJSONKeys`. Compare recognized names by exact case. Any unequal name for which `strings.EqualFold` matches a recognized name is also `ErrJSONKeys`, even if the exact name is absent. Recognized names are `metadata` and `device` at root, `uid` and `sequence` directly in metadata, and `uid` directly in device. Unknown non-colliding names are allowed; their OCSF validity is a later gate. Do not reject case differences among unrelated unknown names here.
+2. Scan the validated bytes with an explicit container stack bounded by `MaxJSONDepth`, without `encoding/json` tokens: step 1 has already established syntax, so the scanner needs no second parser. Inspect every object, including objects in unknown arrays. Decode each member name into an arena, unescaping only names that contain a backslash, and append one entry (object number, name offset, name length) per member. At the end of the line sort the entries by object number, then decoded name bytes, with `slices.SortFunc`, and compare neighbours; no hash is used. Exact duplicates, including escaped spellings such as `uid` and `u\u0069d`, are `ErrJSONKeys`. Compare recognized names by exact bytes. Any unequal name for which `bytes.EqualFold` matches a recognized name is also `ErrJSONKeys`, even if the exact name is absent. Recognized names are `metadata` and `device` at root, `uid` and `sequence` directly in metadata, and `uid` directly in device. Capture recognized values as a decoded `string`, a `json.Number` holding the original number token, or a non-string marker for `null`, booleans and containers. Unknown non-colliding names are allowed; their OCSF validity is a later gate. Do not reject case differences among unrelated unknown names here. With `L = min(declared content size, MaxLineBytes)`, the arena holds `L` bytes and the entry slice `L / 5 + 1` entries, since the shortest member `"":0,` takes 5 bytes; neither grows. The arena, entries and stack are allocated once per `Decode` call and released at return, never pooled across requests ([ingest admission section 7](ingest-admission.md#7-decoder-allocation-cost)).
 3. Require object-valued metadata and device, string-valued metadata.uid and device.uid, and a `json.Number` metadata.sequence. Missing, null or wrong-type values return `ErrFields`. Parse sequence from its original token using lexical `[0-9]+` with no leading zeros except `0`, then `strconv.ParseUint(..., 10, 64)`. Negative zero, negative, fractional, exponent, quoted and overflowing sequences are `ErrFields`. Never pass through float64 or signed int64.
 4. Independently set `DeviceMismatch` once steps 1 and 2 succeed and device.uid is an unambiguous string. Empty device.uid is a mismatch against the nonempty caller value. Retain that flag even on `ErrFields` for another field.
 5. Parse uid with `eventid.Parse`, then check sequence range, sequence position, and exact decoded device string equality, in that order. Return the first line sentinel. No case, Unicode or whitespace normalization applies to values. If all pass, fill all three extracted fields.
 
-A whole-line syntax/depth prepass ensures a duplicate key cannot mask malformed trailing JSON. The token pass avoids a full generic map. [Go encoding/json](https://pkg.go.dev/encoding/json@go1.27.1#Unmarshal) otherwise accepts duplicate keys, uses case-insensitive struct matching and repairs invalid UTF-8/surrogates. [`UseNumber`](https://pkg.go.dev/encoding/json@go1.27.1#Decoder.UseNumber) preserves number tokens. Direct struct unmarshalling, last-key-wins maps and `DisallowUnknownFields` alone are rejected: none enforces this contract, and unknown OCSF fields must survive for later validation.
+A whole-line syntax/depth prepass ensures a duplicate key cannot mask malformed trailing JSON. The byte scanner avoids a full generic map and per-token allocation: an `encoding/json.Decoder.Token` walk with `UseNumber` gives the same answers but allocates a string per name and value and a map per object, 289,543 allocations and 10.8 MB per 1 MiB flat line against 5 allocations for the scanner, and 28.8 million allocations against 2,032 for a 64 MiB batch of the densest shape ([ingest admission section 1](ingest-admission.md#1-measurements)); the test-only reference oracle keeps the token walk as the parity check. Sorting rather than hashing keeps the duplicate check O(n log n) for every input, with no seed for an attacker to defeat. [Go encoding/json](https://pkg.go.dev/encoding/json@go1.27.1#Unmarshal) otherwise accepts duplicate keys, uses case-insensitive struct matching and repairs invalid UTF-8/surrogates. Direct struct unmarshalling, last-key-wins maps and `DisallowUnknownFields` alone are rejected: none enforces this contract, and unknown OCSF fields must survive for later validation.
 
 Depth 128 bounds the token stack and nested-key state; relying on the JSON library's larger syntax limit is rejected. One primary line error gives stable diagnostics. Joining every line error is rejected because parser defects can make later fields ambiguous; `DeviceMismatch` preserves the one independently meaningful security fact. Returning partially validated ids is rejected to prevent accidental promotion.
 
@@ -158,7 +169,7 @@ Raw bytes and extracted ids are inputs for the later generated validator. That v
 
 Benefits: deterministic admission, bounded decode work, exact raw quarantine evidence and a shared byte contract for producers. Costs: bounded compressed buffering and retention of up to 64 MiB of provisional raw lines; strict keys and positional sequences quarantine nonconforming producers. The three v1.0.0 targets share this byte contract. Pure parser fixtures establish no OS qualification.
 
-Later gates: compiled OCSF decoding and validation; field/list bounds; extension provenance and recovery epochs; device authentication and admission concurrency; deduplication and sequence high-water marks; quarantine persistence and device-binding findings; enrichment; stores, ledger and durability fence; HTTP responses and acknowledgement. None is implemented or bypassed by a successful `Decode`.
+Later gates: compiled OCSF decoding and validation; field/list bounds; extension provenance and recovery epochs; device authentication; the handler's use of [ingest admission](ingest-admission.md); deduplication and sequence high-water marks; quarantine persistence and device-binding findings; enrichment; stores, ledger and durability fence; HTTP responses and acknowledgement. None is implemented or bypassed by a successful `Decode`.
 
 ## 8. Machine fixtures and review focus
 
