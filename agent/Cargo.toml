@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/spool", "crates/batch"]
+members = ["crates/spool", "crates/batch", "crates/json", "crates/config", "crates/os", "crates/os-linux"]
 resolver = "3"
 
 [workspace.package]
@@ -11,6 +11,7 @@ publish = false
 
 [workspace.dependencies]
 crc32c = "=0.6.8"
+libc = "=0.2.189"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
