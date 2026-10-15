@@ -22,7 +22,7 @@ No GitHub CI has run on this branch; every "CI proof" step in the plans below is
 - [ ] Reject tool substitution outside reviewed steps in CI policy: `GITHUB_PATH` writes and `PATH`, `CC`, `CXX`, `LD`, `AR`, `RUSTUP_*` settings in workflow, job and step `env` or run text, so a fake `cc`, `go`, `cargo` or `python` cannot forge selected-test evidence.
 - [ ] Catch candidate-schema evaluation errors in `catalogue_compat.py` (unresolvable `$ref`, remote, `urn:` or `$dynamicRef`) as defects with the commit header, and extend the vocabulary test to minimums, `format_version`, minimum lengths, `uniqueItems` and closed-object flags.
 - [ ] CI hardening Task 8 (console split, `tree_digest.py`, macOS Node, pnpm and WebKit lock rows, Mach-O check, Playwright group per platform) and Task 9 (`instructions/testing.md` and spec sections 3, 5 and 6 for the selected-test wrapper, skip-allowance forms, declaration cross-check and Cargo allowlist).
-- [ ] Design the ingest limiter follow-ups: count device-concurrency refusals that find the bucket below the minimum charge toward the rate finding, bound how far slot churn can pull in-flight `Retry-After` down, and add an `n = 3` case to the in-flight `Retry-After` test.
+- [ ] Ingest admission (EV-11): obtain independent review of the revised spec and plan, implement the block cap, window-aware work charge, receive byte/slot reserves, concurrency-rate evidence and uniform retry jitter/tests; obtain the 50-case cost-model CI evidence and writer compatibility qualification; include the ingest deployment-settings exemption and document hashes in the separate permission refresh. Handler integration stays gated on CPU/ARM64, transport memory, storage buffers and agent upload qualification.
 
 ## Standing work
 
