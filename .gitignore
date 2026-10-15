@@ -18,6 +18,11 @@
 /.codex/agents/**/config.toml
 __pycache__/
 
+# Release build inputs copied into the server module (docs/specs/server-runtime.md sections 2 and 6).
+/server/internal/buildinfo/generated.go
+/server/internal/transport/console/dist/
+/server/internal/transport/console/manifest.json
+
 # Secrets stay ignored everywhere; these lines come last so no negation above re-includes them.
 .env
 .env.*
