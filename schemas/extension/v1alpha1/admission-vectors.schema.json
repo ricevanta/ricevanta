@@ -1,0 +1,936 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/extension/v1alpha1/admission-vectors.schema.json",
+  "title": "Ricevanta extension admission decision vectors",
+  "description": "Corpus envelope for docs/specs/extension-admission-contracts.md: verified evidence, a decision-scoped authority snapshot, a request and the expected decision. Embedded documents follow manifest.schema.json and embedded grants follow capability-grant.schema.json; Go tests validate them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile",
+    "cases"
+  ],
+  "properties": {
+    "profile": {
+      "const": "extension-admission-v1alpha1"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "evidence",
+          "snapshot",
+          "request",
+          "verdicts",
+          "expected"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z0-9-]+$(?![\\s\\S])"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "document",
+              "package_sha256",
+              "manifest_sha256",
+              "envelope_sha256"
+            ],
+            "properties": {
+              "document": {
+                "type": "object"
+              },
+              "package_sha256": {
+                "$ref": "#/$defs/digest"
+              },
+              "manifest_sha256": {
+                "$ref": "#/$defs/digest"
+              },
+              "envelope_sha256": {
+                "$ref": "#/$defs/digest"
+              }
+            }
+          },
+          "snapshot": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recovery_epoch",
+              "approval_policy_disabled",
+              "approval_policy_generation",
+              "first_start",
+              "release_version",
+              "project_key",
+              "served_interfaces",
+              "trust_list",
+              "revocations",
+              "revocation_generation",
+              "ownership",
+              "tombstones",
+              "install",
+              "registrations",
+              "disclosure_profiles",
+              "device_groups",
+              "consumed_approvals"
+            ],
+            "properties": {
+              "recovery_epoch": {
+                "$ref": "#/$defs/uint64"
+              },
+              "approval_policy_disabled": {
+                "type": "boolean"
+              },
+              "approval_policy_generation": {
+                "$ref": "#/$defs/uint64"
+              },
+              "first_start": {
+                "type": "boolean"
+              },
+              "release_version": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/version"
+                  }
+                ]
+              },
+              "project_key": {
+                "$ref": "#/$defs/fingerprint"
+              },
+              "served_interfaces": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 11,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "ext.ricevanta.io/content/v1",
+                    "ext.ricevanta.io/browser-adapter/v1",
+                    "ricevanta:agent/classifier@1.0.0",
+                    "ricevanta:agent/parser@1.0.0",
+                    "ricevanta:agent/collector@1.0.0",
+                    "ricevanta:agent/responder@1.0.0",
+                    "ext.ricevanta.io/console-module/v1",
+                    "ext.ricevanta.io/export-destination/v1",
+                    "ext.ricevanta.io/ca-connector/v1",
+                    "ext.ricevanta.io/notifier/v1",
+                    "ext.ricevanta.io/enricher/v1"
+                  ]
+                }
+              },
+              "trust_list": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 1024,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "fingerprint",
+                    "public_key_hex",
+                    "name",
+                    "prefixes",
+                    "project_publisher",
+                    "revoked",
+                    "retired",
+                    "generation"
+                  ],
+                  "properties": {
+                    "fingerprint": {
+                      "$ref": "#/$defs/fingerprint"
+                    },
+                    "public_key_hex": {
+                      "$ref": "#/$defs/digest"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$(?![\\s\\S])"
+                    },
+                    "prefixes": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 16,
+                      "uniqueItems": true,
+                      "items": {
+                        "$ref": "#/$defs/id"
+                      }
+                    },
+                    "project_publisher": {
+                      "type": "boolean"
+                    },
+                    "revoked": {
+                      "type": "boolean"
+                    },
+                    "retired": {
+                      "type": "boolean"
+                    },
+                    "generation": {
+                      "$ref": "#/$defs/uint64"
+                    }
+                  }
+                }
+              },
+              "revocations": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 2,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/id"
+                    },
+                    "version": {
+                      "$ref": "#/$defs/version"
+                    }
+                  }
+                }
+              },
+              "revocation_generation": {
+                "$ref": "#/$defs/uint64"
+              },
+              "ownership": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "owner",
+                      "prior_owners",
+                      "ownership_generation"
+                    ],
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/id"
+                      },
+                      "owner": {
+                        "$ref": "#/$defs/fingerprint"
+                      },
+                      "prior_owners": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 1023,
+                        "uniqueItems": true,
+                        "items": {
+                          "$ref": "#/$defs/fingerprint"
+                        }
+                      },
+                      "ownership_generation": {
+                        "$ref": "#/$defs/uint64"
+                      }
+                    }
+                  }
+                ]
+              },
+              "tombstones": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 2,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "version",
+                    "publisher",
+                    "manifest_sha256",
+                    "package_sha256"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/id"
+                    },
+                    "version": {
+                      "$ref": "#/$defs/version"
+                    },
+                    "publisher": {
+                      "$ref": "#/$defs/fingerprint"
+                    },
+                    "manifest_sha256": {
+                      "$ref": "#/$defs/digest"
+                    },
+                    "package_sha256": {
+                      "$ref": "#/$defs/digest"
+                    }
+                  }
+                }
+              },
+              "install": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "version",
+                      "package_sha256",
+                      "state",
+                      "enabled",
+                      "generation",
+                      "targets",
+                      "grants"
+                    ],
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/id"
+                      },
+                      "version": {
+                        "$ref": "#/$defs/version"
+                      },
+                      "package_sha256": {
+                        "$ref": "#/$defs/digest"
+                      },
+                      "state": {
+                        "enum": [
+                          "active",
+                          "recovery_pending"
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "generation": {
+                        "$ref": "#/$defs/uint64"
+                      },
+                      "targets": {
+                        "$ref": "#/$defs/targets"
+                      },
+                      "grants": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "items": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "registrations": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "browser",
+                    "registration_generation",
+                    "os"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/id"
+                    },
+                    "browser": {
+                      "$ref": "#/$defs/name"
+                    },
+                    "registration_generation": {
+                      "$ref": "#/$defs/uint64"
+                    },
+                    "os": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [],
+                      "properties": {
+                        "macos": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "policy_names",
+                            "native_host"
+                          ],
+                          "properties": {
+                            "policy_names": {
+                              "type": "array",
+                              "minItems": 0,
+                              "maxItems": 64,
+                              "uniqueItems": true,
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                              }
+                            },
+                            "native_host": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "windows": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "policy_names",
+                            "native_host"
+                          ],
+                          "properties": {
+                            "policy_names": {
+                              "type": "array",
+                              "minItems": 0,
+                              "maxItems": 64,
+                              "uniqueItems": true,
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                              }
+                            },
+                            "native_host": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "linux": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "policy_names",
+                            "native_host"
+                          ],
+                          "properties": {
+                            "policy_names": {
+                              "type": "array",
+                              "minItems": 0,
+                              "maxItems": 64,
+                              "uniqueItems": true,
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                              }
+                            },
+                            "native_host": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      },
+                      "minProperties": 1
+                    },
+                    "bound": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "component",
+                        "state"
+                      ],
+                      "properties": {
+                        "id": {
+                          "$ref": "#/$defs/id"
+                        },
+                        "component": {
+                          "$ref": "#/$defs/name"
+                        },
+                        "state": {
+                          "enum": [
+                            "active",
+                            "recovery_pending"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "disclosure_profiles": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-z0-9][a-z0-9.-]{0,127}$(?![\\s\\S])"
+                }
+              },
+              "device_groups": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 1024,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/uuid"
+                }
+              },
+              "consumed_approvals": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/uuid"
+                }
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "requester",
+              "grant_update",
+              "grants",
+              "targets",
+              "approval"
+            ],
+            "properties": {
+              "source": {
+                "enum": [
+                  "upload",
+                  "api",
+                  "gitops",
+                  "index",
+                  "server-image"
+                ]
+              },
+              "requester": {
+                "$ref": "#/$defs/uuid"
+              },
+              "grant_update": {
+                "type": "boolean"
+              },
+              "grants": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 64,
+                "items": {
+                  "type": "object"
+                }
+              },
+              "targets": {
+                "$ref": "#/$defs/targets"
+              },
+              "approval": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "request_digest",
+                      "approval_uid",
+                      "approver",
+                      "recovery_epoch"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "operator"
+                      },
+                      "request_digest": {
+                        "$ref": "#/$defs/fingerprint"
+                      },
+                      "approval_uid": {
+                        "$ref": "#/$defs/uuid"
+                      },
+                      "approver": {
+                        "$ref": "#/$defs/uuid"
+                      },
+                      "recovery_epoch": {
+                        "$ref": "#/$defs/uint64"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "request_digest",
+                      "approval_uid",
+                      "principal",
+                      "recovery_epoch"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "single-administrator"
+                      },
+                      "request_digest": {
+                        "$ref": "#/$defs/fingerprint"
+                      },
+                      "approval_uid": {
+                        "$ref": "#/$defs/uuid"
+                      },
+                      "principal": {
+                        "$ref": "#/$defs/uuid"
+                      },
+                      "recovery_epoch": {
+                        "$ref": "#/$defs/uint64"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "release_version"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "release-fixed"
+                      },
+                      "release_version": {
+                        "$ref": "#/$defs/version"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "verdicts": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "component",
+                "outcome"
+              ],
+              "properties": {
+                "component": {
+                  "$ref": "#/$defs/name"
+                },
+                "outcome": {
+                  "enum": [
+                    "ok",
+                    "failed"
+                  ]
+                }
+              }
+            }
+          },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "outcome",
+              "reasons"
+            ],
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "admit",
+                  "approval_required",
+                  "identical_retry",
+                  "reject"
+                ]
+              },
+              "operation": {
+                "enum": [
+                  "install",
+                  "upgrade",
+                  "reinstall",
+                  "grant_update"
+                ]
+              },
+              "stage": {
+                "enum": [
+                  "input",
+                  "key",
+                  "namespace",
+                  "revocation",
+                  "tombstone",
+                  "ownership",
+                  "interface",
+                  "component",
+                  "targets",
+                  "grant",
+                  "approval"
+                ]
+              },
+              "reasons": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 256,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "subject"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "input.evidence",
+                        "input.snapshot",
+                        "input.request",
+                        "key.unknown",
+                        "key.invalid",
+                        "key.revoked",
+                        "key.retired",
+                        "namespace.reserved",
+                        "namespace.prefix",
+                        "revocation.id",
+                        "revocation.version",
+                        "tombstone.manifest",
+                        "tombstone.package",
+                        "tombstone.publisher",
+                        "tombstone.grants",
+                        "tombstone.targets",
+                        "tombstone.not_installed",
+                        "ownership.owner",
+                        "ownership.assignment_required",
+                        "interface.unserved",
+                        "component.verdict_missing",
+                        "component.verdict_failed",
+                        "component.registration_unknown",
+                        "component.registration_os",
+                        "component.registration_names",
+                        "component.registration_native_host",
+                        "component.registration_bound",
+                        "targets.device_groups_required",
+                        "targets.device_groups_forbidden",
+                        "targets.all_devices",
+                        "targets.console",
+                        "targets.jobs",
+                        "targets.unknown_group",
+                        "targets.retired_key",
+                        "grant.missing",
+                        "grant.extra",
+                        "grant.kind",
+                        "grant.exceeds",
+                        "grant.registration",
+                        "grant.profile",
+                        "grant.roots",
+                        "grant.retired_key",
+                        "approval.release_fixed",
+                        "approval.release_operation",
+                        "approval.widened",
+                        "approval.targets_changed",
+                        "approval.exempt_unavailable",
+                        "approval.exempt_principal",
+                        "approval.epoch",
+                        "approval.digest",
+                        "approval.separation",
+                        "approval.consumed"
+                      ]
+                    },
+                    "subject": {
+                      "type": "string",
+                      "maxLength": 253
+                    }
+                  }
+                }
+              },
+              "closure_digest": {
+                "$ref": "#/$defs/fingerprint"
+              },
+              "request_digest": {
+                "$ref": "#/$defs/fingerprint"
+              },
+              "intent": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "operation",
+                  "approval_kind",
+                  "tombstone_create",
+                  "ownership_create",
+                  "enabled",
+                  "grants",
+                  "targets",
+                  "registration_bind",
+                  "approval_consume"
+                ],
+                "properties": {
+                  "operation": {
+                    "enum": [
+                      "install",
+                      "upgrade",
+                      "reinstall",
+                      "grant_update"
+                    ]
+                  },
+                  "approval_kind": {
+                    "enum": [
+                      "operator",
+                      "single-administrator",
+                      "release-fixed"
+                    ]
+                  },
+                  "tombstone_create": {
+                    "type": "boolean"
+                  },
+                  "ownership_create": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "grants": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 64,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "#/$defs/name"
+                    }
+                  },
+                  "targets": {
+                    "$ref": "#/$defs/targets"
+                  },
+                  "registration_bind": {
+                    "type": "array",
+                    "minItems": 0,
+                    "maxItems": 64,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "registration",
+                        "component"
+                      ],
+                      "properties": {
+                        "registration": {
+                          "$ref": "#/$defs/id"
+                        },
+                        "component": {
+                          "$ref": "#/$defs/name"
+                        }
+                      }
+                    }
+                  },
+                  "approval_consume": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "#/$defs/uuid"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){1,15}$(?![\\s\\S])"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 128,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*))*)?$(?![\\s\\S])"
+    },
+    "digest": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "uint64": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]|1844674407370955161[0-4]|18446744073709551615)$(?![\\s\\S])"
+    },
+    "uuid": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\\s\\S])"
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_groups",
+        "all_devices",
+        "console",
+        "jobs"
+      ],
+      "properties": {
+        "device_groups": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        },
+        "all_devices": {
+          "type": "boolean"
+        },
+        "console": {
+          "type": "boolean"
+        },
+        "jobs": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
