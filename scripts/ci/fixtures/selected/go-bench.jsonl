@@ -1,0 +1,12 @@
+{"Time":"2026-10-15T05:49:09.445980724Z","Action":"start","Package":"example.com/tiny"}
+{"Time":"2026-10-15T05:49:09.451477853Z","Action":"output","Package":"example.com/tiny","Output":"goos: linux\n"}
+{"Time":"2026-10-15T05:49:09.451581215Z","Action":"output","Package":"example.com/tiny","Output":"goarch: amd64\n"}
+{"Time":"2026-10-15T05:49:09.451594392Z","Action":"output","Package":"example.com/tiny","Output":"pkg: example.com/tiny\n"}
+{"Time":"2026-10-15T05:49:09.451661189Z","Action":"output","Package":"example.com/tiny","Output":"cpu: Intel(R) Xeon(R) Processor @ 2.10GHz\n"}
+{"Time":"2026-10-15T05:49:09.45167762Z","Action":"run","Package":"example.com/tiny","Test":"BenchmarkThing"}
+{"Time":"2026-10-15T05:49:09.451680928Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"=== RUN   BenchmarkThing\n"}
+{"Time":"2026-10-15T05:49:09.451691228Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"BenchmarkThing\n"}
+{"Time":"2026-10-15T05:49:09.453610729Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"BenchmarkThing-4   \t     100\t         4.820 ns/op\t       0 B/op\t       0 allocs/op\n"}
+{"Time":"2026-10-15T05:49:09.454010832Z","Action":"output","Package":"example.com/tiny","Output":"PASS\n"}
+{"Time":"2026-10-15T05:49:09.454045073Z","Action":"output","Package":"example.com/tiny","Output":"ok  \texample.com/tiny\t0.008s\n"}
+{"Time":"2026-10-15T05:49:09.454054855Z","Action":"pass","Package":"example.com/tiny","Elapsed":0.008}

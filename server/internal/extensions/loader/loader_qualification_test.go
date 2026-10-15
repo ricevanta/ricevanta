@@ -206,10 +206,109 @@ func effectiveFileLimit(o Options) uint64 {
 	return manifest.DefaultMaxTotalFileBytes
 }
 
+// loaderEvidenceModes lists the measured modes of one recipe; the parent
+// derives the complete expected key set from it before any child runs.
+func loaderEvidenceModes(name string) []string {
+	modes := []string{"combined", "assembled", "full"}
+	if name == "golden/valid-yaml" || name == "parser/maximum-commented/0" || strings.HasPrefix(name, "membership/") || name == "reader/cause" {
+		modes = append(modes, "serial", "two-call")
+	}
+	return modes
+}
+
+type loaderEvidenceKey struct{ Input, Mode string }
+
+// expectedLoaderEvidence counts the records each key must produce; the reviewed
+// corpus repeats some recipe names, so the inventory is a multiset.
+func expectedLoaderEvidence(names []string) map[loaderEvidenceKey]int {
+	expected := make(map[loaderEvidenceKey]int)
+	for _, name := range names {
+		for _, mode := range loaderEvidenceModes(name) {
+			expected[loaderEvidenceKey{name, mode}]++
+		}
+	}
+	return expected
+}
+
+// decodeLoaderMeasurement requires every record field; fixed-width integers
+// reject non-finite or fractional counters.
+func decodeLoaderMeasurement(data []byte) (loaderMeasurement, error) {
+	var m loaderMeasurement
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&m); err != nil {
+		return m, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return m, err
+	}
+	reportType := reflect.TypeOf(m)
+	for i := 0; i < reportType.NumField(); i++ {
+		name := reportType.Field(i).Name
+		value, present := fields[name]
+		if !present || string(value) == "null" {
+			return m, fmt.Errorf("missing measurement field %s", name)
+		}
+	}
+	if m.Input == "" || m.Mode == "" || m.Calls < 0 || m.Calls > 2 || m.Nanoseconds < 0 || m.Ceiling == 0 {
+		return m, fmt.Errorf("measurement identity or counters out of range: %+v", m)
+	}
+	return m, nil
+}
+
+// verifyLoaderChild checks one cold child's plain -v output: the measurement
+// test itself passed, nothing was skipped or failed, and exactly one complete
+// record carries the child's recipe and mode.
+func verifyLoaderChild(output []byte, name, mode string) (loaderMeasurement, error) {
+	var record loaderMeasurement
+	if len(bytes.TrimSpace(output)) == 0 {
+		return record, errors.New("empty measurement child output")
+	}
+	passes, records := 0, 0
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case strings.HasPrefix(line, "--- PASS: TestLoaderMeasurementChild "):
+			passes++
+		case strings.HasPrefix(line, "--- SKIP: ") || strings.HasPrefix(line, "--- FAIL: ") || line == "FAIL":
+			return record, fmt.Errorf("measurement child did not pass: %s", line)
+		}
+		if _, data, ok := strings.Cut(line, "LOADER_MEASUREMENT "); ok {
+			m, err := decodeLoaderMeasurement([]byte(data))
+			if err != nil {
+				return record, err
+			}
+			if m.Input != name || m.Mode != mode {
+				return record, fmt.Errorf("wrong measurement identity %s/%s, want %s/%s", m.Input, m.Mode, name, mode)
+			}
+			record = m
+			records++
+		}
+	}
+	if passes != 1 {
+		return record, fmt.Errorf("TestLoaderMeasurementChild passed %d times, want 1", passes)
+	}
+	if records != 1 {
+		return record, fmt.Errorf("measurement records %d, want 1", records)
+	}
+	return record, nil
+}
+
 func runLoaderBudget(t *testing.T, extended bool) {
 	t.Helper()
 	dir := t.TempDir()
-	for index, c := range loaderBudgetCorpus(t, extended) {
+	corpus := loaderBudgetCorpus(t, extended)
+	names := make([]string, len(corpus))
+	for i, c := range corpus {
+		names[i] = c.Name
+	}
+	expected := expectedLoaderEvidence(names)
+	if len(expected) == 0 {
+		t.Fatal("empty loader evidence inventory")
+	}
+	seen := make(map[loaderEvidenceKey]int, len(expected))
+	for index, c := range corpus {
 		node, oracleErr := referenceAcceptance(c.Payload)
 		got, b, e := yamltokens.Decode(c.Payload)
 		assertAgreementResults(t, node, oracleErr, yamltokens.Check(c.Payload), got, b, e)
@@ -255,11 +354,11 @@ func runLoaderBudget(t *testing.T, extended bool) {
 		if e = os.WriteFile(refPath, data, 0600); e != nil {
 			t.Fatal(e)
 		}
-		modes := []string{"combined", "assembled", "full"}
-		if c.Name == "golden/valid-yaml" || c.Name == "parser/maximum-commented/0" || strings.HasPrefix(c.Name, "membership/") || c.Name == "reader/cause" {
-			modes = append(modes, "serial", "two-call")
-		}
-		for _, mode := range modes {
+		for _, mode := range loaderEvidenceModes(c.Name) {
+			key := loaderEvidenceKey{c.Name, mode}
+			if seen[key] >= expected[key] {
+				t.Fatalf("unexpected or repeated measurement key %+v", key)
+			}
 			t.Run(c.Name+"/"+mode, func(t *testing.T) {
 				cmd := exec.Command(os.Args[0], "-test.run=^TestLoaderMeasurementChild$", "-test.v")
 				cmd.Env = append(os.Environ(), "RICEVANTA_LOADER_REFERENCE="+refPath, "RICEVANTA_LOADER_MODE="+mode)
@@ -268,24 +367,87 @@ func runLoaderBudget(t *testing.T, extended bool) {
 				if e != nil {
 					t.Fatalf("cold child: %v", e)
 				}
-				records := 0
-				for _, line := range strings.Split(string(output), "\n") {
-					if _, data, ok := strings.Cut(line, "LOADER_MEASUREMENT "); ok {
-						var m loaderMeasurement
-						if e := json.Unmarshal([]byte(data), &m); e != nil {
-							t.Fatal(e)
-						}
-						if m.Input != c.Name || m.Mode != mode {
-							t.Fatal("wrong measurement identity")
-						}
-						records++
-					}
+				if _, e := verifyLoaderChild(output, c.Name, mode); e != nil {
+					t.Fatalf("cold child evidence: %v", e)
 				}
-				if records != 1 {
-					t.Fatalf("measurement records %d", records)
-				}
+				seen[key]++
 			})
 		}
+	}
+	for key, want := range expected {
+		if seen[key] != want {
+			t.Errorf("loader measurements for %+v: %d, want %d", key, seen[key], want)
+		}
+	}
+	if len(seen) != len(expected) {
+		t.Fatalf("loader measurement keys %d, want %d", len(seen), len(expected))
+	}
+}
+
+// Synthetic child outputs prove the Gate B parent rejects children that exit
+// zero without a complete, correctly identified record, in every mode.
+func TestLoaderBudgetEvidence(t *testing.T) {
+	expected := expectedLoaderEvidence([]string{"golden/valid-yaml", "mapping/8"})
+	if len(expected) != 8 {
+		t.Fatalf("expected keys %d", len(expected))
+	}
+	for _, mode := range []string{"serial", "two-call", "full", "combined", "assembled"} {
+		if expected[loaderEvidenceKey{"golden/valid-yaml", mode}] != 1 {
+			t.Fatalf("missing %s key", mode)
+		}
+	}
+	if expected[loaderEvidenceKey{"mapping/8", "serial"}] != 0 {
+		t.Fatal("serial mode must stay restricted to the reviewed recipes")
+	}
+	if repeated := expectedLoaderEvidence([]string{"mapping/13", "mapping/13"}); repeated[loaderEvidenceKey{"mapping/13", "full"}] != 2 {
+		t.Fatal("repeated corpus names must each expect their own record")
+	}
+	record := func(name, mode string) string {
+		m := loaderMeasurement{Input: name, Mode: mode, Toolchain: "go", OS: "linux", Arch: "amd64", Calls: 1, Alloc: 10, Objects: 2, LedgerBytes: 10, LedgerObjects: 2, Ceiling: 1 << 30, Nanoseconds: 5, ProcsBefore: 1, ProcsAfter: 1, MemoryLimitBefore: math.MaxInt64, MemoryLimitAfter: math.MaxInt64, GCPercentBefore: math.MaxUint64, GCPercentAfter: math.MaxUint64}
+		if mode == "serial" || mode == "two-call" {
+			m.Calls = 2
+		}
+		data, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	valid := func(name, mode string) string {
+		return "=== RUN   TestLoaderMeasurementChild\nLOADER_MEASUREMENT " + record(name, mode) + "\n--- PASS: TestLoaderMeasurementChild (0.01s)\nPASS\n"
+	}
+	for key := range expected {
+		if _, err := verifyLoaderChild([]byte(valid(key.Input, key.Mode)), key.Input, key.Mode); err != nil {
+			t.Fatalf("valid %+v rejected: %v", key, err)
+		}
+	}
+	good := valid("golden/valid-yaml", "serial")
+	controls := map[string]string{
+		"empty-output":        "",
+		"child-rename":        strings.ReplaceAll(good, "TestLoaderMeasurementChild", "TestLoaderMeasurementChil"),
+		"skipped-child":       "=== RUN   TestLoaderMeasurementChild\n--- SKIP: TestLoaderMeasurementChild (0.00s)\n    loader_qualification_test.go:1: fresh measurement child only\nPASS\n",
+		"failed-child":        strings.ReplaceAll(good, "--- PASS", "--- FAIL"),
+		"missing-measurement": strings.ReplaceAll(good, "LOADER_MEASUREMENT ", "LOADER_MEASUREMEN "),
+		"extra-measurement":   good + "LOADER_MEASUREMENT " + record("golden/valid-yaml", "two-call") + "\n",
+		"duplicate":           good + "LOADER_MEASUREMENT " + record("golden/valid-yaml", "serial") + "\n",
+		"wrong-recipe":        strings.ReplaceAll(good, `"Input":"golden/valid-yaml"`, `"Input":"golden/other"`),
+		"wrong-mode":          strings.ReplaceAll(good, `"Mode":"serial"`, `"Mode":"two-call"`),
+		"missing-field":       strings.ReplaceAll(good, `"PeakRSS":0,`, ""),
+		"non-finite-counter":  strings.ReplaceAll(good, `"Alloc":10,`, `"Alloc":1e999,`),
+		"non-numeric-counter": strings.ReplaceAll(good, `"Nanoseconds":5,`, `"Nanoseconds":"NaN",`),
+		"negative-counter":    strings.ReplaceAll(good, `"Nanoseconds":5,`, `"Nanoseconds":-5,`),
+		"wrong-call-count":    strings.ReplaceAll(good, `"Calls":2,`, `"Calls":3,`),
+		"truncated":           good[:len(good)/2],
+	}
+	for name, output := range controls {
+		t.Run(name, func(t *testing.T) {
+			if _, err := verifyLoaderChild([]byte(output), "golden/valid-yaml", "serial"); err == nil {
+				t.Fatal("defective child evidence accepted")
+			}
+		})
+	}
+	if len(expectedLoaderEvidence(nil)) != 0 {
+		t.Fatal("empty corpus must expect nothing")
 	}
 }
 func TestLoaderBudgetSmoke(t *testing.T) { runLoaderBudget(t, false) }

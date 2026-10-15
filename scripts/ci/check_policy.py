@@ -4,8 +4,10 @@ import ast
 from pathlib import Path
 import re
 import json
+import shlex
 import yaml
 import inventory
+import run_selected
 from required import NEEDS, CALLERS
 
 
@@ -50,26 +52,82 @@ LEAVES = {'design': {'validate': 'design'},
           'console': {'validate': 'console'}, 'bootstrap': {'validate': 'bootstrap'},
           'ci': {'ci-contracts': 'ci-contracts'}}
 
-# Task 2 receipts prove step success. Keep the existing commands behind each
-# declared ID until Task 4 replaces selected execution with audited wrappers.
+# Selected tests, benchmarks, fuzzing and property runs execute only through the
+# wrapper; targets.toml holds their exact commands, pinned in SELECTED_COMMANDS.
+def wrapper(target_id):
+    return f'python -B scripts/ci/run_selected.py --id {target_id} --evidence "$RUNNER_TEMP/evidence"'
+
+
+FUZZ_WRAPPER = 'python -B scripts/ci/run_selected.py --id "go-fuzz:${FUZZ_PACKAGE}:${FUZZ_TARGET}" --evidence "$RUNNER_TEMP/evidence"'
+RECEIPT_WITH_EVIDENCE = "required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')"
+SELECTED_COMMANDS = {
+    'server-unit': ("go test -list '.*' ./...", 'go test -json -count=1 ./...'),
+    'server-race': ("go test -race -list '.*' ./...", 'go test -json -race -count=1 -timeout=15m ./...'),
+    'key-admission-bench': ("go test -list '^BenchmarkValidate$' ./internal/signing/ed25519key",
+                            "go test -json -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key"),
+    'loader-extended': ("go test -list '^(TestParserBudgetExtended)$' ./internal/extensions/loader",
+                        "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetExtended)$' -args -loader-budget-extended"),
+    'loader-repeat': ("go test -list '^(TestParserBudgetSmoke)$' ./internal/extensions/loader",
+                      "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetSmoke)$' -args "
+                      "-loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50"),
+    'loader-fuzz': ("go test -list '^FuzzParserQualification$' ./internal/extensions/loader",
+                    "go test -json -count=1 ./internal/extensions/loader '-fuzz=^FuzzParserQualification$' -fuzztime=60s -parallel=2"),
+    'loader-gate-b-extended': ("go test -list '^(TestLoaderBudgetExtended)$' ./internal/extensions/loader",
+                               "go test -json -count=1 ./internal/extensions/loader -run '^(TestLoaderBudgetExtended)$' -args -loader-budget-extended"),
+    'ocsf-native': ("go test -list '.*' ./internal/events/ocsf", 'go test -json -count=1 ./internal/events/ocsf'),
+    'agent-unit': ('cargo test --locked --workspace -- --list', 'cargo test --locked --workspace'),
+    'spool-extended': ('cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --list',
+                       'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --nocapture --test-threads=1'),
+    'batch-extended': ('cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact --list',
+                       'cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact --nocapture --test-threads=1'),
+    'interop-unit': ("go test -tags rustinterop -list '^TestRustWriter' ./internal/events/body",
+                     "go test -json -tags rustinterop -count=1 ./internal/events/body -run '^TestRustWriter'"),
+    'interop-race': ("go test -race -tags rustinterop -list '^TestRustWriter' ./internal/events/body",
+                     "go test -json -race -tags rustinterop -count=1 ./internal/events/body -run '^TestRustWriter'"),
+}
+SELECTED_BUDGETS = {'loader-repeat': {'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
+                    'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
+                    'batch-extended': {'seed': '0x5249564241544348', 'cases': 20000}}
+
+
+def selected_errors(root):
+    """targets.toml must resolve every wrapper ID to its exact reviewed command."""
+    try:
+        targets = run_selected.inventory(root)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return ['scripts/ci/targets.toml: invalid selected inventory: ' + str(error)]
+    errors = []
+    for target_id, (discovery, command) in SELECTED_COMMANDS.items():
+        target = targets.get(target_id)
+        if target is None:
+            errors.append('scripts/ci/targets.toml: missing selected target ' + target_id); continue
+        if shlex.join(run_selected.discovery_command(target)) != discovery or shlex.join(run_selected.run_command(target)) != command:
+            errors.append('scripts/ci/targets.toml: selected command mismatch: ' + target_id)
+        for key, value in SELECTED_BUDGETS.get(target_id, {}).items():
+            if target.get(key) != value: errors.append('scripts/ci/targets.toml: selected budget mismatch: ' + target_id)
+    for package, name in inventory.FUZZ_PAIRS:
+        target = targets.get(f'go-fuzz:{package}:{name}')
+        if target is None or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2":
+            errors.append(f'scripts/ci/targets.toml: fuzz command mismatch: {package} {name}')
+    for row in targets.values():
+        for allowance in row['skips'].values():
+            if allowance['proof'] not in targets or '*' in allowance['test'] or not allowance['reason']:
+                errors.append('scripts/ci/targets.toml: skip allowance must name an exact test and a proving unit')
+    return errors
+
+
 COMMANDS = {
-    ('server', 'validate'): ('gofmt -l .', 'go test -count=1 ./...', 'go vet ./...',
-                            "go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key"),
-    ('server', 'race'): ('go test -race -count=1 -timeout=15m ./...',),
-    ('server', 'fuzz'): ('go test -count=1 "$FUZZ_PACKAGE" -fuzz="^${FUZZ_TARGET}$" -fuzztime=60s -parallel=2',),
-    ('server', 'loader-gate-a'): ("go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended",
-        "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50",
-        "go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2"),
-    ('server', 'loader-gate-b'): ("go test -count=1 ./internal/extensions/loader -run '^TestLoaderBudgetExtended$' -v -args -loader-budget-extended",),
-    ('server', 'ocsf-native'): ('go test -count=1 ./internal/events/ocsf',),
+    ('server', 'validate'): ('gofmt -l .', wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench')),
+    ('server', 'race'): (wrapper('server-race'),),
+    ('server', 'fuzz'): (FUZZ_WRAPPER,),
+    ('server', 'loader-gate-a'): (wrapper('loader-extended'), wrapper('loader-repeat'), wrapper('loader-fuzz')),
+    ('server', 'loader-gate-b'): (wrapper('loader-gate-b-extended'),),
+    ('server', 'ocsf-native'): (wrapper('ocsf-native'),),
     ('agent', 'validate'): ('cargo metadata --locked --format-version 1', 'python tools/generate-spool-fixtures.py --check',
         'cargo fmt --all -- --check', 'cargo clippy --locked --workspace --all-targets -vv -- -D warnings',
-        'cargo test --locked --workspace',
-        'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact',
-        'cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact'),
+        wrapper('agent-unit'), wrapper('spool-extended'), wrapper('batch-extended')),
     ('agent', 'rustinterop'): ('cargo build --locked -p ricevanta-batch --example seal-vector -vv',
-        "go test -v -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1",
-        "go test -v -race -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1"),
+        wrapper('interop-unit'), wrapper('interop-race')),
     ('console', 'validate'): ('pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm lint',
         'pnpm format:check', 'pnpm audit:deps', 'pnpm test:unit', 'pnpm test:component',
         'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz',
@@ -188,6 +246,17 @@ CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fres
 CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
 
 
+def wrapper_toolchain(run):
+    """Classify a wrapper step by its selected ID's toolchain; unknown IDs count as both."""
+    match = re.search(r'run_selected\.py --id (?:"([^"]+)"|(\S+))', run)
+    if not match: return None
+    target_id = match[1] or match[2]
+    if target_id.startswith('go-fuzz:'): return 'go'
+    try: mode = run_selected.inventory()[target_id]['mode']
+    except (KeyError, OSError, ValueError): return 'unknown'
+    return 'go' if mode.startswith('go') else 'cargo' if mode.startswith('rust') else 'other'
+
+
 def cache_errors(data):
     """Require fresh compiler environments before every workflow consumer."""
     errors = []
@@ -198,8 +267,8 @@ def cache_errors(data):
             if CACHE_ENV & set(scope.get('env', {})):
                 fail('compiler cache environment override forbidden')
         go_setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-go@')]
-        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', ''))]
-        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', ''))]
+        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', '')) in ('go', 'unknown')]
+        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', '')) in ('cargo', 'unknown')]
         for step in steps:
             action = step.get('uses', '')
             settings = step.get('with', {})
@@ -245,10 +314,10 @@ def cache_errors(data):
 def fuzz_evidence_errors(job, native_parser=False):
     """Preserve exact fuzz selection, failure exit and minimized corpora."""
     command = COMMANDS[('server', 'loader-gate-a' if native_parser else 'fuzz')][-1]
-    selected = [step for step in job.get('steps', []) if '-fuzz=' in step.get('run', '')]
-    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'run': command} if native_parser else
-                {'name': 'Fuzz for 60 seconds', 'env': {'FUZZ_PACKAGE': '${{ matrix.package }}',
-                                                      'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
+    selected = [step for step in job.get('steps', []) if '-fuzz=' in step.get('run', '') or 'fuzz' in step.get('run', '').split('--id')[-1]]
+    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'shell': 'bash', 'working-directory': '.', 'run': command} if native_parser else
+                {'name': 'Fuzz for 60 seconds', 'shell': 'bash', 'working-directory': '.',
+                 'env': {'FUZZ_PACKAGE': '${{ matrix.package }}', 'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
     errors = []
     if selected != [expected]: errors.append('exact unconditional fuzz command required')
     corpus = {'name': 'Upload failing corpus', 'if': 'failure()', 'uses': UPLOAD,
@@ -282,7 +351,7 @@ def loader_qualification_errors(job, gate):
         run = ('set -euo pipefail\n'
                f'mkdir -p "$RUNNER_TEMP/loader-measurements-gate-{gate}"\n'
                f'{command} 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-{gate}/{log}.log"\n')
-        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'run': run}]
+        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'shell': 'bash', 'working-directory': '.', 'run': run}]
         if len(matches) != 1: fail('exact unconditional measurement pipeline required: ' + log)
         else: indices += matches
     log_paths = [f'${{{{ runner.temp }}}}/loader-measurements-gate-{gate}/{log}.log' for _, log, _ in recipes]
@@ -369,6 +438,9 @@ def check(root: Path) -> list[str]:
         inventory.fuzz_targets(root)
     except (OSError, ValueError, KeyError, TypeError):
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
+    errors += selected_errors(root)
+    try: selected_ids = set(run_selected.inventory(root))
+    except (OSError, ValueError, KeyError, TypeError): selected_ids = set(SELECTED_COMMANDS)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}
     for name in required_names - set(workflows): fail(name, 'missing required workflow')
     if not required_names <= set(workflows): return errors
@@ -442,6 +514,9 @@ def check(root: Path) -> list[str]:
                 except ValueError: actual = None
                 if actual != wanted or 'if' in proofs[0] or 'required.receipt(' not in proofs[0].get('run', ''):
                     fail(name, f'{jid}: receipt checks mismatch')
+                elif (any(check in selected_ids or check.startswith('go-fuzz:') for check in actual)
+                      and RECEIPT_WITH_EVIDENCE not in proofs[0]['run']):
+                    fail(name, f'{jid}: receipt must bind verified selected-run evidence')
             if not steps or steps[-1].get('uses') != UPLOAD or steps[-1].get('with') != {
                     'name': '${{ steps.proof.outputs.artifact }}', 'path': '${{ runner.temp }}/ci-proof/receipt.json',
                     'retention-days': '30', 'if-no-files-found': 'error'} or 'if' in steps[-1]:
@@ -473,8 +548,8 @@ def check(root: Path) -> list[str]:
     # A closed step rejects trailing flags, shell wrappers and extra test runs.
     race_checks = [step for step in race_steps
                    if step.get('name') == 'Test with race detector'
-                   or re.search(r'\bgo\s+test\b', step.get('run', ''))]
-    if race_checks != [{'name': 'Test with race detector',
+                   or re.search(r'\bgo\s+test\b|run_selected\.py', step.get('run', ''))]
+    if race_checks != [{'name': 'Test with race detector', 'shell': 'bash', 'working-directory': '.',
                         'run': COMMANDS[('server', 'race')][0]}]:
         fail('server', 'race: exact unconditional race command required')
     for scope, settings in (('workflow', workflows['server']), ('job', race)):

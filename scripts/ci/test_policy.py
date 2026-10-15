@@ -32,7 +32,7 @@ class PolicyTests(unittest.TestCase):
         data = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
         step = next(s for s in data['jobs']['race']['steps']
                     if s.get('name') == 'Test with race detector')
-        step['run'] = 'go test -race -count=1 -timeout=15m ./...'
+        step['run'] = check_policy.wrapper('server-race')
         path.write_text(yaml.safe_dump(data, sort_keys=False))
         return path, data, step
 
@@ -44,19 +44,19 @@ class PolicyTests(unittest.TestCase):
     def test_race_command_rejects_deadline_and_coverage_mutations(self):
         path, baseline, _ = self.race_fixture()
         self.assertEqual(check_policy.check(self.root), [])
-        command = 'go test -race -count=1 -timeout=15m ./...'
+        command = check_policy.wrapper('server-race')
         commands = [
-            command.replace(' -timeout=15m', ''),
-            *(command.replace('15m', value) for value in ('0', '10m', '20m')),
-            *(command + ' -timeout=' + value for value in ('0', '10m', '20m')),
-            command.replace(' -race', ''),
-            command.replace(' -count=1', ''),
-            command.replace('./...', './internal/extensions/loader'),
-            *(command + flag for flag in (' -run=TestLoad', ' -skip=TestLoad', ' -short')),
+            'go test -race -count=1 -timeout=15m ./...',
+            'go test -json -race -count=1 -timeout=15m ./...',
+            command.replace('server-race', 'server-unit'),
+            command.replace('server-race', 'ocsf-native'),
+            command.replace(' --evidence "$RUNNER_TEMP/evidence"', ''),
+            command.replace('run_selected.py', 'run_anything.py'),
             'GORACE=atexit_sleep_ms=0 ' + command,
             'env GORACE=atexit_sleep_ms=0 ' + command,
             command + ' || true',
             command + '\n' + command,
+            command + '\ngo test -race -count=1 -timeout=15m ./...',
         ]
         for mutated in commands:
             with self.subTest(command=mutated):
@@ -168,7 +168,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(check_policy.check(self.root), [])
         self.assertTrue(any(s.get('name') == 'Verify loader measurement logs' for s in baseline['jobs']['loader-gate-b']['steps']))
         def measurement(job):
-            return next(s for s in job['steps'] if 'TestLoaderBudgetExtended' in s.get('run', ''))
+            return next(s for s in job['steps'] if '--id loader-gate-b-extended ' in s.get('run', ''))
         def logs(job):
             return next(s for s in job['steps'] if s.get('name') == 'Upload loader measurements')
         mutations = [
@@ -204,11 +204,11 @@ class PolicyTests(unittest.TestCase):
         self.assertIsNotNone(bash, 'Bash is required for measurement fixtures')
         data = yaml.load((ROOT / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertIn('loader-gate-b', data['jobs'])
-        for gate, selectors in (('a', ('TestParserBudgetExtended', 'TestParserBudgetSmoke')), ('b', ('TestLoaderBudgetExtended',))):
+        for gate, selectors in (('a', ('loader-extended', 'loader-repeat')), ('b', ('loader-gate-b-extended',))):
             for selector in selectors:
                 with self.subTest(gate=gate, selector=selector), tempfile.TemporaryDirectory() as tmp:
-                    run = next(s['run'] for s in data['jobs']['loader-gate-' + gate]['steps'] if selector in s.get('run', ''))
-                    command = next(line for line in run.splitlines() if line.startswith('go test '))
+                    run = next(s['run'] for s in data['jobs']['loader-gate-' + gate]['steps'] if '--id ' + selector + ' ' in s.get('run', ''))
+                    command = next(line for line in run.splitlines() if line.startswith('python -B scripts/ci/run_selected.py --id '))
                     pipe = command.index(' 2>&1 | tee ')
                     failing = run.replace(command[:pipe], "bash -c 'echo failed-sample; exit 7'")
                     result = subprocess.run([bash, '-c', failing], env={'RUNNER_TEMP': tmp}, capture_output=True, text=True)
@@ -244,13 +244,15 @@ class PolicyTests(unittest.TestCase):
         job = data['jobs']['loader-gate-a']
         self.assertEqual(job['strategy'], {'fail-fast': 'false', 'matrix': {'os': ['ubuntu-24.04', 'windows-2025', 'macos-15']}})
         self.assertEqual(next(s for s in job['steps'] if s.get('id') == 'proof')['env']['CHECKS'], '["loader-extended", "loader-repeat", "loader-fuzz"]')
-        commands = [
-            "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetExtended$' -v -args -loader-budget-extended",
-            "go test -count=1 ./internal/extensions/loader -run '^TestParserBudgetSmoke$' -v -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50",
-            "go test -count=1 ./internal/extensions/loader -fuzz='^FuzzParserQualification$' -fuzztime=60s -parallel=2",
-        ]
-        for command in commands:
-            self.assertEqual(sum(command in s.get('run', '') for s in job['steps']), 1)
+        for target_id in ('loader-extended', 'loader-repeat', 'loader-fuzz'):
+            self.assertEqual(sum(check_policy.wrapper(target_id) in s.get('run', '') for s in job['steps']), 1)
+        self.assertEqual(check_policy.SELECTED_COMMANDS['loader-extended'][1],
+                         "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetExtended)$' -args -loader-budget-extended")
+        self.assertEqual(check_policy.SELECTED_COMMANDS['loader-repeat'][1],
+                         "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetSmoke)$' -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50")
+        self.assertEqual(check_policy.SELECTED_COMMANDS['loader-fuzz'][1],
+                         "go test -json -count=1 ./internal/extensions/loader '-fuzz=^FuzzParserQualification$' -fuzztime=60s -parallel=2")
+        self.assertEqual(check_policy.SELECTED_BUDGETS['loader-repeat'], {'marker_samples': 50})
         self.assertEqual(tomllib.loads((ROOT / 'scripts/ci/targets.toml').read_text())['loader'],
                          {'package': './internal/extensions/loader', 'target': 'FuzzParserQualification', 'fuzztime': '60s', 'parallel': 2})
 
@@ -267,6 +269,65 @@ class PolicyTests(unittest.TestCase):
                     self.assertTrue(check_policy.check(self.root))
         path.write_text(baseline)
 
+    def test_selected_commands_are_pinned_in_targets(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        self.assertEqual(check_policy.check(self.root), [])
+        race = 'build_flags = ["-race"]\ntest_flags = ["-timeout=15m"]\n'
+        self.assertIn(race, baseline)
+        mutations = {
+            'no deadline': baseline.replace(race, 'build_flags = ["-race"]\n'),
+            'shorter deadline': baseline.replace(race, race.replace('15m', '10m')),
+            'longer deadline': baseline.replace(race, race.replace('15m', '20m')),
+            'disabled deadline': baseline.replace(race, race.replace('15m', '0')),
+            'no race': baseline.replace(race, 'test_flags = ["-timeout=15m"]\n'),
+            'short mode': baseline.replace(race, race.replace('"-timeout=15m"', '"-timeout=15m", "-short"')),
+            'narrowed packages': baseline.replace('id = "server-race"\nmode = "go-suite"\ncwd = "server"\npackages = ["./..."]',
+                                                  'id = "server-race"\nmode = "go-suite"\ncwd = "server"\npackages = ["./internal/extensions/loader"]'),
+            'removed race target': baseline.replace('[[selected]]\nid = "server-race"\nmode = "go-suite"\ncwd = "server"\npackages = ["./..."]\n' + race, ''),
+            'fewer repetitions': baseline.replace('marker_samples = 50', 'marker_samples = 49'),
+            'fewer recovery cases': baseline.replace('cases = 100000', 'cases = 99999'),
+            'other seal seed': baseline.replace('seed = "0x5249564241544348"', 'seed = "0x5249564241544349"'),
+            'fewer benchmark operations': baseline.replace('operations = 100', 'operations = 50'),
+            'dropped extended flag': baseline.replace('tests = ["TestLoaderBudgetExtended"]\nargs = ["-loader-budget-extended"]', 'tests = ["TestLoaderBudgetExtended"]\nargs = []'),
+            'renamed interop selector': baseline.replace('run = "^TestRustWriter"', 'run = "^TestRustWrite"'),
+            'wildcard skip': baseline.replace('test = "TestParserBudgetExtended"', 'test = "TestParser*"', 1),
+            'unproven skip': baseline.replace('proof = "loader-extended"\nmodes = ["server-unit", "server-race", "go-fuzz"]', 'proof = "nothing"\nmodes = ["server-unit", "server-race", "go-fuzz"]', 1),
+            'extra fuzz flag': baseline.replace('[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "60s"',
+                                                '[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "30s"'),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, baseline)
+                path.write_text(mutated)
+                self.assertTrue(any(error.startswith('scripts/ci/targets.toml') for error in check_policy.check(self.root)), label)
+        path.write_text(baseline)
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_receipts_bind_verified_selected_evidence(self):
+        for workflow, jid in (('server', 'validate'), ('server', 'race'), ('server', 'fuzz'), ('server', 'loader-gate-a'),
+                              ('server', 'loader-gate-b'), ('server', 'ocsf-native'), ('agent', 'validate'), ('agent', 'rustinterop')):
+            with self.subTest(workflow=workflow, job=jid):
+                def change(data):
+                    proof = next(s for s in data['jobs'][jid]['steps'] if s.get('id') == 'proof')
+                    proof['run'] = proof['run'].replace(check_policy.RECEIPT_WITH_EVIDENCE, "required.receipt(route, unit, json.loads(os.environ['CHECKS']))")
+                self.mutate(workflow, change)
+                self.assertTrue(any('receipt must bind verified selected-run evidence' in error for error in check_policy.check(self.root)))
+                shutil.copyfile(ROOT / f'.github/workflows/{workflow}.yml', self.root / f'.github/workflows/{workflow}.yml')
+        for workflow, jid, raw in (('server', 'race', 'go test -race -count=1 -timeout=15m ./...'),
+                                   ('server', 'validate', 'go test -count=1 ./...'),
+                                   ('agent', 'validate', 'cargo test --locked --workspace'),
+                                   ('agent', 'rustinterop', "go test -v -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1")):
+            with self.subTest(workflow=workflow, job=jid, raw=raw):
+                def change(data, jid=jid, raw=raw):
+                    for step in data['jobs'][jid]['steps']:
+                        if 'run_selected.py' in step.get('run', ''):
+                            step['run'] = raw
+                            break
+                self.mutate(workflow, change)
+                self.assertTrue(check_policy.check(self.root))
+                shutil.copyfile(ROOT / f'.github/workflows/{workflow}.yml', self.root / f'.github/workflows/{workflow}.yml')
+
     def test_fuzz_corpus_and_failure_propagation_controls(self):
         self.assertEqual(check_policy.check(self.root), [])
         path = self.root / '.github/workflows/server.yml'
@@ -281,7 +342,8 @@ class PolicyTests(unittest.TestCase):
                     elif mutation == 'wrong corpus': corpus['with']['path'] = 'missing/**'
                     elif mutation == 'conditional corpus': corpus['if'] = 'success()'
                     else:
-                        step = next(s for s in job['steps'] if '-fuzz=' in s.get('run', ''))
+                        step = next(s for s in job['steps'] if check_policy.FUZZ_WRAPPER in s.get('run', '')
+                                    or check_policy.wrapper('loader-fuzz') in s.get('run', ''))
                         step['run'] += ' || true'
                     path.write_text(yaml.safe_dump(data, sort_keys=False))
                     self.assertTrue(check_policy.check(self.root))

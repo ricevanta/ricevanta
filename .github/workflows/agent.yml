@@ -110,27 +110,33 @@ jobs:
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         cargo clippy --locked --workspace --all-targets -vv -- -D warnings
     - name: Test
+      shell: bash
+      working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
         CC_ENABLE_DEBUG_OUTPUT: '1'
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
-        cargo test --locked --workspace
+        python -B scripts/ci/run_selected.py --id agent-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Extended recovery property test
+      shell: bash
+      working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
-        cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+        python -B scripts/ci/run_selected.py --id spool-extended --evidence "$RUNNER_TEMP/evidence"
     - name: Extended seal property test
+      shell: bash
+      working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
-        cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact
+        python -B scripts/ci/run_selected.py --id batch-extended --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -150,7 +156,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -224,11 +230,13 @@ jobs:
         test -x "$vector"
         echo "RICEVANTA_BATCH_VECTOR=$vector" >> "$GITHUB_ENV"
     - name: Live Go decoder conformance
-      working-directory: server
-      run: go test -v -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id interop-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Live Go decoder conformance with race detector
-      working-directory: server
-      run: go test -v -race -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id interop-race --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -247,7 +255,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')

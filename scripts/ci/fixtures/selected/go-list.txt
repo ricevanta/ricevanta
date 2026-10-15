@@ -1,0 +1,6 @@
+TestAlpha
+TestBeta
+TestSkipped
+BenchmarkThing
+FuzzThing
+ok  	example.com/tiny	0.007s
