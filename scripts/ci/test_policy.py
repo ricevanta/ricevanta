@@ -61,7 +61,7 @@ class PolicyTests(unittest.TestCase):
         baseline = path.read_text()
         self.assertEqual(check_policy.selected_errors(self.root), [])
         for old, new in (
-            ('cases = 34', 'cases = 33'),
+            ('cases = 50', 'cases = 49'),
             ('benchmark = "BenchmarkDecodeCost"', 'benchmark = "BenchmarkOtherCost"'),
             ('"-benchtime=3x"', '"-benchtime=1x"'),
             ('fuzzminimizetime = "3s"', 'fuzzminimizetime = "30s"'),
@@ -72,6 +72,73 @@ class PolicyTests(unittest.TestCase):
                 path.write_text(baseline.replace(old, new))
                 self.assertTrue(check_policy.selected_errors(self.root))
         path.write_text(baseline)
+
+    def test_ingest_catalogue_mutations(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        before, rest = baseline.split('id = "ingest-cost-model"', 1)
+        row, after = rest.split('[[selected]]', 1)
+        mutations = [
+            row.replace('mode = "go-cost-model"', 'mode = "go-selected"'),
+            row.replace('cwd = "server"', 'cwd = "agent"'),
+            row.replace('./internal/events/body', './internal/events/wire'),
+            row.replace('TestDecodeCostModel', 'TestOther'),
+            row.replace('-timeout=15m', '-timeout=16m', 1),
+            row.replace('cases = 50', 'cases = 34'), row.replace('cases = 50', 'cases = 49'),
+            row.replace('operations = 3', 'operations = 4'),
+            row.replace('"-benchmem", ', ''), row.replace('-benchtime=3x', '-benchtime=4x'),
+            row.replace('"-timeout=15m"]\noperations', '"-timeout=14m"]\noperations'),
+            row.replace('blocks-min-at', 'blocks-min-over'),
+            row.replace('blocks-min-at', 'substituted-key'),
+            row.replace('  "blocks-min-at",\n', ''),
+            row.replace('case_keys = [', 'ignored_case_keys = ['),
+        ]
+        for i, changed in enumerate(mutations):
+            with self.subTest(mutation=i):
+                path.write_text(before+'id = "ingest-cost-model"'+changed+'[[selected]]'+after)
+                self.assertTrue(check_policy.selected_errors(self.root))
+        path.write_text(baseline.replace('id = "ingest-cost-model"', 'id = "other-cost-model"'))
+        self.assertTrue(check_policy.selected_errors(self.root))
+        for old,new in (
+            ('reason = "full ingest cost model runs separately without race instrumentation"', 'reason = "other"'),
+            ('test = "TestDecodeCostModel"', 'test = "TestDecodeCostModel/child"'),
+            ('test = "TestDecodeCostModel"', 'test = "Test*"'),
+            ('package = "github.com/ricevanta/ricevanta/server/internal/events/body"', 'package = "other/body"'),
+            ('proof = "ingest-cost-model"', 'proof = "server-unit"'),
+            ('modes = ["server-unit", "server-race", "go-fuzz"]', 'modes = ["server-unit"]'),
+        ):
+            with self.subTest(skip=old):
+                skip_start=baseline.index('[[skips]]\npackage = "github.com/ricevanta/ricevanta/server/internal/events/body"')
+                skip_end=baseline.index('[[skips]]',skip_start+1)
+                skip=baseline[skip_start:skip_end]
+                self.assertIn(old,skip)
+                path.write_text(baseline[:skip_start]+skip.replace(old,new)+baseline[skip_end:])
+                self.assertTrue(check_policy.selected_errors(self.root))
+        path.write_text(baseline)
+
+    def test_ingest_workflow_and_inventory_mutations(self):
+        data = yaml.load((self.root / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)
+        job = data['jobs']['validate']
+        self.assertEqual(check_policy.ingest_evidence_errors(job, self.root), [])
+        names = ('Ingest cost model', 'Verify ingest measurement log', 'Upload ingest measurements')
+        for name in names:
+            for field,value in (('if','success()'), ('continue-on-error','true')):
+                changed = deepcopy(job)
+                step = next(s for s in changed['steps'] if s.get('name') == name)
+                step[field]=value
+                with self.subTest(step=name,field=field):
+                    self.assertTrue(check_policy.ingest_evidence_errors(changed,self.root))
+            changed=deepcopy(job);changed['steps']=[s for s in changed['steps'] if s.get('name')!=name]
+            self.assertTrue(check_policy.ingest_evidence_errors(changed,self.root))
+        for replacement in ('true # '+check_policy.wrapper('ingest-cost-model'), 'false && '+check_policy.wrapper('ingest-cost-model')):
+            changed=deepcopy(job);next(s for s in changed['steps'] if s.get('name')==names[0])['run']=replacement
+            self.assertTrue(check_policy.ingest_evidence_errors(changed,self.root))
+        changed=deepcopy(job);next(s for s in changed['steps'] if s.get('name')==names[2])['with']['retention-days']='29'
+        self.assertTrue(check_policy.ingest_evidence_errors(changed,self.root))
+        changed=deepcopy(job);proof=next(s for s in changed['steps'] if s.get('id')=='proof');proof['env']['CHECKS']=proof['env']['CHECKS'].replace(', "ingest-cost-model"','')
+        self.assertTrue(check_policy.ingest_evidence_errors(changed,self.root))
+        path=self.root/'scripts/ci/inventory.py';path.write_text(path.read_text().replace("'ingest-cost-model', ",''))
+        self.assertTrue(check_policy.ingest_evidence_errors(job,self.root))
 
     def test_fuzz_artifact_uses_normalized_matrix_path(self):
         data = yaml.load((ROOT / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)

@@ -373,3 +373,101 @@ func TestReadFrameWindow(t *testing.T) {
 }
 
 func zeroFrame(f Frame) bool { return f.data == nil && f.size == 0 && f.window == 0 }
+
+// blockFrame builds structural inputs independently of the codec. Even invalid
+// entropy and zero-output RLE blocks must pay one header visit.
+func blockFrame(size uint64, count int, kind byte) []byte {
+	b := rawFrame(size, 0xc4, 0x68, nil)[:14]
+	for i := 0; i < count; i++ {
+		h := kind << 1
+		if i == count-1 {
+			h |= 1
+		}
+		b = append(b, h, 0, 0)
+		if kind == 1 {
+			b = append(b, 0)
+		}
+	}
+	return append(b, 0, 0, 0, 0)
+}
+
+func TestBlockHeaderLimit(t *testing.T) {
+	for _, size := range []uint64{0, 103, 128<<10 - 1, 128 << 10, 128<<10 + 1, 4 << 20, 64 << 20} {
+		cap := int(1 + (max(size, 128<<10)+128<<10-1)/(128<<10))
+		for _, kind := range []byte{0, 1, 2} {
+			for _, extra := range []int{0, 1} {
+				t.Run(fmt.Sprintf("%d/%d/%d", size, kind, extra), func(t *testing.T) {
+					b := blockFrame(size, cap+extra, kind)
+					var visits uint64
+					_, _, err := inspectFrameCount(b, &visits)
+					if visits != uint64(cap+extra) {
+						t.Fatalf("header visits=%d", visits)
+					}
+					if extra == 0 && err != nil || extra == 1 && !errors.Is(err, ErrFrame) {
+						t.Fatalf("headers=%d cap=%d: %v", cap+extra, cap, err)
+					}
+					if extra == 1 {
+						// Overflow must win even when checksum is absent or trailing bytes follow.
+						for _, broken := range [][]byte{b[:len(b)-4], append(b, 1)} {
+							if _, _, err := inspectFrame(broken); !errors.Is(err, ErrFrame) {
+								t.Fatalf("overflow precedence: %v", err)
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+	b := blockFrame(103, 2, 0)
+	for n := 0; n < 3; n++ {
+		var visits uint64
+		if _, _, err := inspectFrameCount(b[:17+n], &visits); !errors.Is(err, ErrFrame) || visits != 1 {
+			t.Fatalf("truncated header %d: %v", n, err)
+		}
+	}
+	attack := blockFrame(103, 1_660_000, 0)
+	var visits uint64
+	if _, _, err := inspectFrameCount(attack, &visits); !errors.Is(err, ErrFrame) || visits != 3 {
+		t.Fatalf("empty-block attack: %v", err)
+	}
+}
+
+func TestBlockFixtureStages(t *testing.T) {
+	for _, c := range loadFixtures(t).Cases {
+		if c.Name != "bomb-small-claim" && c.Name != "content-size-too-small" {
+			continue
+		}
+		b, err := c.body()
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := ReadFrame(&io.LimitedReader{R: bytes.NewReader(b), N: remainingBudget})
+		if c.Name == "bomb-small-claim" {
+			var visits uint64
+			inspectFrameCount(b, &visits)
+			if visits != 3 {
+				t.Fatalf("bomb header visits=%d", visits)
+			}
+			if !errors.Is(err, ErrFrame) {
+				t.Fatalf("bomb reached codec: %v", err)
+			}
+		} else {
+			if err != nil {
+				t.Fatal(err)
+			}
+			var visits uint64
+			inspectFrameCount(b, &visits)
+			if visits != 1 {
+				t.Fatalf("within-cap header visits=%d", visits)
+			}
+			d, err := c.descriptor()
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines, err := DecodeFrame(f, d, c.Device)
+			if !errors.Is(err, ErrContentSize) || lines != nil {
+				t.Fatalf("within-cap size lie: %v", err)
+			}
+		}
+	}
+}

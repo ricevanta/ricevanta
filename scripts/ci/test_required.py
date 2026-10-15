@@ -19,9 +19,16 @@ def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
             verified_evidence(root, selected[check].get('requires', []), run_id, attempt, sha)
             directory = root / run_selected.evidence_name(check)
             directory.mkdir(exist_ok=True)
-            (directory / 'verified.json').write_text(json.dumps(
-                {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
-                 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}))
+            record={'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
+                    'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
+            if check=='ingest-cost-model':
+                target=selected[check];bench=run_selected.cost_model_benchmark(target)
+                record.update(mode='go-cost-model',cwd='server',discovery=run_selected.discovery_command(target),command=run_selected.run_command(target),
+                              benchmark={'discovery':run_selected.discovery_command(bench),'command':run_selected.run_command(bench)},
+                              summary={'package':run_selected.COST_PACKAGE,'tests':['TestDecodeCostModel'],'measurements':50,'case_keys':sorted(target['case_keys']),
+                                       'benchmark':{'package':run_selected.COST_PACKAGE,'operations':3,'results':{'BenchmarkDecodeCost/a':{'operations':3,'ns_per_op':10,'bytes_per_op':1,'allocs_per_op':1}}}})
+            (directory / 'verified.json').write_text(json.dumps(record))
+
 
 
 class RequiredTests(unittest.TestCase):
@@ -53,6 +60,34 @@ class RequiredTests(unittest.TestCase):
         for changes in ({'exit': 1}, {'GITHUB_RUN_ID': '124'}, {'GITHUB_RUN_ATTEMPT': '2'}, {'GITHUB_SHA': 'c' * 40}):
             proof.write_text(json.dumps({**record, **changes}))
             with self.subTest(changes=changes), self.assertRaises(ValueError): self.receipt('server-validate')
+    def test_ingest_receipt_needs_complete_same_run_composite(self):
+        import run_selected
+        self.route['groups']=sorted(inventory.GROUPS)
+        self.route['units']=inventory.units(self.route['groups'])
+        root=Path(self.evidence.name)
+        path=root/run_selected.evidence_name('ingest-cost-model')/'verified.json'
+        complete=json.loads(path.read_text())
+        self.receipt('server-validate')
+        mutations=[]
+        for key in ('benchmark','mode','command','discovery','summary'):
+            row=deepcopy(complete);row.pop(key);mutations.append((key,row))
+        for key,value in (('result','failure'),('exit',1),('GITHUB_SHA','c'*40),('GITHUB_RUN_ID','124'),('GITHUB_RUN_ATTEMPT','2')):
+            row=deepcopy(complete);row[key]=value;mutations.append((key,row))
+        for field,value in (('measurements',49),('case_keys',complete['summary']['case_keys'][:-1]),('benchmark',{})):
+            row=deepcopy(complete);row['summary'][field]=value;mutations.append((field,row))
+        row=deepcopy(complete);row['summary']['benchmark']['results']['BenchmarkDecodeCost/a']['operations']=1;mutations.append(('iterations',row))
+        row=deepcopy(complete);row['summary']['benchmark']['results']['BenchmarkDecodeCost/a']['ns_per_op']=float('inf');mutations.append(('infinite time',row))
+        for label,row in mutations:
+            with self.subTest(label=label):
+                path.write_text(json.dumps(row))
+                with self.assertRaises(ValueError): self.receipt('server-validate')
+        path.unlink()
+        with self.assertRaises(ValueError): self.receipt('server-validate')
+        # Ordinary-suite skip evidence exists, but never supplies the missing ID.
+        unit=root/run_selected.evidence_name('server-unit')/'verified.json'
+        ordinary=json.loads(unit.read_text());ordinary['summary']={'skipped':[{'test':'TestDecodeCostModel','proof':'ingest-cost-model'}]};unit.write_text(json.dumps(ordinary))
+        with self.assertRaises(ValueError): self.receipt('server-validate')
+        path.write_text(json.dumps(complete));self.receipt('server-validate')
 
     def test_design_receipt_requires_release_contracts(self):
         self.assertIn('release-contracts', inventory.checks('design'))
