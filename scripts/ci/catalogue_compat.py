@@ -16,6 +16,9 @@ MAX_BYTES = 1 << 20
 MAX_DEPTH = 12
 MAX_ENTRIES = 2048
 MAX_REVISION = 4294967295
+NAME_LENGTH = (5, 98)
+USES = (1, 32, 160)  # minimum and maximum entries, maximum bytes per entry
+TEXT_BYTES = {'source': 160, 'note': 512}
 # Fields an existing name can never change in place; `uses` is compared as a set below.
 IMMUTABLE = ('owner', 'scope', 'grant', 'rule', 'protection', 'approval', 'introduced')
 # Permission catalogue spec sections 2 and 4, enforced independently of any schema the candidate carries.
@@ -126,6 +129,11 @@ def printable(value, limit):
     return isinstance(value, str) and 1 <= len(value) <= limit and PRINTABLE.fullmatch(value) is not None
 
 
+def member(value, values):
+    """Membership for decoded JSON: lists and objects are unhashable and never members."""
+    return isinstance(value, str) and value in values
+
+
 def invariants(cat):
     """Closed members, uint32 bounds, grammar, ASCII metadata and grant/owner/rule rules without a schema."""
     if not isinstance(cat, dict):
@@ -145,7 +153,7 @@ def invariants(cat):
             found.append(f'permissions[{index}] must be an object')
             continue
         name = p.get('name')
-        valid_name = isinstance(name, str) and 5 <= len(name) <= 98 and NAME.fullmatch(name) is not None
+        valid_name = isinstance(name, str) and NAME_LENGTH[0] <= len(name) <= NAME_LENGTH[1] and NAME.fullmatch(name) is not None
         label = name if valid_name else f'permissions[{index}]'
         if not valid_name:
             found.append(f'{label}: name grammar violated')
@@ -155,16 +163,16 @@ def invariants(cat):
         found += [f'{label}: unknown member {key!r}' for key in sorted(set(p) - expected)]
         found += [f'{label}: missing member {key!r}' for key in sorted(expected - set(p))]
         for field, values in ENUMS.items():
-            if p.get(field) not in values:
+            if not member(p.get(field), values):
                 found.append(f'{label}: {field} must be one of {sorted(values)}')
         rule = p.get('rule')
-        if rule in RULES and (p.get('protection'), p.get('approval')) != RULES[rule]:
+        if member(rule, RULES) and (p.get('protection'), p.get('approval')) != RULES[rule]:
             found.append(f'{label}: protection/approval must be {RULES[rule]} for rule {rule!r}')
         if valid_name:
             owners = OWNERS.get(name.split('.')[0])
             if owners is None:
                 found.append(f'{label}: namespace unknown')
-            elif p.get('owner') not in owners:
+            elif not member(p.get('owner'), owners):
                 found.append(f'{label}: owner must be one of {sorted(owners)}')
             if p.get('grant') != GRANTS.get(name, 'role'):
                 found.append(f'{label}: grant must be {GRANTS.get(name, "role")!r}')
@@ -173,10 +181,10 @@ def invariants(cat):
         if 'retired_in' in p and not uint(p['retired_in'], 2):
             found.append(f'{label}: retired_in {p["retired_in"]!r} outside 2..{MAX_REVISION}')
         uses = p.get('uses')
-        if not (isinstance(uses, list) and 1 <= len(uses) <= 32 and all(printable(u, 160) for u in uses)
-                and len(set(uses)) == len(uses)):
-            found.append(f'{label}: uses must be 1..32 unique printable ASCII strings of 1..160 bytes')
-        for field, limit in (('source', 160), ('note', 512)):
+        if not (isinstance(uses, list) and USES[0] <= len(uses) <= USES[1]
+                and all(printable(u, USES[2]) for u in uses) and len(set(uses)) == len(uses)):
+            found.append(f'{label}: uses must be {USES[0]}..{USES[1]} unique printable ASCII strings of 1..{USES[2]} bytes')
+        for field, limit in TEXT_BYTES.items():
             if not printable(p.get(field), limit):
                 found.append(f'{label}: {field} must be 1..{limit} printable ASCII bytes')
     if len(names) != len(rows) or names != sorted(set(names)):
@@ -242,10 +250,15 @@ def compare(root, base_sha, candidate_sha):
     data, validators, headers = {}, {}, []
     for what, sha in (('base', base_sha), ('candidate', candidate_sha)):
         try:
-            oid, data[what] = blob(root, sha, CATALOGUE)
-            schema_oid, validators[what] = load_validator(root, sha, module, what + ' schema')
-            headers.append(f'{what} commit {sha} catalogue blob {oid} schema blob {schema_oid}')
+            # Log the commit and catalogue blob before the schema loads, so a schema failure still names them.
+            headers.append(f'{what} commit {sha}')
             print(headers[-1], flush=True)
+            oid, data[what] = blob(root, sha, CATALOGUE)
+            headers[-1] += f' catalogue blob {oid}'
+            print(f'{what} catalogue blob {oid}', flush=True)
+            schema_oid, validators[what] = load_validator(root, sha, module, what + ' schema')
+            headers[-1] += f' schema blob {schema_oid}'
+            print(f'{what} schema blob {schema_oid}', flush=True)
             cat = decode(data[what], what)
             validate(cat, validators[what], module.lifecycle, what)
         except ValueError as exc:

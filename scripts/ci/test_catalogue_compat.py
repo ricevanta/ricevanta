@@ -324,6 +324,12 @@ class CatalogueCompatTests(unittest.TestCase):
             'non-object entry': (lambda cat: cat['permissions'].append('row'), 'permissions['),
             'empty permissions': (lambda cat: cat.update(permissions=[]), 'permissions must hold 1..2048 entries'),
             'too many permissions': (lambda cat: cat.update(permissions=cat['permissions'] * 7), 'permissions must hold 1..2048 entries'),
+            # N-01: unhashable member values are defects, not a TypeError out of invariants().
+            'list scope': (lambda cat: entry(cat, PROBE).update(scope=['organization']), 'scope must be one of'),
+            'object rule': (lambda cat: entry(cat, PROBE).update(rule={}), 'rule must be one of'),
+            'list owner': (lambda cat: entry(cat, PROBE).update(owner=['mdm']), 'owner must be one of'),
+            'object status': (lambda cat: entry(cat, PROBE).update(status={}), 'status must be one of'),
+            'list grant': (lambda cat: entry(cat, PROBE).update(grant=['role']), 'grant must be one of'),
         }
         for label, (change, fragment) in singles.items():
             with self.subTest(single=label):
@@ -398,7 +404,73 @@ class CatalogueCompatTests(unittest.TestCase):
         for label, schema in schemas.items():
             with self.subTest(schema=label):
                 bad = self.commit(self.changed(lambda cat: None), schema=schema)
-                self.reject(self.base, bad, 'candidate schema')
+                # N-02: a candidate schema failure still names the candidate commit and catalogue blob.
+                self.reject(self.base, bad, 'candidate schema', f'candidate commit {bad}',
+                            'catalogue blob ' + self.git('rev-parse', bad + ':' + CATALOGUE))
+        gitlink = self.commit_mode('160000', oid=self.base, path=SCHEMA)
+        self.reject(self.base, gitlink, f'candidate commit {gitlink}', SCHEMA, 'must be a regular file blob')
+
+    def test_unhashable_members_return_defects_directly(self):
+        """N-01: invariants() reports unhashable values as defects through the library contract."""
+        for field, value in (('scope', ['organization']), ('rule', {}), ('owner', ['mdm']), ('protection', {}),
+                             ('approval', []), ('grant', {}), ('status', [])):
+            with self.subTest(field=field):
+                cat = self.changed(lambda cat: entry(cat, PROBE).update({field: value}))
+                found = self.compat.invariants(cat)
+                self.assertTrue(any(d.startswith(f'{PROBE}: {field} must be one of') for d in found), found)
+
+    def test_vocabulary_matches_the_live_schema(self):
+        """N-04: the schema-independent vocabulary cannot drift from schemas/permissions/v1."""
+        c, schema = self.compat, self.schema
+        permission = schema['$defs']['permission']
+        props = permission['properties']
+        for field, values in c.ENUMS.items():
+            self.assertEqual(values, set(props[field]['enum']), field)
+        self.assertEqual(set().union(*c.OWNERS.values()), set(props['owner']['enum']))
+        self.assertEqual(c.ROOT_FIELDS, set(schema['properties']))
+        self.assertEqual(c.ROOT_FIELDS, set(schema['required']))
+        self.assertEqual(c.ENTRY_FIELDS, set(permission['required']))
+        self.assertEqual(c.ENTRY_FIELDS | {'retired_in'}, set(props))
+        self.assertEqual(schema['properties']['revision']['maximum'], c.MAX_REVISION)
+        self.assertEqual(props['introduced']['maximum'], c.MAX_REVISION)
+        self.assertEqual(props['retired_in']['maximum'], c.MAX_REVISION)
+        self.assertEqual(schema['properties']['permissions']['maxItems'], c.MAX_ENTRIES)
+        name = schema['$defs']['name']
+        self.assertEqual((name['minLength'], name['maxLength']), c.NAME_LENGTH)
+        anchored = '^' + c.NAME.pattern.removesuffix(r'\Z') + r'$(?![\s\S])'
+        self.assertEqual(name['pattern'], anchored)
+        uses = props['uses']
+        self.assertEqual((uses['minItems'], uses['maxItems'], uses['items']['maxLength']), c.USES)
+        for field, limit in c.TEXT_BYTES.items():
+            self.assertEqual(props[field]['maxLength'], limit, field)
+        printable = '^' + c.PRINTABLE.pattern.removesuffix(r'\Z') + r'$(?![\s\S])'
+        for spec in (uses['items'], props['source'], props['note']):
+            self.assertEqual(spec['pattern'], printable)
+        rules, owners, grants, namespaces = {}, {}, {}, None
+        conditional = None
+        for clause in permission['allOf']:
+            cond = clause.get('if', {}).get('properties', {})
+            then = clause.get('then', {}).get('properties', {})
+            if 'rule' in cond and 'const' in cond['rule']:
+                rules[cond['rule']['const']] = (then['protection']['const'], then['approval']['const'])
+            elif 'rule' in cond:
+                conditional = (set(cond['rule']['not']['enum']), (then['protection']['const'], then['approval']['const']))
+            elif 'name' in cond and 'pattern' in cond['name']:
+                owners[cond['name']['pattern'].removeprefix('^').removesuffix(r'\.')] = set(then['owner']['enum'])
+            elif 'name' in cond and 'const' in cond['name']:
+                node = clause
+                while 'if' in node:
+                    grants[node['if']['properties']['name']['const']] = node['then']['properties']['grant']['const']
+                    node = node['else']
+                self.assertEqual(node['properties']['grant']['const'], 'role')
+            elif 'name' in clause.get('properties', {}):
+                namespaces = clause['properties']['name']['pattern'].split(')', 1)[0].removeprefix('^(').split('|')
+        self.assertEqual(c.GRANTS, grants)
+        self.assertEqual(c.OWNERS, owners)
+        self.assertEqual(set(c.OWNERS), set(namespaces))
+        self.assertEqual(conditional[0], set(rules))
+        rules.update({rule: conditional[1] for rule in set(props['rule']['enum']) - conditional[0]})
+        self.assertEqual(c.RULES, rules)
 
     def test_catalogue_path_object_modes(self):
         """R-02/R-06/R-08: index modes come from Git plumbing, not host filesystem features."""
