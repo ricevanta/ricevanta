@@ -1,0 +1,64 @@
+{
+  "config": {
+    "configFile": "/home/runner/work/ricevanta/ricevanta/console/playwright.config.ts",
+    "rootDir": "/home/runner/work/ricevanta/ricevanta/console/tests/browser",
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "projects": [
+      {"id": "chromium", "name": "chromium", "testDir": "/home/runner/work/ricevanta/ricevanta/console/tests/browser", "retries": 0, "timeout": 30000},
+      {"id": "firefox", "name": "firefox", "testDir": "/home/runner/work/ricevanta/ricevanta/console/tests/browser", "retries": 0, "timeout": 30000},
+      {"id": "webkit", "name": "webkit", "testDir": "/home/runner/work/ricevanta/ricevanta/console/tests/browser", "retries": 0, "timeout": 30000}
+    ],
+    "version": "1.59.1",
+    "workers": 1
+  },
+  "suites": [
+    {
+      "title": "csp.spec.ts",
+      "file": "csp.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "enforcing CSP",
+          "file": "csp.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "serves the exact header",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {"timeout": 30000, "annotations": [], "expectedStatus": "passed", "projectId": "chromium", "projectName": "chromium", "results": [{"workerIndex": 0, "status": "passed", "duration": 412, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-01-01T00:00:00.000Z", "attachments": []}], "status": "expected"},
+                {"timeout": 30000, "annotations": [], "expectedStatus": "passed", "projectId": "firefox", "projectName": "firefox", "results": [{"workerIndex": 0, "status": "passed", "duration": 511, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-01-01T00:00:01.000Z", "attachments": []}], "status": "expected"},
+                {"timeout": 30000, "annotations": [], "expectedStatus": "passed", "projectId": "webkit", "projectName": "webkit", "results": [{"workerIndex": 0, "status": "passed", "duration": 620, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-01-01T00:00:02.000Z", "attachments": []}], "status": "expected"}
+              ],
+              "id": "a1-chromium",
+              "file": "csp.spec.ts",
+              "line": 4,
+              "column": 3
+            },
+            {
+              "title": "blocks inline scripts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {"timeout": 30000, "annotations": [], "expectedStatus": "passed", "projectId": "chromium", "projectName": "chromium", "results": [{"workerIndex": 0, "status": "passed", "duration": 300, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-01-01T00:00:03.000Z", "attachments": []}], "status": "expected"},
+                {"timeout": 30000, "annotations": [], "expectedStatus": "passed", "projectId": "firefox", "projectName": "firefox", "results": [{"workerIndex": 0, "status": "passed", "duration": 310, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-01-01T00:00:04.000Z", "attachments": []}], "status": "expected"},
+                {"timeout": 30000, "annotations": [], "expectedStatus": "passed", "projectId": "webkit", "projectName": "webkit", "results": [{"workerIndex": 0, "status": "passed", "duration": 330, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-01-01T00:00:05.000Z", "attachments": []}], "status": "expected"}
+              ],
+              "id": "a2-chromium",
+              "file": "csp.spec.ts",
+              "line": 12,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {"startTime": "2026-01-01T00:00:00.000Z", "duration": 2483, "expected": 6, "skipped": 0, "unexpected": 0, "flaky": 0}
+}

@@ -1,0 +1,7 @@
+test	TestAlpha	/fixtures/tiny-go/tiny_test.go
+test	TestBeta	/fixtures/tiny-go/tiny_test.go
+test	TestSkipped	/fixtures/tiny-go/tiny_test.go
+benchmark	BenchmarkThing	/fixtures/tiny-go/tiny_test.go
+fuzz	FuzzThing	/fixtures/tiny-go/tiny_test.go
+example	ExampleHello	/fixtures/tiny-go/tiny_test.go
+test	TestGamma	/fixtures/tiny-go/sub/sub_test.go

@@ -27,7 +27,7 @@ CHECKS = {
     'design': ['ocsf-schemas', 'policy-schemas', 'export-schemas', 'report-schemas',
                'permission-schema', 'fixture-contracts', 'ci-schema', 'document-limits',
                'release-contracts', 'catalogue-compat'],
-    'ci-contracts': ['ci-unit', 'ci-policy'],
+    'ci-contracts': ['ci-go-helper', 'ci-unit', 'ci-policy'],
     'server-validate': ['server-format', 'server-unit', 'key-admission-bench', 'server-vet'],
     'server-race': ['server-race'],
     'interop': ['interop-build', 'interop-unit', 'interop-race'],

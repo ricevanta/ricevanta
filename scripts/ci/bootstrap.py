@@ -858,8 +858,7 @@ def install_rust(ctx, entry, members, staging):
     links_inside(target, entry, 'admitted Rust root')
     ctx.installed[entry['tool']] = target / 'bin'
     if entry['tool'] == 'rustc':
-        ctx.env['RUSTC'] = str(target / 'bin' / ('rustc' + ctx.host.exe))
-        ctx.env['RUSTDOC'] = str(target / 'bin' / ('rustdoc' + ctx.host.exe))
+        # No RUSTC or RUSTDOC export: PATH order selects the admitted binaries, and the selected-run wrapper refuses both names.
         # Cargo searches $CARGO_HOME/bin for subcommands and rustup proxies read RUSTUP_HOME; both point at empty admitted homes.
         for key, name in (('CARGO_HOME', 'cargo-home'), ('RUSTUP_HOME', 'rustup-home')):
             (ctx.dest / name).mkdir(exist_ok=True)

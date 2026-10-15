@@ -461,7 +461,11 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn(str(dest / 'go' / 'bin'), paths)
         self.assertEqual(env['GOROOT'], str(dest / 'go'))
         self.assertTrue((dest / 'rust' / 'bin').is_dir())
-        self.assertEqual(env['RUSTC'], str(dest / 'rust' / 'bin' / ('rustc.exe' if HOST == 'windows-x64' else 'rustc')))
+        self.assertEqual(paths[paths.index(str(dest / 'rust' / 'bin'))], str(dest / 'rust' / 'bin'), 'PATH, not RUSTC, selects the admitted rustc')
+        import run_selected
+        rust_names = [key for key in env if run_selected.CARGO_CONTROLLED_ENV.search(key.upper())]
+        self.assertEqual(sorted(rust_names), ['CARGO_HOME', 'RUSTUP_AUTO_INSTALL', 'RUSTUP_HOME'])
+        self.assertEqual(run_selected.cargo_environment_overrides(rust_names), [], 'the wrapper admits every Cargo or Rust name the bootstrap exports')
         self.assertEqual((env['CARGO_HOME'], env['RUSTUP_HOME'], env['RUSTUP_AUTO_INSTALL']), (str(dest / 'cargo-home'), str(dest / 'rustup-home'), '0'))
         self.assertFalse((dest / 'cargo-home' / 'bin').exists(), 'Cargo finds subcommands only on the admitted PATH')
         self.assertFalse((dest / 'rust' / 'install.sh').exists(), 'installer scripts from the archive are never copied')

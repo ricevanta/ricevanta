@@ -1,0 +1,37 @@
+{
+  "numTotalTestSuites": 2,
+  "numPassedTestSuites": 2,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 3,
+  "numPassedTests": 3,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {"added": 0, "failure": false, "filesAdded": 0, "filesRemoved": 0, "filesRemovedList": [], "filesUnmatched": 0, "filesUpdated": 0, "matched": 0, "total": 0, "unchecked": 0, "uncheckedKeysByFile": [], "unmatched": 0, "updated": 0, "didUpdate": false},
+  "startTime": 1760000000000,
+  "success": true,
+  "testResults": [
+    {
+      "assertionResults": [
+        {"ancestorTitles": [], "fullName": "terminates deterministically for seeded catalogue, preference and locale mutations", "status": "passed", "title": "terminates deterministically for seeded catalogue, preference and locale mutations", "duration": 812, "failureMessages": [], "location": {"line": 6, "column": 1}, "meta": {}}
+      ],
+      "startTime": 1760000000100,
+      "endTime": 1760000000912,
+      "status": "passed",
+      "message": "",
+      "name": "/home/runner/work/ricevanta/ricevanta/console/tests/unit/fuzz.test.ts"
+    },
+    {
+      "assertionResults": [
+        {"ancestorTitles": ["output"], "fullName": "output prints measured bytes", "status": "passed", "title": "prints measured bytes", "duration": 3, "failureMessages": [], "location": {"line": 4, "column": 3}, "meta": {}},
+        {"ancestorTitles": ["output"], "fullName": "output fails over budget", "status": "passed", "title": "fails over budget", "duration": 2, "failureMessages": [], "location": {"line": 9, "column": 3}, "meta": {}}
+      ],
+      "startTime": 1760000000100,
+      "endTime": 1760000000110,
+      "status": "passed",
+      "message": "",
+      "name": "/home/runner/work/ricevanta/ricevanta/console/tests/unit/output.test.ts"
+    }
+  ]
+}

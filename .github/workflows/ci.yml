@@ -67,7 +67,7 @@ jobs:
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
-        CI_TOOLS: python
+        CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
       shell: bash
@@ -78,8 +78,28 @@ jobs:
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
-        CI_TOOLS: python
+        CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+    - name: Create fresh Go caches
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
+    - name: Format and vet the Go test declaration helper
+      shell: bash
+      working-directory: scripts/ci/gotestdecls
+      run: |
+        unformatted="$(gofmt -l .)"
+        if [ -n "$unformatted" ]; then
+          printf '%s\n' "$unformatted"
+          exit 1
+        fi
+        go vet .
     - name: Create validator environment
       shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
@@ -104,7 +124,7 @@ jobs:
       env:
         ROUTE_JSON: ${{ needs.route.outputs.route }}
         UNIT: ci-contracts
-        CHECKS: '["ci-unit", "ci-policy"]'
+        CHECKS: '["ci-go-helper", "ci-unit", "ci-policy"]'
         HOST_OS: ''
       run: |
         python - <<'PY'
