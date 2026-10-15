@@ -61,8 +61,8 @@ Owner: implementer, coordinated with the CI-audit owner. Size: one integration P
 
 Consumes: [CI hardening section 12](../specs/ci-hardening.md#12-release-build-handoff), through these exact interfaces:
 
-- `scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform PLATFORM --tools TOOL[,TOOL...] --dest DIR --cache-mode sources|none --env-out PATH`; tag jobs use `none`. Add Linux ARM64 payload entries and native bootstrap proof before server ARM64 builds.
-- `.github/python-version` (`3.14.8`), `.github/requirements-design.txt` and `scripts/ci/python_env.py --check`; use the sole hash-locked validator environment.
+- `scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform PLATFORM --tools TOOL[,TOOL...] --dest DIR --cache-mode sources|none --env-out PATH`, run by the runner's `python3` in the exact bootstrap step and applied by the one exact `cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"` step that CI hardening section 8 fixes; tag jobs use `none`. Add the `linux-x64-ubuntu22.04` and `linux-arm64-ubuntu22.04` payload rows and native bootstrap proof on those runners before any Ubuntu 22.04 release job runs the bootstrap.
+- `.github/python-version` (`3.14.8`), `.github/requirements-design.txt`, `scripts/ci/python_env.py --venv` and the isolated terminal `python -I -S -B scripts/ci/python_env.py --check`; use the sole hash-locked validator environment.
 - `scripts/ci/run_selected.py --id ID --evidence DIR`, with selectors in `scripts/ci/targets.toml`; `scripts/ci/fresh_go.py --root PATH --env-out PATH` creates fresh Go caches.
 - `scripts/ci/catalogue_compat.py --root PATH --base-sha SHA --candidate-sha SHA`; use the validated route's base and tested commits.
 - `scripts/ci/route.py --event-name EVENT --event PATH --root PATH --out PATH`, adding `--full` for validated tag pushes; extend `scripts/ci/inventory.py` for release units.
@@ -80,7 +80,7 @@ Do not create an independent bootstrap, validator closure, execution parser or b
 
 ## Task 3. Version the existing console build
 
-Owner: implementer. Size: one PR. Own `console/scripts/build-info.ts`, `console/src/generated/build-info.ts` generation, the existing shell information view, `console/tests/unit/build-info.test.ts`, console build scripts and `.github/workflows/builds.yml`. Generated files remain ignored; add scoped ignore entries only when required. Read console foundation and Vue instructions.
+Owner: implementer. Size: one PR. Own `console/scripts/build-info.ts`, `console/src/generated/build-info.ts` generation, the existing shell information view, `console/tests/unit/build-info.test.ts`, console build scripts `.github/workflows/builds.yml` and the tag-run identity step in `.github/workflows/console.yml`, which derives the identity independently from the tag under spec section 2. Generated files remain ignored; add scoped ignore entries only when required. Read console foundation and Vue instructions.
 
 Consumes: Task 1 identity. Produces: validated unpacked console assets and public metadata, with an identical source identity and no inline script or weakened CSP. A native server later embeds this exact asset tree. Task 5 creates the distributable console archive.
 
@@ -88,7 +88,7 @@ Consumes: Task 1 identity. Produces: validated unpacked console assets and publi
 - [ ] Run `pnpm --dir console test:unit -- tests/unit/build-info.test.ts`; require failure before identity integration.
 - [ ] Generate the typed module from the validated record and integrate it into the existing production build. Keep package.json's core and frozen lockfile unchanged on tag builds. Preserve dependency-script suppression, current license audit and OSV policy.
 - [ ] Run `pnpm --dir console typecheck`, `pnpm --dir console lint`, `pnpm --dir console format:check` and `pnpm --dir console test:unit`; require pass locally for touched contracts.
-- [ ] CI proof in `console-build`: `pnpm --dir console install --frozen-lockfile`, `pnpm --dir console audit:deps`, `pnpm --dir console build`, `pnpm --dir console check:reproducible`, `pnpm --dir console test:component`, `pnpm --dir console test:csp` and `pnpm --dir console test:fuzz`. Install pinned browser payloads through the verified bootstrap first. Require two equal manifests, browser negative controls, the 10,000-case property run and printed budgets.
+- [ ] CI proof in `console-build`: `pnpm --dir console install --frozen-lockfile`, `pnpm --dir console audit:deps`, `pnpm --dir console build`, `pnpm --dir console check:reproducible`, `pnpm --dir console test:fuzz` and `python -B scripts/ci/tree_digest.py --root console/dist`; `console-build` runs no browser. `release-ready` requires the same tag run's CI `console` and `console-webkit:macos-arm64` leaves, whose component, Chromium, Firefox and WebKit gates test their `dist-digest`, and requires that digest to equal `console-build`'s ([CI hardening section 8](../specs/ci-hardening.md#payloads-and-browser-hosts)). Generate build identity identically in both builds, so equal sources yield equal trees. CI proof records that the `ubuntu-22.04` `console-build` tree and the `ubuntu-24.04` CI console tree are byte-identical for one tag; any difference blocks `release-ready` until a reviewed fix, never a weaker comparison. Require two equal manifests, browser negative controls, the 10,000-case property run and printed budgets.
 - [ ] Upload the unpacked console tree as an Actions artifact with 14-day retention and evidence with 30-day retention. CI may publish this Actions artifact before runtime prerequisites, but it must not create a product pre-release on its own.
 
 ## Task 4. Native executable builds and footprint evidence
