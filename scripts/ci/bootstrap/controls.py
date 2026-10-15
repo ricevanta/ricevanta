@@ -5,8 +5,10 @@ truncated and a one-byte-appended copy of each through `--cache-mode sources`, a
 before any extraction, installation or execution: distinct size and digest reasons, an empty
 destination, no executed command and unchanged installer side-effect sentinels. It also proves
 that a wrong `--platform` fails before any download. `evidence` checks a finished bootstrap: the
-evidence file lists exactly the selected lock entries with their digests, and every admitted
-executable resolves on PATH to the admitted root rather than a runner tool cache.
+evidence file lists exactly the selected lock entries with their digests, every admitted
+executable resolves on PATH to the admitted root rather than a runner tool cache, and every
+variable the bootstrap admitted (GOROOT, CARGO_HOME, PLAYWRIGHT_BROWSERS_PATH, pnpm settings and
+the rest) holds the admitted value in the step's environment.
 
 Standard library only; it imports the sibling `bootstrap.py`.
 """
@@ -54,8 +56,18 @@ def sentinel_snapshot(host):
                     except OSError: continue
                     state[str(path)] = (info.st_mtime_ns, info.st_size, info.st_mode)
     if host.is_windows:
-        state['registry'] = host.registry_has_user_python('3.14')
+        state['registry'] = (sorted(host.registry.registrations('3.14')), host.registry.user_core('3.14'))
     return state
+
+
+class CountingExecute:
+    """Wraps any executor so the controls can prove no command ran after a refusal, also with the real one."""
+    def __init__(self, inner):
+        self.inner, self.calls = inner, []
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append(list(argv))
+        return self.inner(argv, **kwargs)
 
 
 def run_bootstrap(argv, fetch, execute, host):
@@ -82,7 +94,8 @@ def control_corrupt(args, fetch, execute, host):
     sources = work / 'sources'
     sources.mkdir()
     report = {'kind': 'bootstrap-controls', 'platform': args.platform, 'controls': [], 'failures': []}
-    calls = getattr(execute, 'calls', None)
+    execute = CountingExecute(execute)
+    calls = execute.calls
     try:
         for entry in entries:
             target = sources / entry['sha256']
@@ -164,11 +177,28 @@ def control_evidence(args):
         row = recorded.get(entry['id'], {})
         if row.get('sha256') != entry['sha256'] or row.get('size') != entry['size'] or row.get('url') != entry['url'] or row.get('verified') is not True:
             report['failures'].append(f'{entry["id"]}: evidence does not match the lock entry')
+        if entry['tool'] in bootstrap.PLAYWRIGHT_BUILDS:
+            build = bootstrap.PLAYWRIGHT_BUILDS[entry['tool']]
+            browser = Path(os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')) / f'{build["directory"]}-{build["revision"]}'
+            if not (browser / 'INSTALLATION_COMPLETE').is_file() or not browser.resolve().is_relative_to(root.resolve()):
+                report['failures'].append(f'{entry["id"]}: PLAYWRIGHT_BROWSERS_PATH does not hold the admitted {browser.name}')
+            report['controls'].append({'control': 'browser', 'entry': entry['id'], 'directory': str(browser)})
         for name in EXECUTABLES.get(entry['tool'], ()):
             found = shutil.which(name)
             if not found or not Path(found).resolve().is_relative_to(root.resolve()) and not Path(found).is_relative_to(root):
                 report['failures'].append(f'{entry["id"]}: {name} on PATH resolves to {found!r}, not under the admitted root {root}')
             report['controls'].append({'control': 'path', 'entry': entry['id'], 'executable': name, 'resolved': found})
+    admitted = evidence.get('env', {}) if isinstance(evidence.get('env'), dict) else {}
+    for key, value in sorted(admitted.items()):
+        actual = os.environ.get(key)
+        if key == 'PATH':
+            separator = ';' if evidence.get('platform', '').startswith('windows') else os.pathsep
+            prefix = [p for p in evidence.get('path', [])]
+            if (actual or '').split(separator)[:len(prefix)] != prefix:
+                report['failures'].append('PATH does not begin with the admitted directories')
+        elif actual != value:
+            report['failures'].append(f'{key} is {actual!r} in this step, not the admitted {value!r}')
+        report['controls'].append({'control': 'environment', 'variable': key})
     return report
 
 

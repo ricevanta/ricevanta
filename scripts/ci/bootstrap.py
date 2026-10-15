@@ -8,12 +8,15 @@ and unsupported member kinds before extraction. Installed tools are executed onc
 expected version and host. Runner tool caches are never consulted.
 
 `--cache-mode sources` reuses verified payload copies from the directory named by
-`CI_TOOLCHAIN_SOURCES` (files named by SHA-256) and stores fresh downloads there; a cached copy
-that fails verification is an error, never a reason to download instead. `--cache-mode none`
-ignores that directory and deletes payloads after admission.
+`CI_TOOLCHAIN_SOURCES` (files named by SHA-256) and stores fresh downloads there; a cached copy is
+hashed while it is copied into the private download directory, and a copy that fails verification
+is an error, never a reason to download instead. `--cache-mode none` ignores that directory and
+deletes payloads after admission. Interrupted or short transfers are retried a bounded number of
+times; a complete download with the wrong digest is never retried. A refusal empties the destination.
 """
 import argparse
 import hashlib
+import ntpath
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -21,6 +24,7 @@ import platform
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
@@ -34,6 +38,8 @@ MAX_MEMBERS = 200_000
 MAX_EXTRACTED = 4 * 1024 ** 3
 TIMEOUT = 120
 CHUNK = 1 << 20
+TRANSFER_ATTEMPTS = 3
+MAX_LINK_HOPS = 40
 SOURCES_ENV = 'CI_TOOLCHAIN_SOURCES'
 PLAYWRIGHT_VERSION = '1.59.1'
 PLATFORMS = {
@@ -66,10 +72,20 @@ PYTHON_CHECK = ('import platform, sys, ssl, lzma, zlib, hashlib, venv, ensurepip
 LIBPYTHON_CHECK = "print(next(line.split()[-1] for line in open('/proc/self/maps') if '/libpython' in line))"
 WINDOWS_INSTALLER_ARGS = ('/quiet', 'InstallAllUsers=0', 'Include_launcher=0', 'Include_test=0', 'Include_doc=0', 'Include_tcltk=0',
                           'Shortcuts=0', 'AssociateFiles=0', 'PrependPath=0', 'CompileAll=0', 'Include_pip=1')
+# The actions/python-versions Linux build links every ELF file to the builder's tool-cache prefix; it is relocated.
+PYTHON_BUILD_LIB = '/opt/hostedtoolcache/Python/{version}/x64/lib'
+# pnpm 11 reads pnpm_config_*; pmOnFail defaults to `download`, which would fetch and run an unadmitted pnpm.
+PNPM_ENV = {'pnpm_config_pm_on_fail': 'error', 'pnpm_config_update_notifier': 'false'}
+PNPM_GUARD_PROBE = {'name': 'pnpm-guard-probe', 'private': True, 'packageManager': 'pnpm@0.0.1'}
+REEXEC_PROBE = 'import hashlib, ssl, tarfile, zipfile, zlib, urllib.request'
 
 
 class BootstrapError(Exception):
     """A refused payload, host, lock, archive or tool check; the message names the entry and the reason."""
+
+
+class TransferError(BootstrapError):
+    """A network transfer that failed before completion; the only refusal that may be retried."""
 
 
 def log(phase, *parts):
@@ -84,9 +100,85 @@ def host_platform():
     raise BootstrapError(f'unsupported host: {system} {machine}')
 
 
+class WindowsRegistry:
+    """The runner's Python registrations, purged the way the payload's own setup.ps1 does before installing."""
+    UNINSTALL = ('Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', 'Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall')
+    USER_DATA = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products'
+
+    def _winreg(self):
+        import winreg  # pragma: no cover - Windows only
+        return winreg
+
+    def _children(self, hive, path):  # pragma: no cover - Windows only
+        winreg = self._winreg()
+        try:
+            key = winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+        except OSError:
+            return []
+        names = []
+        with key:
+            index = 0
+            while True:
+                try: names.append(winreg.EnumKey(key, index))
+                except OSError: return names
+                index += 1
+
+    def _value(self, hive, path, name):  # pragma: no cover - Windows only
+        winreg = self._winreg()
+        try:
+            with winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+                return str(winreg.QueryValueEx(key, name)[0])
+        except OSError:
+            return ''
+
+    def user_core(self, minor):  # pragma: no cover - Windows only
+        """A per-user PEP 514 registration means a per-user install already ran in this session."""
+        return self._exists(self._winreg().HKEY_CURRENT_USER, f'Software\\Python\\PythonCore\\{minor}')
+
+    def _exists(self, hive, path):  # pragma: no cover - Windows only
+        winreg = self._winreg()
+        try:
+            winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY).Close()
+            return True
+        except OSError:
+            return False
+
+    def registrations(self, minor):  # pragma: no cover - Windows only
+        """(hive name, key path, display name) for every 'Python 3.N.* (64-bit)' product registration."""
+        winreg = self._winreg()
+        pattern = python_registration_pattern(minor)
+        found = []
+        for hive, hive_name in ((winreg.HKEY_CURRENT_USER, 'HKCU'), (winreg.HKEY_LOCAL_MACHINE, 'HKLM')):
+            for section in self.UNINSTALL:
+                for child in self._children(hive, section):
+                    name = self._value(hive, f'{section}\\{child}', 'DisplayName')
+                    if pattern.search(name): found.append((hive_name, f'{section}\\{child}', name))
+        for child in self._children(winreg.HKEY_LOCAL_MACHINE, self.USER_DATA):
+            name = self._value(winreg.HKEY_LOCAL_MACHINE, f'{self.USER_DATA}\\{child}\\InstallProperties', 'DisplayName')
+            if pattern.search(name): found.append(('HKLM', f'{self.USER_DATA}\\{child}', name))
+        for child in self._children(winreg.HKEY_CLASSES_ROOT, 'Installer\\Products'):
+            name = self._value(winreg.HKEY_CLASSES_ROOT, f'Installer\\Products\\{child}', 'ProductName')
+            if pattern.search(name): found.append(('HKCR', f'Installer\\Products\\{child}', name))
+        return found
+
+    def delete(self, registration):  # pragma: no cover - Windows only
+        winreg = self._winreg()
+        hive = {'HKCU': winreg.HKEY_CURRENT_USER, 'HKLM': winreg.HKEY_LOCAL_MACHINE, 'HKCR': winreg.HKEY_CLASSES_ROOT}[registration[0]]
+        def remove(path):
+            for child in self._children(hive, path): remove(f'{path}\\{child}')
+            winreg.DeleteKeyEx(hive, path, winreg.KEY_WOW64_64KEY, 0)
+        remove(registration[1])
+
+
+def python_registration_pattern(minor):
+    """setup.ps1's `Python <major>.<minor>.*(64-bit)` filter."""
+    major, minor_number = minor.split('.')
+    return re.compile(rf'Python {major}\.{minor_number}\..*64-bit')
+
+
 class Host:
-    """Facts about the machine running the bootstrap; tests inject other platforms and side-effect probes."""
-    def __init__(self, platform_name, *, framework_root=None, registry_has_user_python=None):
+    """Facts about the machine running the bootstrap; tests inject other platforms, framework roots and registries."""
+    def __init__(self, platform_name, *, framework_root=None, registry=None, environ=None):
         if platform_name not in PLATFORMS: raise BootstrapError('unknown platform: ' + platform_name)
         self.platform = platform_name
         self.spec = PLATFORMS[platform_name]
@@ -94,27 +186,22 @@ class Host:
         self.is_windows = platform_name.startswith('windows')
         self.is_macos = platform_name.startswith('macos')
         self.framework_root = Path(framework_root) if framework_root else Path('/Library/Frameworks/Python.framework')
-        self._registry = registry_has_user_python
-
-    def registry_has_user_python(self, version):
-        if self._registry is not None: return self._registry(version)
-        import winreg  # pragma: no cover - Windows only
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, rf'Software\Python\PythonCore\{version}'):
-                return True
-        except OSError:
-            return False
+        self.registry = registry if registry is not None else (WindowsRegistry() if self.is_windows else None)
+        self.environ = os.environ if environ is None else environ
 
 
-def execute(argv, env=None, cwd=None, timeout=600, check=True):
-    """Run an admitted executable and return (exit code, decoded stdout); stderr joins the error on failure."""
+def execute(argv, env=None, cwd=None, timeout=600, check=True, stderr=False):
+    """Run an admitted executable and return (exit code, decoded stdout[, then stderr]); a None value removes a variable."""
     merged = dict(os.environ)
-    if env: merged.update(env)
+    for key, value in (env or {}).items():
+        if value is None: merged.pop(key, None)
+        else: merged[key] = value
     try:
         result = subprocess.run([str(a) for a in argv], env=merged, cwd=cwd, timeout=timeout, capture_output=True)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise BootstrapError(f'execution failed: {argv[0]}: {exc}') from exc
     stdout = result.stdout.decode('utf-8', 'replace').replace('\r\n', '\n')
+    if stderr: stdout += result.stderr.decode('utf-8', 'replace').replace('\r\n', '\n')
     if check and result.returncode:
         stderr = result.stderr.decode('utf-8', 'replace')[-2000:]
         raise BootstrapError(f'execution failed: {argv[0]} exited {result.returncode}: {stderr.strip()}')
@@ -148,7 +235,7 @@ def fetch_url(url, limit, sink):
     except BootstrapError:
         raise
     except Exception as exc:
-        raise BootstrapError(f'download failed: {url}: {exc}') from exc
+        raise TransferError(f'download failed: {url}: {exc}') from exc
 
 
 def strict_json(text):
@@ -241,6 +328,9 @@ def lock_errors(root):
         return [f'{LICENSING}: {exc}']
     versions = {}
     for entry in lock['entries']:
+        # macOS may re-exec into Apple's /usr/bin/python3, whose lzma support is not guaranteed.
+        if entry['platform'] == 'macos-arm64' and re.search(r'\.(?:xz|txz|lzma)$', entry['url']):
+            errors.append(f'{LOCK}: {entry["id"]}: macOS payloads must not require lzma; use the vendor gzip archive')
         if entry['sha256'] not in licensing: errors.append(f'{LOCK}: {entry["id"]}: no exact payload license evidence in {LICENSING}')
         versions.setdefault(entry['tool'], set()).add(entry['version'])
     for tool, found in sorted(versions.items()):
@@ -283,11 +373,45 @@ def verify_file(path, entry):
     if actual != entry['sha256']: raise BootstrapError(f'{entry["id"]}: digest mismatch (expected {entry["sha256"]}, got {actual})')
 
 
-def download_payload(entry, target, fetch):
+def download_payload(entry, target, fetch, attempts=TRANSFER_ATTEMPTS):
+    """Download into a fresh file and verify; retry only interrupted or short transfers, never a wrong digest or an oversize body."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    with open(target, 'wb') as sink:
-        fetch(entry['url'], entry['size'], sink)
-    verify_file(target, entry)
+    failure = None
+    for attempt in range(1, attempts + 1):
+        if target.exists(): target.unlink()
+        try:
+            with open(target, 'wb') as sink:
+                fetch(entry['url'], entry['size'], sink)
+        except TransferError as exc:
+            failure = exc
+        else:
+            size = target.stat().st_size
+            if size >= entry['size']:
+                verify_file(target, entry)
+                return
+            failure = BootstrapError(f'{entry["id"]}: size mismatch (expected {entry["size"]} bytes, got {size}; transfer ended early)')
+        if attempt < attempts: log('retry', entry['id'], f'attempt {attempt} of {attempts} failed:', failure)
+    if target.exists(): target.unlink()
+    raise BootstrapError(f'{failure} (after {attempts} attempts)') from failure
+
+
+def copy_verified(source, target, entry):
+    """Hash a cached payload while copying it from one open descriptor into the private download directory."""
+    flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0)
+    try:
+        descriptor = os.open(source, flags)
+    except OSError as exc:
+        raise BootstrapError(f'{entry["id"]}: cached payload is not a readable regular file: {exc}') from exc
+    target.parent.mkdir(parents=True, exist_ok=True)
+    digest, size = hashlib.sha256(), 0
+    with os.fdopen(descriptor, 'rb') as stream, open(target, 'wb') as sink:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode): raise BootstrapError(f'{entry["id"]}: cached payload is not a regular file')
+        while size <= entry['size']:
+            chunk = stream.read(min(CHUNK, entry['size'] + 1 - size))
+            if not chunk: break
+            digest.update(chunk); sink.write(chunk); size += len(chunk)
+    if size != entry['size']: raise BootstrapError(f'{entry["id"]}: size mismatch (expected {entry["size"]} bytes, got {size if size <= entry["size"] else "more"})')
+    if digest.hexdigest() != entry['sha256']: raise BootstrapError(f'{entry["id"]}: digest mismatch (expected {entry["sha256"]}, got {digest.hexdigest()})')
 
 
 class Member:
@@ -346,24 +470,106 @@ def inspect_archive(path, entry, host):
             target = member.link
             if not target or target.startswith('/') or re.match(r'^[A-Za-z]:', target) or '\\' in target or '\0' in target:
                 raise BootstrapError(f'{entry["id"]}: escaping link {member.name!r} -> {target!r}')
-            resolved = PurePosixPath(member.name).parent.joinpath(target)
-            depth = 0
-            for part in resolved.parts:
-                if part == '..': depth -= 1
-                elif part not in ('', '.'): depth += 1
-                if depth < 0: raise BootstrapError(f'{entry["id"]}: escaping link {member.name!r} -> {target!r}')
         if member.kind == 'hardlink':
             target = normalize_name(member.link, entry) if member.link and not member.link.startswith('/') else None
             if target is None or seen.get(target) != 'file': raise BootstrapError(f'{entry["id"]}: escaping link {member.name!r} -> {member.link!r}')
             member.link = target
-    links = {m.name for m in members if m.kind == 'symlink'}
+    # Names compare case-insensitively on every host: macOS and Windows file systems fold case.
+    links = {m.name.lower(): m.link for m in members if m.kind == 'symlink'}
     for member in members:
         parts = member.name.split('/')
         for depth in range(1, len(parts)):
-            if '/'.join(parts[:depth]) in links:
+            if '/'.join(parts[:depth]).lower() in links:
                 raise BootstrapError(f'{entry["id"]}: archive member {member.name!r} lies beneath the symbolic link {"/".join(parts[:depth])!r}')
+    for member in members:
+        if member.kind == 'symlink': resolve_virtual_link(member.name, links, entry)
     if total > MAX_EXTRACTED: raise BootstrapError(f'{entry["id"]}: archive expands beyond the admitted size limit')
     return members
+
+
+def resolve_virtual_link(name, links, entry):
+    """Resolve a link through every other link in the archive, case-folded, and refuse any path above the archive root."""
+    resolved, hops = [], 0
+    pending = list(PurePosixPath(name).parent.parts) + links[name.lower()].split('/')
+    while pending:
+        part = pending.pop(0)
+        if part in ('', '.'): continue
+        if part == '..':
+            if not resolved: raise BootstrapError(f'{entry["id"]}: escaping link {name!r} -> {links[name.lower()]!r}')
+            resolved.pop()
+            continue
+        resolved.append(part)
+        target = links.get('/'.join(resolved).lower())
+        if target is not None:
+            hops += 1
+            if hops > MAX_LINK_HOPS: raise BootstrapError(f'{entry["id"]}: link loop at {name!r}')
+            resolved.pop()
+            pending = target.split('/') + pending
+    return '/'.join(resolved)
+
+
+def links_inside(root, entry, what):
+    """After any extraction or re-rooting copy, every link must resolve inside its tree."""
+    base = root.resolve()
+    for current, directories, files in os.walk(root):
+        for name in directories + files:
+            candidate = Path(current) / name
+            if candidate.is_symlink():
+                try:
+                    inside = candidate.resolve().is_relative_to(base)
+                except (OSError, RuntimeError):
+                    inside = False
+                if not inside: raise BootstrapError(f'{entry["id"]}: link escapes the {what}: {candidate.relative_to(root)}')
+
+
+def elf_runpaths(path):
+    """(file offset, allocated length, value) of every DT_RUNPATH/DT_RPATH string in a little-endian ELF64 file, else []."""
+    with open(path, 'rb') as stream:
+        data = stream.read()
+    if data[:4] != b'\x7fELF' or data[4] != 2 or data[5] != 1: return []
+    phoff, = struct.unpack_from('<Q', data, 0x20)
+    phentsize, phnum = struct.unpack_from('<HH', data, 0x36)
+    loads, dynamic = [], None
+    for index in range(phnum):
+        p_type, _, p_offset, p_vaddr, _, p_filesz, _, _ = struct.unpack_from('<IIQQQQQQ', data, phoff + index * phentsize)
+        if p_type == 1: loads.append((p_vaddr, p_offset, p_filesz))
+        elif p_type == 2: dynamic = (p_offset, p_filesz)
+    if dynamic is None: return []
+    tags = []
+    for offset in range(dynamic[0], dynamic[0] + dynamic[1], 16):
+        tag, value = struct.unpack_from('<qQ', data, offset)
+        if tag == 0: break
+        tags.append((tag, value))
+    strtab = next((value for tag, value in tags if tag == 5), None)
+    base = next((v_offset + strtab - vaddr for vaddr, v_offset, size in loads if strtab is not None and vaddr <= strtab < vaddr + size), None)
+    if base is None: return []
+    found = []
+    for tag, value in tags:
+        if tag in (15, 29):
+            start = base + value
+            end = data.index(b'\0', start)
+            found.append((start, end - start, data[start:end].decode('utf-8', 'replace')))
+    return found
+
+
+def relocate_runpaths(root, old, new_from, entry):
+    """Rewrite each ELF runpath equal to `old` in place to an $ORIGIN-relative path to `new_from`; refuse any other absolute runpath."""
+    relocated = []
+    for current, _, files in os.walk(root):
+        for name in files:
+            path = Path(current) / name
+            if path.is_symlink() or not path.is_file(): continue
+            for offset, length, value in elf_runpaths(path):
+                if value.startswith('$ORIGIN'): continue
+                if value != old: raise BootstrapError(f'{entry["id"]}: {path.relative_to(root)} has an unadmitted runpath {value!r}')
+                relative = os.path.relpath(new_from, path.parent).replace(os.sep, '/')
+                replacement = ('$ORIGIN' if relative == '.' else '$ORIGIN/' + relative).encode()
+                if len(replacement) > length: raise BootstrapError(f'{entry["id"]}: cannot relocate {path.relative_to(root)} runpath')
+                with open(path, 'r+b') as stream:
+                    stream.seek(offset)
+                    stream.write(replacement + b'\0' * (length - len(replacement)))
+                relocated.append(str(path.relative_to(root)))
+    return relocated
 
 
 def extract_archive(path, members, staging, entry):
@@ -396,16 +602,7 @@ def extract_archive(path, members, staging, entry):
         raise BootstrapError(f'{entry["id"]}: extraction failed: {exc}') from exc
     finally:
         archive.close()
-    root = staging.resolve()
-    for current, directories, files in os.walk(staging):
-        for name in directories + files:
-            candidate = Path(current) / name
-            if candidate.is_symlink():
-                try:
-                    inside = candidate.resolve().is_relative_to(root)
-                except (OSError, RuntimeError):
-                    inside = False
-                if not inside: raise BootstrapError(f'{entry["id"]}: link escapes the staging directory: {candidate.name}')
+    links_inside(staging, entry, 'staging directory')
 
 
 def top_level(members):
@@ -423,13 +620,25 @@ class Context:
     def __init__(self, dest, host, execute_fn, cache_mode):
         self.dest, self.host, self.execute, self.cache_mode = dest, host, execute_fn, cache_mode
         self.env, self.paths, self.installed, self.checks = {}, [], {}, []
-        self.staging = {}
+        self.relocated = {}
 
-    def run(self, entry, argv, env=None, timeout=600):
+    def run(self, entry, argv, env=None, timeout=600, cwd=None, expect_failure=False):
+        """Execute an admitted tool; with expect_failure, return (exit code, stdout and stderr) instead of raising."""
         log('execute', entry['id'], *map(str, argv))
-        code, output = self.execute([str(a) for a in argv], env=env, timeout=timeout)
+        if expect_failure:
+            code, output = self.execute([str(a) for a in argv], env=env, timeout=timeout, cwd=cwd, check=False, stderr=True)
+            self.checks.append({'entry': entry['id'], 'argv': [str(a) for a in argv], 'exit': code, 'output': output.strip()[:4000]})
+            return code, output
+        code, output = self.execute([str(a) for a in argv], env=env, timeout=timeout, cwd=cwd)
         self.checks.append({'entry': entry['id'], 'argv': [str(a) for a in argv], 'output': output.strip()[:4000]})
         return output
+
+    def admitted_env(self, **extra):
+        """The admitted directories alone on PATH, plus the admitted variables: no runner default can answer."""
+        env = dict(self.env)
+        env['PATH'] = (';' if self.host.is_windows else os.pathsep).join(self.paths)
+        env.update(extra)
+        return env
 
     def add_path(self, path):
         if str(path) not in self.paths: self.paths.append(str(path))
@@ -451,6 +660,7 @@ def install_go(ctx, entry, members, staging):
     target = ctx.dest / 'go'
     move_root(staging, members, entry, 'go', target)
     ctx.installed['go'] = target / 'bin' / ('go' + ctx.host.exe)
+    ctx.env['GOROOT'] = str(target)
     ctx.add_path(target / 'bin')
 
 
@@ -458,6 +668,10 @@ def check_go(ctx, entry):
     output = ctx.run(entry, [ctx.installed['go'], 'version']).strip()
     expected = f'go version go{entry["version"]} {ctx.host.spec["go"]}'
     if output != expected: raise BootstrapError(f'{entry["id"]}: version check failed: {output!r} is not {expected!r}')
+    # An inherited GOROOT would supply another standard library under the same version string.
+    goroot = ctx.run(entry, [ctx.installed['go'], 'env', 'GOROOT'], env={'GOROOT': ctx.env['GOROOT']}).strip()
+    if Path(goroot) != Path(ctx.env['GOROOT']):
+        raise BootstrapError(f'{entry["id"]}: go env GOROOT is {goroot!r}, not the admitted {ctx.env["GOROOT"]}')
 
 
 def layout_python(members, entry, host):
@@ -472,8 +686,15 @@ def install_python(ctx, entry, members, staging):
     minor = '.'.join(entry['version'].split('.')[:2])
     target = ctx.dest / 'python'
     if ctx.host.is_windows:
-        if ctx.host.registry_has_user_python(minor):
+        registry = ctx.host.registry
+        if registry.user_core(minor):
             raise BootstrapError(f'{entry["id"]}: a per-user Python {minor} is already registered; the installer would modify it instead of installing freshly')
+        # The runner image installs this same bundle per machine; Burn would then repair that copy instead of installing.
+        # Purge the runner's Python <minor> product registrations exactly as the payload's own setup.ps1 does.
+        for registration in registry.registrations(minor):
+            log('replaced runner-provided', 'Python registration', *registration)
+            registry.delete(registration)
+        if registry.registrations(minor): raise BootstrapError(f'{entry["id"]}: could not remove the runner Python {minor} registrations')
         installer = staging / f'python-{entry["version"]}-amd64.exe'
         ctx.run(entry, [installer, WINDOWS_INSTALLER_ARGS[0], WINDOWS_INSTALLER_ARGS[1], f'TargetDir={target}', *WINDOWS_INSTALLER_ARGS[2:]], timeout=1800)
         python = target / 'python.exe'
@@ -498,18 +719,20 @@ def install_python(ctx, entry, members, staging):
         ctx.add_path(target / 'bin')
         return
     os.replace(staging, target)
+    # The build's RUNPATH names the runner tool cache, which holds the same version: point every ELF file at the admitted lib.
+    ctx.relocated['python'] = relocate_runpaths(target, PYTHON_BUILD_LIB.format(version=entry['version']), target / 'lib', entry)
     python = target / 'bin' / f'python{minor}'
     link = target / 'bin' / 'python'
     if not link.exists() and not link.is_symlink(): os.symlink(f'python{minor}', link)
-    existing = os.environ.get('LD_LIBRARY_PATH', '')
-    ctx.env['LD_LIBRARY_PATH'] = str(target / 'lib') + (os.pathsep + existing if existing else '')
     ctx.installed['python'] = python
     ctx.add_path(target / 'bin')
 
 
 def check_python(ctx, entry):
     python = ctx.installed['python']
-    env = {'LD_LIBRARY_PATH': ctx.env['LD_LIBRARY_PATH']} if 'LD_LIBRARY_PATH' in ctx.env else None
+    linux = not (ctx.host.is_windows or ctx.host.is_macos)
+    # On Linux, prove the relocated RUNPATH alone finds the admitted libpython: no loader variable may help.
+    env = {'LD_LIBRARY_PATH': None, 'LD_PRELOAD': None} if linux else None
     lines = ctx.run(entry, [python, '-I', '-c', PYTHON_CHECK], env=env).strip().splitlines()
     expected_prefix = ctx.host.framework_root / 'Versions' / '.'.join(entry['version'].split('.')[:2]) if ctx.host.is_macos else ctx.dest / 'python'
     if len(lines) != 4 or lines[0] != entry['version'] or lines[3] != 'ok':
@@ -518,8 +741,7 @@ def check_python(ctx, entry):
     if lines[2] not in ctx.host.spec['machine']: raise BootstrapError(f'{entry["id"]}: interpreter machine {lines[2]!r} is not {ctx.host.platform}')
     pip = ctx.run(entry, [python, '-I', '-m', 'pip', '--version'], env=env).strip()
     if not pip.startswith('pip '): raise BootstrapError(f'{entry["id"]}: bundled pip missing: {pip!r}')
-    if env is not None:
-        # The payload's RUNPATH names the runner tool cache; LD_LIBRARY_PATH must win, so prove which libpython is mapped.
+    if linux:
         mapped = ctx.run(entry, [python, '-I', '-c', LIBPYTHON_CHECK], env=env).strip()
         library = ctx.dest / 'python' / 'lib' / f'libpython{".".join(entry["version"].split(".")[:2])}.so.1.0'
         if Path(mapped) != library: raise BootstrapError(f'{entry["id"]}: interpreter maps libpython from {mapped!r}, not the admitted {library}')
@@ -556,10 +778,16 @@ def install_rust(ctx, entry, members, staging):
         destination.parent.mkdir(parents=True, exist_ok=True)
         if kind == 'file': shutil.copy2(source, destination)
         else: shutil.copytree(source, destination, symlinks=True)
+    links_inside(target, entry, 'admitted Rust root')
     ctx.installed[entry['tool']] = target / 'bin'
     if entry['tool'] == 'rustc':
         ctx.env['RUSTC'] = str(target / 'bin' / ('rustc' + ctx.host.exe))
         ctx.env['RUSTDOC'] = str(target / 'bin' / ('rustdoc' + ctx.host.exe))
+        # Cargo searches $CARGO_HOME/bin for subcommands and rustup proxies read RUSTUP_HOME; both point at empty admitted homes.
+        for key, name in (('CARGO_HOME', 'cargo-home'), ('RUSTUP_HOME', 'rustup-home')):
+            (ctx.dest / name).mkdir(exist_ok=True)
+            ctx.env[key] = str(ctx.dest / name)
+        ctx.env['RUSTUP_AUTO_INSTALL'] = '0'
     ctx.add_path(target / 'bin')
 
 
@@ -583,6 +811,12 @@ def check_rust(ctx, entry):
         match = re.search(r'\(([0-9a-f]{9,40}) ', output)
         if not commit or not match or not commit.startswith(match[1]):
             raise BootstrapError(f'{entry["id"]}: {output!r} does not report the admitted rustc commit')
+        # `cargo fmt` and `cargo clippy` must reach these binaries with only admitted directories and homes in view.
+        subcommand = 'fmt' if entry['tool'] == 'rustfmt' else 'clippy'
+        through_cargo = ctx.run(entry, [bin_dir / ('cargo' + exe), subcommand, '--version'], env=ctx.admitted_env()).strip()
+        if through_cargo != output:
+            raise BootstrapError(f'{entry["id"]}: cargo {subcommand} reports {through_cargo!r}, not the admitted {output!r}')
+        if (Path(ctx.env['CARGO_HOME']) / 'bin').exists(): raise BootstrapError(f'{entry["id"]}: the admitted Cargo home must hold no bin directory')
     else:
         triple = ctx.host.spec['rust']
         if not (bin_dir.parent / 'lib' / 'rustlib' / triple / 'lib').is_dir(): raise BootstrapError(f'{entry["id"]}: standard library for {triple} missing')
@@ -634,14 +868,26 @@ def install_pnpm(ctx, entry, members, staging):
     shim.write_text(f'#!/bin/sh\nexec "{ctx.installed["node"]}" "{target / "package" / "bin" / "pnpm.mjs"}" "$@"\n', encoding='utf-8')
     shim.chmod(0o755)
     ctx.installed['pnpm'] = shim
-    ctx.env['npm_config_manage_package_manager_versions'] = 'false'
-    ctx.env['npm_config_update_notifier'] = 'false'
+    ctx.env.update(PNPM_ENV)
     ctx.add_path(shim_dir)
 
 
 def check_pnpm(ctx, entry):
     output = ctx.run(entry, [ctx.installed['pnpm'], '--version']).strip()
     if output != entry['version']: raise BootstrapError(f'{entry["id"]}: version check failed: {output!r} is not {entry["version"]!r}')
+    # Prove the admitted pnpm refuses to switch to a project-pinned pnpm. The registry is unreachable, so a missing
+    # guard fails differently instead of downloading.
+    probe = ctx.dest / '.pnpm-guard'
+    probe.mkdir()
+    try:
+        (probe / 'package.json').write_text(json.dumps(PNPM_GUARD_PROBE) + '\n', encoding='utf-8')
+        code, refused = ctx.run(entry, [ctx.installed['pnpm'], '--version'], cwd=probe, expect_failure=True,
+                                env=ctx.admitted_env(pnpm_config_registry='https://127.0.0.1:9/', pnpm_config_fetch_retries='0'))
+    finally:
+        shutil.rmtree(probe, ignore_errors=True)
+    wanted = f'This project is configured to use {PNPM_GUARD_PROBE["packageManager"].split("@")[1]} of pnpm'
+    if code == 0 or wanted not in refused:
+        raise BootstrapError(f'{entry["id"]}: pnpm did not refuse a project-pinned version switch: exit {code}: {refused.strip()[:300]!r}')
 
 
 def layout_browser(members, entry, host):
@@ -727,6 +973,30 @@ def prepare_destination(dest):
     return path
 
 
+def inherited_path(host):
+    """The runner PATH to keep behind the admitted directories, without Git Bash's own prefix on Windows.
+
+    Git for Windows' bash.exe prepends its mingw64 and usr directories and the user's bin directory; exporting them
+    through GITHUB_ENV would put Git coreutils ahead of System32 in every later pwsh or cmd step.
+    """
+    entries = [e for e in host.environ.get('PATH', '').split(';' if host.is_windows else os.pathsep) if e]
+    if host.is_windows and host.environ.get('MSYSTEM'):
+        home = host.environ.get('USERPROFILE') or host.environ.get('HOME') or ''
+        def wrapper(value):
+            folded = ntpath.normcase(ntpath.normpath(value))
+            return (folded.endswith(ntpath.normcase('\\mingw64\\bin')) or folded.endswith(ntpath.normcase('\\usr\\bin'))
+                    or (home and folded == ntpath.normcase(ntpath.normpath(ntpath.join(home, 'bin')))))
+        while entries and wrapper(entries[0]): entries.pop(0)
+    return entries
+
+
+def empty_destination(dest):
+    """No partial install survives a refusal: the destination returns to empty."""
+    for child in list(dest.iterdir()):
+        if child.is_dir() and not child.is_symlink(): shutil.rmtree(child, ignore_errors=True)
+        else: child.unlink()
+
+
 def runner_inputs(host):
     return {'bootstrapInterpreter': sys.executable, 'bootstrapPython': platform.python_version(), 'system': platform.system(),
             'release': platform.release(), 'machine': platform.machine(), 'platform': host.platform,
@@ -774,13 +1044,13 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
     try:
         for entry in entries:
             cached = sources / entry['sha256'] if sources else None
-            if cached is not None and cached.exists():
-                if cached.is_symlink() or not cached.is_file(): raise BootstrapError(f'{entry["id"]}: cached payload is not a regular file')
-                verify_file(cached, entry)
-                log('reuse', entry['id'], cached)
-                payloads[entry['id']] = (cached, 'sources')
-                continue
             target = downloads / entry['id'] / entry['url'].rsplit('/', 1)[1]
+            if cached is not None and (cached.exists() or cached.is_symlink()):
+                # Hash while copying from one descriptor; inspection and extraction read only the private copy.
+                copy_verified(cached, target, entry)
+                log('reuse', entry['id'], cached)
+                payloads[entry['id']] = (target, 'sources')
+                continue
             log('fetch', entry['id'], entry['url'])
             download_payload(entry, target, fetch)
             log('verify', entry['id'], entry['size'], entry['sha256'])
@@ -805,17 +1075,20 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
             RECIPES[entry['tool']][1](ctx, entry, inspected[entry['id']], staging)
             evidence['entries'].append({'id': entry['id'], 'tool': entry['tool'], 'version': entry['version'], 'url': entry['url'],
                                         'size': entry['size'], 'sha256': entry['sha256'], 'verified': True, 'source': source,
-                                        'installed': str(ctx.installed.get(entry['tool'], ''))})
+                                        'installed': str(ctx.installed.get(entry['tool'], '')),
+                                        'relocated': ctx.relocated.get(entry['tool'], [])})
         for entry in entries:
             log('check', entry['id'])
             RECIPES[entry['tool']][2](ctx, entry)
             log('admitted', entry['tool'], entry['version'], ctx.installed.get(entry['tool'], ''))
+    except BaseException:
+        empty_destination(dest)
+        raise
     finally:
         for transient in (downloads, staging_root):
             if transient.exists(): shutil.rmtree(transient, ignore_errors=True)
     ctx.env['CI_ADMITTED_ROOT'] = str(dest)
-    inherited = os.environ.get('PATH', '')
-    if ctx.paths: ctx.env['PATH'] = os.pathsep.join([*ctx.paths, *([inherited] if inherited else [])])
+    if ctx.paths: ctx.env['PATH'] = (';' if host.is_windows else os.pathsep).join([*ctx.paths, *inherited_path(host)])
     for key, value in ctx.env.items():
         safe_text(key, 'environment name'); safe_text(value, 'environment value ' + key)
     for path in ctx.paths: safe_text(path, 'PATH entry')
@@ -826,26 +1099,39 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
     return 0
 
 
-def reexec_outside_replaced_framework(argv):
-    """On macOS the admitted Python replaces the framework copy; never run the bootstrap from inside it."""
-    if sys.platform != 'darwin' or os.environ.get('RICEVANTA_BOOTSTRAP_REEXEC'): return
+def reexec_outside_replaced_framework(argv, *, system=None, executable=None, framework=None, system_python=Path('/usr/bin/python3'),
+                                       environ=None, probe=None, execv=None):
+    """On macOS the admitted Python replaces the framework copy; never run the bootstrap from inside it.
+
+    The replacement interpreter is Apple's /usr/bin/python3. macOS payloads are gzip or zip archives, so it needs
+    no lzma; it must still import the modules the bootstrap uses, or the run stops with a clear reason.
+    """
+    system = sys.platform if system is None else system
+    environ = os.environ if environ is None else environ
+    if system != 'darwin' or environ.get('RICEVANTA_BOOTSTRAP_REEXEC'): return False
     try:
         args = parse_args(argv)
         tools = expand_tools(args.tools)
     except (SystemExit, BootstrapError):
-        return
-    if 'python' not in tools: return
-    framework = Host('macos-arm64').framework_root
-    if Path(sys.executable).resolve().is_relative_to(framework.resolve() if framework.exists() else framework) and Path('/usr/bin/python3').exists():
-        log('reexec', '/usr/bin/python3 (bootstrap interpreter lives inside the framework being replaced)')
-        os.environ['RICEVANTA_BOOTSTRAP_REEXEC'] = '1'
-        os.execv('/usr/bin/python3', ['/usr/bin/python3', '-B', os.path.abspath(__file__), *argv])
+        return False
+    if 'python' not in tools: return False
+    framework = Host('macos-arm64').framework_root if framework is None else Path(framework)
+    executable = Path(sys.executable if executable is None else executable)
+    inside = executable.resolve().is_relative_to(framework.resolve() if framework.exists() else framework)
+    if not inside: return False
+    if not system_python.exists(): raise BootstrapError(f'the bootstrap interpreter {executable} lives inside {framework}, which the admitted Python replaces, and {system_python} is missing')
+    probe = probe or (lambda: subprocess.run([str(system_python), '-I', '-c', REEXEC_PROBE], capture_output=True).returncode == 0)
+    if not probe(): raise BootstrapError(f'{system_python} cannot import the modules the bootstrap needs ({REEXEC_PROBE})')
+    log('reexec', f'{system_python} (bootstrap interpreter lives inside the framework being replaced)')
+    environ['RICEVANTA_BOOTSTRAP_REEXEC'] = '1'
+    (execv or os.execv)(str(system_python), [str(system_python), '-B', os.path.abspath(__file__), *argv])
+    return True
 
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    reexec_outside_replaced_framework(argv)
     try:
+        reexec_outside_replaced_framework(argv)
         return run(argv)
     except BootstrapError as exc:
         print('bootstrap: refused: ' + str(exc), file=sys.stderr, flush=True)

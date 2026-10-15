@@ -21,7 +21,7 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'docs').mkdir()
         shutil.copyfile(ROOT / 'docs/licensing.md', self.root / 'docs/licensing.md')
         # The toolchain lock review compares its versions with the component pins.
-        for pin in ('server/go.mod', 'agent/rust-toolchain.toml', 'console/.node-version', 'console/package.json'):
+        for pin in ('server/go.mod', 'agent/rust-toolchain.toml', 'console/.node-version', 'console/package.json', 'console/pnpm-workspace.yaml'):
             (self.root / pin).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / pin, self.root / pin)
 
@@ -459,6 +459,33 @@ class PolicyTests(unittest.TestCase):
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
 
+    def test_project_settings_cannot_let_pnpm_download_pnpm_or_node(self):
+        import json as json_module
+        self.assertEqual(check_policy.check(self.root), [])
+        manifest_path = self.root / 'console/package.json'
+        manifest = manifest_path.read_text()
+        data = json_module.loads(manifest)
+        for label, dev_engines, expected in (
+                ('runtime download', {'runtime': {'name': 'node', 'version': '24.21.0', 'onFail': 'download'}}, 'devEngines.runtime'),
+                ('runtime verified only', {'runtime': {'name': 'node', 'version': '24.21.0', 'onFail': 'error'}}, 'devEngines.runtime can download Node'),
+                ('package manager download', {'packageManager': {'name': 'pnpm', 'version': '11.17.0', 'onFail': 'download'}}, 'onFail must be error')):
+            with self.subTest(case=label):
+                manifest_path.write_text(json_module.dumps({**data, 'devEngines': dev_engines}))
+                errors = check_policy.check(self.root)
+                manifest_path.write_text(manifest)
+                self.assertTrue(any(expected in e for e in errors), errors)
+        workspace = self.root / 'console/pnpm-workspace.yaml'
+        settings = workspace.read_text()
+        for line in ('pmOnFail: download', 'managePackageManagerVersions: true', 'useNodeVersion: 24.20.0'):
+            with self.subTest(setting=line):
+                workspace.write_text(settings + line + '\n')
+                errors = check_policy.check(self.root)
+                workspace.write_text(settings)
+                self.assertTrue(any('console/pnpm-workspace.yaml' in e for e in errors), line)
+        workspace.write_text(settings + 'pmOnFail: error\n')
+        self.assertEqual(check_policy.check(self.root), [])
+        workspace.write_text(settings)
+
     def test_bootstrap_admission_mutations_are_rejected(self):
         self.assertEqual(check_policy.check(self.root), [])
         def admitted(data, jid):
@@ -492,13 +519,27 @@ class PolicyTests(unittest.TestCase):
             ('bootstrap', 'removed matrix tools', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][0].update(tools='python,go'), 'bootstrap tools omit rust'),
             # The bootstrap's GITHUB_ENV write is admitted only in its exact shape; nothing else may redirect admitted tools.
             ('ci', 'bootstrap also writing GITHUB_PATH', lambda d: admitted(d, 'route').update(run=check_policy.BOOTSTRAP_COMMAND + ' --path-out "$GITHUB_PATH"'), 'missing exact bootstrap command'),
-            ('design', 'second GITHUB_ENV writer in a closure consumer', lambda d: d['jobs']['validate']['steps'].insert(3, {'shell': 'bash', 'working-directory': '.', 'run': check_policy.BOOTSTRAP_COMMAND.replace('admitted"', 'other"')}), 'environment writes outside the fresh cache helper and admitted bootstrap'),
+            ('design', 'second GITHUB_ENV writer in a closure consumer', lambda d: d['jobs']['validate']['steps'].insert(4, {'shell': 'bash', 'working-directory': '.', 'run': 'cat "$RUNNER_TEMP/other.env" >> "$GITHUB_ENV"'}), 'environment writes outside the fresh cache helper and admitted bootstrap'),
             ('server', 'PATH override through GITHUB_ENV', lambda d: d['jobs']['fuzz']['steps'].insert(4, {'run': 'echo "PATH=$RUNNER_TEMP/shim:$PATH" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             ('server', 'RUSTC override through GITHUB_ENV', lambda d: d['jobs']['fuzz']['steps'].insert(4, {'run': 'printf "RUSTC=%s\\n" /usr/bin/rustc >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             ('server', 'GITHUB_PATH shim outside a closure consumer', lambda d: d['jobs']['fuzz']['steps'].insert(4, {'run': 'echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"'}), 'PATH changes outside the admitted bootstrap'),
             ('server', 'step PATH env', lambda d: d['jobs']['race']['steps'][-3].setdefault('env', {}).update(PATH='/opt/hostedtoolcache/go/1.27.1/x64/bin'), 'admitted tool environment override'),
             ('console', 'job browser path', lambda d: d['jobs']['validate'].update(env={'PLAYWRIGHT_BROWSERS_PATH': '/home/runner/.cache/ms-playwright'}), 'admitted tool environment override'),
             ('agent', 'workflow toolchain override', lambda d: d.update(env={'RUSTUP_TOOLCHAIN': 'stable'}), 'admitted tool environment override'),
+            # The review's accepted probes (R-13) and the admitted environment file (R-15).
+            ('bootstrap', 'browsers dropped from the Linux row', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][0].update(tools='python,go,rust'), 'must select every lock tool'),
+            ('bootstrap', 'Rust dropped from the macOS row', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][2].update(tools='python,go'), 'must select every lock tool'),
+            ('console', 'pnpm dlx', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'pnpm dlx some-tool@1.0.0'}), 'unchecked download'),
+            ('console', 'gh release download', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'gh release download v1 -R owner/tool'}), 'unchecked download'),
+            ('console', 'python urlretrieve', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'python -c "import urllib.request; urllib.request.urlretrieve(\'https://x.invalid/t\', \'t\')"'}), 'unchecked download'),
+            ('console', 'pnpm pm-on-fail download', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'pnpm install --frozen-lockfile --pm-on-fail=download'}), 'unchecked download'),
+            ('server', 'LD_PRELOAD job env', lambda d: d['jobs']['validate'].update(env={'LD_PRELOAD': '/tmp/hook.so'}), 'admitted tool environment override forbidden: LD_PRELOAD'),
+            ('console', 'NODE_OPTIONS job env', lambda d: d['jobs']['validate']['env'].update(NODE_OPTIONS='--require /tmp/hook.js'), 'admitted tool environment override forbidden: NODE_OPTIONS'),
+            ('console', 'pnpm setting through env', lambda d: d['jobs']['validate']['env'].update(pnpm_config_pm_on_fail='download'), 'admitted tool environment override forbidden: pnpm_config_pm_on_fail'),
+            ('console', 'pnpm setting through GITHUB_ENV', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'echo "pnpm_config_pm_on_fail=download" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('server', 'environment file not applied', lambda d: d['jobs']['validate']['steps'].pop(2), 'the exact admitted environment step must directly follow'),
+            ('server', 'environment file applied twice', lambda d: d['jobs']['validate']['steps'].insert(6, dict(d['jobs']['validate']['steps'][2])), 'the exact admitted environment step'),
+            ('server', 'environment file rewritten', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'echo "GOROOT=/opt/go" >> "$RUNNER_TEMP/tools.env"'}), 'written and applied only by its exact steps'),
         ]
         for name, label, change, expected in mutations:
             with self.subTest(mutation=label):
@@ -509,7 +550,9 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(check_policy.check(self.root), [])
         lock = self.root / 'scripts/ci/toolchains.lock.json'
         baseline = lock.read_text()
-        for label, text in (('tampered digest', baseline.replace('63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445', 'f' * 64)),
+        mac = '"url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.gz"'
+        for label, text in (('macOS payload needing lzma', baseline.replace(mac, mac.replace('.tar.gz', '.tar.xz'))),
+                            ('tampered digest', baseline.replace('63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445', 'f' * 64)),
                             ('http mirror', baseline.replace('https://go.dev/dl/go1.27.1.linux-amd64.tar.gz', 'http://go.dev/dl/go1.27.1.linux-amd64.tar.gz')),
                             ('removed Windows Go', baseline.replace('"id": "go-1.27.1-windows-x64"', '"id": "go-1.27.1-windows-x64", "mirror": "x"'))):
             with self.subTest(lock=label):

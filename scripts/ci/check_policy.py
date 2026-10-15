@@ -86,7 +86,10 @@ CACHE = 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
 # Every toolchain comes from the reviewed lock through one exact bootstrap step; setup actions and
 # ad hoc installers fetch unchecked payloads and are forbidden everywhere.
 BOOTSTRAP_COMMAND = ('python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
-                     '--tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"')
+                     '--tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"')
+# The plan's interface writes the admitted environment to a file; one exact step then applies it for later steps.
+APPLY_COMMAND = 'cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"'
+APPLY_NAME = 'Apply admitted toolchain environment'
 EVIDENCE_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
                     '--tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"')
 CONTROLS_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
@@ -94,16 +97,27 @@ CONTROLS_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py corrupt --lock 
 PLATFORM_EXPRESSION = '${{ fromJSON(\'{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}\')[matrix.os] }}'
 ALLOWED_ACTIONS = (CHECKOUT, UPLOAD, DOWNLOAD, CACHE)
 UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b|\bapt(?:-get)?\s+install\b|\bbrew\s+install\b|\bchoco\b|'
-                                r'\bwinget\b|\bcurl\b|\bwget\b|Invoke-WebRequest|\biwr\b|\bnpm\s+(?:i|install|exec)\b|\bnpx\b|'
-                                r'\bgo\s+(?:install|get)\b|\bcargo\s+install\b|\bpip\s+download\b')
+                                r'\bwinget\b|\bcurl\b|\bwget\b|Invoke-WebRequest|Invoke-RestMethod|\biwr\b|\birm\b|Start-BitsTransfer|'
+                                r'\bbitsadmin\b|\bcertutil\b|\bnpm\s+(?:i|install|exec|x)\b|\bnpx\b|\bpnpx\b|\bpnpm\s+(?:dlx|create|env|self-update)\b|'
+                                r'\bpnpm\s+(?:add|install|i)\s+(?:-g|--global)\b|--pm-on-fail|\bgh\s+(?:release|run|attestation)\s+download\b|'
+                                r'\bgh\s+api\b|\bgit\s+clone\b|\burllib\b|\burlretrieve\b|\burlopen\b|\bhttp\.client\b|\brequests\.|'
+                                r'\bfetch\(|\bgo\s+(?:install|get)\b|\bcargo\s+(?:install|binstall)\b|\bpip\s+download\b')
 TOOL_CONSUMERS = (('python', re.compile(r'\bpython3?\b')), ('go', re.compile(r'\bgo(?:fmt)?\s')),
                   ('rust', re.compile(r'\bcargo\b|\brustc\b|\brustfmt\b')), ('node', re.compile(r'\bnode\b|\bpnpm\b')),
                   ('pnpm', re.compile(r'\bpnpm\b')), ('playwright', re.compile(r'pnpm test:(?:component|csp)|\bplaywright\b')))
-# Variables bootstrap.py writes through --env-out; no other step or env mapping may set them.
-ADMITTED_ENV = frozenset({'PATH', 'Path', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'RUSTC', 'RUSTDOC', 'CI_ADMITTED_ROOT',
-                          'PLAYWRIGHT_BROWSERS_PATH', 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', 'PLAYWRIGHT_DOWNLOAD_HOST',
-                          'npm_config_manage_package_manager_versions', 'npm_config_update_notifier', 'GOROOT', 'RUSTUP_TOOLCHAIN'})
-ADMITTED_ENV_WRITE = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(sorted(ADMITTED_ENV)) + r')\s*=')
+# Variables bootstrap.py writes through --env-out, and loader or interpreter hooks that would substitute other code
+# for an admitted tool; no other step or env mapping may set them. Whole families are closed by prefix.
+ADMITTED_ENV = frozenset({'PATH', 'Path', 'LD_LIBRARY_PATH', 'LD_PRELOAD', 'LD_AUDIT', 'DYLD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES',
+                          'DYLD_FRAMEWORK_PATH', 'RUSTC', 'RUSTDOC', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'CI_ADMITTED_ROOT',
+                          'GOROOT', 'GOTOOLCHAIN', 'NODE_OPTIONS', 'NODE_PATH', 'COREPACK_ENABLE_STRICT'})
+ADMITTED_ENV_PREFIXES = ('PLAYWRIGHT_', 'RUSTUP_', 'COREPACK_', 'pnpm_config_', 'npm_config_', 'PNPM_', 'NPM_CONFIG_')
+ADMITTED_ENV_WRITE = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(sorted(ADMITTED_ENV)) + '|'
+                                + '|'.join(p + r'\w*' for p in ADMITTED_ENV_PREFIXES) + r')\s*=')
+
+
+def admitted_env_names(mapping):
+    if not isinstance(mapping, dict): return []
+    return sorted(k for k in mapping if k in ADMITTED_ENV or str(k).startswith(ADMITTED_ENV_PREFIXES))
 BOOTSTRAP_NAME = 'Bootstrap admitted toolchains'
 EVIDENCE_NAME = 'Verify admitted toolchain evidence'
 CONTROLS_NAME = 'Reject corrupted payloads before any extraction or execution'
@@ -170,7 +184,21 @@ def scanner_job(unit):
 def bootstrap_steps(platform, tools):
     env = {'CI_PLATFORM': platform, 'CI_TOOLS': tools}
     return [{'name': BOOTSTRAP_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': BOOTSTRAP_COMMAND},
+            {'name': APPLY_NAME, 'shell': 'bash', 'working-directory': '.', 'run': APPLY_COMMAND},
             {'name': EVIDENCE_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': EVIDENCE_COMMAND}]
+
+
+def lock_tools(root):
+    try:
+        lock = bootstrap.load_lock(root / bootstrap.LOCK)
+    except bootstrap.BootstrapError:
+        return {}
+    tools = {}
+    for entry in lock['entries']: tools.setdefault(entry['platform'], set()).add(entry['tool'])
+    return tools
+
+
+LOCK_TOOLS = {}
 
 
 def consumer_tools(steps):
@@ -215,17 +243,17 @@ def bootstrap_errors(data, name):
             if isinstance(env, dict) and {'CI_PLATFORM', 'CI_TOOLS'} & set(env): fail('bootstrap inputs must be literal step env')
         # Only the admitted bootstrap sets PATH and tool variables; only the admitted venv step prepends to PATH.
         for scope in (data, job, *steps):
-            env = scope.get('env', {})
-            if isinstance(env, dict) and ADMITTED_ENV & set(env): fail('admitted tool environment override forbidden')
+            for key in admitted_env_names(scope.get('env', {})): fail('admitted tool environment override forbidden: ' + key)
         for step in steps:
             run = step.get('run', '')
             if 'GITHUB_PATH' in run and run != python_env.VENV_COMMAND: fail('PATH changes outside the admitted bootstrap forbidden')
-            if 'GITHUB_ENV' in run and run != BOOTSTRAP_COMMAND and ADMITTED_ENV_WRITE.search(run):
+            if 'GITHUB_ENV' in run and run != APPLY_COMMAND and ADMITTED_ENV_WRITE.search(run):
                 fail('admitted tool environment override forbidden')
+            if 'tools.env' in run and run not in (BOOTSTRAP_COMMAND, APPLY_COMMAND): fail('the admitted environment file is written and applied only by its exact steps')
         bootstraps = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
         if any('scripts/ci/bootstrap.py' in s.get('run', '') for i, s in enumerate(steps) if i not in bootstraps):
             fail('missing exact bootstrap command')
-        helpers = {BOOTSTRAP_COMMAND, EVIDENCE_COMMAND, CONTROLS_COMMAND}
+        helpers = {BOOTSTRAP_COMMAND, APPLY_COMMAND, EVIDENCE_COMMAND, CONTROLS_COMMAND}
         consumers = [s for s in steps if s.get('run') not in helpers]
         required = consumer_tools(consumers)
         if not bootstraps and not required: continue
@@ -246,14 +274,57 @@ def bootstrap_errors(data, name):
         expanded = set(bootstrap.expand_tools(','.join(sorted(selected)))) if selected else set()
         for tool in sorted(required):
             if {'rust': 'rustc', 'playwright': 'chromium-headless-shell'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
-        if not (index + 1 < len(steps) and steps[index + 1] == {**step, 'name': EVIDENCE_NAME, 'run': EVIDENCE_COMMAND}):
+        apply = {'name': APPLY_NAME, 'shell': 'bash', 'working-directory': '.', 'run': APPLY_COMMAND}
+        if not (index + 1 < len(steps) and steps[index + 1] == apply) or sum(s.get('run') == APPLY_COMMAND for s in steps) != 1:
+            fail('the exact admitted environment step must directly follow the bootstrap step')
+        if not (index + 2 < len(steps) and steps[index + 2] == {**step, 'name': EVIDENCE_NAME, 'run': EVIDENCE_COMMAND}):
             fail('admitted toolchain evidence step must follow the bootstrap step')
+        if name == 'bootstrap':
+            # The bootstrap leaves cold-install every payload the lock holds for their host, so dropping one is visible.
+            for row in job.get('strategy', {}).get('matrix', {}).get('include', []) or []:
+                platform = inventory.HOSTS.get(row.get('os')) if isinstance(row, dict) else None
+                try:
+                    chosen = set(bootstrap.expand_tools(row.get('tools', ''))) if platform else None
+                except bootstrap.BootstrapError:
+                    chosen = None
+                if chosen != LOCK_TOOLS.get(platform): fail(f'bootstrap matrix row {row.get("os")!r} must select every lock tool for its host')
         controls = {**step, 'name': CONTROLS_NAME, 'run': CONTROLS_COMMAND}
         for s in steps[:index]:
             if s.get('uses', '').startswith('actions/checkout@') or (name == 'bootstrap' and s == controls): continue
             fail('bootstrap must precede every step except checkout')
         if name == 'bootstrap' and (sum(s == controls for s in steps) != 1 or index == 0 or steps[index - 1] != controls):
             fail('exact corruption controls must precede the cold install')
+    return errors
+
+
+def package_manager_errors(root):
+    """pnpm and Node come only from the admitted bootstrap: no project setting may let pnpm switch or download either."""
+    errors = []
+    console = root / 'console'
+    try:
+        manifest = json.loads((console / 'package.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return ['console/package.json: unreadable']
+    def walk(value, path):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == 'onFail' and child != 'error': errors.append(f'console/package.json: {path}.onFail must be error')
+                walk(child, f'{path}.{key}')
+        elif isinstance(value, list):
+            for child in value: walk(child, path)
+    walk(manifest.get('devEngines', {}), 'devEngines')
+    runtime = (manifest.get('devEngines') or {}).get('runtime') if isinstance(manifest.get('devEngines'), dict) else None
+    if runtime is not None: errors.append('console/package.json: devEngines.runtime can download Node; Node comes from the admitted bootstrap')
+    for name in ('pnpm-workspace.yaml', '.npmrc'):
+        try:
+            text = (console / name).read_text(encoding='utf-8')
+        except OSError:
+            continue
+        for match in re.finditer(r'(?im)^\s*(pmOnFail|pm-on-fail|managePackageManagerVersions|manage-package-manager-versions|'
+                                 r'packageManagerStrict\w*|package-manager-strict\S*|useNodeVersion|use-node-version|nodeVersion|node-version)\s*[:=]\s*(\S+)', text):
+            key, value = match[1], match[2].strip('\'"')
+            if not (key.lower() in ('pmonfail', 'pm-on-fail') and value == 'error'):
+                errors.append(f'console/{name}: {key} {value} lets pnpm switch versions or download a runtime')
     return errors
 
 
@@ -310,7 +381,9 @@ def windows_rows(job):
 
 GO_FRESH = 'python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"'
 CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" '
-               '--cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"')
+               '--cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"')
+# Cargo's home is the admitted, bin-free CARGO_HOME from the bootstrap; only its registry index and archives are cached.
+CARGO_CACHE_PATHS = ['${{ runner.temp }}/admitted/cargo-home/registry/index', '${{ runner.temp }}/admitted/cargo-home/registry/cache']
 CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
 
 
@@ -333,7 +406,7 @@ def cache_errors(data):
                 fail('setup-go cache must be disabled')
             if action.startswith('actions/cache'):
                 paths = settings.get('path', '').strip().splitlines()
-                if paths != ['~/.cargo/registry/index', '~/.cargo/registry/cache']:
+                if paths != CARGO_CACHE_PATHS:
                     fail('cache restore may contain only Cargo index and archives')
             run = step.get('run', '')
             if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
@@ -417,7 +490,7 @@ def python_errors(data):
                 fail('PATH changes outside the admitted venv step forbidden in closure consumer')
             # The admitted bootstrap step writes PATH and tool variables once, before the venv; bootstrap_errors
             # closes its name, keys, inputs and position.
-            if 'GITHUB_ENV' in run and run not in (GO_FRESH, CARGO_FRESH, BOOTSTRAP_COMMAND):
+            if 'GITHUB_ENV' in run and run not in (GO_FRESH, CARGO_FRESH, APPLY_COMMAND):
                 fail('environment writes outside the fresh cache helper and admitted bootstrap forbidden in closure consumer')
     if consuming_workflow:
         for key in python_env_keys(data.get('env', {})):
@@ -508,6 +581,7 @@ def loader_qualification_errors(job, gate):
 
 def check(root: Path) -> list[str]:
     errors = []
+    LOCK_TOOLS.clear(); LOCK_TOOLS.update(lock_tools(root))
     def fail(name, message): errors.append(f'.github/workflows/{name}.yml: {message}')
     workflows = {}
     for path in sorted((root / '.github/workflows').glob('*.yml')):
@@ -556,6 +630,7 @@ def check(root: Path) -> list[str]:
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
     errors += python_env.lock_errors(root)
     errors += bootstrap.lock_errors(root)
+    errors += package_manager_errors(root)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}
     for name in required_names - set(workflows): fail(name, 'missing required workflow')
     if not required_names <= set(workflows): return errors

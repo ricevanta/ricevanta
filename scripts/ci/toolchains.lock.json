@@ -151,45 +151,45 @@
       "tool": "rustc",
       "version": "1.99.0",
       "platform": "macos-arm64",
-      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.xz",
-      "size": 50296404,
-      "sha256": "334a66714ca316d71bbe5efe44f71762d0b276cea73be2987374693a837f7450"
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 85303276,
+      "sha256": "2f6b9c9cdc9c2e87ab2e27335e8bb0c4dbe4daea486e39030b66980058f74353"
     },
     {
       "id": "rust-std-1.99.0-macos-arm64",
       "tool": "rust-std",
       "version": "1.99.0",
       "platform": "macos-arm64",
-      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-apple-darwin.tar.xz",
-      "size": 30726892,
-      "sha256": "a7c6de8aa21e7c31163a7656295b321bb85f5dce55ed8ea95ac9ac561202bb5b"
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 48529215,
+      "sha256": "3589b3a6c6470d590aa5aa7fa1a4af0101103847761a5372a7300b0aa85699c6"
     },
     {
       "id": "cargo-1.99.0-macos-arm64",
       "tool": "cargo",
       "version": "1.99.0",
       "platform": "macos-arm64",
-      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.xz",
-      "size": 8951812,
-      "sha256": "76abff0ad79a10a3152dff640ea0d8b3c37637d9300bf55da41b95c3ddc069c1"
+      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 13080990,
+      "sha256": "318b85c276b43134102fb49bbb54bfd0757e5cce47a772461149aeab5adea2ab"
     },
     {
       "id": "rustfmt-1.99.0-macos-arm64",
       "tool": "rustfmt",
       "version": "1.99.0",
       "platform": "macos-arm64",
-      "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.xz",
-      "size": 1506692,
-      "sha256": "8b1436085c081e5efa88febadf667171a7a107073d168cd32b249a8eb70800da"
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 2217541,
+      "sha256": "c8d86490e38920ab7783483dc828695a9a678eff541c5fa793f165b374e87312"
     },
     {
       "id": "clippy-1.99.0-macos-arm64",
       "tool": "clippy",
       "version": "1.99.0",
       "platform": "macos-arm64",
-      "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.xz",
-      "size": 2811804,
-      "sha256": "c31a0765ed31d98515a09a13b44486048873d90ac75bb1e6690a17fb36a5d4e2"
+      "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.gz",
+      "size": 4450540,
+      "sha256": "d13d16085280bd652d4a77041073264719c9ee92f33702f9dce2ee86777c92b1"
     },
     {
       "id": "node-24.21.0-linux-x64",

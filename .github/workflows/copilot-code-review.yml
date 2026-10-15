@@ -36,7 +36,11 @@ jobs:
         env:
           CI_PLATFORM: linux-x64
           CI_TOOLS: python,go,rust,node,pnpm
-        run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
+        run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+      - name: Apply admitted toolchain environment
+        shell: bash
+        working-directory: .
+        run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
       - name: Verify admitted toolchain evidence
         shell: bash
         working-directory: .
@@ -71,7 +75,7 @@ jobs:
       - name: Admit Cargo downloads and fresh target
         shell: bash
         working-directory: .
-        run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+        run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
       - name: Re-verify validator environment
         shell: bash
         working-directory: .

@@ -40,7 +40,11 @@ jobs:
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,rust
-      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
       shell: bash
       working-directory: .
@@ -77,13 +81,13 @@ jobs:
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
+          ${{ runner.temp }}/admitted/cargo-home/registry/index
+          ${{ runner.temp }}/admitted/cargo-home/registry/cache
         key: agent-cargo-registry-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
     - name: Admit Cargo downloads and fresh target
       shell: bash
       working-directory: .
-      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Check locked dependency pins
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
@@ -191,7 +195,11 @@ jobs:
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go,rust
-      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
       shell: bash
       working-directory: .
@@ -212,8 +220,8 @@ jobs:
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
+          ${{ runner.temp }}/admitted/cargo-home/registry/index
+          ${{ runner.temp }}/admitted/cargo-home/registry/cache
         key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
     - name: Check admitted Rust and native host
       run: |
@@ -225,7 +233,7 @@ jobs:
     - name: Admit Cargo downloads and fresh target
       shell: bash
       working-directory: .
-      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Build live writer
       working-directory: agent
       env:

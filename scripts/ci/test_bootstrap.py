@@ -1,4 +1,10 @@
-"""Digest-checked toolchain admission: lock review, payload verification, archive safety and tool checks."""
+"""Digest-checked toolchain admission: lock review, payload verification, archive safety and tool checks.
+
+Every test injects the host facts it depends on (platform identity, Python framework root, Windows registry,
+environment), so the suite gives the same answers on linux-x64, windows-x64 and macos-arm64 runners and after the
+real bootstrap step has changed those runners. BOOTSTRAP_TEST_HOST selects a simulated identity; the suite also
+re-runs itself under the two identities the current host is not.
+"""
 import contextlib
 import hashlib
 import io
@@ -6,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
@@ -18,10 +25,16 @@ import bootstrap
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = ROOT / 'scripts/ci/toolchains.lock.json'
-HOST = bootstrap.host_platform()
+SIMULATED = os.environ.get('BOOTSTRAP_TEST_HOST')
+HOST = SIMULATED or bootstrap.host_platform()
+assert HOST in bootstrap.PLATFORMS, HOST
+POSIX = os.name != 'nt'
 # Captured from the admitted linux-x64 payloads; rustfmt and clippy print a ten-digit short hash, rustc nine.
 RUSTC_VV = ('rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\n'
             'commit-date: 2026-09-28\nhost: {triple}\nrelease: 1.99.0\nLLVM version: 23.1.1\n')
+RUSTFMT = 'rustfmt 1.10.0-stable (b940084d7e 2026-09-28)\n'
+CLIPPY = 'clippy 0.1.99 (b940084d7e 2026-09-28)\n'
+TOOLCACHE_LIB = '/opt/hostedtoolcache/Python/3.14.8/x64/lib'
 
 
 def sha(data):
@@ -46,7 +59,7 @@ def tar_bytes(members, mode='w:gz'):
 
 
 def zip_bytes(members):
-    """members: (name, data, file mode, is_symlink)."""
+    """members: (name, data, file mode, is_symlink); a name ending in '/' is a directory entry."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name, data, perm, link in members:
@@ -69,17 +82,61 @@ def symlink(name, target):
     return (name, None, 0o777, tarfile.SYMTYPE, target)
 
 
+def elf(runpath, needed=b'libc.so.6'):
+    """A minimal little-endian ELF64 shared object whose dynamic section names one DT_RUNPATH."""
+    base = 0x400000
+    strtab = b'\0' + runpath.encode() + b'\0' + needed + b'\0'
+    strtab_offset = 64 + 2 * 56
+    dynamic_offset = (strtab_offset + len(strtab) + 7) // 8 * 8
+    dynamic = struct.pack('<qQqQqQqQ', 1, 2 + len(runpath), 29, 1, 5, base + strtab_offset, 0, 0)
+    total = dynamic_offset + len(dynamic)
+    header = b'\x7fELF' + bytes([2, 1, 1, 0]) + b'\0' * 8 + struct.pack('<HHIQQQIHHHHHH', 3, 62, 1, 0, 64, 0, 0, 64, 56, 2, 64, 0, 0)
+    phdrs = (struct.pack('<IIQQQQQQ', 1, 5, 0, base, base, total, total, 0x1000)
+             + struct.pack('<IIQQQQQQ', 2, 6, dynamic_offset, base + dynamic_offset, base + dynamic_offset, len(dynamic), len(dynamic), 8))
+    image = header + phdrs + strtab
+    return image + b'\0' * (dynamic_offset - len(image)) + dynamic
+
+
+class FakeRegistry:
+    """Windows Python registrations as the runner image leaves them: the same bundle installed per machine."""
+    def __init__(self, registrations=(), user_core=False):
+        self.items = list(registrations)
+        self.core = user_core
+        self.deleted = []
+
+    def user_core(self, minor):
+        return self.core
+
+    def registrations(self, minor):
+        pattern = bootstrap.python_registration_pattern(minor)
+        return [item for item in self.items if pattern.search(item[2])]
+
+    def delete(self, registration):
+        self.items.remove(registration); self.deleted.append(registration)
+
+
+RUNNER_PYTHON = [('HKLM', r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{bundle}', 'Python 3.14.8 (64-bit)'),
+                 ('HKLM', r'SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products\core', 'Python 3.14.8 Core Interpreter (64-bit)'),
+                 ('HKCR', r'Installer\Products\core', 'Python 3.14.8 Core Interpreter (64-bit)'),
+                 ('HKLM', r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{other}', 'Python 3.12.10 (64-bit)')]
+
+
+def make_host(platform, base, registry=None, environ=None):
+    """Injected host facts: never the real framework, registry or toolchain state of the machine running the tests."""
+    return bootstrap.Host(platform, framework_root=base / 'Frameworks' / 'Python.framework',
+                          registry=(registry if registry is not None else FakeRegistry()) if platform == 'windows-x64' else None,
+                          environ=environ)
+
+
 class FakeExecute:
-    """Canned tool output keyed by executable basename; records every invocation."""
+    """Canned tool output keyed by executable basename; records every invocation with its environment and directory."""
     def __init__(self, responses=None, side_effect=None):
         self.responses = responses or {}
         self.side_effect = side_effect
-        self.calls = []
-        self.envs = []
+        self.calls, self.envs, self.cwds = [], [], []
 
-    def __call__(self, argv, env=None, cwd=None, timeout=None, check=True):
-        self.calls.append(list(argv))
-        self.envs.append(dict(env or {}))
+    def __call__(self, argv, env=None, cwd=None, timeout=None, check=True, stderr=False):
+        self.calls.append(list(argv)); self.envs.append(dict(env or {})); self.cwds.append(cwd)
         if self.side_effect: self.side_effect(argv)
         name = Path(argv[0]).name.lower()
         for suffix in ('.exe', '.cmd'):
@@ -90,7 +147,10 @@ class FakeExecute:
             if name == 'ldconfig': return (0, '\tlibGLESv2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so.2\n'
                                               '\tlibx264.so.164 (libc6,x86-64) => /lib/x86_64-linux-gnu/libx264.so.164\n')
             raise AssertionError('unexpected tool execution: ' + ' '.join(map(str, argv)))
-        return (0, handler(argv) if callable(handler) else handler)
+        result = handler(argv, dict(env or {}), cwd) if callable(handler) else handler
+        code, output = result if isinstance(result, tuple) else (0, result)
+        if code and check: raise bootstrap.BootstrapError(f'execution failed: {argv[0]} exited {code}: {output}')
+        return code, output
 
 
 def python_prefix(argv):
@@ -99,28 +159,67 @@ def python_prefix(argv):
 
 
 def python_check(platform, libpython=None):
-    def check(argv):
+    def check(argv, env, cwd):
         if '-m' in argv: return 'pip 26.2.1 from fixture (python 3.14)'
-        if '/proc/self/maps' in argv[-1]: return (libpython or str(python_prefix(argv) / 'lib' / 'libpython3.14.so.1.0')) + '\n'
+        if '/proc/self/maps' in argv[-1]:
+            # The loader finds libpython through the RUNPATH only when the bootstrap relocated it.
+            if libpython: return libpython + '\n'
+            executable = Path(argv[0])
+            runpaths = [value for _, _, value in bootstrap.elf_runpaths(executable)]
+            if env.get('LD_LIBRARY_PATH', 'unset') is not None and 'LD_LIBRARY_PATH' in env: return 'LD_LIBRARY_PATH leaked\n'
+            if runpaths == ['$ORIGIN/../lib']: return str(executable.parent.parent / 'lib' / 'libpython3.14.so.1.0') + '\n'
+            return TOOLCACHE_LIB + '/libpython3.14.so.1.0\n'
         return f'3.14.8\n{python_prefix(argv)}\n{bootstrap.PLATFORMS[platform]["machine"][0]}\nok\n'
     return check
+
+
+def go_handler(platform):
+    def go(argv, env, cwd):
+        if argv[1:] == ['env', 'GOROOT']: return env.get('GOROOT', '/usr/local/go') + '\n'
+        return f'go version go1.27.1 {bootstrap.PLATFORMS[platform]["go"]}\n'
+    return go
+
+
+def cargo(argv, env, cwd):
+    if argv[1:2] == ['clippy']: return CLIPPY
+    if argv[1:2] == ['fmt']: return RUSTFMT
+    return 'cargo 1.99.0 (5f94df478 2026-08-27)\n'
+
+
+def pnpm(argv, env, cwd):
+    if cwd is not None and json.loads((Path(cwd) / 'package.json').read_text()).get('packageManager'):
+        if env.get('pnpm_config_pm_on_fail') == 'error':
+            return (1, '[ERROR] This project is configured to use 0.0.1 of pnpm. Your current pnpm is v11.18.0\n')
+        return '0.0.1\n'  # pnpm's default `download` switched to the project's pnpm
+    return '11.18.0\n'
 
 
 def responses(platform=HOST):
     spec = bootstrap.PLATFORMS[platform]
     return {
-        'go': f'go version go1.27.1 {spec["go"]}\n',
+        'go': go_handler(platform),
         'python3.14': python_check(platform), 'python': python_check(platform),
-        'rustc': RUSTC_VV.format(triple=spec['rust']),
-        'cargo': 'cargo 1.99.0 (5f94df478 2026-08-27)\n',
-        'rustfmt': 'rustfmt 1.10.0-stable (b940084d7e 2026-09-28)\n',
-        'cargo-clippy': 'clippy 0.1.99 (b940084d7e 2026-09-28)\n',
-        'node': 'v24.21.0 linux-x64\n', 'pnpm': '11.18.0\n',
-        'chrome': 'Google Chrome for Testing 147.0.7727.15 \n',
+        'rustc': RUSTC_VV.format(triple=spec['rust']), 'cargo': cargo, 'rustfmt': RUSTFMT, 'cargo-clippy': CLIPPY,
+        'node': 'v24.21.0 linux-x64\n', 'pnpm': pnpm,
         'chrome-headless-shell': 'Chrome Headless Shell 147.0.7727.15 \n',
         'firefox': 'Mozilla Firefox 148.0.2\n',
         'ffmpeg-linux': 'ffmpeg version n7.0.1-playwright-build-1011 Copyright (c) 2000-2024 the FFmpeg developers\n',
     }
+
+
+def installers(platform, framework, sentinel=None, registry=None):
+    """Side effects of the vendor installers, which the fake executor does not run."""
+    def effect(argv):
+        if argv[0].endswith('python-3.14.8-amd64.exe'):
+            if sentinel: sentinel.write_text('executed')
+            if registry is not None: assert not registry.registrations('3.14'), 'the runner registrations are purged before the installer runs'
+            target = Path(next(a for a in argv if a.startswith('TargetDir=')).split('=', 1)[1])
+            target.mkdir(parents=True); (target / 'python.exe').write_bytes(b'MZ')
+        if argv[:3] == ['sudo', '-n', 'rm']: __import__('shutil').rmtree(argv[-1])
+        if argv[:3] == ['sudo', '-n', 'installer']:
+            binary = framework / 'Versions' / '3.14' / 'bin'
+            binary.mkdir(parents=True); (binary / 'python3.14').write_text('#!/bin/sh\n')
+    return effect
 
 
 class Fixtures:
@@ -130,6 +229,8 @@ class Fixtures:
         self.platform = platform
         self.exe = '.exe' if platform == 'windows-x64' else ''
         self.payloads = {}
+        self.scripts = {}
+        self.fetched = []
         self.entries = []
 
     def add(self, tool, version, data, name=None):
@@ -139,15 +240,17 @@ class Fixtures:
                                  platform=self.platform, url=url, size=len(data), sha256=sha(data)))
         return url
 
-    def go(self, script=b'#!/bin/sh\necho "go version go1.27.1 linux/amd64"\n'):
-        suffix = self.exe
+    def go(self, script=None):
+        script = script or f'#!/bin/sh\nif [ "$1" = env ]; then echo "$GOROOT"; else echo "go version go1.27.1 {bootstrap.PLATFORMS[self.platform]["go"]}"; fi\n'.encode()
+        if self.platform == 'windows-x64':
+            data = zip_bytes([('go/', b'', 0o755, False), ('go/LICENSE', b'BSD', 0o644, False), ('go/VERSION', b'go1.27.1\n', 0o644, False),
+                              ('go/bin/', b'', 0o755, False), ('go/bin/go.exe', script, 0o755, False), ('go/bin/gofmt.exe', b'', 0o755, False)])
+            return self.add('go', '1.27.1', data, 'go.zip')
         members = [directory('go'), regular('go/LICENSE', b'BSD'), regular('go/VERSION', b'go1.27.1\n'),
-                   directory('go/bin'), regular('go/bin/go' + suffix, script, 0o755), regular('go/bin/gofmt' + suffix, b'', 0o755)]
-        data = zip_bytes([(n, d or b'', p, False) for n, d, p, _, _ in members if d is not None or n.endswith('bin')]) \
-            if self.platform == 'windows-x64' else tar_bytes(members)
-        return self.add('go', '1.27.1', data, 'go.zip' if suffix else 'go.tar.gz')
+                   directory('go/bin'), regular('go/bin/go', script, 0o755), regular('go/bin/gofmt', b'', 0o755)]
+        return self.add('go', '1.27.1', tar_bytes(members), 'go.tar.gz')
 
-    def python(self):
+    def python(self, runpath=TOOLCACHE_LIB):
         if self.platform == 'windows-x64':
             data = zip_bytes([('python-3.14.8-amd64.exe', b'MZ installer', 0o644, False), ('setup.ps1', b'# fixture', 0o644, False)])
             return self.add('python', '3.14.8', data, 'python.zip')
@@ -155,10 +258,11 @@ class Fixtures:
             # Same shape as the real payload: a './' root member, then './'-prefixed files.
             data = tar_bytes([directory('./'), regular('./setup.sh', b'set -e\n', 0o755), regular('./python-3.14.8-macos11.pkg', b'xar!'), regular('./build_output.txt', b'')])
             return self.add('python', '3.14.8', data, 'python.tar.gz')
-        # Same shape as python-3.14.8-linux-24.04-x64.tar.gz: a '.' root member, then './'-prefixed entries.
-        members = [directory('.'), directory('./bin'), regular('./bin/python3.14', b'#!/bin/sh\n', 0o755), symlink('./bin/python3', 'python3.14'),
-                   directory('./lib'), regular('./lib/libpython3.14.so.1.0', b'\x7fELF'), regular('./setup.sh', b'set -e\n', 0o755),
-                   directory('./lib/python3.14'), regular('./lib/python3.14/LICENSE.txt', b'PSF')]
+        # Same shape as python-3.14.8-linux-24.04-x64.tar.gz: a '.' root member, './'-prefixed entries, tool-cache RUNPATHs.
+        members = [directory('.'), directory('./bin'), regular('./bin/python3.14', elf(runpath), 0o755), symlink('./bin/python3', 'python3.14'),
+                   directory('./lib'), regular('./lib/libpython3.14.so.1.0', elf(runpath)), regular('./setup.sh', b'set -e\n', 0o755),
+                   directory('./lib/python3.14'), regular('./lib/python3.14/LICENSE.txt', b'PSF'), directory('./lib/python3.14/lib-dynload'),
+                   regular('./lib/python3.14/lib-dynload/_lzma.cpython-314-x86_64-linux-gnu.so', elf(runpath), 0o755)]
         return self.add('python', '3.14.8', tar_bytes(members))
 
     def rust(self):
@@ -169,6 +273,7 @@ class Fixtures:
                  'cargo': ('cargo', [f'bin/cargo{suffix}', 'share/doc/cargo/LICENSE-MIT']),
                  'rustfmt': ('rustfmt-preview', [f'bin/rustfmt{suffix}', f'bin/cargo-fmt{suffix}']),
                  'clippy': ('clippy-preview', [f'bin/cargo-clippy{suffix}', f'bin/clippy-driver{suffix}'])}
+        mode, extension = ('w:gz', 'tar.gz') if self.platform == 'macos-arm64' else ('w:xz', 'tar.xz')
         for tool, (component, files) in parts.items():
             top = f'{tool}-1.99.0-{triple}'
             members = [directory(top), regular(f'{top}/components', (component + '\n').encode()),
@@ -178,7 +283,7 @@ class Fixtures:
                        regular(f'{top}/{component}/manifest.in', ''.join(f'file:{f}\n' for f in files).encode())]
             for path in files:
                 members.append(regular(f'{top}/{component}/{path}', b'#!/bin/sh\n' if path.startswith('bin/') else b'data', 0o755))
-            self.add(tool, '1.99.0', tar_bytes(members, 'w:xz'), f'{tool}.tar.xz')
+            self.add(tool, '1.99.0', tar_bytes(members, mode), f'{tool}.{extension}')
 
     def node(self):
         members = [directory('node-v24.21.0-linux-x64'), regular('node-v24.21.0-linux-x64/LICENSE', b'MIT'),
@@ -210,7 +315,14 @@ class Fixtures:
         return path
 
     def fetch(self, url, limit, sink):
-        if url not in self.payloads: raise bootstrap.BootstrapError('download failed: ' + url)
+        """Serve the payload, or the next scripted behaviour for the URL: bytes to send or an exception to raise."""
+        self.fetched.append(url)
+        script = self.scripts.get(url)
+        if script:
+            step = script.pop(0)
+            if isinstance(step, BaseException): raise step
+            sink.write(step[:limit + 1]); return
+        if url not in self.payloads: raise bootstrap.TransferError('download failed: ' + url)
         sink.write(self.payloads[url][:limit + 1])
 
 
@@ -220,18 +332,20 @@ class BootstrapTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name).resolve()
         self.fixtures = Fixtures(self.base)
+        self.framework = self.base / 'Frameworks' / 'Python.framework'
 
-    def run_bootstrap(self, tools, *, fetch=None, execute=None, platform=HOST, dest=None, cache_mode='none', env=None, host=None, lock=None):
-        execute = execute or FakeExecute(responses(platform))
+    def run_bootstrap(self, tools, *, fetch=None, execute=None, platform=None, dest=None, cache_mode='none', env=None, host=None, lock=None):
+        platform = platform or self.fixtures.platform
+        execute = execute or FakeExecute(responses(platform), side_effect=installers(platform, self.framework))
         dest = dest or self.base / 'dest'
         argv = ['--lock', str(lock or self.fixtures.lock()), '--platform', platform, '--tools', tools, '--dest', str(dest),
                 '--cache-mode', cache_mode, '--env-out', str(self.base / 'env')]
         out = io.StringIO()
-        environ = {k: v for k, v in os.environ.items() if k not in ('CI_TOOLCHAIN_SOURCES', 'RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY')}
+        environ = {k: v for k, v in os.environ.items() if k not in ('CI_TOOLCHAIN_SOURCES', 'RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY', 'MSYSTEM')}
         environ.update(env or {})
         with contextlib.redirect_stdout(out), mock.patch.dict(os.environ, environ, clear=True):
             try:
-                code = bootstrap.run(argv, fetch=fetch or self.fixtures.fetch, execute=execute, host=host or bootstrap.Host(platform))
+                code = bootstrap.run(argv, fetch=fetch or self.fixtures.fetch, execute=execute, host=host or make_host(platform, self.base))
                 error = None
             except bootstrap.BootstrapError as exc:
                 code, error = 1, str(exc)
@@ -246,6 +360,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(execute.calls, [], 'no tool or installer may execute after refusal')
         for phase in ('extract', 'install', 'execute', 'admitted'):
             self.assertNotIn(f'bootstrap: {phase} ', journal)
+
+    def separator(self):
+        return ';' if self.fixtures.platform == 'windows-x64' else os.pathsep
 
     def test_repository_lock_validates_and_is_licensed(self):
         from jsonschema import Draft202012Validator
@@ -264,6 +381,7 @@ class BootstrapTests(unittest.TestCase):
         for entry in entries:
             self.assertIn(entry['sha256'], licensing, entry['id'] + ' needs exact payload license evidence')
             self.assertNotEqual(entry['sha256'], '0' * 64)
+            if entry['platform'] == 'macos-arm64': self.assertFalse(entry['url'].endswith('.xz'), entry['id'])
         for platform in ('linux-x64', 'windows-x64', 'macos-arm64'):
             tools = {e['tool'] for e in entries if e['platform'] == platform}
             self.assertTrue({'go', 'python', 'rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy'} <= tools, platform)
@@ -312,7 +430,7 @@ class BootstrapTests(unittest.TestCase):
         self.fixtures.go()
         other = next(p for p in bootstrap.PLATFORMS if p != HOST)
         def no_fetch(url, limit, sink): raise AssertionError('download attempted on the wrong host')
-        code, error, journal, execute, dest = self.run_bootstrap('go', fetch=no_fetch, platform=other, host=bootstrap.Host(HOST))
+        code, error, journal, execute, dest = self.run_bootstrap('go', fetch=no_fetch, platform=other, host=make_host(HOST, self.base))
         self.assertEqual(code, 1)
         self.assertIn('unsupported host', error)
         self.assert_untouched(dest, execute, journal)
@@ -323,23 +441,20 @@ class BootstrapTests(unittest.TestCase):
         if HOST == 'linux-x64':
             self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
             tools += ',node,pnpm,playwright'
-        execute = FakeExecute(responses())
-        if HOST == 'windows-x64':
-            def installer(argv):
-                if argv[0].endswith('python-3.14.8-amd64.exe'):
-                    target = Path(next(a for a in argv if a.startswith('TargetDir=')).split('=', 1)[1])
-                    target.mkdir(parents=True); (target / 'python.exe').write_bytes(b'MZ')
-            execute.side_effect = installer
-        code, error, journal, execute, dest = self.run_bootstrap(tools, execute=execute)
+        code, error, journal, execute, dest = self.run_bootstrap(tools)
         self.assertEqual((code, error), (0, None), journal)
         env = self.env_lines()
         self.assertEqual(env['CI_ADMITTED_ROOT'], str(dest))
-        paths = env['PATH'].split(os.pathsep)
+        paths = env['PATH'].split(self.separator())
         self.assertTrue((dest / 'go' / 'bin').is_dir())
         self.assertIn(str(dest / 'go' / 'bin'), paths)
+        self.assertEqual(env['GOROOT'], str(dest / 'go'))
         self.assertTrue((dest / 'rust' / 'bin').is_dir())
         self.assertEqual(env['RUSTC'], str(dest / 'rust' / 'bin' / ('rustc.exe' if HOST == 'windows-x64' else 'rustc')))
+        self.assertEqual((env['CARGO_HOME'], env['RUSTUP_HOME'], env['RUSTUP_AUTO_INSTALL']), (str(dest / 'cargo-home'), str(dest / 'rustup-home'), '0'))
+        self.assertFalse((dest / 'cargo-home' / 'bin').exists(), 'Cargo finds subcommands only on the admitted PATH')
         self.assertFalse((dest / 'rust' / 'install.sh').exists(), 'installer scripts from the archive are never copied')
+        self.assertNotIn('LD_LIBRARY_PATH', env)
         evidence = json.loads((dest / 'bootstrap-evidence.json').read_text())
         self.assertEqual(sorted(e['id'] for e in evidence['entries']), sorted(e['id'] for e in self.fixtures.entries))
         for entry in evidence['entries']:
@@ -348,12 +463,21 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse((dest / '.downloads').exists(), 'payloads are deleted after admission in none mode')
         self.assertFalse((dest / '.staging').exists())
         executed = [Path(c[0]) for c in execute.calls]
-        self.assertTrue(all(dest in p.parents or p.name in ('sudo', 'ldd', 'ldconfig') for p in executed), executed)
+        self.assertTrue(all(dest in p.parents or self.framework in p.parents or p.name in ('sudo', 'ldd', 'ldconfig') for p in executed), executed)
+        # cargo fmt and cargo clippy are proven with only admitted directories and homes in view.
+        for argv, call_env in zip(execute.calls, execute.envs):
+            if Path(argv[0]).stem == 'cargo' and argv[1:2] in (['fmt'], ['clippy']):
+                self.assertEqual(call_env['PATH'].split(self.separator()), evidence['path'])
+                self.assertEqual(call_env['CARGO_HOME'], str(dest / 'cargo-home'))
         if HOST == 'linux-x64':
-            self.assertEqual(env['LD_LIBRARY_PATH'].split(os.pathsep)[0], str(dest / 'python' / 'lib'))
+            relocated = next(e for e in evidence['entries'] if e['tool'] == 'python')['relocated']
+            self.assertEqual(sorted(relocated), ['bin/python3.14', 'lib/libpython3.14.so.1.0', 'lib/python3.14/lib-dynload/_lzma.cpython-314-x86_64-linux-gnu.so'])
+            self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(dest / 'python' / 'bin' / 'python3.14')], ['$ORIGIN/../lib'])
+            self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(dest / 'python' / 'lib' / 'python3.14' / 'lib-dynload' / '_lzma.cpython-314-x86_64-linux-gnu.so')], ['$ORIGIN/../..'])
             self.assertEqual(env['PLAYWRIGHT_BROWSERS_PATH'], str(dest / 'ms-playwright'))
             self.assertEqual(env['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'], '1')
-            self.assertEqual(env['npm_config_manage_package_manager_versions'], 'false')
+            self.assertEqual(env['pnpm_config_pm_on_fail'], 'error')
+            self.assertFalse(any(key.startswith('npm_config_') for key in env), 'pnpm 11 reads pnpm_config_*, not npm_config_*')
             for name in ('chromium_headless_shell-1217', 'firefox-1511', 'webkit-2272', 'ffmpeg-1011'):
                 self.assertTrue((dest / 'ms-playwright' / name / 'INSTALLATION_COMPLETE').is_file(), name)
             link = dest / 'ms-playwright' / 'webkit-2272' / 'minibrowser-gtk' / 'lib' / 'libwebkitgtk-6.0.so.4'
@@ -361,6 +485,7 @@ class BootstrapTests(unittest.TestCase):
             self.assertTrue((dest / 'bin' / 'pnpm').exists())
             self.assertIn(str(dest / 'node' / 'bin'), paths)
             self.assertTrue((dest / 'python' / 'bin' / 'python').is_symlink())
+            self.assertFalse((dest / '.pnpm-guard').exists())
         self.assertIn('bootstrap: admitted go', journal)
 
     def test_size_and_digest_mismatches_are_distinct_and_refuse_before_extraction(self):
@@ -379,6 +504,58 @@ class BootstrapTests(unittest.TestCase):
                 self.assert_untouched(dest, execute, journal)
         self.fixtures.payloads[url] = good
 
+    def test_transfers_retry_only_interrupted_or_short_downloads(self):
+        url = self.fixtures.go()
+        good = self.fixtures.payloads[url]
+        # A dropped connection, then a short body, then the full payload: admitted on the third attempt.
+        self.fixtures.scripts[url] = [bootstrap.TransferError('download failed: reset'), good[:100]]
+        code, error, journal, *_ = self.run_bootstrap('go')
+        self.assertEqual((code, error), (0, None), journal)
+        self.assertEqual(self.fixtures.fetched.count(url), 3)
+        self.assertEqual(journal.count('bootstrap: retry '), 2)
+        # Always short: refused after the bounded attempts, keeping the size reason.
+        self.fixtures.fetched.clear(); self.fixtures.scripts[url] = [good[:100]] * 5
+        code, error, journal, execute, dest = self.run_bootstrap('go', dest=self.base / 'short')
+        self.assertEqual(code, 1); self.assertIn('size mismatch', error); self.assertIn(f'after {bootstrap.TRANSFER_ATTEMPTS} attempts', error)
+        self.assertEqual(self.fixtures.fetched.count(url), bootstrap.TRANSFER_ATTEMPTS)
+        self.assert_untouched(dest, execute, journal)
+        # A complete download with the wrong digest, or an oversize body, is never retried.
+        for label, body in (('digest', good[:-1] + bytes([good[-1] ^ 1])), ('oversize', good + b'\0')):
+            with self.subTest(case=label):
+                self.fixtures.fetched.clear(); self.fixtures.scripts[url] = [body] * 5
+                code, error, *_ = self.run_bootstrap('go', dest=self.base / ('once-' + label))
+                self.assertEqual(code, 1); self.assertIn('digest mismatch' if label == 'digest' else 'size mismatch', error)
+                self.assertEqual(self.fixtures.fetched.count(url), 1)
+        # Redirect and scheme refusals are not transfer failures either.
+        self.fixtures.fetched.clear(); self.fixtures.scripts[url] = [bootstrap.BootstrapError('insecure download redirect: http://x')] * 5
+        code, error, *_ = self.run_bootstrap('go', dest=self.base / 'insecure')
+        self.assertEqual(code, 1); self.assertIn('insecure', error); self.assertEqual(self.fixtures.fetched.count(url), 1)
+
+    def test_fetch_url_stops_at_the_recorded_size_plus_one_byte(self):
+        """The real fetcher's byte limit, not the fixture's: an endless body yields exactly limit + 1 bytes."""
+        class Endless:
+            reads = 0
+            def read(self, amount):
+                Endless.reads += 1
+                return b'x' * amount
+            def __enter__(self): return self
+            def __exit__(self, *exc): return False
+        class Opener:
+            def open(self, request, timeout=None):
+                assert request.full_url.startswith('https://')
+                return Endless()
+        sink = io.BytesIO()
+        with mock.patch.object(bootstrap.urllib.request, 'build_opener', lambda *handlers: Opener()):
+            bootstrap.fetch_url('https://fixtures.invalid/endless', 3 * bootstrap.CHUNK + 5, sink)
+        self.assertEqual(len(sink.getvalue()), 3 * bootstrap.CHUNK + 6)
+        self.assertLessEqual(Endless.reads, 4)
+        class Failing:
+            def open(self, request, timeout=None): raise OSError('connection reset')
+        with mock.patch.object(bootstrap.urllib.request, 'build_opener', lambda *handlers: Failing()):
+            with self.assertRaises(bootstrap.TransferError): bootstrap.fetch_url('https://fixtures.invalid/x', 10, io.BytesIO())
+        with self.assertRaises(bootstrap.BootstrapError) as raised: bootstrap.fetch_url('http://fixtures.invalid/x', 10, io.BytesIO())
+        self.assertNotIsInstance(raised.exception, bootstrap.TransferError)
+
     def test_https_only_redirects(self):
         import urllib.request
         handler = bootstrap.SecureRedirect()
@@ -394,6 +571,7 @@ class BootstrapTests(unittest.TestCase):
         else: self.fail('redirect chains must be bounded')
 
     def test_unsafe_archives_are_refused_before_extraction(self):
+        """Inspection is host-independent: the same linux-x64 fixture lock and host on every runner."""
         version = regular('go/VERSION', b'go1.27.1\n')
         archives = {
             'traversal': (tar_bytes([directory('go'), regular('go/../evil', b'x')]), 'traverses outside'),
@@ -410,14 +588,20 @@ class BootstrapTests(unittest.TestCase):
                                                     symlink('go/t', 's/..'), regular('go/t/escaped', b'x')]), 'beneath the symbolic link'),
             'member beneath link': (tar_bytes([directory('go'), version, directory('go/bin'), symlink('go/lib', 'bin'), regular('go/lib/go', b'x', 0o755),
                                                regular('go/bin/go', b'x', 0o755)]), 'beneath the symbolic link'),
+            # Case-insensitive file systems: a case variant of a link name is the link.
+            'case-variant member beneath link': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/w', '..'),
+                                                            regular('go/W/escaped', b'x')]), 'beneath the symbolic link'),
+            'case-variant link chain': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/s', '..'),
+                                                   symlink('go/t', 'S/..')]), 'escaping link'),
+            'link loop': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/a', 'b'), symlink('go/b', 'a')]), 'link loop'),
         }
         for label, (data, reason) in archives.items():
             with self.subTest(archive=label):
-                fixtures = Fixtures(self.base / label.replace(' ', '-'))
+                fixtures = Fixtures(self.base / label.replace(' ', '-'), 'linux-x64')
                 fixtures.base.mkdir()
                 self.fixtures = fixtures
                 fixtures.add('go', '1.27.1', data, 'go.zip' if 'zip' in label else 'go.tar.gz')
-                code, error, journal, execute, dest = self.run_bootstrap('go', dest=fixtures.base / 'dest', host=bootstrap.Host('linux-x64'), platform='linux-x64')
+                code, error, journal, execute, dest = self.run_bootstrap('go', dest=fixtures.base / 'dest', host=make_host('linux-x64', fixtures.base))
                 self.assertEqual(code, 1, label)
                 self.assertIn(reason, error or '', label)
                 self.assertNotIn('bootstrap: install ', journal)
@@ -425,9 +609,33 @@ class BootstrapTests(unittest.TestCase):
                 self.assertEqual(execute.calls, [])
                 self.assertFalse((dest / 'go').exists())
                 self.assertFalse((fixtures.base / 'escaped').exists() or (fixtures.base / 'dest' / 'escaped').exists())
+        # Windows hosts refuse symbolic links outright.
+        fixtures = Fixtures(self.base / 'windows-link', 'windows-x64'); fixtures.base.mkdir(); self.fixtures = fixtures
+        fixtures.add('go', '1.27.1', zip_bytes([('go/VERSION', b'go1.27.1\n', 0o644, False), ('go/bin/go.exe', b'MZ', 0o755, False),
+                                                ('go/lib', b'bin', 0o777, True)]), 'go.zip')
+        code, error, *_ = self.run_bootstrap('go', dest=fixtures.base / 'dest', host=make_host('windows-x64', fixtures.base))
+        self.assertEqual(code, 1); self.assertIn('symbolic link', error)
 
-    @unittest.skipIf(os.name == 'nt', 'POSIX symlink semantics')
+    @unittest.skipUnless(POSIX, 'POSIX symlink semantics')
+    def test_rust_component_links_are_revalidated_after_the_copy(self):
+        """Rust components are re-rooted into dest/rust; a link that was inside the component may point outside it there."""
+        fixtures = Fixtures(self.base, 'linux-x64'); self.fixtures = fixtures
+        fixtures.rust()
+        top = 'rustc-1.99.0-x86_64-unknown-linux-gnu'
+        members = [directory(top), regular(f'{top}/components', b'rustc\n'), directory(f'{top}/rustc'),
+                   regular(f'{top}/rustc/manifest.in', b'file:bin/rustc\nfile:bin/rustdoc\ndir:lib\n'),
+                   regular(f'{top}/rustc/bin/rustc', b'#!/bin/sh\n', 0o755), regular(f'{top}/rustc/bin/rustdoc', b'#!/bin/sh\n', 0o755),
+                   directory(f'{top}/rustc/lib'), symlink(f'{top}/rustc/lib/escape', '../../components')]
+        data = tar_bytes(members, 'w:xz')
+        entry = next(e for e in fixtures.entries if e['tool'] == 'rustc')
+        fixtures.payloads[entry['url']] = data; entry.update(size=len(data), sha256=sha(data))
+        code, error, journal, execute, dest = self.run_bootstrap('rust', host=make_host('linux-x64', self.base))
+        self.assertEqual(code, 1); self.assertIn('link escapes the admitted Rust root', error)
+        self.assertEqual(list(dest.iterdir()), [], 'a refusal empties the destination')
+
+    @unittest.skipUnless(POSIX, 'POSIX symlink semantics')
     def test_legitimate_internal_symlink_is_preserved(self):
+        self.fixtures = Fixtures(self.base, 'linux-x64')
         self.fixtures.go(); self.fixtures.python()
         code, error, journal, execute, dest = self.run_bootstrap('go,python')
         self.assertEqual((code, error), (0, None), journal)
@@ -436,19 +644,61 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(os.readlink(link), 'python3.14')
         self.assertTrue(link.resolve().is_relative_to(dest))
 
+    def test_elf_runpaths_are_relocated_and_foreign_ones_refused(self):
+        self.fixtures = Fixtures(self.base, 'linux-x64')
+        self.fixtures.python(runpath='/opt/other/lib')
+        code, error, journal, execute, dest = self.run_bootstrap('python')
+        self.assertEqual(code, 1); self.assertIn("unadmitted runpath '/opt/other/lib'", error)
+        self.assertEqual(list(dest.iterdir()), [])
+        path = self.base / 'probe.so'
+        path.write_bytes(elf(TOOLCACHE_LIB))
+        self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(path)], [TOOLCACHE_LIB])
+        entry = {'id': 'probe'}
+        self.assertEqual(bootstrap.relocate_runpaths(self.base, TOOLCACHE_LIB, self.base / 'lib', entry), ['probe.so'])
+        self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(path)], ['$ORIGIN/lib'])
+        self.assertEqual(path.stat().st_size, len(elf(TOOLCACHE_LIB)), 'relocation rewrites the string in place')
+        (self.base / 'script').write_text('#!/bin/sh\n')
+        self.assertEqual(bootstrap.elf_runpaths(self.base / 'script'), [])
+
+    def test_linux_python_loads_only_the_admitted_libpython(self):
+        """The payload's RUNPATH names the runner tool cache, which holds the same version; the relocated RUNPATH alone must win."""
+        self.fixtures = Fixtures(self.base, 'linux-x64')
+        self.fixtures.python()
+        canned = responses('linux-x64')
+        canned['python3.14'] = python_check('linux-x64', TOOLCACHE_LIB + '/libpython3.14.so.1.0')
+        code, error, *_ = self.run_bootstrap('python', execute=FakeExecute(canned))
+        self.assertEqual(code, 1); self.assertIn('libpython', error); self.assertIn('hostedtoolcache', error)
+        execute = FakeExecute(responses('linux-x64'))
+        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, dest=self.base / 'dest-ok')
+        self.assertEqual((code, error), (0, None), journal)
+        mapped = [env for argv, env in zip(execute.calls, execute.envs) if '/proc/self/maps' in argv[-1]]
+        self.assertEqual(mapped, [{'LD_LIBRARY_PATH': None, 'LD_PRELOAD': None}], 'no loader variable may help the check')
+        with mock.patch.object(bootstrap, 'relocate_runpaths', lambda *args: []):
+            code, error, *_ = self.run_bootstrap('python', dest=self.base / 'dest-unrelocated')
+        self.assertEqual(code, 1); self.assertIn('hostedtoolcache', error)
+
     def test_destination_must_be_absolute_and_empty(self):
         self.fixtures.go()
         occupied = self.base / 'occupied'
         occupied.mkdir(); (occupied / 'stale').write_text('old tool')
         code, error, journal, execute, _ = self.run_bootstrap('go', dest=occupied)
         self.assertEqual(code, 1); self.assertIn('destination', error); self.assertEqual(execute.calls, [])
-        self.assertEqual([p.name for p in occupied.iterdir()], ['stale'])
+        self.assertEqual([p.name for p in occupied.iterdir()], ['stale'], 'a destination that was not empty is never cleaned')
         empty = self.base / 'empty'; empty.mkdir()
-        code, error, *_ = self.run_bootstrap('go', dest=empty)
-        self.assertEqual((code, error), (0, None))
+        code, error, journal, *_ = self.run_bootstrap('go', dest=empty)
+        self.assertEqual((code, error), (0, None), journal)
         code, error, *_ = self.run_bootstrap('go', dest=Path('relative-dest'))
         self.assertEqual(code, 1); self.assertIn('absolute', error)
         self.assertFalse(Path('relative-dest').exists())
+
+    def test_refusal_after_partial_install_empties_the_destination(self):
+        self.fixtures.go(); self.fixtures.rust()
+        canned = responses(); canned['cargo-clippy'] = 'clippy 0.1.98 (0000000000 2026-08-01)\n'
+        code, error, journal, execute, dest = self.run_bootstrap('go,rust', execute=FakeExecute(canned))
+        self.assertEqual(code, 1); self.assertIn('admitted rustc commit', error)
+        self.assertIn('bootstrap: admitted go', journal, 'the refusal came after other tools were installed and checked')
+        self.assertTrue(dest.is_dir()); self.assertEqual(list(dest.iterdir()), [])
+        self.assertFalse((self.base / 'env').exists(), 'nothing is exported after a refusal')
 
     def test_warm_tool_cache_and_path_tools_are_never_substituted(self):
         self.fixtures.go()
@@ -456,14 +706,20 @@ class BootstrapTests(unittest.TestCase):
         cached = cache / 'go' / '1.27.1' / 'x64' / 'bin'
         cached.mkdir(parents=True); (cached / 'go').write_text('#!/bin/sh\necho "go version go1.27.1 linux/amd64"\n')
         (cached / 'go').chmod(0o755); (cache / 'go' / '1.27.1' / 'x64.complete').touch()
-        env = {'RUNNER_TOOL_CACHE': str(cache), 'AGENT_TOOLSDIRECTORY': str(cache), 'PATH': str(cached) + os.pathsep + os.environ.get('PATH', '')}
-        def offline(url, limit, sink): raise bootstrap.BootstrapError('download failed: network unavailable')
+        env = {'RUNNER_TOOL_CACHE': str(cache), 'AGENT_TOOLSDIRECTORY': str(cache), 'GOROOT': str(cache / 'go' / '1.27.1' / 'x64'),
+               'PATH': str(cached) + os.pathsep + os.environ.get('PATH', '')}
+        def offline(url, limit, sink): raise bootstrap.TransferError('download failed: network unavailable')
         code, error, journal, execute, dest = self.run_bootstrap('go', fetch=offline, env=env)
         self.assertEqual(code, 1); self.assertIn('download failed', error)
         self.assert_untouched(dest, execute, journal)
         code, error, journal, execute, dest = self.run_bootstrap('go', env=env, dest=self.base / 'dest2')
         self.assertEqual((code, error), (0, None), journal)
         self.assertEqual(Path(execute.calls[0][0]), dest / 'go' / 'bin' / ('go.exe' if HOST == 'windows-x64' else 'go'))
+        self.assertEqual(self.env_lines()['GOROOT'], str(dest / 'go'), 'the inherited GOROOT is replaced')
+        canned = responses(); canned['go'] = lambda argv, env, cwd: (str(cache / 'go' / '1.27.1' / 'x64') + '\n' if argv[1:] == ['env', 'GOROOT']
+                                                                      else f'go version go1.27.1 {bootstrap.PLATFORMS[HOST]["go"]}\n')
+        code, error, *_ = self.run_bootstrap('go', env=env, execute=FakeExecute(canned), dest=self.base / 'dest3')
+        self.assertEqual(code, 1); self.assertIn('GOROOT', error)
 
     def test_sources_cache_mode_verifies_and_never_falls_back(self):
         url = self.fixtures.go()
@@ -471,7 +727,7 @@ class BootstrapTests(unittest.TestCase):
         digest = sha(good)
         sources = self.base / 'sources'; sources.mkdir()
         def offline(url, limit, sink): raise AssertionError('sources mode must not download a cached payload')
-        def unavailable(url, limit, sink): raise bootstrap.BootstrapError('download failed: network unavailable')
+        def unavailable(url, limit, sink): raise bootstrap.TransferError('download failed: network unavailable')
         code, error, *_ = self.run_bootstrap('go', fetch=unavailable, cache_mode='sources', env={'CI_TOOLCHAIN_SOURCES': str(sources)}, dest=self.base / 'd0')
         self.assertEqual(code, 1); self.assertIn('download', error)
         code, error, journal, _, _ = self.run_bootstrap('go', cache_mode='sources', env={'CI_TOOLCHAIN_SOURCES': str(sources)}, dest=self.base / 'd1')
@@ -491,64 +747,133 @@ class BootstrapTests(unittest.TestCase):
         code, error, *_ = self.run_bootstrap('go', fetch=counting, cache_mode='none', env={'CI_TOOLCHAIN_SOURCES': str(sources)}, dest=self.base / 'd5')
         self.assertEqual((code, error), (0, None)); self.assertEqual(calls, [url], 'none mode ignores any sources directory')
 
-    def test_installer_sentinel_never_appears_for_a_corrupted_download(self):
-        """The Windows payload is an installer: it runs only after verification, so corruption leaves no trace."""
-        fixtures = Fixtures(self.base, 'windows-x64')
-        self.fixtures = fixtures
+    def test_sources_payload_is_read_once_into_a_private_copy(self):
+        """Verification and extraction read the same bytes: changing the cached file after it is hashed has no effect."""
+        url = self.fixtures.go()
+        good = self.fixtures.payloads[url]
+        sources = self.base / 'sources'; sources.mkdir()
+        cached = sources / sha(good); cached.write_bytes(good)
+        inspected = []
+        real_inspect = bootstrap.inspect_archive
+        def swap_after_hash(path, entry, host):
+            cached.write_bytes(good[:-1] + bytes([good[-1] ^ 0xFF]))
+            inspected.append(path)
+            return real_inspect(path, entry, host)
+        with mock.patch.object(bootstrap, 'inspect_archive', swap_after_hash):
+            code, error, journal, execute, dest = self.run_bootstrap('go', cache_mode='sources', env={'CI_TOOLCHAIN_SOURCES': str(sources)})
+        self.assertEqual((code, error), (0, None), journal)
+        self.assertTrue(inspected[0].is_relative_to(dest / '.downloads'), inspected)
+        if POSIX:
+            cached.unlink(); os.symlink(self.base / 'elsewhere', cached); (self.base / 'elsewhere').write_bytes(good)
+            code, error, *_ = self.run_bootstrap('go', cache_mode='sources', env={'CI_TOOLCHAIN_SOURCES': str(sources)}, dest=self.base / 'linked')
+            self.assertEqual(code, 1); self.assertIn('cached payload', error)
+
+    def test_windows_installer_replaces_runner_registrations_only_after_verification(self):
+        """The runner registers the same Python bundle per machine; purge it as setup.ps1 does, and never before verification."""
+        fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures = fixtures
         url = fixtures.python()
         sentinel = self.base / 'installer-ran'
-        def installer(argv):
-            if argv[0].endswith('python-3.14.8-amd64.exe'):
-                sentinel.write_text('executed')
-                target = Path(next(a for a in argv if a.startswith('TargetDir=')).split('=', 1)[1])
-                target.mkdir(parents=True); (target / 'python.exe').write_bytes(b'MZ')
-        execute = FakeExecute(responses('windows-x64'), side_effect=installer)
-        host = bootstrap.Host('windows-x64', registry_has_user_python=lambda version: False)
-        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, platform='windows-x64', host=host)
+        registry = FakeRegistry(RUNNER_PYTHON)
+        execute = FakeExecute(responses('windows-x64'), side_effect=installers('windows-x64', self.framework, sentinel, registry))
+        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, host=make_host('windows-x64', self.base, registry))
         self.assertEqual((code, error), (0, None), journal)
         self.assertTrue(sentinel.exists(), 'positive control: the verified installer runs')
+        self.assertEqual(registry.deleted, RUNNER_PYTHON[:3], 'every Python 3.14 product registration, HKLM and HKCR, and nothing else')
+        self.assertEqual(journal.count('bootstrap: replaced runner-provided Python registration'), 3)
         self.assertTrue((dest / 'python' / 'python3.exe').exists())
-        self.assertIn('/quiet', execute.calls[0]); self.assertIn('InstallAllUsers=0', execute.calls[0]); self.assertIn('PrependPath=0', execute.calls[0])
+        installer = next(c for c in execute.calls if c[0].endswith('.exe'))
+        for flag in ('/quiet', 'InstallAllUsers=0', 'PrependPath=0', 'Include_launcher=0'): self.assertIn(flag, installer)
         sentinel.unlink()
         good = fixtures.payloads[url]
         fixtures.payloads[url] = good[:10] + bytes([good[10] ^ 0x80]) + good[11:]
-        execute = FakeExecute(responses('windows-x64'), side_effect=installer)
-        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, platform='windows-x64', host=host, dest=self.base / 'dest-corrupt')
+        registry = FakeRegistry(RUNNER_PYTHON)
+        execute = FakeExecute(responses('windows-x64'), side_effect=installers('windows-x64', self.framework, sentinel, registry))
+        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, host=make_host('windows-x64', self.base, registry), dest=self.base / 'dest-corrupt')
         self.assertEqual(code, 1); self.assertIn('digest mismatch', error)
         self.assertFalse(sentinel.exists(), 'a corrupted installer must never execute')
+        self.assertEqual(registry.deleted, [], 'no runner state changes before verification')
         self.assert_untouched(dest, execute, journal)
         fixtures.payloads[url] = good
-        busy = bootstrap.Host('windows-x64', registry_has_user_python=lambda version: True)
-        code, error, journal, execute, dest = self.run_bootstrap('python', execute=FakeExecute(responses('windows-x64'), side_effect=installer),
-                                                                 platform='windows-x64', host=busy, dest=self.base / 'dest-busy')
-        self.assertEqual(code, 1); self.assertIn('already registered', error); self.assertEqual(execute.calls, [])
+        busy = FakeRegistry(RUNNER_PYTHON, user_core=True)
+        code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, busy), dest=self.base / 'dest-busy')
+        self.assertEqual(code, 1); self.assertIn('already registered', error); self.assertEqual(execute.calls, []); self.assertEqual(busy.deleted, [])
+        class Stuck(FakeRegistry):
+            def delete(self, registration): self.deleted.append(registration)
+        stuck = Stuck(RUNNER_PYTHON)
+        code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, stuck), dest=self.base / 'dest-stuck')
+        self.assertEqual(code, 1); self.assertIn('could not remove', error)
+        self.assertFalse(any(c[0].endswith('.exe') for c in execute.calls), 'the installer never runs over a surviving registration')
 
-    @unittest.skipIf(os.name == 'nt', 'POSIX symlink semantics')
-    def test_macos_framework_install_replaces_runner_copy_and_links_dest(self):
-        fixtures = Fixtures(self.base, 'macos-arm64')
-        self.fixtures = fixtures
+    def test_every_archive_is_inspected_before_any_installer_runs(self):
+        fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures = fixtures
         fixtures.python()
-        framework = self.base / 'Frameworks' / 'Python.framework'
-        stale = framework / 'Versions' / '3.14' / 'bin'
+        fixtures.add('go', '1.27.1', zip_bytes([('go/VERSION', b'go1.27.1\n', 0o644, False), ('go/../evil.exe', b'MZ', 0o755, False)]), 'go.zip')
+        sentinel = self.base / 'installer-ran'
+        registry = FakeRegistry(RUNNER_PYTHON)
+        execute = FakeExecute(responses('windows-x64'), side_effect=installers('windows-x64', self.framework, sentinel, registry))
+        code, error, journal, execute, dest = self.run_bootstrap('python,go', execute=execute, host=make_host('windows-x64', self.base, registry))
+        self.assertEqual(code, 1); self.assertIn('go-1.27.1-windows-x64', error); self.assertIn('traverses outside', error)
+        self.assertFalse(sentinel.exists()); self.assertEqual(registry.deleted, [])
+        self.assert_untouched(dest, execute, journal)
+
+    @unittest.skipUnless(POSIX, 'POSIX symlink semantics')
+    def test_macos_framework_install_replaces_runner_copy_and_links_dest(self):
+        fixtures = Fixtures(self.base, 'macos-arm64'); self.fixtures = fixtures
+        fixtures.python()
+        stale = self.framework / 'Versions' / '3.14' / 'bin'
         stale.mkdir(parents=True); (stale / 'python3.14').write_text('runner 3.14.7')
+        order = []
         def privileged(argv):
-            if argv[:2] == ['sudo', '-n'] and argv[2] == 'rm': __import__('shutil').rmtree(argv[-1])
-            if argv[:2] == ['sudo', '-n'] and argv[2] == 'installer':
-                self.assertFalse((framework / 'Versions' / '3.14').exists(), 'install only into an empty framework version')
+            if argv[:3] == ['sudo', '-n', 'installer']:
+                order.append('installer')
+                self.assertFalse((self.framework / 'Versions' / '3.14').exists(), 'install only into an empty framework version')
                 self.assertTrue(argv[argv.index('-pkg') + 1].endswith('python-3.14.8-macos11.pkg'))
-                stale.mkdir(parents=True); (stale / 'python3.14').write_text('#!/bin/sh\n'); (stale / 'python3.14').chmod(0o755)
+            installers('macos-arm64', self.framework)(argv)
         execute = FakeExecute(responses('macos-arm64'), side_effect=privileged)
-        host = bootstrap.Host('macos-arm64', framework_root=framework)
-        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, platform='macos-arm64', host=host)
+        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute)
         self.assertEqual((code, error), (0, None), journal)
         self.assertEqual([c[2] for c in execute.calls if c[0] == 'sudo'], ['rm', 'installer'])
         self.assertEqual(os.readlink(dest / 'python' / 'bin' / 'python'), str(stale / 'python3.14'))
         self.assertIn('bootstrap: replaced runner-provided ', journal)
 
-    @unittest.skipIf(os.name == 'nt', 'shell script fixtures')
+    def test_macos_reexec_leaves_the_framework_being_replaced(self):
+        framework = self.base / 'Frameworks' / 'Python.framework'
+        inside = framework / 'Versions' / '3.14' / 'bin' / 'python3.14'
+        inside.parent.mkdir(parents=True); inside.write_text('')
+        system_python = self.base / 'usr-bin-python3'; system_python.write_text('')
+        argv = ['--lock', 'l', '--platform', 'macos-arm64', '--tools', 'python,go', '--dest', '/d', '--cache-mode', 'none', '--env-out', 'e']
+        calls, environ = [], {}
+        def execv(path, args): calls.append((path, args))
+        with contextlib.redirect_stdout(io.StringIO()):
+            done = bootstrap.reexec_outside_replaced_framework(argv, system='darwin', executable=inside, framework=framework,
+                                                               system_python=system_python, environ=environ, probe=lambda: True, execv=execv)
+        self.assertTrue(done)
+        self.assertEqual(calls, [(str(system_python), [str(system_python), '-B', os.path.abspath(bootstrap.__file__), *argv])])
+        self.assertEqual(environ, {'RICEVANTA_BOOTSTRAP_REEXEC': '1'})
+        with self.assertRaisesRegex(bootstrap.BootstrapError, 'cannot import'), contextlib.redirect_stdout(io.StringIO()):
+            bootstrap.reexec_outside_replaced_framework(argv, system='darwin', executable=inside, framework=framework,
+                                                        system_python=system_python, environ={}, probe=lambda: False, execv=execv)
+        with self.assertRaisesRegex(bootstrap.BootstrapError, 'missing'):
+            bootstrap.reexec_outside_replaced_framework(argv, system='darwin', executable=inside, framework=framework,
+                                                        system_python=self.base / 'absent', environ={}, probe=lambda: True, execv=execv)
+        for label, kwargs in (('outside the framework', dict(executable=self.base / 'python3')),
+                              ('already re-executed', dict(environ={'RICEVANTA_BOOTSTRAP_REEXEC': '1'})),
+                              ('not macOS', dict(system='linux')),
+                              ('no python selected', dict(argv=[a if a != 'python,go' else 'go' for a in argv]))):
+            with self.subTest(case=label):
+                options = dict(argv=argv, system='darwin', executable=inside, framework=framework, system_python=system_python,
+                               environ={}, probe=lambda: True, execv=execv)
+                options.update(kwargs)
+                before = len(calls)
+                self.assertFalse(bootstrap.reexec_outside_replaced_framework(options.pop('argv'), **options))
+                self.assertEqual(len(calls), before)
+        self.assertNotIn('lzma', bootstrap.REEXEC_PROBE, 'macOS payloads are gzip or zip archives')
+
+    @unittest.skipUnless(POSIX, 'shell script fixtures')
     def test_real_execution_sentinel_only_after_verification(self):
         sentinel = self.base / 'go-ran'
-        script = f'#!/bin/sh\necho ran > "{sentinel}"\necho "go version go1.27.1 {bootstrap.PLATFORMS[HOST]["go"]}"\n'.encode()
+        script = (f'#!/bin/sh\necho ran > "{sentinel}"\nif [ "$1" = env ]; then echo "$GOROOT"; else '
+                  f'echo "go version go1.27.1 {bootstrap.PLATFORMS[HOST]["go"]}"; fi\n').encode()
         url = self.fixtures.go(script)
         code, error, journal, _, dest = self.run_bootstrap('go', execute=bootstrap.execute)
         self.assertEqual((code, error), (0, None), journal)
@@ -568,11 +893,11 @@ class BootstrapTests(unittest.TestCase):
 
     def test_browser_libraries_follow_playwright_host_validation(self):
         """Bundled libraries resolve through the browser's own directories; WebKit's dlopen libraries must be in the loader cache."""
-        if HOST != 'linux-x64': self.skipTest('browser payloads are consumed on Linux x64 only')
+        self.fixtures = Fixtures(self.base, 'linux-x64')
         self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
-        execute = FakeExecute(responses())
-        def ldd(argv):
-            library_path = execute.envs[-1].get('LD_LIBRARY_PATH', '').split(':')
+        execute = FakeExecute(responses('linux-x64'))
+        def ldd(argv, env, cwd):
+            library_path = env.get('LD_LIBRARY_PATH', '').split(':')
             if argv[-1].endswith('/libclearkey.so'): return '\tlibstdc++.so.7 => not found\n'
             if argv[-1].endswith('/firefox/firefox') and not any(p.endswith('/firefox-1511/firefox') for p in library_path):
                 return '\tlibmozgtk.so => not found\n'
@@ -583,23 +908,10 @@ class BootstrapTests(unittest.TestCase):
         lddcalls = [c[-1] for c in execute.calls if c[0] == 'ldd']
         self.assertIn(str(dest / 'ms-playwright' / 'firefox-1511' / 'firefox' / 'firefox'), lddcalls)
         self.assertFalse(any('gmp-clearkey' in c for c in lddcalls), 'only the directories Playwright validates are inspected')
-        canned = responses()
+        canned = responses('linux-x64')
         canned['ldconfig'] = '\tlibGLESv2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so.2\n'
         code, error, *_ = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned), dest=self.base / 'dest-dlopen')
         self.assertEqual(code, 1); self.assertIn('webkit', error); self.assertIn('libx264.so', error)
-
-    def test_linux_python_loads_only_the_admitted_libpython(self):
-        """The payload's RUNPATH names the runner tool cache; the interpreter must map the admitted libpython instead."""
-        if HOST != 'linux-x64': self.skipTest('Linux shared-library layout')
-        self.fixtures.python()
-        canned = responses()
-        canned['python3.14'] = python_check('linux-x64', '/opt/hostedtoolcache/Python/3.14.8/x64/lib/libpython3.14.so.1.0')
-        code, error, *_ = self.run_bootstrap('python', execute=FakeExecute(canned))
-        self.assertEqual(code, 1); self.assertIn('libpython', error); self.assertIn('hostedtoolcache', error)
-        execute = FakeExecute(responses())
-        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, dest=self.base / 'dest-ok')
-        self.assertEqual((code, error), (0, None), journal)
-        self.assertTrue(all(env.get('LD_LIBRARY_PATH', '').split(os.pathsep)[0] == str(dest / 'python' / 'lib') for env in execute.envs))
 
     def test_rust_components_must_come_from_the_admitted_rustc_build(self):
         self.fixtures.rust()
@@ -610,17 +922,44 @@ class BootstrapTests(unittest.TestCase):
                 code, error, *_ = self.run_bootstrap('rust', execute=FakeExecute(canned), dest=self.base / ('dest-' + output[-20:-12]))
                 self.assertEqual(code, 1); self.assertIn('admitted rustc commit', error)
 
-    def test_browser_dependency_and_version_checks_name_missing_libraries(self):
-        if HOST != 'linux-x64': self.skipTest('browser payloads are consumed on Linux x64 only')
-        self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
+    def test_cargo_subcommands_resolve_to_the_admitted_binaries(self):
+        """Cargo prefers $CARGO_HOME/bin when it is not on PATH; a rustup proxy answering there must be refused."""
+        self.fixtures.rust()
         canned = responses()
-        canned['ldd'] = lambda argv: ('\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n'
-                                     if argv[-1].endswith('/chrome-headless-shell') else '\tlibc.so.6 => /lib/libc.so.6\n')
+        def warm_cargo(argv, env, cwd):
+            if argv[1:2] == ['clippy'] and Path(env.get('CARGO_HOME', '')).name != 'cargo-home': return 'FAKE-CARGO-HOME-CLIPPY\n'
+            if argv[1:2] == ['clippy']: return 'clippy 0.1.99 (0123456789 2026-09-28)\n'  # the runner's own clippy
+            return cargo(argv, env, cwd)
+        canned['cargo'] = warm_cargo
+        code, error, *_ = self.run_bootstrap('rust', execute=FakeExecute(canned))
+        self.assertEqual(code, 1); self.assertIn('cargo clippy reports', error)
+
+    def test_pnpm_refuses_a_project_pinned_version_switch(self):
+        """pnpm 11 defaults pmOnFail to download; the admitted pnpm_config_pm_on_fail=error must make it refuse."""
+        self.fixtures = Fixtures(self.base, 'linux-x64')
+        self.fixtures.node(); self.fixtures.pnpm()
+        execute = FakeExecute(responses('linux-x64'))
+        code, error, journal, execute, dest = self.run_bootstrap('node,pnpm', execute=execute)
+        self.assertEqual((code, error), (0, None), journal)
+        probe = [(argv, env) for argv, env, cwd in zip(execute.calls, execute.envs, execute.cwds) if cwd is not None]
+        self.assertEqual(len(probe), 1)
+        self.assertEqual(probe[0][1]['pnpm_config_pm_on_fail'], 'error')
+        self.assertEqual(probe[0][1]['pnpm_config_registry'], 'https://127.0.0.1:9/', 'a missing guard cannot download during the probe')
+        with mock.patch.object(bootstrap, 'PNPM_ENV', {'pnpm_config_update_notifier': 'false'}):
+            code, error, *_ = self.run_bootstrap('node,pnpm', dest=self.base / 'unguarded')
+        self.assertEqual(code, 1); self.assertIn('did not refuse a project-pinned version switch', error)
+
+    def test_browser_dependency_and_version_checks_name_missing_libraries(self):
+        self.fixtures = Fixtures(self.base, 'linux-x64')
+        self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
+        canned = responses('linux-x64')
+        canned['ldd'] = lambda argv, env, cwd: ('\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n'
+                                               if argv[-1].endswith('/chrome-headless-shell') else '\tlibc.so.6 => /lib/libc.so.6\n')
         code, error, journal, execute, dest = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned))
         self.assertEqual(code, 1)
         self.assertIn('libnss3.so', error); self.assertIn('libgbm.so.1', error); self.assertIn('chromium-headless-shell', error)
         self.assertNotIn('bootstrap: admitted chromium-headless-shell', journal)
-        canned = responses()
+        canned = responses('linux-x64')
         canned['firefox'] = 'Mozilla Firefox 147.0\n'
         code, error, *_ = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned), dest=self.base / 'dest2')
         self.assertEqual(code, 1); self.assertIn('firefox', error); self.assertIn('version', error)
@@ -634,24 +973,40 @@ class BootstrapTests(unittest.TestCase):
         bad = self.base / 'new\nline'
         code, error, *_ = self.run_bootstrap('go', dest=bad)
         self.assertEqual(code, 1); self.assertIn('newline', error)
-        code, error, *_ = self.run_bootstrap('go')
-        self.assertEqual((code, error), (0, None))
+        code, error, journal, *_ = self.run_bootstrap('go')
+        self.assertEqual((code, error), (0, None), journal)
         env = self.env_lines()
-        self.assertEqual(set(env), {'CI_ADMITTED_ROOT', 'PATH'})
+        self.assertEqual(set(env), {'CI_ADMITTED_ROOT', 'GOROOT', 'PATH'})
         dest = self.base / 'dest'
-        self.assertEqual(env['PATH'].split(os.pathsep)[0], str(dest / 'go' / 'bin'), 'admitted directories come first')
-        self.assertEqual(env['PATH'].split(os.pathsep, 1)[1], os.environ['PATH'], 'the inherited PATH follows unchanged')
+        self.assertEqual(env['PATH'].split(self.separator())[0], str(dest / 'go' / 'bin'), 'admitted directories come first')
+        if HOST != 'windows-x64':
+            self.assertEqual(env['PATH'].split(os.pathsep, 1)[1], os.environ['PATH'], 'the inherited PATH follows unchanged')
+
+    def test_windows_path_drops_the_git_bash_prefix(self):
+        runner = [r'C:\hostedtoolcache\windows\Python\3.12.10\x64', r'C:\Windows\system32', r'C:\Program Files\Git\usr\bin', r'C:\Program Files\Git\cmd']
+        wrapper = [r'C:\Users\runneradmin\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin']
+        environ = {'MSYSTEM': 'MINGW64', 'USERPROFILE': r'C:\Users\runneradmin', 'PATH': ';'.join(wrapper + runner)}
+        host = make_host('windows-x64', self.base, environ=environ)
+        self.assertEqual(bootstrap.inherited_path(host), runner, 'only the leading wrapper entries go; the runner keeps its own Git entries')
+        self.assertEqual(bootstrap.inherited_path(make_host('windows-x64', self.base, environ={**environ, 'MSYSTEM': ''})), wrapper + runner,
+                         'outside Git Bash nothing is removed')
+        self.assertEqual(bootstrap.inherited_path(make_host('linux-x64', self.base, environ={'PATH': '/usr/local/bin:/usr/bin', 'MSYSTEM': 'MINGW64'})),
+                         ['/usr/local/bin', '/usr/bin'])
+        fixtures = Fixtures(self.base / 'win', 'windows-x64'); fixtures.base.mkdir(); self.fixtures = fixtures
+        fixtures.go()
+        code, error, journal, *_ = self.run_bootstrap('go', host=make_host('windows-x64', self.base, environ=environ))
+        self.assertEqual((code, error), (0, None), journal)
+        self.assertEqual(self.env_lines()['PATH'].split(';'), [str(self.base / 'dest' / 'go' / 'bin'), *runner])
 
     def test_env_out_is_the_only_output_interface(self):
         """The spec fixes the CLI; admitted directories reach later steps only through --env-out."""
-        self.fixtures.go()
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             bootstrap.parse_args(['--lock', 'l', '--platform', HOST, '--tools', 'go', '--dest', '/d', '--cache-mode', 'none',
                                   '--env-out', 'e', '--path-out', 'p'])
 
-    @unittest.skipIf(os.name == 'nt', 'shell script fixtures')
+    @unittest.skipUnless(POSIX and not SIMULATED, 'runs the real command line on the real host')
     def test_command_line_end_to_end_in_sources_mode(self):
-        url = self.fixtures.go(f'#!/bin/sh\necho "go version go1.27.1 {bootstrap.PLATFORMS[HOST]["go"]}"\n'.encode())
+        url = self.fixtures.go()
         sources = self.base / 'sources'; sources.mkdir()
         payload = self.fixtures.payloads[url]
         (sources / sha(payload)).write_bytes(payload)
@@ -691,19 +1046,24 @@ class ControlsTests(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             report = self.controls.run(['corrupt', '--lock', str(lock), '--platform', HOST, '--tools', 'go', '--work', str(self.base / 'work')],
-                                       fetch=fixtures.fetch, execute=FakeExecute(responses()), host=bootstrap.Host(HOST))
+                                       fetch=fixtures.fetch, execute=FakeExecute(responses()), host=make_host(HOST, self.base))
         self.assertEqual(report['failures'], [])
         kinds = {row['control'] for row in report['controls']}
         self.assertEqual(kinds, {'flipped-byte', 'truncated', 'appended', 'wrong-host'})
         self.assertFalse(list((self.base / 'work' / 'sources').glob('*')), 'payload copies are deleted after the controls')
-        lenient = FakeExecute(responses())
-        def accept_everything(path, entry): return None
-        with mock.patch.object(bootstrap, 'verify_file', accept_everything), contextlib.redirect_stdout(out):
+        # A lenient verifier with a plain executor (no call log of its own): the controls still see every command it ran.
+        executed = []
+        def plain(argv, **kwargs):
+            executed.append(argv)
+            return FakeExecute(responses())(argv, **kwargs)
+        def accept_everything(source, target, entry): target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(source.read_bytes())
+        with mock.patch.object(bootstrap, 'copy_verified', accept_everything), contextlib.redirect_stdout(out):
             report = self.controls.run(['corrupt', '--lock', str(lock), '--platform', HOST, '--tools', 'go', '--work', str(self.base / 'work2')],
-                                       fetch=fixtures.fetch, execute=lenient, host=bootstrap.Host(HOST))
+                                       fetch=fixtures.fetch, execute=plain, host=make_host(HOST, self.base))
         self.assertTrue(report['failures'], 'a verifier that accepts corrupted bytes must fail the controls')
+        self.assertTrue(executed and any('a command executed after refusal' in f for f in report['failures']), report['failures'])
 
-    def test_evidence_check_requires_every_selected_tool_on_the_path(self):
+    def test_evidence_check_requires_every_selected_tool_on_the_path_and_admitted_environment(self):
         fixtures = Fixtures(self.base)
         fixtures.go()
         lock = fixtures.lock()
@@ -712,11 +1072,17 @@ class ControlsTests(unittest.TestCase):
         with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(io.StringIO()):
             bootstrap.run(['--lock', str(lock), '--platform', HOST, '--tools', 'go', '--dest', str(dest), '--cache-mode', 'none',
                            '--env-out', str(self.base / 'env')],
-                          fetch=fixtures.fetch, execute=FakeExecute(responses()), host=bootstrap.Host(HOST))
+                          fetch=fixtures.fetch, execute=FakeExecute(responses()), host=make_host(HOST, self.base))
+        admitted = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
         evidence = dest / 'bootstrap-evidence.json'
         argv = ['evidence', '--lock', str(lock), '--platform', HOST, '--tools', 'go', '--evidence', str(evidence)]
-        with mock.patch.dict(os.environ, {'PATH': str(dest / 'go' / 'bin') + os.pathsep + os.environ['PATH']}), contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(self.controls.run(argv)['failures'], [])
+        if HOST == 'windows-x64': admitted['PATH'] = admitted['PATH'].replace(';', os.pathsep) if POSIX else admitted['PATH']
+        with mock.patch.dict(os.environ, admitted), contextlib.redirect_stdout(io.StringIO()):
+            report = self.controls.run(argv)
+            if HOST != 'windows-x64' or not POSIX: self.assertEqual(report['failures'], [])
+        with mock.patch.dict(os.environ, {**admitted, 'GOROOT': str(self.base / 'warm-goroot')}), contextlib.redirect_stdout(io.StringIO()):
+            report = self.controls.run(argv)
+        self.assertTrue(any('GOROOT' in f for f in report['failures']), report)
         with mock.patch.dict(os.environ, {'PATH': os.environ['PATH']}), contextlib.redirect_stdout(io.StringIO()):
             report = self.controls.run(argv)
         self.assertTrue(any('go' in f and 'PATH' in f for f in report['failures']), report)
@@ -724,6 +1090,35 @@ class ControlsTests(unittest.TestCase):
         evidence.write_text(json.dumps(data))
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertTrue(self.controls.run(argv)['failures'])
+
+    def test_evidence_check_requires_the_admitted_browser_registry(self):
+        fixtures = Fixtures(self.base, 'linux-x64')
+        fixtures.node(); fixtures.pnpm(); fixtures.playwright()
+        lock = fixtures.lock()
+        dest = self.base / 'dest'
+        with contextlib.redirect_stdout(io.StringIO()):
+            bootstrap.run(['--lock', str(lock), '--platform', 'linux-x64', '--tools', 'node,pnpm,playwright', '--dest', str(dest), '--cache-mode', 'none',
+                           '--env-out', str(self.base / 'env')],
+                          fetch=fixtures.fetch, execute=FakeExecute(responses('linux-x64')), host=make_host('linux-x64', self.base))
+        admitted = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
+        argv = ['evidence', '--lock', str(lock), '--platform', 'linux-x64', '--tools', 'node,pnpm,playwright', '--evidence', str(dest / 'bootstrap-evidence.json')]
+        with mock.patch.dict(os.environ, admitted), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.controls.run(argv)['failures'], [])
+        warm = self.base / 'home-cache' / 'ms-playwright'; warm.mkdir(parents=True)
+        with mock.patch.dict(os.environ, {**admitted, 'PLAYWRIGHT_BROWSERS_PATH': str(warm)}), contextlib.redirect_stdout(io.StringIO()):
+            failures = self.controls.run(argv)['failures']
+        self.assertTrue(any('PLAYWRIGHT_BROWSERS_PATH' in f for f in failures), failures)
+
+
+class HostIdentityTests(unittest.TestCase):
+    @unittest.skipIf(SIMULATED, 'already running under a simulated identity')
+    def test_suite_passes_under_every_platform_identity(self):
+        """The suite must not depend on the host it runs on: run it under the two identities this host is not."""
+        for identity in sorted(set(bootstrap.PLATFORMS) - {HOST, 'linux-arm64'}):
+            with self.subTest(identity=identity):
+                result = subprocess.run([sys.executable, '-B', '-m', 'unittest', 'test_bootstrap'], cwd=Path(__file__).parent,
+                                        env={**os.environ, 'BOOTSTRAP_TEST_HOST': identity}, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr[-4000:])
 
 
 if __name__ == '__main__':

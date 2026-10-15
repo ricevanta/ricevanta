@@ -89,12 +89,11 @@ Shared schemas and design documents are read-only implementation inputs. Report 
 | `windows-2025` | `x86_64-pc-windows-msvc` | `X64` |
 | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` | `X64` |
 
-- [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python setup reads `python-version-file: .github/python-version`. Rust setup runs `rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy`; subsequent Cargo commands select the checked-in toolchain file. No unpinned Rust action or downloaded install script.
+- [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python 3.14.8 and the Rust 1.99.0 rustc, rust-std, cargo, rustfmt and clippy components come from the digest-checked bootstrap in [CI hardening section 8](../specs/ci-hardening.md#8-one-validator-environment-and-admitted-tools-ci-04-to-ci-07), which pins the versions in `.github/python-version` and `agent/rust-toolchain.toml` through `scripts/ci/toolchains.lock.json`. No setup action, rustup download or install script runs.
 
 | Action | Exact commit | Basis |
 |---|---|---|
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | [v7.0.1 release](https://github.com/actions/checkout/releases/tag/v7.0.1), server and design workflow pin |
-| `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` | [v7.0.0 release](https://github.com/actions/setup-python/releases/tag/v7.0.0), design workflow pin |
 | `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | [v6.1.0 release](https://github.com/actions/cache/releases/tag/v6.1.0) |
 
 - [ ] Follow the authoritative cache boundary in [release builds](../specs/release-builds.md#4-reproducibility-and-toolchain-admission): cache only integrity-checked downloaded registry sources, never `agent/target`, other compiled output or credentials. Tag builds use no restored caches. Check `cargo metadata --locked --format-version 1` resolves the expected pins without changing the lockfile.
