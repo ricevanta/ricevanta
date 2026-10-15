@@ -109,6 +109,7 @@ const (
 	CodeComponentRegistrationNames      Code = "component.registration_names"
 	CodeComponentRegistrationNativeHost Code = "component.registration_native_host"
 	CodeComponentRegistrationBound      Code = "component.registration_bound"
+	CodeComponentRegistrationDuplicate  Code = "component.registration_duplicate"
 	CodeTargetsDeviceGroupsRequired     Code = "targets.device_groups_required"
 	CodeTargetsDeviceGroupsForbidden    Code = "targets.device_groups_forbidden"
 	CodeTargetsAllDevices               Code = "targets.all_devices"
@@ -144,7 +145,7 @@ var allCodes = []Code{
 	CodeTombstoneManifest, CodeTombstonePackage, CodeTombstonePublisher, CodeTombstoneGrants, CodeTombstoneTargets, CodeTombstoneNotInstalled,
 	CodeOwnershipOwner, CodeOwnershipAssignmentRequired,
 	CodeInterfaceUnserved,
-	CodeComponentVerdictMissing, CodeComponentVerdictFailed, CodeComponentRegistrationUnknown, CodeComponentRegistrationOS, CodeComponentRegistrationNames, CodeComponentRegistrationNativeHost, CodeComponentRegistrationBound,
+	CodeComponentVerdictMissing, CodeComponentVerdictFailed, CodeComponentRegistrationUnknown, CodeComponentRegistrationOS, CodeComponentRegistrationNames, CodeComponentRegistrationNativeHost, CodeComponentRegistrationBound, CodeComponentRegistrationDuplicate,
 	CodeTargetsDeviceGroupsRequired, CodeTargetsDeviceGroupsForbidden, CodeTargetsAllDevices, CodeTargetsConsole, CodeTargetsJobs, CodeTargetsUnknownGroup, CodeTargetsRetiredKey,
 	CodeGrantMissing, CodeGrantExtra, CodeGrantKind, CodeGrantRegistration, CodeGrantExceeds, CodeGrantProfile, CodeGrantRoots, CodeGrantRetiredKey,
 	CodeApprovalReleaseFixed, CodeApprovalReleaseOperation, CodeApprovalWidened, CodeApprovalTargetsChanged, CodeApprovalEpoch, CodeApprovalDigest, CodeApprovalSeparation, CodeApprovalExemptUnavailable, CodeApprovalExemptPrincipal, CodeApprovalConsumed,
@@ -367,7 +368,7 @@ type Intent struct {
 	Enabled          bool
 	Grants           []string
 	Targets          Targets
-	RegistrationBind []Binding
+	RegistrationBind []Binding // the id's complete binding set after commit; unnamed bindings are released
 	ApprovalConsume  string
 }
 

@@ -11,12 +11,15 @@ import (
 // rules, and the request's field rules and its four rules.
 func (d *decider) input() []Reason {
 	var reasons []Reason
-	if !checkEvidence(d.e) {
+	evidenceOK := checkEvidence(d.e)
+	if !evidenceOK {
 		reasons = append(reasons, Reason{Code: CodeInputEvidence})
 	}
+	// The record rules run only on field-valid values, so their pairwise
+	// passes see bounded counts.
 	var cs checker
 	cs.validSnapshot(d.s)
-	if cs.fieldFail || cs.grantFail || !d.snapshotRules() {
+	if cs.fieldFail || cs.grantFail || !d.snapshotRules(evidenceOK) {
 		reasons = append(reasons, Reason{Code: CodeInputSnapshot})
 	}
 	var cr checker
@@ -27,7 +30,10 @@ func (d *decider) input() []Reason {
 	return reasons
 }
 
-func (d *decider) snapshotRules() bool {
+// snapshotRules checks the twelve snapshot rules. The comparisons with the
+// evidence's id and version (rules 3 to 6) run only on valid evidence, so a
+// malformed evidence id is one defect with one reason, input.evidence.
+func (d *decider) snapshotRules(evidenceOK bool) bool {
 	s, e := d.s, d.e
 	fingerprints := make(map[string]bool, len(s.TrustList))
 	for i := range s.TrustList {
@@ -48,14 +54,15 @@ func (d *decider) snapshotRules() bool {
 		}
 	}
 	// Rule 3: revocations name the id, and a version revocation the version.
+	sameID := func(id string) bool { return !evidenceOK || id == e.ID }
 	for _, r := range s.Revocations {
-		if r.ID != e.ID || r.Version != "" && r.Version != e.Version {
+		if !sameID(r.ID) || evidenceOK && r.Version != "" && r.Version != e.Version {
 			return false
 		}
 	}
 	// Rule 4: the ownership record names the id; rule 10 for its keys.
 	if o := s.Ownership; o != nil {
-		if o.ID != e.ID || !fingerprints[o.Owner] {
+		if !sameID(o.ID) || !fingerprints[o.Owner] {
 			return false
 		}
 		for _, p := range o.PriorOwners {
@@ -67,7 +74,7 @@ func (d *decider) snapshotRules() bool {
 	// Rule 5: tombstones name the id, at most one per version; rule 10 for
 	// their publishers.
 	for i, t := range s.Tombstones {
-		if t.ID != e.ID || !fingerprints[t.Publisher] {
+		if !sameID(t.ID) || !fingerprints[t.Publisher] {
 			return false
 		}
 		for j := 0; j < i; j++ {
@@ -80,7 +87,7 @@ func (d *decider) snapshotRules() bool {
 		// Rule 6: the install names the id and its version has a tombstone
 		// with the same package digest.
 		t := findTombstone(s, in.Version)
-		if in.ID != e.ID || t == nil || t.PackageSHA256 != in.PackageSHA256 {
+		if !sameID(in.ID) || t == nil || t.PackageSHA256 != in.PackageSHA256 {
 			return false
 		}
 		for i := range in.Grants {
@@ -99,6 +106,10 @@ func (d *decider) snapshotRules() bool {
 				return false
 			}
 		}
+	}
+	// Rule 12: an install or tombstone exists only beside the ownership record.
+	if (s.Install != nil || len(s.Tombstones) > 0) && s.Ownership == nil {
+		return false
 	}
 	// Rule 9: one record per registration id.
 	for i := range s.Registrations {
@@ -271,6 +282,7 @@ func (d *decider) iface() []Reason {
 // stays within a stored registration that no other active holder binds.
 func (d *decider) component() []Reason {
 	var reasons []Reason
+	referenced := map[string]bool{}
 	for _, c := range d.e.Components {
 		seen, failed := false, false
 		for _, v := range d.v {
@@ -289,6 +301,12 @@ func (d *decider) component() []Reason {
 		if b == nil {
 			continue
 		}
+		// Components are in name order, so every adapter after the first
+		// that names a registration is a duplicate, stored or not.
+		if referenced[b.Registration] {
+			reasons = append(reasons, Reason{Code: CodeComponentRegistrationDuplicate, Subject: c.Name})
+		}
+		referenced[b.Registration] = true
 		reg := findRegistration(d.s, b.Registration)
 		if reg == nil {
 			reasons = append(reasons, Reason{Code: CodeComponentRegistrationUnknown, Subject: c.Name})
@@ -309,7 +327,9 @@ func (d *decider) component() []Reason {
 				}
 			}
 		}
-		if h := reg.Bound; h != nil && h.State == StateActive && (h.ID != d.e.ID || h.Component != c.Name) {
+		// A binding this id holds never blocks: the intent's binding set
+		// replaces the id's bindings.
+		if h := reg.Bound; h != nil && h.State == StateActive && h.ID != d.e.ID {
 			reasons = append(reasons, Reason{Code: CodeComponentRegistrationBound, Subject: c.Name})
 		}
 	}

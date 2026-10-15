@@ -1,5 +1,7 @@
 package admission
 
+import "strconv"
+
 // Subset rules of extension-admission section 4. bounded reports whether
 // values v stay within bound for one agreeing kind and interface. Against the
 // manifest request (current false) collector roots and the disclosure profile
@@ -128,58 +130,130 @@ func widened(g *Grant, current *Grant) bool {
 	return !bounded(g.Interface, &g.Values, &current.Values, true)
 }
 
-func grantEqual(a, b *Grant) bool {
-	return a.Component == b.Component && a.Kind == b.Kind && a.Interface == b.Interface && valuesEqual(&a.Values, &b.Values)
+// grantEqual is identical-retry equality: set-valued arrays compare as sets
+// (extension-admission section 4).
+func grantEqual(a, b *Grant) bool { return grantKey(a, true) == grantKey(b, true) }
+
+// equalityKey is an injective, length-prefixed encoding: two values encode
+// alike exactly when they are equal. With canonical false arrays keep their
+// order (JSON equality, for uniqueItems); with canonical true set-valued grant
+// arrays are sorted first (set equality). Console slots are keyed by name.
+type equalityKey []byte
+
+func (k *equalityKey) str(s string) {
+	*k = strconv.AppendInt(*k, int64(len(s)), 10)
+	*k = append(*k, ':')
+	*k = append(*k, s...)
 }
 
-// valuesEqual is JSON equality of two values objects: arrays compare in order.
-func valuesEqual(a, b *Values) bool {
-	if (a.Content == nil) != (b.Content == nil) || (a.BrowserAdapter == nil) != (b.BrowserAdapter == nil) ||
-		(a.AgentModule == nil) != (b.AgentModule == nil) || (a.ConsoleModule == nil) != (b.ConsoleModule == nil) ||
-		(a.ServiceConnector == nil) != (b.ServiceConnector == nil) {
-		return false
+func (k *equalityKey) bytes(b []byte) { k.str(string(b)) }
+
+func (k *equalityKey) u64(n uint64) {
+	*k = strconv.AppendUint(*k, n, 10)
+	*k = append(*k, ';')
+}
+
+func (k *equalityKey) flags(values ...bool) {
+	for _, v := range values {
+		if v {
+			*k = append(*k, 't')
+		} else {
+			*k = append(*k, 'f')
+		}
 	}
-	if a.BrowserAdapter != nil && (a.BrowserAdapter.Registration != b.BrowserAdapter.Registration || !osPoliciesEqual(&a.BrowserAdapter.OS, &b.BrowserAdapter.OS)) {
-		return false
+}
+
+func (k *equalityKey) strs(values []string) {
+	k.u64(uint64(len(values)))
+	for _, v := range values {
+		k.str(v)
 	}
-	if x, y := a.AgentModule, b.AgentModule; x != nil {
+}
+
+func (k *equalityKey) osPolicies(p *OSPolicies, canonical bool) {
+	for _, e := range []*OSPolicy{p.MacOS, p.Windows, p.Linux} {
+		k.flags(e != nil)
+		if e != nil {
+			k.strs(set(e.PolicyNames, canonical))
+			k.flags(e.NativeHost)
+		}
+	}
+}
+
+func grantKey(g *Grant, canonical bool) string {
+	var k equalityKey
+	k.str(g.Component)
+	k.str(g.Kind)
+	k.str(g.Interface)
+	k.values(&g.Values, canonical)
+	return string(k)
+}
+
+// set returns values, sorted when canonical.
+func set(values []string, canonical bool) []string {
+	if !canonical {
+		return values
+	}
+	return sortedStrings(values)
+}
+
+// sortedByKey sorts element keys when canonical; the keys are injective, so
+// any fixed order gives set equality.
+func sortedByKey(keys []string, canonical bool) []string {
+	if canonical {
+		return sortedStrings(keys)
+	}
+	return keys
+}
+
+// values encodes every field of a Values; a nil and an empty set-valued
+// agent array differ, as JSON absence and an empty array do.
+func (k *equalityKey) values(v *Values, canonical bool) {
+	k.flags(v.Content != nil, v.BrowserAdapter != nil, v.AgentModule != nil, v.ConsoleModule != nil, v.ServiceConnector != nil)
+	if b := v.BrowserAdapter; b != nil {
+		k.str(b.Registration)
+		k.osPolicies(&b.OS, canonical)
+	}
+	if a := v.AgentModule; a != nil {
 		for _, f := range append(append(append([]agentField{}, budgetFields...), collectorFields...), responderFields...) {
-			if *f.get(x) != *f.get(y) {
-				return false
-			}
+			k.u64(*f.get(a))
 		}
-		if !stringsEqual(x.MIMETypes, y.MIMETypes) || !stringsEqual(x.Actions, y.Actions) || x.DisclosureProfile != y.DisclosureProfile || len(x.Roots) != len(y.Roots) {
-			return false
+		k.flags(a.MIMETypes != nil, a.Actions != nil, a.Roots != nil)
+		k.strs(set(a.MIMETypes, canonical))
+		k.strs(set(a.Actions, canonical))
+		roots := make([]string, len(a.Roots))
+		for i, r := range a.Roots {
+			var rk equalityKey
+			rk.str(r.OS)
+			rk.str(r.Path)
+			roots[i] = string(rk)
 		}
-		if (x.MIMETypes == nil) != (y.MIMETypes == nil) || (x.Actions == nil) != (y.Actions == nil) || (x.Roots == nil) != (y.Roots == nil) {
-			return false
+		k.u64(uint64(len(roots)))
+		for _, r := range sortedByKey(roots, canonical) {
+			*k = append(*k, r...)
 		}
-		for i := range x.Roots {
-			if x.Roots[i] != y.Roots[i] {
-				return false
-			}
+		k.str(a.DisclosureProfile)
+	}
+	if c := v.ConsoleModule; c != nil {
+		names := sortedKeys(c.Slots)
+		k.u64(uint64(len(names)))
+		for _, name := range names {
+			k.str(name)
+			k.strs(set(c.Slots[name], canonical))
 		}
 	}
-	if x, y := a.ConsoleModule, b.ConsoleModule; x != nil {
-		if len(x.Slots) != len(y.Slots) {
-			return false
+	if c := v.ServiceConnector; c != nil {
+		out := make([]string, len(c.Outbound))
+		for i, o := range c.Outbound {
+			var ok equalityKey
+			ok.str(o.Host)
+			ok.u64(o.Port)
+			ok.str(o.Transport)
+			out[i] = string(ok)
 		}
-		for k, ops := range x.Slots {
-			other, ok := y.Slots[k]
-			if !ok || !stringsEqual(ops, other) {
-				return false
-			}
-		}
-	}
-	if x, y := a.ServiceConnector, b.ServiceConnector; x != nil {
-		if len(x.Outbound) != len(y.Outbound) {
-			return false
-		}
-		for i := range x.Outbound {
-			if x.Outbound[i] != y.Outbound[i] {
-				return false
-			}
+		k.u64(uint64(len(out)))
+		for _, o := range sortedByKey(out, canonical) {
+			*k = append(*k, o...)
 		}
 	}
-	return true
 }

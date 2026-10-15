@@ -3,7 +3,7 @@ package admission
 // ParseResource decodes the GitOps kind Extension. It is not the package
 // manifest: spec.components, files and spec.requires are invalid here.
 func ParseResource(data []byte) (Resource, error) {
-	root, err := decodeJSON(data, MaxResourceBytes)
+	root, err := decodeJSON(data, MaxResourceBytes, MaxResourceValues)
 	if err != nil {
 		return Resource{}, err
 	}
@@ -81,11 +81,11 @@ func (c *checker) resource(n *node) (Resource, bool) {
 func (c *checker) validResource(r *Resource) {
 	c.check(validID(r.ID) && validVersion(r.Version))
 	c.check(r.Source.URL == "" || matches(r.Source.URL, 9, 2048, urlPattern))
-	c.check(len(r.Grants) >= 1 && len(r.Grants) <= 64)
-	for i := range r.Grants {
-		c.validGrant(&r.Grants[i])
-		for j := 0; j < i; j++ {
-			c.check(!grantEqual(&r.Grants[j], &r.Grants[i]))
+	if c.within(len(r.Grants), 1, 64) {
+		seen := make(map[string]struct{}, len(r.Grants))
+		for i := range r.Grants {
+			c.validGrant(&r.Grants[i])
+			c.check(firstSeen(seen, grantKey(&r.Grants[i], false)))
 		}
 	}
 	c.validTargets(&r.Targets)

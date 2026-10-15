@@ -14,6 +14,14 @@ const (
 	MaxResourceBytes    = 2 << 20
 	MaxGrantRecordBytes = 1 << 20
 	MaxDepth            = 16
+
+	// Value caps count every JSON value (objects, arrays and scalars, not
+	// member names). The lexer refuses the first value past the cap before
+	// allocating it, so allocation is proportional to the cap.
+	MaxSnapshotValues    = 65536
+	MaxRequestValues     = 32768
+	MaxResourceValues    = 32768
+	MaxGrantRecordValues = 1024
 )
 
 type nodeKind uint8
@@ -50,15 +58,16 @@ func (n *node) member(key string) *node {
 // rejection, valid UTF-8 without lone surrogates, and integer tokens without
 // sign, fraction or exponent. Every failure is ErrJSON.
 type lexer struct {
-	data []byte
-	pos  int
+	data   []byte
+	pos    int
+	values int // values still allowed
 }
 
-func decodeJSON(data []byte, limit int) (*node, error) {
+func decodeJSON(data []byte, limit, values int) (*node, error) {
 	if len(data) > limit {
 		return nil, ErrJSON
 	}
-	l := lexer{data: data}
+	l := lexer{data: data, values: values}
 	n, ok := l.value(0)
 	if !ok {
 		return nil, ErrJSON
@@ -91,9 +100,10 @@ func (l *lexer) take(b byte) bool {
 
 func (l *lexer) value(depth int) (*node, bool) {
 	l.space()
-	if l.pos >= len(l.data) {
+	if l.pos >= len(l.data) || l.values == 0 {
 		return nil, false
 	}
+	l.values--
 	switch c := l.data[l.pos]; {
 	case c == '{' || c == '[':
 		if depth == MaxDepth {
@@ -545,7 +555,7 @@ func knownInterface(s string) bool { return oneOf(s, servedInterfaceNames...) }
 // ParseSnapshot decodes the decision-scoped snapshot. A parsed value proves
 // shape, never authority.
 func ParseSnapshot(data []byte) (Snapshot, error) {
-	root, err := decodeJSON(data, MaxSnapshotBytes)
+	root, err := decodeJSON(data, MaxSnapshotBytes, MaxSnapshotValues)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -562,7 +572,7 @@ func ParseSnapshot(data []byte) (Snapshot, error) {
 
 // ParseRequest decodes an admission request.
 func ParseRequest(data []byte) (Request, error) {
-	root, err := decodeJSON(data, MaxRequestBytes)
+	root, err := decodeJSON(data, MaxRequestBytes, MaxRequestValues)
 	if err != nil {
 		return Request{}, err
 	}
@@ -915,54 +925,79 @@ func (c *checker) validSnapshot(s *Snapshot) {
 	c.check(stringSet(s.ServedInterfaces, 0, 11, knownInterface))
 	c.check(s.ReleaseVersion == "" || validVersion(s.ReleaseVersion))
 	c.check(validFingerprint(s.ProjectKey))
-	c.check(len(s.TrustList) <= 1024)
-	for i := range s.TrustList {
-		t := &s.TrustList[i]
-		c.check(validFingerprint(t.Fingerprint) && validDisplayName(t.Name) && stringSet(t.Prefixes, 1, 16, validID))
-		for j := 0; j < i; j++ {
-			c.check(!trustEntryEqual(&s.TrustList[j], t))
+	// Once an array's count fails, the result is ErrField whatever its items
+	// hold, so its item and uniqueness passes are skipped; the remaining
+	// uniqueness checks are map lookups on exact equality keys. Work stays
+	// linear in the input.
+	if c.within(len(s.TrustList), 0, 1024) {
+		seen := make(map[string]struct{}, len(s.TrustList))
+		for i := range s.TrustList {
+			t := &s.TrustList[i]
+			c.check(validFingerprint(t.Fingerprint) && validDisplayName(t.Name) && stringSet(t.Prefixes, 1, 16, validID))
+			c.check(firstSeen(seen, trustEntryKey(t)))
 		}
 	}
-	c.check(len(s.Revocations) <= 2)
-	for i, r := range s.Revocations {
-		c.check(validID(r.ID) && (r.Version == "" || validVersion(r.Version)))
-		for j := 0; j < i; j++ {
-			c.check(s.Revocations[j] != r)
+	if c.within(len(s.Revocations), 0, 2) {
+		seen := make(map[Revocation]struct{}, len(s.Revocations))
+		for _, r := range s.Revocations {
+			c.check(validID(r.ID) && (r.Version == "" || validVersion(r.Version)))
+			_, dup := seen[r]
+			c.check(!dup)
+			seen[r] = struct{}{}
 		}
 	}
 	if o := s.Ownership; o != nil {
 		c.check(validID(o.ID) && validFingerprint(o.Owner) && stringSet(o.PriorOwners, 0, 1023, validFingerprint))
 	}
-	c.check(len(s.Tombstones) <= 2)
-	for i, t := range s.Tombstones {
-		c.check(validID(t.ID) && validVersion(t.Version) && validFingerprint(t.Publisher))
-		for j := 0; j < i; j++ {
-			c.check(s.Tombstones[j] != t)
+	if c.within(len(s.Tombstones), 0, 2) {
+		seen := make(map[Tombstone]struct{}, len(s.Tombstones))
+		for _, t := range s.Tombstones {
+			c.check(validID(t.ID) && validVersion(t.Version) && validFingerprint(t.Publisher))
+			_, dup := seen[t]
+			c.check(!dup)
+			seen[t] = struct{}{}
 		}
 	}
 	if in := s.Install; in != nil {
 		c.check(validID(in.ID) && validVersion(in.Version) && (in.State == StateActive || in.State == StateRecoveryPending))
 		c.validTargets(&in.Targets)
-		c.check(len(in.Grants) >= 1 && len(in.Grants) <= 64)
-		for i := range in.Grants {
-			c.validGrantRecord(&in.Grants[i])
+		if c.within(len(in.Grants), 1, 64) {
+			for i := range in.Grants {
+				c.validGrantRecord(&in.Grants[i])
+			}
 		}
 	}
-	c.check(len(s.Registrations) <= 64)
-	for i := range s.Registrations {
-		r := &s.Registrations[i]
-		c.check(validID(r.ID) && validName(r.Browser))
-		c.validOSPolicies(&r.OS)
-		if b := r.Bound; b != nil {
-			c.check(validID(b.ID) && validName(b.Component) && (b.State == StateActive || b.State == StateRecoveryPending))
-		}
-		for j := 0; j < i; j++ {
-			c.check(!registrationEqual(&s.Registrations[j], r))
+	if c.within(len(s.Registrations), 0, 64) {
+		seen := make(map[string]struct{}, len(s.Registrations))
+		for i := range s.Registrations {
+			r := &s.Registrations[i]
+			c.check(validID(r.ID) && validName(r.Browser))
+			c.validOSPolicies(&r.OS)
+			if b := r.Bound; b != nil {
+				c.check(validID(b.ID) && validName(b.Component) && (b.State == StateActive || b.State == StateRecoveryPending))
+			}
+			c.check(firstSeen(seen, registrationKey(r)))
 		}
 	}
 	c.check(stringSet(s.DisclosureProfiles, 0, 64, validProfile))
 	c.check(stringSet(s.DeviceGroups, 0, 1024, validUUID))
 	c.check(stringSet(s.ConsumedApprovals, 0, 1, validUUID))
+}
+
+// within records a count failure and reports whether the count is in bounds.
+func (c *checker) within(n, min, max int) bool {
+	ok := n >= min && n <= max
+	c.check(ok)
+	return ok
+}
+
+// firstSeen adds key to seen and reports whether it was absent.
+func firstSeen(seen map[string]struct{}, key string) bool {
+	if _, dup := seen[key]; dup {
+		return false
+	}
+	seen[key] = struct{}{}
+	return true
 }
 
 func (c *checker) validOSPolicies(p *OSPolicies) {
@@ -986,9 +1021,10 @@ func (c *checker) validTargets(t *Targets) {
 func (c *checker) validRequest(r *Request) {
 	c.check(oneOf(string(r.Source), "upload", "api", "gitops", "index", "server-image"))
 	c.check(validUUID(r.Requester))
-	c.check(len(r.Grants) <= 64)
-	for i := range r.Grants {
-		c.validGrant(&r.Grants[i])
+	if c.within(len(r.Grants), 0, 64) {
+		for i := range r.Grants {
+			c.validGrant(&r.Grants[i])
+		}
 	}
 	c.validTargets(&r.Targets)
 	if r.Approval != nil {
@@ -996,30 +1032,32 @@ func (c *checker) validRequest(r *Request) {
 	}
 }
 
-func trustEntryEqual(a, b *TrustEntry) bool {
-	return a.Fingerprint == b.Fingerprint && a.PublicKey == b.PublicKey && a.Name == b.Name && stringsEqual(a.Prefixes, b.Prefixes) &&
-		a.ProjectPublisher == b.ProjectPublisher && a.Revoked == b.Revoked && a.Retired == b.Retired && a.Generation == b.Generation
+// trustEntryKey and registrationKey are injective encodings: equal keys
+// exactly when the JSON objects are equal.
+func trustEntryKey(t *TrustEntry) string {
+	var k equalityKey
+	k.str(t.Fingerprint)
+	k.bytes(t.PublicKey[:])
+	k.str(t.Name)
+	k.strs(t.Prefixes)
+	k.flags(t.ProjectPublisher, t.Revoked, t.Retired)
+	k.u64(t.Generation)
+	return string(k)
 }
 
-func registrationEqual(a, b *Registration) bool {
-	if a.ID != b.ID || a.Browser != b.Browser || a.RegistrationGeneration != b.RegistrationGeneration || !osPoliciesEqual(&a.OS, &b.OS) {
-		return false
+func registrationKey(r *Registration) string {
+	var k equalityKey
+	k.str(r.ID)
+	k.str(r.Browser)
+	k.u64(r.RegistrationGeneration)
+	k.osPolicies(&r.OS, false)
+	k.flags(r.Bound != nil)
+	if b := r.Bound; b != nil {
+		k.str(b.ID)
+		k.str(b.Component)
+		k.str(string(b.State))
 	}
-	if a.Bound == nil || b.Bound == nil {
-		return a.Bound == nil && b.Bound == nil
-	}
-	return *a.Bound == *b.Bound
-}
-
-func osPoliciesEqual(a, b *OSPolicies) bool {
-	return osPolicyEqual(a.MacOS, b.MacOS) && osPolicyEqual(a.Windows, b.Windows) && osPolicyEqual(a.Linux, b.Linux)
-}
-
-func osPolicyEqual(a, b *OSPolicy) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return a.NativeHost == b.NativeHost && stringsEqual(a.PolicyNames, b.PolicyNames)
+	return string(k)
 }
 
 func stringsEqual(a, b []string) bool {

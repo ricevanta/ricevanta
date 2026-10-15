@@ -188,14 +188,15 @@ func osPoliciesJV(p *OSPolicies) jv {
 	}{{"macos", p.MacOS}, {"windows", p.Windows}, {"linux", p.Linux}} {
 		if e.policy != nil {
 			o.keys = append(o.keys, e.name)
-			o.items = append(o.items, jobj("policy_names", jstrs(e.policy.PolicyNames), "native_host", jbool(e.policy.NativeHost)))
+			o.items = append(o.items, jobj("policy_names", jstrs(sortedStrings(e.policy.PolicyNames)), "native_host", jbool(e.policy.NativeHost)))
 		}
 	}
 	return o
 }
 
 // valuesJV encodes grant values with exactly the members the interface's
-// schema branch defines. Arrays keep the proposal's order.
+// schema branch defines. Every grant array is set-valued and encoded in
+// canonical order: strings bytewise, objects by their JCS bytes.
 func valuesJV(iface string, v *Values) (jv, error) {
 	switch {
 	case v.Content != nil:
@@ -212,24 +213,28 @@ func valuesJV(iface string, v *Values) (jv, error) {
 		switch iface {
 		case ifaceParser:
 			o.keys = append(o.keys, "mime_types")
-			o.items = append(o.items, jstrs(a.MIMETypes))
+			o.items = append(o.items, jstrs(sortedStrings(a.MIMETypes)))
 		case ifaceCollector:
 			roots := make([]jv, len(a.Roots))
 			for i, r := range a.Roots {
 				roots[i] = jobj("os", jstr(r.OS), "path", jstr(r.Path))
 			}
 			o.keys = append(o.keys, "roots", "disclosure_profile")
-			o.items = append(o.items, jarr(roots...), jstr(a.DisclosureProfile))
+			sortedRoots, err := byJCS(roots)
+			if err != nil {
+				return jv{}, err
+			}
+			o.items = append(o.items, sortedRoots, jstr(a.DisclosureProfile))
 		case ifaceResponder:
 			o.keys = append(o.keys, "actions")
-			o.items = append(o.items, jstrs(a.Actions))
+			o.items = append(o.items, jstrs(sortedStrings(a.Actions)))
 		}
 		return o, nil
 	case v.ConsoleModule != nil:
 		slots := jobj()
 		for _, name := range sortedKeys(v.ConsoleModule.Slots) {
 			slots.keys = append(slots.keys, name)
-			slots.items = append(slots.items, jstrs(v.ConsoleModule.Slots[name]))
+			slots.items = append(slots.items, jstrs(sortedStrings(v.ConsoleModule.Slots[name])))
 		}
 		return jobj("slots", slots), nil
 	case v.ServiceConnector != nil:
@@ -237,9 +242,35 @@ func valuesJV(iface string, v *Values) (jv, error) {
 		for i, o := range v.ServiceConnector.Outbound {
 			out[i] = jobj("host", jstr(o.Host), "port", jint(o.Port), "transport", jstr(o.Transport))
 		}
-		return jobj("outbound", jarr(out...)), nil
+		sortedOut, err := byJCS(out)
+		if err != nil {
+			return jv{}, err
+		}
+		return jobj("outbound", sortedOut), nil
 	}
 	return jv{}, errDigestInput
+}
+
+// byJCS returns the items as an array sorted by their JCS bytes.
+func byJCS(items []jv) (jv, error) {
+	type keyed struct {
+		key  string
+		item jv
+	}
+	all := make([]keyed, len(items))
+	for i, item := range items {
+		b, err := item.encode(nil)
+		if err != nil {
+			return jv{}, err
+		}
+		all[i] = keyed{string(b), item}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].key < all[j].key })
+	out := make([]jv, len(all))
+	for i := range all {
+		out[i] = all[i].item
+	}
+	return jarr(out...), nil
 }
 
 func sortedKeys(m map[string][]string) []string {

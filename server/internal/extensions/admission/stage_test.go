@@ -42,6 +42,10 @@ var stageDefects = []struct {
 	{StageRevocation, func(in *inputs) { in.s.Revocations = []Revocation{{ID: in.e.ID}} }},
 	{StageTombstone, func(in *inputs) {
 		in.s.Tombstones = []Tombstone{{ID: in.e.ID, Version: in.e.Version, Publisher: in.e.PublisherFingerprint, ManifestSHA256: in.e.ManifestSHA256, PackageSHA256: [32]byte{9}}}
+		// Snapshot rule 12: a tombstone exists only beside the ownership record.
+		if in.s.Ownership == nil {
+			in.s.Ownership = &Ownership{ID: in.e.ID, Owner: in.e.PublisherFingerprint, OwnershipGeneration: 1}
+		}
 	}},
 	{StageOwnership, func(in *inputs) { in.s.Ownership = &Ownership{ID: in.e.ID, Owner: partnerKey, OwnershipGeneration: 1} }},
 	{StageInterface, func(in *inputs) {
@@ -236,8 +240,8 @@ func TestNoAliasing(t *testing.T) {
 			t.Errorf("%s: decision slices alias inputs", c.Name)
 		}
 	}
-	if admitted != 18 {
-		t.Errorf("checked %d admitted decisions, want 18", admitted)
+	if admitted != 22 {
+		t.Errorf("checked %d admitted decisions, want 22", admitted)
 	}
 }
 

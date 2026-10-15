@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // corpusRaw returns the compact snapshot and request of one corpus case.
@@ -399,5 +401,145 @@ func TestBoundsValues(t *testing.T) {
 	r["grant"].(map[string]any)["values"].(map[string]any)["roots"] = []any{map[string]any{"os": "linux", "path": "/" + strings.Repeat("a", 256)}}
 	if err := parseGrant(marshal(t, r)); !errors.Is(err, ErrField) {
 		t.Errorf("257-byte root: %v", err)
+	}
+}
+
+// repeatedArray joins count copies of item into a JSON array.
+func repeatedArray(item string, count int) string {
+	var b strings.Builder
+	b.Grow(count * (len(item) + 1))
+	b.WriteByte('[')
+	for i := 0; i < count; i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(item)
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
+// TestParseLinearWork: uniqueness and item checks stop once a count fails
+// and the remaining ones are map lookups, so work stays linear inside the
+// byte and value bounds (review R-02). The review's quadratic shapes (a 2 MiB
+// resource of identical minimal grants, 80,000 revocations, a 16 MiB snapshot
+// of revocations) now stop at the value cap with ErrJSON; the largest arrays
+// that fit under the caps reach the uniqueness pass and fail with ErrField; a
+// hand-built snapshot that never passed a parser reaches Decide directly.
+func TestParseLinearWork(t *testing.T) {
+	// Budgets leave room for -race and slow runners; before the fix the
+	// review measured 6-7 s for the resource and 25.8 s for 80,000
+	// revocations, and the 16 MiB case projected to about two hours.
+	const budget = 3 * time.Second
+	timed := func(name string, f func() error, want error) {
+		t.Helper()
+		start := time.Now()
+		err := f()
+		elapsed := time.Since(start)
+		if !errors.Is(err, want) && !(want == nil && err == nil) {
+			t.Errorf("%s: got %v, want %v", name, err, want)
+		}
+		if elapsed > budget {
+			t.Errorf("%s took %v, over %v", name, elapsed, budget)
+		}
+		t.Logf("%s: %v", name, elapsed)
+	}
+	parseResource := func(b []byte) func() error { return func() error { _, e := ParseResource(b); return e } }
+	parseSnapshot := func(b []byte) func() error { return func() error { _, e := ParseSnapshot(b); return e } }
+	grant := `{"component":"a","kind":"content","interface":"ext.ricevanta.io/content/v1","values":{}}`
+	head := `{"apiVersion":"ricevanta.io/v1alpha1","kind":"Extension","metadata":{"name":"com.example.x"},"spec":{"version":"1.0.0","source":{"sha256":"` + strings.Repeat("0", 64) + `"},"targets":{"device_groups":[],"all_devices":false,"console":false,"jobs":false},"enabled":false,"grants":`
+	resource := func(count int) []byte { return []byte(head + repeatedArray(grant, count) + `}}`) }
+	byBytes := (MaxResourceBytes - len(head) - 4) / (len(grant) + 1)
+	if b := resource(byBytes); len(b) > MaxResourceBytes || len(b) < MaxResourceBytes-len(grant)-8 {
+		t.Fatalf("resource is %d bytes", len(b))
+	}
+	// Outside the grants array the resource holds 14 values; each grant 5.
+	underCap := (MaxResourceValues - 14) / 5
+	timed(fmt.Sprintf("ParseResource %d grants (byte bound)", byBytes), parseResource(resource(byBytes)), ErrJSON)
+	timed(fmt.Sprintf("ParseResource %d grants (value cap)", underCap), parseResource(resource(underCap)), ErrField)
+	timed(fmt.Sprintf("ParseResource %d grants (value cap + 1)", underCap+1), parseResource(resource(underCap+1)), ErrJSON)
+	snapshot, _ := corpusRaw(t, 0)
+	root, err := decodeJSON(snapshot, MaxSnapshotBytes, MaxSnapshotValues)
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := countValues(root)
+	revocation := `{"id":"a.b"}`
+	full := (MaxSnapshotBytes - len(snapshot)) / (len(revocation) + 1)
+	fits := (MaxSnapshotValues - used) / 2 // each revocation holds 2 values
+	for _, c := range []struct {
+		count int
+		want  error
+	}{{80000, ErrJSON}, {full, ErrJSON}, {fits, ErrField}, {fits + 1, ErrJSON}} {
+		data := replaceOnce(t, snapshot, `"revocations":[]`, `"revocations":`+repeatedArray(revocation, c.count))
+		if len(data) > MaxSnapshotBytes {
+			t.Fatalf("snapshot is %d bytes", len(data))
+		}
+		timed(fmt.Sprintf("ParseSnapshot %d revocations", c.count), parseSnapshot(data), c.want)
+	}
+	in := caseInputs(t, "install-new-admit")
+	for len(in.s.Revocations) < 80000 {
+		in.s.Revocations = append(in.s.Revocations, Revocation{ID: in.e.ID})
+	}
+	in.s.TrustList = append(in.s.TrustList, make([]TrustEntry, 80000)...)
+	timed("Decide with 80,000 hand-built revocations and trust entries", func() error {
+		d := decideInputs(in)
+		if d.Outcome != Reject || d.Stage != StageInput {
+			return fmt.Errorf("decision %+v", d)
+		}
+		return nil
+	}, nil)
+}
+
+func countValues(n *node) int {
+	total := 1
+	for _, item := range n.items {
+		total += countValues(item)
+	}
+	return total
+}
+
+// TestValueCaps: an input of small values one past each value cap is ErrJSON,
+// the input at the cap is not, and allocation stays within a fixed multiple of
+// the cap instead of following the input length.
+func TestValueCaps(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		cap   int
+		limit int
+		parse func([]byte) error
+	}{
+		{"snapshot", MaxSnapshotValues, MaxSnapshotBytes, func(b []byte) error { _, e := ParseSnapshot(b); return e }},
+		{"request", MaxRequestValues, MaxRequestBytes, func(b []byte) error { _, e := ParseRequest(b); return e }},
+		{"resource", MaxResourceValues, MaxResourceBytes, func(b []byte) error { _, e := ParseResource(b); return e }},
+		{"grant record", MaxGrantRecordValues, MaxGrantRecordBytes, func(b []byte) error { _, e := ParseGrantRecord(b); return e }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// {"x":[0,...]} holds the object, the array and the zeros.
+			values := func(n int) []byte { return []byte(`{"x":` + repeatedArray("0", n-2) + `}`) }
+			if err := c.parse(values(c.cap)); !errors.Is(err, ErrShape) {
+				t.Fatalf("%d values: %v, want ErrShape", c.cap, err)
+			}
+			if err := c.parse(values(c.cap + 1)); !errors.Is(err, ErrJSON) {
+				t.Fatalf("%d values: %v, want ErrJSON", c.cap+1, err)
+			}
+			// The whole byte bound of small values allocates no more than
+			// the cap allows. A value costs about 120 bytes (its node, its
+			// pointer and the parent slice's doubling growth); 160 is the
+			// fixed multiple. Without the caps the review measured 962 MiB
+			// for a 16 MiB snapshot of zeros.
+			huge := values((c.limit - 8) / 2)
+			var before, after runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			err := c.parse(huge)
+			runtime.ReadMemStats(&after)
+			if !errors.Is(err, ErrJSON) {
+				t.Fatalf("byte-bound input: %v", err)
+			}
+			if allocated := after.TotalAlloc - before.TotalAlloc; allocated > uint64(c.cap)*160+1<<16 {
+				t.Errorf("allocated %d bytes for a cap of %d values", allocated, c.cap)
+			}
+		})
 	}
 }

@@ -29,7 +29,7 @@ func corpusCases(t testing.TB) []corpusCase {
 	if err := json.Unmarshal(b, &corpus); err != nil {
 		t.Fatal(err)
 	}
-	if corpus.Profile != "extension-admission-v1alpha1" || len(corpus.Cases) != 129 {
+	if corpus.Profile != "extension-admission-v1alpha1" || len(corpus.Cases) != 140 {
 		t.Fatalf("unexpected corpus header: %q, %d cases", corpus.Profile, len(corpus.Cases))
 	}
 	return corpus.Cases
@@ -139,7 +139,7 @@ func TestVectors(t *testing.T) {
 			outcomes[x.Outcome]++
 		})
 	}
-	want := map[string]int{"approval_required": 27, "admit": 18, "identical_retry": 1, "reject": 83}
+	want := map[string]int{"approval_required": 27, "admit": 22, "identical_retry": 3, "reject": 88}
 	if !reflect.DeepEqual(outcomes, want) {
 		t.Errorf("outcomes %v, want %v", outcomes, want)
 	}

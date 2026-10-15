@@ -38,7 +38,8 @@ func FuzzDecide(f *testing.F) {
 		if !ok {
 			i = 0
 		}
-		f.Add(compact(f, c.Snapshot), compact(f, c.Request), uint8(i), uint8(0))
+		f.Add(compact(f, c.Snapshot), compact(f, c.Request), uint8(i), uint8(0), uint8(0))
+		f.Add(compact(f, c.Snapshot), compact(f, c.Request), uint8(i), uint8(0), uint8(1))
 	}
 	for _, c := range schemaCases(f, "admission-vectors/schema-cases.json", "admission-vectors.schema.json") {
 		var envelope struct {
@@ -48,10 +49,13 @@ func FuzzDecide(f *testing.F) {
 			continue
 		}
 		for _, v := range envelope.Cases {
-			f.Add([]byte(v.Snapshot), []byte(v.Request), uint8(0), uint8(1))
+			f.Add([]byte(v.Snapshot), []byte(v.Request), uint8(0), uint8(1), uint8(0))
 		}
 	}
-	f.Fuzz(func(t *testing.T, snapshot, request []byte, which, verdictMask uint8) {
+	// flags bit 0 re-binds an operator or single-administrator approval to
+	// the request digest and epoch the decision recomputes, so mutated closure
+	// facts can still reach Admit instead of ending at approval.digest.
+	f.Fuzz(func(t *testing.T, snapshot, request []byte, which, verdictMask, flags uint8) {
 		s, err := ParseSnapshot(snapshot)
 		if err != nil {
 			return
@@ -67,6 +71,15 @@ func FuzzDecide(f *testing.F) {
 				continue
 			}
 			v = append(v, Verdict{Component: c.Name, OK: verdictMask&(1<<(i%7)) == 0})
+		}
+		if a := r.Approval; flags&1 != 0 && a != nil && a.Kind != ReleaseFixed {
+			preview := r
+			preview.Approval = nil
+			if p := Decide(e, s, preview, v); p.Outcome == ApprovalRequired {
+				rebound := *a
+				rebound.RequestDigest, rebound.RecoveryEpoch = p.RequestDigest, s.RecoveryEpoch
+				r.Approval = &rebound
+			}
 		}
 		d := Decide(e, s, r, v)
 		if again := Decide(e, s, r, v); !reflect.DeepEqual(d, again) {
@@ -120,6 +133,7 @@ func checkInvariants(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdic
 	if err != nil || request != d.RequestDigest {
 		t.Fatalf("request digest %s %v, decision %s", request, err, d.RequestDigest)
 	}
+	recheckStages(t, e, s, r, v)
 	if d.Outcome != Admit {
 		return
 	}
@@ -225,6 +239,19 @@ func checkInvariants(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdic
 			}
 			if !targetsEqual(&r.Targets, &in.Targets) || d.Intent.Enabled != in.Enabled {
 				t.Fatal("release-fixed changed targets or the enabled state")
+			}
+			for i := range r.Grants {
+				g := &r.Grants[i]
+				var current *Grant
+				for j := range in.Grants {
+					if in.Grants[j].Grant.Component == g.Component {
+						current = &in.Grants[j].Grant
+					}
+				}
+				if current == nil || current.Kind != g.Kind || current.Interface != g.Interface {
+					t.Fatalf("release-fixed admitted a new component %s", g.Component)
+				}
+				recheckNarrower(t, g, current)
 			}
 		default:
 			t.Fatal("release-fixed grant update")
@@ -353,4 +380,188 @@ func FuzzParse(f *testing.F) {
 			t.Fatalf("error %v is not exactly one parse sentinel", err)
 		}
 	})
+}
+
+// recheckStages repeats, without the stage code, the rules every decision
+// that passed all stages (approval_required or admit) must satisfy.
+func recheckStages(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdict) {
+	t.Helper()
+	under := func(id string, prefixes []string) bool {
+		for _, p := range prefixes {
+			if id == p || len(id) > len(p) && id[:len(p)+1] == p+"." {
+				return true
+			}
+		}
+		return false
+	}
+	var entry *TrustEntry
+	for i := range s.TrustList {
+		if s.TrustList[i].Fingerprint == e.PublisherFingerprint {
+			entry = &s.TrustList[i]
+		}
+	}
+	if entry == nil || entry.Revoked || entry.Retired && !r.GrantUpdate {
+		t.Fatal("passed under an unknown, revoked or retired key")
+	}
+	if under(e.ID, []string{"io.ricevanta"}) && !entry.ProjectPublisher || !under(e.ID, entry.Prefixes) {
+		t.Fatal("passed outside the key's namespace")
+	}
+	for _, rv := range s.Revocations {
+		if rv.Version == "" || rv.Version == e.Version {
+			t.Fatal("passed a revoked id or version")
+		}
+	}
+	for _, interfaces := range e.Requires {
+		for _, iface := range interfaces {
+			served := false
+			for _, x := range s.ServedInterfaces {
+				served = served || x == iface
+			}
+			if !served {
+				t.Fatalf("passed with %s unserved", iface)
+			}
+		}
+	}
+	registrations := map[string]bool{}
+	for _, c := range e.Components {
+		seen := false
+		for _, x := range v {
+			if x.Component == c.Name {
+				seen = true
+				if !x.OK {
+					t.Fatalf("passed with a failed verdict for %s", c.Name)
+				}
+			}
+		}
+		if !seen {
+			t.Fatalf("passed without a verdict for %s", c.Name)
+		}
+		b := c.Requested.BrowserAdapter
+		if b == nil {
+			continue
+		}
+		if registrations[b.Registration] {
+			t.Fatal("two adapters passed on one registration")
+		}
+		registrations[b.Registration] = true
+		var reg *Registration
+		for i := range s.Registrations {
+			if s.Registrations[i].ID == b.Registration {
+				reg = &s.Registrations[i]
+			}
+		}
+		if reg == nil || reg.Bound != nil && reg.Bound.State == StateActive && reg.Bound.ID != e.ID {
+			t.Fatal("adapter passed on an unknown or foreign-held registration")
+		}
+	}
+	for _, g := range r.Targets.DeviceGroups {
+		known := false
+		for _, x := range s.DeviceGroups {
+			known = known || x == g
+		}
+		if !known {
+			t.Fatal("passed with an unknown device group")
+		}
+	}
+	if in := s.Install; r.GrantUpdate && entry.Retired && in != nil && !in.Targets.AllDevices {
+		if r.Targets.AllDevices {
+			t.Fatal("retired key reached all devices")
+		}
+		for _, g := range r.Targets.DeviceGroups {
+			kept := false
+			for _, x := range in.Targets.DeviceGroups {
+				kept = kept || x == g
+			}
+			if !kept {
+				t.Fatal("retired key reached a new device group")
+			}
+		}
+	}
+	if in := s.Install; r.GrantUpdate && entry.Retired {
+		for i := range r.Grants {
+			g := &r.Grants[i]
+			var current *Grant
+			for j := range in.Grants {
+				if in.Grants[j].Grant.Component == g.Component {
+					current = &in.Grants[j].Grant
+				}
+			}
+			if current == nil || current.Kind != g.Kind || current.Interface != g.Interface {
+				t.Fatalf("retired key added component %s", g.Component)
+			}
+			recheckNarrower(t, g, current)
+		}
+	}
+}
+
+// recheckNarrower: g is equal to or narrower than the current grant.
+func recheckNarrower(t *testing.T, g, current *Grant) {
+	t.Helper()
+	within := func(values, of []string) {
+		for _, x := range values {
+			found := false
+			for _, o := range of {
+				found = found || x == o
+			}
+			if !found {
+				t.Fatalf("%s widened: %q", g.Component, x)
+			}
+		}
+	}
+	switch {
+	case g.Values.BrowserAdapter != nil:
+		b, c := g.Values.BrowserAdapter, current.Values.BrowserAdapter
+		if b.Registration != c.Registration {
+			t.Fatal("registration changed")
+		}
+		for _, pair := range [][2]*OSPolicy{{b.OS.MacOS, c.OS.MacOS}, {b.OS.Windows, c.OS.Windows}, {b.OS.Linux, c.OS.Linux}} {
+			if pair[0] == nil {
+				continue
+			}
+			if pair[1] == nil || pair[0].NativeHost && !pair[1].NativeHost {
+				t.Fatal("adapter widened")
+			}
+			within(pair[0].PolicyNames, pair[1].PolicyNames)
+		}
+	case g.Values.AgentModule != nil:
+		a, c := reflect.ValueOf(*g.Values.AgentModule), reflect.ValueOf(*current.Values.AgentModule)
+		for i := 0; i < a.NumField(); i++ {
+			if a.Field(i).Kind() == reflect.Uint64 && a.Field(i).Uint() > c.Field(i).Uint() {
+				t.Fatalf("%s widened: %s", g.Component, a.Type().Field(i).Name)
+			}
+		}
+		x, y := g.Values.AgentModule, current.Values.AgentModule
+		within(x.MIMETypes, y.MIMETypes)
+		within(x.Actions, y.Actions)
+		if x.DisclosureProfile != y.DisclosureProfile {
+			t.Fatal("disclosure profile changed")
+		}
+		for _, root := range x.Roots {
+			found := false
+			for _, o := range y.Roots {
+				found = found || root == o
+			}
+			if !found {
+				t.Fatal("root outside the current roots")
+			}
+		}
+	case g.Values.ConsoleModule != nil:
+		for slot, ops := range g.Values.ConsoleModule.Slots {
+			allowed, ok := current.Values.ConsoleModule.Slots[slot]
+			if !ok {
+				t.Fatal("console slot added")
+			}
+			within(ops, allowed)
+		}
+	case g.Values.ServiceConnector != nil:
+		for _, o := range g.Values.ServiceConnector.Outbound {
+			found := false
+			for _, p := range current.Values.ServiceConnector.Outbound {
+				found = found || o == p
+			}
+			if !found {
+				t.Fatal("outbound destination added")
+			}
+		}
+	}
 }

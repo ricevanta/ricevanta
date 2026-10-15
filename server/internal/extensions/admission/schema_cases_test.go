@@ -45,7 +45,7 @@ func TestSchemaCases(t *testing.T) {
 	}{
 		{"extension-resource/schema-cases.json", "extension-resource.schema.json", 33, func(b []byte) error { _, e := ParseResource(b); return e }},
 		{"capability-grant/schema-cases.json", "capability-grant.schema.json", 20, func(b []byte) error { _, e := ParseGrantRecord(b); return e }},
-		{"admission-vectors/schema-cases.json", "admission-vectors.schema.json", 28, vectorsEnvelope},
+		{"admission-vectors/schema-cases.json", "admission-vectors.schema.json", 30, vectorsEnvelope},
 	}
 	for _, s := range suites {
 		cases := schemaCases(t, s.path, s.schema)
@@ -236,7 +236,7 @@ func expectedShape(raw json.RawMessage) error {
 		}
 	}
 	var reasons []json.RawMessage
-	if json.Unmarshal(e["reasons"], &reasons) != nil || reasons == nil && string(e["reasons"]) != "[]" || len(reasons) > 256 {
+	if json.Unmarshal(e["reasons"], &reasons) != nil || reasons == nil && string(e["reasons"]) != "[]" || len(reasons) > 1029 {
 		return fmt.Errorf("reasons")
 	}
 	var codes []string

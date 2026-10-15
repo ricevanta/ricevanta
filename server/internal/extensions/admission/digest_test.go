@@ -138,8 +138,8 @@ func TestDigests(t *testing.T) {
 		}
 		checked++
 	}
-	if checked != 45 {
-		t.Errorf("checked %d recorded digest pairs, want 45", checked)
+	if checked != 49 {
+		t.Errorf("checked %d recorded digest pairs, want 49", checked)
 	}
 	first := corpusCases(t)[0]
 	var x expectation

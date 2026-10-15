@@ -98,7 +98,7 @@ func numericFields(iface string) []agentField {
 
 // ParseGrantRecord decodes one committed grant record.
 func ParseGrantRecord(data []byte) (GrantRecord, error) {
-	root, err := decodeJSON(data, MaxGrantRecordBytes)
+	root, err := decodeJSON(data, MaxGrantRecordBytes, MaxGrantRecordValues)
 	if err != nil {
 		return GrantRecord{}, err
 	}
