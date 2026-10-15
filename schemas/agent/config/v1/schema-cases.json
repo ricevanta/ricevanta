@@ -108,6 +108,26 @@
       "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "runtime_dir": "C:\\x\\com1.txt" } }
     },
     {
+      "id": "windows-device-name-space-before-extension",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "log_dir": "C:\\x\\CON .txt" } }
+    },
+    {
+      "id": "windows-com-port-space-before-extension",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "C:\\x\\COM1 .log" } }
+    },
+    {
+      "id": "windows-console-input-device",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "runtime_dir": "C:\\x\\CONIN$" } }
+    },
+    {
+      "id": "windows-console-output-device",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "log_dir": "C:\\x\\CONOUT$" } }
+    },
+    {
       "id": "fractional-interval",
       "valid": false,
       "instance": { "schema": "ricevanta-agent-config-v1", "health": { "interval_ms": 1000.5 } }

@@ -129,7 +129,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "address"
+        "address",
+        "tls"
       ],
       "properties": {
         "address": {
