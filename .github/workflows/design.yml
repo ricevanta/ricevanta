@@ -108,6 +108,10 @@ jobs:
         for example in json.load(open('schemas/ci/v1/examples.json')):
             Draft202012Validator(schema).validate(example)
         PY
+    - name: Re-verify validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
       shell: bash

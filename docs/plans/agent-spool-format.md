@@ -4,7 +4,7 @@
 
 **Architecture:** One leaf package in the `agent/` virtual workspace. Encoders write explicit fields; recovery returns a borrowed, validated prefix and typed diagnostics. No process, filesystem, runtime or networking integration enters the library.
 
-**Toolchain:** Rust 1.99.0 with Cargo 1.99.0. The installed companion tools are Go 1.27.1, Node 24.21.0 and pnpm 11.18.0; this slice does not require Node or pnpm. Python fixture generation uses only the standard library; CI pins Python 3.13.7.
+**Toolchain:** Rust 1.99.0 with Cargo 1.99.0. The installed companion tools are Go 1.27.1, Node 24.21.0 and pnpm 11.18.0; this slice does not require Node or pnpm. Python fixture generation uses only the standard library; CI runs it on the single Python recorded in `.github/python-version`.
 
 ## Global constraints
 
@@ -89,7 +89,7 @@ Shared schemas and design documents are read-only implementation inputs. Report 
 | `windows-2025` | `x86_64-pc-windows-msvc` | `X64` |
 | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` | `X64` |
 
-- [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python setup sets `python-version: '3.13.7'`. Rust setup runs `rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy`; subsequent Cargo commands select the checked-in toolchain file. No unpinned Rust action or downloaded install script.
+- [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python setup reads `python-version-file: .github/python-version`. Rust setup runs `rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy`; subsequent Cargo commands select the checked-in toolchain file. No unpinned Rust action or downloaded install script.
 
 | Action | Exact commit | Basis |
 |---|---|---|

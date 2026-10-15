@@ -5,7 +5,9 @@ name: Copilot review environment
   pull_request:
     paths:
       - '.github/workflows/copilot-code-review.yml'
+      - '.github/python-version'
       - '.github/requirements-design.txt'
+      - 'scripts/ci/python_env.py'
       - 'server/go.mod'
       - 'server/go.sum'
       - 'console/package.json'
@@ -73,3 +75,7 @@ jobs:
         shell: bash
         working-directory: .
         run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+      - name: Re-verify validator environment
+        shell: bash
+        working-directory: .
+        run: python -B scripts/ci/python_env.py --check

