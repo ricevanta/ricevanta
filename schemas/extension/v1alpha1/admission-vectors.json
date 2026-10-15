@@ -35013,7 +35013,7 @@
           "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
         ],
         "consumed_approvals": [],
-        "automatic_release_floor": "0.2.0"
+        "automatic_release_floor": "0.3.0"
       },
       "request": {
         "source": "server-image",
@@ -35053,8 +35053,8 @@
             "subject": ""
           }
         ],
-        "closure_digest": "sha256:a4f2e9a3fed3acab51bf8adc17fe8e094e6b4a34cbe697a19dabb3ee5710312b",
-        "request_digest": "sha256:f15d0562b254ed12b8c4a5b4047826131511ce98e92c7f5422b2589327c49a36"
+        "closure_digest": "sha256:84d53940ab6f17f16f5e1103b67144ba4a88cc7fddd0f0bd30c7c21c65154ba2",
+        "request_digest": "sha256:81004c844b16259ec6e6fc79a7f0fca828bddc158ad7d449c14e36570641d0c3"
       }
     },
     {
@@ -38029,6 +38029,194 @@
             "subject": "chrome"
           }
         ]
+      }
+    },
+    {
+      "name": "global-floor-equality-new-id-needs-operator",
+      "description": "Equality passes the global floor check; a new id after first start still needs operation approval.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "io.ricevanta.sigma-core",
+            "version": "0.2.0",
+            "publisher": {
+              "name": "Ricevanta project",
+              "key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/io.ricevanta.sigma-core"
+          },
+          "spec": {
+            "requires": {
+              "content": [
+                "ext.ricevanta.io/content/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "rules",
+                "kind": "content",
+                "interface": "ext.ricevanta.io/content/v1",
+                "files": [
+                  "content/rules.yaml"
+                ],
+                "format": "sigma",
+                "file": "content/rules.yaml",
+                "capabilities": {}
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "content/rules.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "ba60a1b88070a5947d79c4f058688ef31bab1971707ef6a9551ad6379b32f6a8",
+        "manifest_sha256": "ccf22a4d1858bf1226ce2bb0b49cc8a108526e18e7550aa76f54c61e6c0f6924",
+        "envelope_sha256": "6c9abe6090ea17a375b4d64f345e1048fa8dc8b97c91a35fbdfe0f9c57d0ebcc"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.2.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [],
+        "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            },
+            "recovery_epoch": "3"
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": [],
+        "automatic_release_floor": "0.2.0"
+      },
+      "request": {
+        "source": "server-image",
+        "requester": "00000000-0000-7000-8000-000000000000",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "rules",
+            "kind": "content",
+            "interface": "ext.ricevanta.io/content/v1",
+            "values": {}
+          }
+        ],
+        "targets": {
+          "device_groups": [],
+          "all_devices": true,
+          "console": false,
+          "jobs": false
+        },
+        "approval": {
+          "kind": "release-fixed",
+          "release_version": "0.2.0"
+        }
+      },
+      "verdicts": [
+        {
+          "component": "rules",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "approval_required",
+        "operation": "install",
+        "reasons": [
+          {
+            "code": "approval.release_operation",
+            "subject": ""
+          }
+        ],
+        "closure_digest": "sha256:a4f2e9a3fed3acab51bf8adc17fe8e094e6b4a34cbe697a19dabb3ee5710312b",
+        "request_digest": "sha256:f15d0562b254ed12b8c4a5b4047826131511ce98e92c7f5422b2589327c49a36"
       }
     }
   ]
