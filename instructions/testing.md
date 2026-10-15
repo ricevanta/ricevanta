@@ -10,7 +10,7 @@ go test -count=1 ./internal/path/to/touched/package
 
 `-count=1` prevents cached Go test results from hiding changes to fixtures outside `server/`. It does not disable compiled-object reuse.
 
-Every CI Go consumer uses `scripts/ci/fresh_go.py --root PATH --env-out PATH` to create unused absolute build and module cache directories below `RUNNER_TEMP`. The helper records zero initial entries and exports `GOCACHE`, `GOMODCACHE`, `GOTOOLCHAIN=local` and `GOFLAGS=-mod=readonly` through `GITHUB_ENV`. Children inherit these values. Each job runs `go mod download` followed by `go mod verify` before Go checks. Setup-go caching and compiled-output restores are forbidden.
+Every CI Go consumer uses `scripts/ci/fresh_go.py --root PATH --env-out PATH` to create unused absolute build and module cache directories below `RUNNER_TEMP`. The helper records zero initial entries and exports the environment fixed by [CI hardening section 5](../docs/specs/ci-hardening.md#5-fresh-go-compilation-and-dependency-caches-ci-03), including `GOENV=off` and an empty `GOCACHEPROG`, through its pinned `GITHUB_ENV` step. Children inherit these values. Each job runs `go mod download` followed by `go mod verify` before Go checks. Setup-go caching and compiled-output restores are forbidden.
 
 Cargo caches only the registry index and `.crate` archives. The same helper's Cargo mode discards restored extracted sources, checks archive SHA-256 values against `agent/Cargo.lock`, fetches locked dependencies, rechecks downloads and discards extracted sources before compilation. Each job uses a fresh `CARGO_TARGET_DIR`. Console caches no `node_modules` or build output. Tag builds restore and save no caches.
 
