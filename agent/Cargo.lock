@@ -120,6 +120,7 @@ dependencies = [
 name = "ricevanta-os-windows"
 version = "0.1.0"
 dependencies = [
+ "ricevanta-json",
  "ricevanta-os",
  "windows-sys",
 ]

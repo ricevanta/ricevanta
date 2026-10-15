@@ -246,10 +246,11 @@ fn directory_parent_rules() {
     }
 }
 
-/// Fails, never passes, without root. Task 6 runs it in the Linux
-/// `agent-unit` leaf under `sudo` (`cargo test --locked -p ricevanta-os-linux
-/// --test protection root_ -- --ignored`) and names every `root_` test in
-/// the receipt.
+/// Fails, never passes, without root. Plan Task 6 builds this test binary
+/// as the runner user, takes its path from Cargo's JSON output, and runs
+/// only that binary under `sudo <path> root_ --ignored` (no Cargo command
+/// under `sudo`), on Linux and on macOS, naming every `root_` test in the
+/// receipt.
 fn require_root(p: &TestPlatform) {
     assert_eq!(
         p.euid(),
@@ -259,7 +260,7 @@ fn require_root(p: &TestPlatform) {
 }
 
 #[test]
-#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+#[ignore = "needs root: Task 6 runs the built binary under sudo on Linux and macOS"]
 fn root_foreign_owner_of_config_and_parent_fails() {
     let p = platform();
     require_root(&p);
@@ -277,7 +278,7 @@ fn root_foreign_owner_of_config_and_parent_fails() {
 }
 
 #[test]
-#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+#[ignore = "needs root: Task 6 runs the built binary under sudo on Linux and macOS"]
 fn root_directory_parent_owner_and_group_rules() {
     let p = platform();
     require_root(&p);
@@ -312,7 +313,7 @@ fn root_directory_parent_owner_and_group_rules() {
 }
 
 #[test]
-#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+#[ignore = "needs root: Task 6 runs the built binary under sudo on Linux and macOS"]
 fn root_service_mode_refuses_unprivileged_directory_owner() {
     let p = platform();
     require_root(&p);
@@ -334,7 +335,7 @@ fn root_service_mode_refuses_unprivileged_directory_owner() {
 }
 
 #[test]
-#[ignore = "needs root: Task 6 runs it under sudo in the Linux agent-unit leaf"]
+#[ignore = "needs root: Task 6 runs the built binary under sudo on Linux and macOS"]
 fn root_foreign_health_file_is_refused_untouched() {
     let p = platform();
     require_root(&p);

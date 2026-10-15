@@ -37,8 +37,10 @@ pub struct MacPlatform {
 }
 
 impl MacPlatform {
-    /// Learns the effective uid without a `libc` call: the owner of a new
-    /// pipe is the effective uid of the process that created it.
+    /// Learns the effective uid without a `libc` call: xnu's `pipe_stat`
+    /// reports a pipe's owner as `kauth_getuid()` of the process calling
+    /// `fstat`, the credential's `cr_uid`, which `bsd/sys/ucred.h` names
+    /// the effective user id.
     pub fn new() -> io::Result<MacPlatform> {
         let (reader, _writer) = std::io::pipe()?;
         let euid = File::from(OwnedFd::from(reader)).metadata()?.uid();

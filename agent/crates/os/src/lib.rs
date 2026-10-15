@@ -412,10 +412,13 @@ pub enum Reason {
         /// The offending SID in string form, when an entry names one.
         sid: Option<String>,
     },
-    /// The path's final component is not a plain name: the path is empty,
-    /// ends in a separator, or ends in `.` or `..`, any of which would make
-    /// the OS resolve the preceding component as a directory and follow a
-    /// symbolic link there despite `O_NOFOLLOW`.
+    /// The path is not an absolute path in the spec section 3.1 normal form
+    /// for the OS (an empty, `.` or `..` segment anywhere, a trailing
+    /// separator, the other OS's form, or on Windows a name Win32 would
+    /// rewrite or treat as a device), or a name below a checked directory
+    /// is not one plain segment. Any of these could let a component other
+    /// than the final one, which alone is opened without following links,
+    /// redirect the lookup.
     PathForm,
     /// Opening, creating or inspecting the object failed.
     Io(IoCause),
@@ -526,8 +529,9 @@ impl CheckedDir {
 /// section 3.1. Every check runs on the opened descriptor or handle, never on
 /// a path; no method falls back to defaults or a weaker mode. A path is
 /// accepted only to reach a checked parent; nothing below a checked parent
-/// takes a path. Every path and name must end in a plain name, not empty,
-/// `.` or `..`, and a name contains no separator ([`Reason::PathForm`]).
+/// takes a path. Every path must be absolute and in the spec section 3.1
+/// normal form for the OS ([`is_normal_form`]) and every name one plain
+/// segment ([`is_plain_name`]); anything else is [`Reason::PathForm`].
 pub trait Platform: Send + Sync {
     /// The OS whose rules this platform applies.
     fn os(&self) -> Os;
@@ -554,9 +558,12 @@ pub trait Platform: Send + Sync {
 
     /// Opens `agent.json` read-only without following a final symbolic link
     /// and without blocking: opens and checks its parent by path (the strict
-    /// parent rule), then opens the file relative to that parent's
-    /// descriptor and checks the opened file. `Ok(None)` when the file or its
-    /// parent does not exist.
+    /// parent rule), then opens the file and checks the opened file. On Unix
+    /// the file is opened relative to the checked parent's descriptor; on
+    /// Windows by path, which spec section 3.1 allows because the checked
+    /// access control leaves no other principal a way to redirect it, with
+    /// reparse points refused. `Ok(None)` when the file or its parent does
+    /// not exist.
     fn open_config(&self, path: &Path, mode: Mode) -> Result<Option<File>, ProtectionError>;
 
     /// Splits the path of a `kind` directory into its parent and plain final

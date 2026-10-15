@@ -17,8 +17,9 @@ use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, GetSecurityInfo, SE_FILE_OBJECT,
 };
 use windows_sys::Win32::Security::{
-    ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce, IsValidSid,
-    OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+    ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce,
+    GetSecurityDescriptorLength, IsValidSid, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    PSID,
 };
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
@@ -36,101 +37,216 @@ use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, KF_FLAG_DEFAULT, SHGet
 /// the maximum extended-length path.
 const MAX_WIDE: usize = 32_768;
 
-#[expect(
-    unsafe_code,
-    reason = "reads a NUL-terminated wide string the caller guarantees valid for at most MAX_WIDE units"
-)]
-fn wide_to_os(text: *const u16) -> Option<OsString> {
-    if text.is_null() {
-        return None;
-    }
-    let mut len = 0;
-    // SAFETY: the caller passes a NUL-terminated string allocated by the
-    // system; reading stops at the terminator and never beyond MAX_WIDE.
-    while len < MAX_WIDE && unsafe { *text.add(len) } != 0 {
-        len += 1;
-    }
-    if len == MAX_WIDE {
-        return None;
-    }
-    // SAFETY: `len` units starting at `text` were just read as initialised.
-    let units = unsafe { std::slice::from_raw_parts(text, len) };
-    Some(OsString::from_wide(units))
+/// How a [`WideBuffer`] is released.
+#[derive(Clone, Copy)]
+enum Release {
+    /// `CoTaskMemFree` (`SHGetKnownFolderPath`).
+    CoTaskMem,
+    /// `LocalFree` (`ConvertSidToStringSidW`).
+    Local,
 }
 
-#[expect(
-    unsafe_code,
-    reason = "SHGetKnownFolderPath: the out PWSTR is freed with CoTaskMemFree whether the call succeeds or not"
-)]
-pub(crate) fn program_data() -> io::Result<OsString> {
-    let mut path: windows_sys::core::PWSTR = std::ptr::null_mut();
-    // SAFETY: the GUID is a static, the token is null (the calling
-    // process), and `path` is a valid out pointer.
-    let hr = unsafe {
-        SHGetKnownFolderPath(
-            &FOLDERID_ProgramData,
-            KF_FLAG_DEFAULT as u32,
-            std::ptr::null_mut(),
-            &raw mut path,
-        )
-    };
-    let result = if hr >= 0 {
-        wide_to_os(path).ok_or_else(|| io::Error::from(io::ErrorKind::InvalidData))
-    } else {
-        Err(io::Error::from_raw_os_error(hr))
-    };
-    // SAFETY: "whether SHGetKnownFolderPath succeeds or not" the buffer is
-    // freed with CoTaskMemFree; freeing null is a no-op.
-    unsafe { CoTaskMemFree(path.cast_const().cast()) };
-    result
+/// A NUL-terminated wide string that a system call allocated and wrote
+/// through the out pointer `&raw mut buffer.ptr`, and this value owns.
+///
+/// Invariant: `ptr` is null or such a string, valid until `drop`, which
+/// frees it with the matching function exactly once. The pointer is only
+/// ever written by the system call itself, never passed in by a caller.
+struct WideBuffer {
+    ptr: windows_sys::core::PWSTR,
+    release: Release,
 }
 
-/// Frees a `LocalAlloc` buffer the system returned, on every path.
-struct LocalBuffer(*mut core::ffi::c_void);
+impl WideBuffer {
+    fn empty(release: Release) -> WideBuffer {
+        WideBuffer {
+            ptr: std::ptr::null_mut(),
+            release,
+        }
+    }
 
-impl Drop for LocalBuffer {
     #[expect(
         unsafe_code,
-        reason = "LocalFree: the pointer came from a system call that documents LocalFree as its release, and is freed once"
+        reason = "reads the owned NUL-terminated system string, at most MAX_WIDE units, per the type invariant"
+    )]
+    fn to_os(&self) -> Option<OsString> {
+        if self.ptr.is_null() {
+            return None;
+        }
+        let mut len = 0;
+        // SAFETY: by the type invariant `ptr` is a NUL-terminated string
+        // alive while `self` is borrowed; reading stops at the terminator and
+        // never beyond MAX_WIDE units.
+        while len < MAX_WIDE && unsafe { self.ptr.add(len).read() } != 0 {
+            len += 1;
+        }
+        if len == MAX_WIDE {
+            return None;
+        }
+        // SAFETY: the `len` units before the terminator were just read as
+        // initialised and stay alive while `self` is borrowed.
+        let units = unsafe { std::slice::from_raw_parts(self.ptr, len) };
+        Some(OsString::from_wide(units))
+    }
+}
+
+impl Drop for WideBuffer {
+    #[expect(
+        unsafe_code,
+        reason = "CoTaskMemFree or LocalFree: releases the owned system string once, with the function its allocator documents"
     )]
     fn drop(&mut self) {
-        if !self.0.is_null() {
-            // SAFETY: the buffer was allocated by GetSecurityInfo or
-            // ConvertSidToStringSidW and is released exactly once here.
-            unsafe { LocalFree(self.0) };
+        if self.ptr.is_null() {
+            return;
+        }
+        match self.release {
+            // SAFETY: allocated by SHGetKnownFolderPath, released once.
+            Release::CoTaskMem => unsafe { CoTaskMemFree(self.ptr.cast_const().cast()) },
+            // SAFETY: allocated by ConvertSidToStringSidW, released once.
+            Release::Local => unsafe {
+                LocalFree(self.ptr.cast());
+            },
         }
     }
 }
 
 #[expect(
     unsafe_code,
-    reason = "ConvertSidToStringSidW: the SID is validated first; the returned string is freed with LocalFree"
+    reason = "SHGetKnownFolderPath: writes the out PWSTR owned by a WideBuffer, which frees it with CoTaskMemFree whether the call succeeds or not"
 )]
-fn sid_string(sid: PSID) -> Option<String> {
-    // SAFETY: `sid` points into a security descriptor that outlives this
-    // call; IsValidSid only reads it.
-    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
-        return None;
+pub(crate) fn program_data() -> io::Result<OsString> {
+    let mut path = WideBuffer::empty(Release::CoTaskMem);
+    // SAFETY: the GUID is a static, the token is null (the calling
+    // process), and the out pointer is the buffer's own field.
+    let hr = unsafe {
+        SHGetKnownFolderPath(
+            &FOLDERID_ProgramData,
+            KF_FLAG_DEFAULT as u32,
+            std::ptr::null_mut(),
+            &raw mut path.ptr,
+        )
+    };
+    // `path` is dropped, and so freed, on every path below.
+    if hr < 0 {
+        return Err(io::Error::from_raw_os_error(hr));
     }
-    let mut text: windows_sys::core::PWSTR = std::ptr::null_mut();
-    // SAFETY: `sid` is valid and `text` is a valid out pointer.
-    let ok = unsafe { ConvertSidToStringSidW(sid, &raw mut text) };
-    let _guard = LocalBuffer(text.cast());
-    if ok == 0 {
-        return None;
-    }
-    wide_to_os(text).and_then(|s| s.into_string().ok())
+    path.to_os()
+        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidData))
 }
+
+/// The self-relative security descriptor `GetSecurityInfo` allocated.
+///
+/// Invariant: `start` is null or the descriptor, `len` its
+/// `GetSecurityDescriptorLength`, all of it readable until `drop`, which
+/// frees it with `LocalFree` once.
+struct Descriptor {
+    start: PSECURITY_DESCRIPTOR,
+    len: usize,
+}
+
+impl Descriptor {
+    /// Whether `len` bytes from `ptr` lie inside the descriptor; address
+    /// arithmetic only, no access.
+    fn contains(&self, ptr: *const core::ffi::c_void, len: usize) -> bool {
+        let start = self.start.addr();
+        let at = ptr.addr();
+        !self.start.is_null()
+            && at >= start
+            && at
+                .checked_add(len)
+                .is_some_and(|end| end <= start.saturating_add(self.len))
+    }
+
+    /// A SID at `ptr` with at most `limit` bytes available, bounded by the
+    /// end of the descriptor too; `None` when `ptr` is outside it.
+    fn sid_at(&self, ptr: *const core::ffi::c_void, limit: usize) -> Option<SidRef<'_>> {
+        if !self.contains(ptr, 1) {
+            return None;
+        }
+        let available = self.start.addr().saturating_add(self.len) - ptr.addr();
+        Some(SidRef {
+            ptr: ptr.cast(),
+            max_len: available.min(limit),
+            _descriptor: std::marker::PhantomData,
+        })
+    }
+}
+
+impl Drop for Descriptor {
+    #[expect(
+        unsafe_code,
+        reason = "LocalFree: the descriptor came from GetSecurityInfo, which documents LocalFree as its release, and is freed once"
+    )]
+    fn drop(&mut self) {
+        if !self.start.is_null() {
+            // SAFETY: allocated by GetSecurityInfo and released once here.
+            unsafe { LocalFree(self.start) };
+        }
+    }
+}
+
+/// A SID inside a borrowed [`Descriptor`].
+///
+/// Invariant: `max_len` bytes from `ptr` lie inside the descriptor, which
+/// the borrow keeps alive.
+struct SidRef<'a> {
+    ptr: *const u8,
+    max_len: usize,
+    _descriptor: std::marker::PhantomData<&'a Descriptor>,
+}
+
+impl SidRef<'_> {
+    /// The SID in string form, or `None` when it does not fit its bound,
+    /// is not a valid SID, or cannot be converted. The SID's own length,
+    /// 8 bytes plus 4 per sub-authority, must fit the bound before any API
+    /// reads it.
+    #[expect(
+        unsafe_code,
+        reason = "reads the sub-authority count inside the bound, then IsValidSid and ConvertSidToStringSidW on a SID that fits it; the string is owned by a WideBuffer"
+    )]
+    fn to_text(&self) -> Option<String> {
+        if self.max_len < 8 {
+            return None;
+        }
+        // SAFETY: byte 1 (SubAuthorityCount) lies inside the bound, which
+        // lies inside the live descriptor.
+        let count = usize::from(unsafe { self.ptr.add(1).read() });
+        if 8 + 4 * count > self.max_len {
+            return None;
+        }
+        let sid: PSID = self.ptr.cast_mut().cast();
+        // SAFETY: the whole SID lies inside the live descriptor.
+        if unsafe { IsValidSid(sid) } == 0 {
+            return None;
+        }
+        let mut text = WideBuffer::empty(Release::Local);
+        // SAFETY: `sid` is valid as above; the out pointer is the buffer's
+        // own field, which frees the string on drop.
+        if unsafe { ConvertSidToStringSidW(sid, &raw mut text.ptr) } == 0 {
+            return None;
+        }
+        text.to_os().and_then(|s| s.into_string().ok())
+    }
+}
+
+/// Offsets inside an access-allowed or access-denied entry.
+const ACE_MASK_OFFSET: usize = std::mem::offset_of!(ACCESS_ALLOWED_ACE, Mask);
+const ACE_SID_OFFSET: usize = std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart);
+/// The smallest SID: revision, count and the 6-byte authority.
+const MIN_SID_BYTES: usize = 8;
 
 #[expect(
     unsafe_code,
-    reason = "GetSecurityInfo and GetAce: the handle is borrowed open for the call; the descriptor is freed with LocalFree after every entry is decoded"
+    reason = "GetSecurityInfo, GetSecurityDescriptorLength and GetAce: the handle is borrowed open for the call; every read of the ACL and its entries is unaligned and bounded by the descriptor, which is freed with LocalFree"
 )]
 pub(crate) fn security(file: &File) -> io::Result<SecurityFacts> {
     let handle = file.as_raw_handle() as HANDLE;
     let mut owner: PSID = std::ptr::null_mut();
     let mut dacl: *mut ACL = std::ptr::null_mut();
-    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    let mut descriptor = Descriptor {
+        start: std::ptr::null_mut(),
+        len: 0,
+    };
     // SAFETY: `handle` is open with READ_CONTROL for the whole call because
     // `file` is borrowed; every out pointer is valid; group and SACL are
     // not requested and passed as null.
@@ -143,55 +259,78 @@ pub(crate) fn security(file: &File) -> io::Result<SecurityFacts> {
             std::ptr::null_mut(),
             &raw mut dacl,
             std::ptr::null_mut(),
-            &raw mut descriptor,
+            &raw mut descriptor.start,
         )
     };
-    let _guard = LocalBuffer(descriptor);
     if code != ERROR_SUCCESS {
         return Err(io::Error::from_raw_os_error(code as i32));
     }
-    let owner = sid_string(owner);
+    if descriptor.start.is_null() {
+        return Err(io::Error::from(io::ErrorKind::InvalidData));
+    }
+    // SAFETY: the descriptor is the valid self-relative descriptor just
+    // returned; the call only reads its header.
+    descriptor.len = unsafe { GetSecurityDescriptorLength(descriptor.start) } as usize;
+    let owner = descriptor
+        .sid_at(owner.cast_const(), usize::MAX)
+        .and_then(|sid| sid.to_text());
     if dacl.is_null() {
         return Ok(SecurityFacts { owner, dacl: None });
     }
-    // SAFETY: a non-null DACL points into `descriptor`, alive until
-    // `_guard` drops; ACL is a plain header read by value.
-    let count = unsafe { (*dacl).AceCount };
-    let mut entries = Vec::with_capacity(usize::from(count));
-    for index in 0..u32::from(count) {
+    if !descriptor.contains(dacl.cast_const().cast(), std::mem::size_of::<ACL>()) {
+        return Err(io::Error::from(io::ErrorKind::InvalidData));
+    }
+    // SAFETY: the ACL header lies inside the live descriptor (checked);
+    // the read is unaligned.
+    let header = unsafe { std::ptr::read_unaligned(dacl.cast_const()) };
+    let mut entries = Vec::with_capacity(usize::from(header.AceCount));
+    for index in 0..u32::from(header.AceCount) {
         let mut ace: *mut core::ffi::c_void = std::ptr::null_mut();
         // SAFETY: `index` is below the ACL's own count; `ace` is a valid out
         // pointer.
-        if unsafe { GetAce(dacl, index, &raw mut ace) } == 0 || ace.is_null() {
+        if unsafe { GetAce(dacl, index, &raw mut ace) } == 0 {
             return Err(io::Error::last_os_error());
         }
-        // SAFETY: GetAce returns a pointer to an entry inside the ACL, which
-        // starts with an ACE_HEADER.
-        let header = unsafe { std::ptr::read_unaligned(ace.cast::<ACE_HEADER>()) };
-        let decoded = if matches!(
-            header.AceType,
+        if !descriptor.contains(ace.cast_const(), std::mem::size_of::<ACE_HEADER>()) {
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
+        }
+        // SAFETY: the entry header lies inside the live descriptor; the
+        // read is unaligned.
+        let ace_header = unsafe { std::ptr::read_unaligned(ace.cast_const().cast::<ACE_HEADER>()) };
+        let size = usize::from(ace_header.AceSize);
+        let decodable = matches!(
+            ace_header.AceType,
             ACCESS_ALLOWED_ACE_TYPE | ACCESS_DENIED_ACE_TYPE
-        ) && usize::from(header.AceSize)
-            >= std::mem::size_of::<ACCESS_ALLOWED_ACE>()
-        {
-            // SAFETY: allowed and denied entries share the ACCESS_ALLOWED_ACE
-            // layout, and AceSize covers it; the SID starts at SidStart and
-            // lies within the entry.
-            let entry = unsafe { std::ptr::read_unaligned(ace.cast::<ACCESS_ALLOWED_ACE>()) };
-            // SAFETY: `ace` points to a live ACCESS_ALLOWED_ACE-layout entry;
-            // taking the field's address creates no reference, so alignment
-            // is not required.
-            let sid = unsafe { &raw mut (*ace.cast::<ACCESS_ALLOWED_ACE>()).SidStart };
+        ) && size >= ACE_SID_OFFSET + MIN_SID_BYTES
+            && descriptor.contains(ace.cast_const(), size);
+        let decoded = if decodable {
+            // SAFETY: the whole entry, mask included, lies inside the live
+            // descriptor (checked); the read is unaligned.
+            let mask = unsafe {
+                std::ptr::read_unaligned(
+                    ace.cast_const()
+                        .cast::<u8>()
+                        .add(ACE_MASK_OFFSET)
+                        .cast::<u32>(),
+                )
+            };
+            // The SID is bounded by the entry's own size.
+            // SAFETY: the offset lies inside the entry checked above.
+            let sid_ptr = unsafe { ace.cast_const().cast::<u8>().add(ACE_SID_OFFSET) };
             Ace {
-                ace_type: header.AceType,
-                flags: header.AceFlags,
-                mask: entry.Mask,
-                sid: sid_string(sid.cast()),
+                ace_type: ace_header.AceType,
+                flags: ace_header.AceFlags,
+                mask,
+                sid: descriptor
+                    .sid_at(sid_ptr.cast(), size - ACE_SID_OFFSET)
+                    .and_then(|sid| sid.to_text()),
             }
         } else {
+            // Undecoded: other types fail closed, and an allowed entry
+            // without a decodable trustee fails closed too.
             Ace {
-                ace_type: header.AceType,
-                flags: header.AceFlags,
+                ace_type: ace_header.AceType,
+                flags: ace_header.AceFlags,
                 mask: 0,
                 sid: None,
             }

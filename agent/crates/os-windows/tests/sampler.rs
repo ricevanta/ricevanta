@@ -25,12 +25,14 @@ fn live_sample_of_own_process() {
         other => panic!("Windows reports handles, got {other:?}"),
     }
     assert!(private_usage_bytes().unwrap() > 0);
-    // A new thread is counted.
-    let (send, receive) = std::sync::mpsc::channel::<()>();
-    let worker = std::thread::spawn(move || receive.recv().ok());
-    let with_thread = sampler.sample().unwrap();
-    assert!(with_thread.threads > sample.threads || with_thread.threads >= 2);
-    drop(send);
+    // A new thread that blocks until released is counted. This binary
+    // holds this one test, so no other test starts threads meanwhile.
+    let before = sampler.sample().unwrap().threads;
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    let worker = std::thread::spawn(move || wait.recv().ok());
+    let during = sampler.sample().unwrap().threads;
+    drop(release);
     worker.join().unwrap();
+    assert!(during > before, "threads before {before}, during {during}");
     eprintln!("live sample {sample:?} in {elapsed:?}");
 }

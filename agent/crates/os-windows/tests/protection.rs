@@ -353,6 +353,82 @@ fn run_mode_creates_directories_and_checks_nothing() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+fn powershell(script: &str) -> String {
+    let output = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{script}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+#[test]
+fn null_dacl_on_a_real_file_fails() {
+    let p = platform();
+    let tree = Tree::new();
+    let config = tree.join("agent.json");
+    // SDDL `D:NO_ACCESS_CONTROL` is a NULL DACL; the owner stays
+    // Administrators so only the DACL rule can fail.
+    let path = config.to_str().unwrap();
+    powershell(&format!(
+        "$a = Get-Acl -LiteralPath '{path}'; \
+         $a.SetSecurityDescriptorSddlForm('O:BAD:NO_ACCESS_CONTROL'); \
+         Set-Acl -LiteralPath '{path}' -AclObject $a"
+    ));
+    let sddl = powershell(&format!("(Get-Acl -LiteralPath '{path}').Sddl"));
+    assert!(sddl.contains("D:NO_ACCESS_CONTROL"), "precondition: {sddl}");
+    let got = reason(p.open_config(&config, Mode::Service), Object::ConfigFile);
+    assert_eq!(got, Reason::InsecureAcl { sid: None });
+}
+
+#[test]
+fn junctions_at_parents_and_directories_are_refused() {
+    let p = platform();
+    let tree = Tree::new();
+    let target = tree.join("target");
+    fs::create_dir(&target).unwrap();
+    for name in ["state", "logs"] {
+        fs::create_dir(target.join(name)).unwrap();
+    }
+    // A junction as the checked parent of a configured directory.
+    junction(&tree.join("parent"), &target);
+    let got = reason(
+        checked(&p, &tree.join("parent").join("state"), DirKind::State),
+        Object::StateParent,
+    );
+    assert_eq!(got, Reason::ReparsePoint);
+    // Junctions in place of the state and log directories.
+    for (name, kind, object) in [
+        ("state", DirKind::State, Object::StateDir),
+        ("logs", DirKind::Log, Object::LogDir),
+    ] {
+        fs::remove_dir(tree.join(name)).unwrap();
+        junction(&tree.join(name), &target.join(name));
+        let got = reason(checked(&p, &tree.join(name), kind), object);
+        assert_eq!(got, Reason::ReparsePoint, "{name}");
+    }
+}
+
+#[test]
+fn service_mode_never_creates_a_missing_directory() {
+    let p = platform();
+    let tree = Tree::new();
+    fs::remove_dir(tree.join("state")).unwrap();
+    let got = reason(
+        checked(&p, &tree.join("state"), DirKind::State),
+        Object::StateDir,
+    );
+    assert!(
+        matches!(&got, Reason::Io(cause) if cause.kind() == std::io::ErrorKind::NotFound),
+        "{got:?}"
+    );
+    assert!(!tree.join("state").exists());
+}
+
 #[test]
 fn platform_constants() {
     let p = platform();
