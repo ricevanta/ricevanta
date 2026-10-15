@@ -38,6 +38,8 @@ class FreshGoTests(unittest.TestCase):
         env = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
         self.assertEqual(env['GOTOOLCHAIN'], 'local')
         self.assertEqual(env['GOFLAGS'], '-mod=readonly')
+        # Every later Go step ignores the per-user `go env -w` file (CI hardening section 6).
+        self.assertEqual(env['GOENV'], 'off')
         for key in ('GOCACHE', 'GOMODCACHE'):
             path = Path(env[key])
             self.assertTrue(path.is_absolute())
@@ -99,7 +101,7 @@ class FreshGoTests(unittest.TestCase):
         self.assertEqual(safe.stdout.strip(), fresh['GOCACHE'])
         self.assertFalse(marker.exists())
         self.assertNotIn(str(prior), safe.stderr)
-        actual = subprocess.run(['go', 'env', '-json', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS'],
+        actual = subprocess.run(['go', 'env', '-json', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'GOENV'],
                                 cwd=fixture, env={**env, **fresh}, capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(actual.stdout), fresh)
 

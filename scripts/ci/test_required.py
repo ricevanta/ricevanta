@@ -10,7 +10,7 @@ import tempfile
 import inventory
 import required
 
-def verified_evidence(root, checks, run_id='123', attempt='1'):
+def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
     """Write verified selected-run records so emission can bind every wrapper check."""
     import run_selected
     selected = run_selected.inventory()
@@ -20,7 +20,7 @@ def verified_evidence(root, checks, run_id='123', attempt='1'):
             directory.mkdir(exist_ok=True)
             (directory / 'verified.json').write_text(json.dumps(
                 {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
-                 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': 'b' * 40}))
+                 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}))
 
 
 class RequiredTests(unittest.TestCase):
@@ -173,12 +173,14 @@ class RequiredTests(unittest.TestCase):
                     {'kind': 'selected-run', 'version': 1, 'id': victim, 'result': 'success', 'exit': 1,
                      'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}))
                 with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, root)
-                # Evidence from another run, another attempt or without a run binding proves nothing here.
-                for run_id, attempt in (('124', '1'), ('123', '2'), (None, None)):
-                    other = root / ('other-%s-%s' % (run_id, attempt))
+                # Evidence from another run, attempt or tested commit, or without a run binding, proves nothing here.
+                for run_id, attempt, sha in (('124', '1', 'b' * 40), ('123', '2', 'b' * 40), (None, None, 'b' * 40),
+                                             ('123', '1', 'c' * 40), ('123', '1', None)):
+                    other = root / ('other-%s-%s-%s' % (run_id, attempt, sha and sha[0]))
                     other.mkdir()
-                    verified_evidence(other, checks, run_id, attempt)
-                    with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, other)
+                    verified_evidence(other, checks, run_id, attempt, sha)
+                    with self.subTest(run_id=run_id, attempt=attempt, sha=sha), self.assertRaises(ValueError):
+                        required.receipt(self.route, unit, checks, other)
 
     def test_artifact_names_are_collision_free(self):
         self.assertNotEqual(required.artifact_name(self.route, 'a:b'), required.artifact_name(self.route, 'a/b'))

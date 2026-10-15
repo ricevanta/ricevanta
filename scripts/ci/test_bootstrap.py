@@ -82,18 +82,19 @@ def symlink(name, target):
     return (name, None, 0o777, tarfile.SYMTYPE, target)
 
 
-def elf(runpath, needed=b'libc.so.6', symbol_name=None, sections=True):
+def elf(runpath, needed=b'libc.so.6', symbol_name=None, sections=True, prefix=b''):
     """A minimal little-endian ELF64 shared object: one DT_RUNPATH, one DT_NEEDED and a .dynsym with one named symbol.
 
     symbol_name is the symbol's dynamic string table offset (default: the DT_NEEDED string); sections=False drops the
-    section header table that accounts for symbol and version names.
+    section header table that accounts for symbol and version names; prefix puts bytes without a NUL directly before
+    the runpath string, so a name at offset 1 runs into it.
     """
     base = 0x400000
-    strtab = b'\0' + runpath.encode() + b'\0' + needed + b'\0'
-    needed_offset = 2 + len(runpath)
+    strtab = b'\0' + prefix + runpath.encode() + b'\0' + needed + b'\0'
+    needed_offset = 2 + len(prefix) + len(runpath)
     strtab_offset = 64 + 2 * 56
     dynamic_offset = (strtab_offset + len(strtab) + 7) // 8 * 8
-    dynamic = struct.pack('<qQqQqQqQ', 1, needed_offset, 29, 1, 5, base + strtab_offset, 0, 0)
+    dynamic = struct.pack('<qQqQqQqQ', 1, needed_offset, 29, 1 + len(prefix), 5, base + strtab_offset, 0, 0)
     dynsym_offset = dynamic_offset + len(dynamic)
     dynsym = b'\0' * 24 + struct.pack('<IBBHQQ', needed_offset if symbol_name is None else symbol_name, 0x12, 0, 0, 0, 0)
     shdr_offset = dynsym_offset + len(dynsym)
@@ -131,11 +132,14 @@ RUNNER_PYTHON = [('HKLM', r'Software\Microsoft\Windows\CurrentVersion\Uninstall\
                  ('HKLM', r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{other}', 'Python 3.12.10 (64-bit)')]
 
 
-def make_host(platform, base, registry=None, environ=None):
-    """Injected host facts: never the real framework, registry or toolchain state of the machine running the tests."""
+def make_host(platform, base, registry=None, environ=None, os_release=None):
+    """Injected host facts: never the real framework, registry, Ubuntu release or toolchain state of the machine running the tests."""
+    release = bootstrap.PLATFORMS[platform].get('release')
+    if os_release is None and release: os_release = {'ID': 'ubuntu', 'VERSION_ID': release}
+    extra = {'os_release': os_release} if os_release is not None else {}
     return bootstrap.Host(platform, framework_root=base / 'Frameworks' / 'Python.framework',
                           registry=(registry if registry is not None else FakeRegistry()) if platform == 'windows-x64' else None,
-                          environ=environ)
+                          environ=environ, **extra)
 
 
 class FakeExecute:
@@ -462,10 +466,11 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(env['GOROOT'], str(dest / 'go'))
         self.assertTrue((dest / 'rust' / 'bin').is_dir())
         self.assertEqual(paths[paths.index(str(dest / 'rust' / 'bin'))], str(dest / 'rust' / 'bin'), 'PATH, not RUSTC, selects the admitted rustc')
-        import run_selected
-        rust_names = [key for key in env if run_selected.CARGO_CONTROLLED_ENV.search(key.upper())]
+        import rust_env
+        rust_names = [key for key in env if rust_env.CONTROLLED.search(key.upper())]
         self.assertEqual(sorted(rust_names), ['CARGO_HOME', 'RUSTUP_AUTO_INSTALL', 'RUSTUP_HOME'])
-        self.assertEqual(run_selected.cargo_environment_overrides(rust_names), [], 'the wrapper admits every Cargo or Rust name the bootstrap exports')
+        self.assertEqual(rust_env.rust_overrides(rust_names), [], 'the wrapper admits every Cargo or Rust name the bootstrap exports')
+        self.assertLessEqual(set(rust_names), rust_env.ADMITTED_RUST_ENV)
         self.assertEqual((env['CARGO_HOME'], env['RUSTUP_HOME'], env['RUSTUP_AUTO_INSTALL']), (str(dest / 'cargo-home'), str(dest / 'rustup-home'), '0'))
         self.assertFalse((dest / 'cargo-home' / 'bin').exists(), 'Cargo finds subcommands only on the admitted PATH')
         self.assertFalse((dest / 'rust' / 'install.sh').exists(), 'installer scripts from the archive are never copied')
@@ -684,6 +689,8 @@ class BootstrapTests(unittest.TestCase):
         # A string that shares bytes with the runpath (suffix sharing in .dynstr) would be corrupted by the rewrite.
         for label, image, reason in (('symbol name inside the runpath', elf(TOOLCACHE_LIB, symbol_name=1 + len('/opt/')), 'shares bytes'),
                                      ('needed entry sharing the runpath start', elf(TOOLCACHE_LIB, symbol_name=1), 'shares bytes'),
+                                     # N-05r: a name that starts below the runpath and runs into it shares its tail bytes.
+                                     ('name starting below the runpath', elf(TOOLCACHE_LIB, symbol_name=1, prefix=b'lib'), 'shares bytes'),
                                      ('no section headers', elf(TOOLCACHE_LIB, sections=False), 'no section headers'),
                                      ('truncated program headers', elf(TOOLCACHE_LIB)[:150], 'malformed ELF'),
                                      ('big-endian', elf(TOOLCACHE_LIB)[:5] + b'\x02' + elf(TOOLCACHE_LIB)[6:], 'malformed ELF')):
@@ -1040,6 +1047,90 @@ class BootstrapTests(unittest.TestCase):
         if HOST != 'windows-x64':
             self.assertEqual(env['PATH'].split(os.pathsep, 1)[1], os.environ['PATH'], 'the inherited PATH follows unchanged')
 
+    def test_env_file_holds_exactly_the_section_8_names(self):
+        """Design section 8: only the table's names, each only when its tool is selected, plus the admitted root."""
+        self.assertEqual(bootstrap.ENV_FILE_NAMES, frozenset({
+            'PATH', 'GOROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'RUSTUP_AUTO_INSTALL', 'PLAYWRIGHT_BROWSERS_PATH',
+            'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', 'pnpm_config_pm_on_fail', 'pnpm_config_update_notifier', 'CI_ADMITTED_ROOT'}))
+        names = {'python': {'PATH'}, 'go': {'PATH', 'GOROOT'}, 'rust': {'PATH', 'CARGO_HOME', 'RUSTUP_HOME', 'RUSTUP_AUTO_INSTALL'},
+                 'node': {'PATH'}, 'pnpm': {'PATH', 'pnpm_config_pm_on_fail', 'pnpm_config_update_notifier'},
+                 'playwright': {'PLAYWRIGHT_BROWSERS_PATH', 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'}}
+        self.fixtures.go(); self.fixtures.python(); self.fixtures.rust()
+        selections = ['python', 'go', 'rust', 'python,go,rust']
+        if HOST == 'linux-x64':
+            self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
+            selections += ['node', 'node,pnpm', 'playwright', 'python,go,rust,node,pnpm,playwright']
+        for index, tools in enumerate(selections):
+            with self.subTest(tools=tools):
+                (self.base / 'env').unlink(missing_ok=True)
+                code, error, journal, *_ = self.run_bootstrap(tools, dest=self.base / f'dest-{index}')
+                self.assertEqual((code, error), (0, None), journal)
+                expected = set().union(*(names[tool] for tool in tools.split(','))) | {'CI_ADMITTED_ROOT'}
+                self.assertEqual(set(self.env_lines()), expected)
+                self.assertEqual(len((self.base / 'env').read_text().splitlines()), len(expected), 'each name is written once')
+
+    def test_env_file_refuses_names_outside_the_table(self):
+        """The bootstrap checks its own env file before writing it: no RUSTC, RUSTDOC or Rust name outside ADMITTED_RUST_ENV."""
+        import rust_env
+        self.assertEqual(bootstrap.env_file_errors({name: 'x' for name in bootstrap.ENV_FILE_NAMES}), [])
+        self.assertLessEqual({n for n in bootstrap.ENV_FILE_NAMES if rust_env.CONTROLLED.search(n.upper())}, rust_env.ADMITTED_RUST_ENV)
+        for name in ('RUSTC', 'RUSTDOC', 'RUSTC_WRAPPER', 'RUSTFLAGS', 'CARGO_TARGET_DIR', 'CARGO_NET_OFFLINE', 'RUSTUP_TOOLCHAIN',
+                     'LD_LIBRARY_PATH', 'NODE_OPTIONS', 'CC', 'GOFLAGS', 'npm_config_registry'):
+            with self.subTest(name=name):
+                errors = bootstrap.env_file_errors({'PATH': '/x', name: 'y'})
+                self.assertTrue(errors and all(name in e for e in errors), errors)
+        self.fixtures.go()
+        original = bootstrap.RECIPES['go']
+        def leaky_check(ctx, entry):
+            original[2](ctx, entry); ctx.env['RUSTC'] = '/usr/bin/rustc'
+        with mock.patch.dict(bootstrap.RECIPES, {'go': (original[0], original[1], leaky_check)}):
+            code, error, journal, *_ = self.run_bootstrap('go')
+        self.assertEqual(code, 1)
+        self.assertIn('RUSTC', error)
+        self.assertFalse((self.base / 'env').exists(), 'nothing is written when the env file would carry an unadmitted name')
+
+    def test_ubuntu_release_must_match_the_platform(self):
+        """24.04 and 22.04 runners are distinct identities: /etc/os-release decides, and a mismatch refuses before any download."""
+        for name, base_name in (('linux-x64-ubuntu22.04', 'linux-x64'), ('linux-arm64-ubuntu22.04', 'linux-arm64')):
+            spec, base_spec = dict(bootstrap.PLATFORMS[name]), dict(bootstrap.PLATFORMS[base_name])
+            self.assertEqual((spec.pop('release'), base_spec.pop('release')), ('22.04', '24.04'))
+            self.assertEqual(spec, base_spec)
+        for name in ('windows-x64', 'macos-arm64'): self.assertIsNone(bootstrap.PLATFORMS[name].get('release'))
+        lock = {'kind': 'toolchains', 'version': 1, 'entries': [
+            dict(id='go-1.27.1-linux-arm64-ubuntu22.04', tool='go', version='1.27.1', platform='linux-arm64-ubuntu22.04',
+                 url='https://go.dev/dl/go1.27.1.linux-arm64.tar.gz', size=1, sha256='a' * 64)]}
+        bootstrap.validate_lock(lock)
+        for os_release, expected in (({'ID': 'ubuntu', 'VERSION_ID': '24.04'}, 'linux-x64'), ({'ID': 'ubuntu', 'VERSION_ID': '22.04'}, 'linux-x64-ubuntu22.04')):
+            self.assertEqual(bootstrap.host_platform(system='Linux', machine='x86_64', os_release=os_release), expected)
+        self.assertEqual(bootstrap.host_platform(system='Linux', machine='aarch64', os_release={'ID': 'ubuntu', 'VERSION_ID': '22.04'}),
+                         'linux-arm64-ubuntu22.04')
+        self.assertEqual(bootstrap.host_platform(system='Darwin', machine='arm64', os_release={}), 'macos-arm64')
+        release = self.base / 'os-release'
+        release.write_text('NAME="Ubuntu"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID="22.04"\n# comment\n\n')
+        self.assertEqual(bootstrap.read_os_release(release), {'NAME': 'Ubuntu', 'ID': 'ubuntu', 'ID_LIKE': 'debian', 'VERSION_ID': '22.04'})
+        self.assertEqual(bootstrap.read_os_release(self.base / 'missing'), {})
+        def no_fetch(url, limit, sink): raise AssertionError('download attempted on the wrong Ubuntu release')
+        for platform, os_release in (('linux-x64', {'ID': 'ubuntu', 'VERSION_ID': '22.04'}),
+                                     ('linux-x64-ubuntu22.04', {'ID': 'ubuntu', 'VERSION_ID': '24.04'}),
+                                     ('linux-x64', {'ID': 'debian', 'VERSION_ID': '24.04'}),
+                                     ('linux-x64', {})):
+            with self.subTest(platform=platform, os_release=os_release):
+                self.fixtures = Fixtures(self.base / platform, platform); self.fixtures.base.mkdir(exist_ok=True)
+                self.fixtures.go()
+                dest = self.base / 'dest-release'
+                code, error, journal, execute, dest = self.run_bootstrap('go', fetch=no_fetch, dest=dest,
+                                                                         host=make_host(platform, self.base, os_release=os_release))
+                self.assertEqual(code, 1)
+                self.assertIn('Ubuntu', error)
+                self.assert_untouched(dest, execute, journal)
+        for platform in ('linux-x64', 'linux-x64-ubuntu22.04'):
+            with self.subTest(matching=platform):
+                self.fixtures = Fixtures(self.base / ('ok-' + platform), platform); self.fixtures.base.mkdir(exist_ok=True)
+                self.fixtures.go()
+                (self.base / 'env').unlink(missing_ok=True)
+                code, error, journal, *_ = self.run_bootstrap('go', dest=self.base / ('dest-ok-' + platform))
+                self.assertEqual((code, error), (0, None), journal)
+
     def test_windows_path_drops_the_git_bash_prefix(self):
         runner = [r'C:\hostedtoolcache\windows\Python\3.12.10\x64', r'C:\Windows\system32', r'C:\Program Files\Git\usr\bin', r'C:\Program Files\Git\cmd']
         wrapper = [r'C:\Users\runneradmin\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin']
@@ -1195,7 +1286,8 @@ class HostIdentityTests(unittest.TestCase):
     @unittest.skipIf(SIMULATED, 'already running under a simulated identity')
     def test_suite_passes_under_every_platform_identity(self):
         """The suite must not depend on the host it runs on: run it under the two identities this host is not."""
-        for identity in sorted(set(bootstrap.PLATFORMS) - {HOST, 'linux-arm64'}):
+        # The three CI hosts; linux-arm64 and the Ubuntu 22.04 identities have no runner here yet.
+        for identity in sorted({'linux-x64', 'windows-x64', 'macos-arm64'} - {HOST}):
             with self.subTest(identity=identity):
                 result = subprocess.run([sys.executable, '-B', '-m', 'unittest', 'test_bootstrap'], cwd=Path(__file__).parent,
                                         env={**os.environ, 'BOOTSTRAP_TEST_HOST': identity}, capture_output=True, text=True)

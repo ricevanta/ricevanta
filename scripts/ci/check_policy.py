@@ -12,6 +12,7 @@ import bootstrap
 import inventory
 import python_env
 import run_selected
+import rust_env
 from required import NEEDS, CALLERS
 
 
@@ -177,23 +178,31 @@ def cargo_config_errors(root):
     return errors
 
 
-# Workflows may set only these Cargo/rustc variables; CARGO_HOME and
-# CARGO_TARGET_DIR come solely from fresh_go.py (see cache_errors).
-WORKFLOW_CARGO_ENV = frozenset({'CARGO_NET_OFFLINE', 'CARGO_INCREMENTAL', 'CARGO_TERM_COLOR', 'RUST_BACKTRACE'})
+# Shell-style assignments (`NAME=value cmd`, `export NAME=`, `env NAME=` or a GITHUB_ENV line); cc reads target-suffixed
+# names with hyphens, which `env` can pass.
+SHELL_ASSIGNMENT = re.compile(r'(?<![\w$.-])([A-Za-z_][A-Za-z0-9_-]*)\+?=')
 
 
 def cargo_override_errors(data):
-    """Closed allowlist for Cargo/rustc variables in workflow env and GITHUB_ENV writes."""
+    """Closed allowlists (rust_env) for Cargo/rustc and C toolchain variables in workflow env, run scripts and GITHUB_ENV writes.
+
+    Workflows may set only rust_env.WORKFLOW_RUST_ENV; CARGO_HOME and CARGO_TARGET_DIR come solely from the bootstrap's env
+    file and fresh_go.py (see cache_errors). No workflow sets a C compiler, archiver, flag or SDK variable that cc or cgo reads.
+    """
     errors = []
     def check(name):
-        if run_selected.CARGO_CONTROLLED_ENV.search(name.upper()) and name.upper() not in WORKFLOW_CARGO_ENV | {'CARGO_HOME', 'CARGO_TARGET_DIR'}:
+        if rust_env.CONTROLLED.search(name.upper()) and name.upper() not in rust_env.WORKFLOW_RUST_ENV:
             errors.append(f'{jid}: unreviewed Cargo or rustc variable {name} forbidden')
+        if rust_env.is_c_toolchain_name(name):
+            errors.append(f'{jid}: C toolchain variable {name} forbidden')
     for jid, job in data.get('jobs', {}).items():
         for scope in (data, job, *job.get('steps', [])):
             env = scope.get('env', {})
             for key in (env if isinstance(env, dict) else {}): check(str(key))
         for step in job.get('steps', []):
-            for name in re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*=', str(step.get('run', ''))): check(name)
+            names = set(re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*=', str(step.get('run', ''))))
+            names |= set(SHELL_ASSIGNMENT.findall(str(step.get('run', ''))))
+            for name in sorted(names): check(name)
     return errors
 
 
@@ -282,19 +291,23 @@ UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b
                                 r'\bbitsadmin\b|\bcertutil\b|\bnpm\s+(?:i|install|exec|x)\b|\bnpx\b|\bpnpx\b|\bpnpm\s+(?:dlx|create|env|self-update)\b|'
                                 r'\bpnpm\s+(?:add|install|i)\s+(?:-g|--global)\b|--pm-on-fail|\bgh\s+(?:release|run|attestation)\s+download\b|'
                                 r'\bgh\s+api\b|\bgit\s+clone\b|\burllib\.request\b|\burllib3\b|\burlretrieve\b|\burlopen\b|\bhttp\.client\b|\brequests\.|'
-                                r'\bWebClient\b|\bDownload(?:File|String|Data)(?:Async)?\b|\bHttpClient\b|\bInvoke-WebRequest\b|'
+                                # .NET and JavaScript clients count when constructed or called, not when prose names them.
+                                r'\bNet\.WebClient\b|New-Object\s+(?:-TypeName\s+)?\S*WebClient\b|\.Download(?:File|String|Data)(?:Async)?\s*\(|'
+                                r'\bNet\.Http\.HttpClient\b|\bnew\s+HttpClient\s*\(|\.Get(?:String|ByteArray|Stream)?Async\s*\(|'
                                 r'\brequire\(\s*[\'"](?:node:)?https?[\'"]\s*\)|\bimport\(\s*[\'"](?:node:)?https?[\'"]\s*\)|'
                                 r'\bfrom\s+[\'"](?:node:)?https?[\'"]|\bhttps?\.(?:get|request)\(|'
-                                r'\bfetch\(|\bgo\s+(?:install|get)\b|\bcargo\s+(?:install|binstall)\b|\bpip\s+download\b')
+                                r'(?<!\w)fetch\(\s*(?:[\'"`]|[A-Za-z_$][\w$.]*\s*[,)])|\bgo\s+(?:install|get)\b|\bcargo\s+(?:install|binstall)\b|\bpip\s+download\b')
 TOOL_CONSUMERS = (('python', re.compile(r'\bpython3?\b')), ('go', re.compile(r'\bgo(?:fmt)?\s')),
                   ('rust', re.compile(r'\bcargo\b|\brustc\b|\brustfmt\b')), ('node', re.compile(r'\bnode\b|\bpnpm\b')),
                   ('pnpm', re.compile(r'\bpnpm\b')), ('playwright', re.compile(r'pnpm test:(?:component|csp)|\bplaywright\b')))
 # Variables bootstrap.py writes through --env-out, and loader or interpreter hooks that would substitute other code
 # for an admitted tool; no other step or env mapping may set them. Whole families are closed by prefix.
+# The runner's own RUNNER_* facts (RUNNER_TEMP, RUNNER_ENVIRONMENT) and the linker are closed the same way.
 ADMITTED_ENV = frozenset({'PATH', 'Path', 'LD_LIBRARY_PATH', 'LD_PRELOAD', 'LD_AUDIT', 'DYLD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES',
                           'DYLD_FRAMEWORK_PATH', 'RUSTC', 'RUSTDOC', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'CI_ADMITTED_ROOT',
-                          'GOROOT', 'GOTOOLCHAIN', 'NODE_OPTIONS', 'NODE_PATH', 'COREPACK_ENABLE_STRICT'})
-ADMITTED_ENV_PREFIXES = ('PLAYWRIGHT_', 'RUSTUP_', 'COREPACK_', 'pnpm_config_', 'npm_config_', 'PNPM_', 'NPM_CONFIG_')
+                          'GOROOT', 'GOTOOLCHAIN', 'GOTOOLDIR', 'LD', 'NODE_OPTIONS', 'NODE_PATH', 'COREPACK_ENABLE_STRICT'})
+ADMITTED_ENV_PREFIXES = ('PLAYWRIGHT_', 'RUSTUP_', 'COREPACK_', 'pnpm_config_', 'npm_config_', 'PNPM_', 'NPM_CONFIG_', 'RUNNER_',
+                         'LD_', 'DYLD_')
 ADMITTED_ENV_WRITE = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(sorted(ADMITTED_ENV)) + '|'
                                 + '|'.join(p + r'\w*' for p in ADMITTED_ENV_PREFIXES) + r')\s*=')
 
@@ -302,6 +315,35 @@ ADMITTED_ENV_WRITE = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(sorted(ADMITT
 def admitted_env_names(mapping):
     if not isinstance(mapping, dict): return []
     return sorted(k for k in mapping if k in ADMITTED_ENV or str(k).startswith(ADMITTED_ENV_PREFIXES))
+
+
+# The one shape of a GITHUB_ENV write outside the pinned helper and apply steps: a literal name and a value without command
+# substitution, so the reviewed name is the name the runner sets. Names built at run time (`${n}ROOT=`, printf, Python
+# string concatenation, a block redirect or the `github.env` context) cannot be reviewed and are refused.
+LITERAL_ENV_WRITE = re.compile(r'[ \t]*echo[ \t]+"([A-Za-z_][A-Za-z0-9_]*)=(?:[^"`$\n\\]|\$(?!\()\{?[A-Za-z_][A-Za-z0-9_]*\}?)*"[ \t]*>>[ \t]*"\$GITHUB_ENV"[ \t]*')
+
+
+def forbidden_env_name(name):
+    """Section 8: names no step outside the pinned helpers may set through env or GITHUB_ENV."""
+    return (name in ADMITTED_ENV or name.startswith(ADMITTED_ENV_PREFIXES) or name in CACHE_ENV
+            or rust_env.is_c_toolchain_name(name) or bool(rust_env.rust_overrides([name])) or name.upper() in ('BASH_ENV', 'ENV'))
+
+
+def env_write_errors(step):
+    """GITHUB_ENV writes outside the pinned steps: one literal echo line per write, naming a variable outside section 8's list."""
+    run = step.get('run', '')
+    if run in (APPLY_COMMAND, GO_FRESH, CARGO_FRESH): return []
+    errors = []
+    other = step_text({key: value for key, value in step.items() if key != 'run'})
+    if ENV_FILE.search(other): errors.append('environment file writes must be literal echo lines in the run script')
+    for line in str(run).splitlines():
+        if not ENV_FILE.search(line): continue
+        match = LITERAL_ENV_WRITE.fullmatch(line)
+        if not match:
+            errors.append('environment file writes must be literal echo lines naming a reviewed variable')
+        elif forbidden_env_name(match[1]):
+            errors.append('admitted tool environment override forbidden: ' + match[1])
+    return errors
 BOOTSTRAP_NAME = 'Bootstrap admitted toolchains'
 EVIDENCE_NAME = 'Verify admitted toolchain evidence'
 CONTROLS_NAME = 'Reject corrupted payloads before any extraction or execution'
@@ -436,6 +478,16 @@ def lock_tools(root):
 
 
 LOCK_TOOLS = {}
+# Each consuming job's literal CI_TOOLS (section 8); bootstrap.yml's rows select every lock tool for their host instead.
+JOB_TOOLS = {
+    ('agent', 'validate'): 'python,rust', ('agent', 'rustinterop'): 'python,go,rust',
+    ('ci', 'route'): 'python', ('ci', 'ci-contracts'): 'python,go', ('ci', 'gitleaks'): 'python', ('ci', 'semgrep'): 'python',
+    ('ci', 'ci-required'): 'python', ('console', 'validate'): 'python,node,pnpm,playwright',
+    ('copilot-code-review', 'copilot-setup-steps'): 'python,go,rust,node,pnpm', ('design', 'validate'): 'python',
+    ('server', 'validate'): 'python,go', ('server', 'race'): 'python,go', ('server', 'fuzz-targets'): 'python',
+    ('server', 'fuzz'): 'python,go', ('server', 'loader-gate-a'): 'python,go', ('server', 'loader-gate-b'): 'python,go',
+    ('server', 'ocsf-native'): 'python,go',
+}
 
 
 def consumer_tools(steps):
@@ -483,7 +535,9 @@ def bootstrap_errors(data, name):
             for key in admitted_env_names(scope.get('env', {})): fail('admitted tool environment override forbidden: ' + key)
         for step in steps:
             run = step.get('run', '')
-            if 'GITHUB_PATH' in run and run != python_env.VENV_COMMAND: fail('PATH changes outside the admitted bootstrap forbidden')
+            # By variable, `github.path` context or runner file name, in any key of the step.
+            if PATH_FILE.search(step_text(step)) and run != python_env.VENV_COMMAND: fail('PATH changes outside the admitted bootstrap forbidden')
+            for message in env_write_errors(step): fail(message)
             # Quotes and escapes cannot split a variable name past the check: "GO""ROOT=" is GOROOT=.
             if 'GITHUB_ENV' in run and run != APPLY_COMMAND and ADMITTED_ENV_WRITE.search(re.sub(r'["\'\\`]', '', run)):
                 fail('admitted tool environment override forbidden')
@@ -506,6 +560,8 @@ def bootstrap_errors(data, name):
         runner = job.get('runs-on', '')
         expected_platform = PLATFORM_EXPRESSION if '${{' in str(runner) else inventory.HOSTS.get(runner)
         if env['CI_PLATFORM'] != expected_platform: fail('CI_PLATFORM must come from the fixed runner matrix')
+        if name != 'bootstrap' and env['CI_TOOLS'] != JOB_TOOLS.get((name, jid)):
+            fail(f'CI_TOOLS differs from the reviewed selection {JOB_TOOLS.get((name, jid))!r}')
         selected = resolve_tools(env['CI_TOOLS'], job)
         if selected is None:
             fail('CI_TOOLS must be a literal tool list from the workflow'); selected = set()
@@ -622,7 +678,8 @@ CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fres
                '--cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"')
 # Cargo's home is the admitted, bin-free CARGO_HOME from the bootstrap; only its registry index and archives are cached.
 CARGO_CACHE_PATHS = ['${{ runner.temp }}/admitted/cargo-home/registry/index', '${{ runner.temp }}/admitted/cargo-home/registry/cache']
-CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
+# GOENV is fresh_go.py's `off`: a per-user `go env -w` file could otherwise supply CC, flags or a toolchain.
+CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'GOENV', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
 
 
 def wrapper_id(run):
@@ -663,7 +720,7 @@ def cache_errors(data, root):
                 if paths != CARGO_CACHE_PATHS:
                     fail('cache restore may contain only Cargo index and archives')
             run = step.get('run', '')
-            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
+            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
                 fail('compiler cache environment reset forbidden')
         def admission(command, consumers):
             matching = [i for i, s in enumerate(steps) if s.get('run') == command]
@@ -704,8 +761,21 @@ def consumer_env_errors(scope):
 
 
 def step_text(step):
-    """Everything a step or scope executes or passes on; display names are not executed."""
-    return json.dumps({key: value for key, value in step.items() if key != 'name'}, sort_keys=True)
+    """Everything a step or scope executes or passes on, as the raw strings joined by newlines; display names are not executed.
+
+    Raw strings, not JSON: escaping would turn a line start, tab or continuation into `\\n`, `\\t` or `\\\\` glued to the
+    next token, which hides `which`, `validator/` or `sys.executable` from the word-boundary patterns.
+    """
+    parts = []
+    def walk(value):
+        if isinstance(value, dict):
+            for key, child in value.items(): parts.append(str(key)); walk(child)
+        elif isinstance(value, list):
+            for child in value: walk(child)
+        else:
+            parts.append(str(value))
+    walk({key: value for key, value in step.items() if key != 'name'})
+    return '\n'.join(parts)
 
 
 def python_errors(data):

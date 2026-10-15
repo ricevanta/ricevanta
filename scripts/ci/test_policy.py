@@ -393,12 +393,76 @@ class PolicyTests(unittest.TestCase):
                 self.mutate('agent', write_env)
                 self.assertTrue(any('unreviewed Cargo or rustc variable' in error for error in check_policy.check(self.root)))
                 shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
-        for name in sorted(check_policy.WORKFLOW_CARGO_ENV):
+        for name in sorted(check_policy.rust_env.WORKFLOW_RUST_ENV):
             with self.subTest(allowed=name):
                 self.mutate('agent', lambda data: data['jobs']['validate'].setdefault('env', {}).update({name: '1'}))
                 self.assertFalse(any('Cargo or rustc variable' in error for error in check_policy.check(self.root)))
                 shutil.copytree(ROOT / '.github', self.root / '.github', dirs_exist_ok=True)
         self.assertEqual(check_policy.check(self.root), [])
+
+    def test_c_toolchain_runner_and_path_settings_are_rejected(self):
+        """Design sections 6 and 8 and review R-23: C toolchain names, LD, Go environment files, RUNNER_* and
+        GITHUB_PATH writes by any spelling, in every job; GITHUB_ENV writes only as literal reviewed names."""
+        self.assertEqual(check_policy.check(self.root), [])
+        def steps(data, jid): return data['jobs'][jid]['steps']
+        def insert(jid, step, at=5): return lambda d: steps(d, jid).insert(at, step)
+        def env_at(scope, jid, key, value='x'):
+            def change(data):
+                target = data if scope == 'workflow' else data['jobs'][jid] if scope == 'job' else next(s for s in steps(data, jid) if 'run_selected.py' in s.get('run', ''))
+                target.setdefault('env', {})[key] = value
+            return change
+        mutations = []
+        for name in ('CC', 'cc', 'CXX', 'AR', 'CFLAGS', 'CFLAGS_x86_64_unknown_linux_gnu', 'CC_x86_64-unknown-linux-gnu', 'TARGET_CXX',
+                     'HOST_CC', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET', 'CROSS_COMPILE', 'CRATE_CC_NO_DEFAULTS', 'VCINSTALLDIR', 'CGO_LDFLAGS',
+                     'CGO_CFLAGS'):
+            for scope in ('workflow', 'job', 'step'):
+                mutations.append(('agent', f'{scope} {name}', env_at(scope, 'validate', name), 'C toolchain variable'))
+            mutations.append(('server', f'GITHUB_ENV {name}', insert('fuzz', {'shell': 'bash', 'run': f'echo "{name}=/tmp/x" >> "$GITHUB_ENV"'}), 'C toolchain variable'))
+        mutations += [
+            ('server', 'race CC through step env', env_at('step', 'race', 'CC', '/tmp/cc'), 'C toolchain variable'),
+            ('agent', 'LD job env', env_at('job', 'validate', 'LD', '/tmp/ld'), 'admitted tool environment override forbidden: LD'),
+            ('server', 'GOTOOLDIR job env', env_at('job', 'validate', 'GOTOOLDIR', '/tmp/tools'), 'admitted tool environment override forbidden: GOTOOLDIR'),
+            ('server', 'GOENV job env', env_at('job', 'validate', 'GOENV', '/tmp/go.env'), 'compiler cache environment override forbidden'),
+            ('server', 'GOENV through GITHUB_ENV', insert('fuzz', {'shell': 'bash', 'run': 'echo "GOENV=/tmp/go.env" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('server', 'RUNNER_TEMP job env', env_at('job', 'validate', 'RUNNER_TEMP', '/tmp/elsewhere'), 'admitted tool environment override forbidden: RUNNER_TEMP'),
+            ('agent', 'RUNNER_ENVIRONMENT workflow env', env_at('workflow', 'validate', 'RUNNER_ENVIRONMENT', 'github-hosted'), 'admitted tool environment override forbidden: RUNNER_ENVIRONMENT'),
+            ('server', 'RUNNER_TOOL_CACHE through GITHUB_ENV', insert('fuzz', {'shell': 'bash', 'run': 'echo "RUNNER_TOOL_CACHE=/tmp/c" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('agent', 'RUSTUP_HOME through GITHUB_ENV', insert('validate', {'shell': 'bash', 'run': 'echo "RUSTUP_HOME=/tmp/r" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            # GITHUB_PATH by context in jobs that consume no Python closure.
+            ('server', 'github.path in a Go job', insert('fuzz', {'shell': 'bash', 'run': 'echo "$RUNNER_TEMP/shim" >> "${{ github.path }}"'}), 'PATH changes outside the admitted bootstrap'),
+            ('agent', 'runner add_path file in a Rust job', insert('validate', {'shell': 'bash', 'run': 'echo "$RUNNER_TEMP/shim" >> "$RUNNER_TEMP"/_runner_file_commands/add_path_x'}), 'PATH changes outside the admitted bootstrap'),
+            ('agent', 'github.path through step env', insert('validate', {'shell': 'bash', 'env': {'P': '${{ github.path }}'}, 'run': 'echo "$RUNNER_TEMP/shim" >> "$P"'}), 'PATH changes outside the admitted bootstrap'),
+            # N-04r: names built at run time cannot be reviewed.
+            ('server', 'variable-built GOROOT', insert('fuzz', {'shell': 'bash', 'run': 'n=GO; echo "${n}ROOT=/opt/go" >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
+            ('server', 'printf-built name', insert('fuzz', {'shell': 'bash', 'run': 'printf "%sROOT=/opt/go\\n" GO >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
+            ('server', 'Python-built GOROOT', insert('fuzz', {'shell': 'bash', 'run': "python3 -c \"import os; open(os.environ['GITHUB_ENV'], 'a').write('GO' + 'ROOT=/opt/go\\n')\""}), 'environment file writes must be literal'),
+            ('server', 'github.env context', insert('fuzz', {'shell': 'bash', 'run': 'echo "GOFLAGS=-mod=mod" >> "${{ github.env }}"'}), 'environment file writes must be literal'),
+            ('server', 'heredoc block write', insert('fuzz', {'shell': 'bash', 'run': '{\n  echo "A=1"\n} >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
+            # Section 8: every job's CI_TOOLS is pinned, not merely a superset of what it runs.
+            ('server', 'extra tool selected', lambda d: next(s for s in steps(d, 'validate') if s.get('run') == check_policy.BOOTSTRAP_COMMAND)['env'].update(CI_TOOLS='python,go,rust'),
+             'CI_TOOLS differs from the reviewed selection'),
+            ('agent', 'interop without go pin', lambda d: [s['env'].update(CI_TOOLS='python,go,rust,node') for s in steps(d, 'rustinterop')
+                                                          if s.get('run') in (check_policy.BOOTSTRAP_COMMAND, check_policy.EVIDENCE_COMMAND)],
+             'CI_TOOLS differs from the reviewed selection'),
+        ]
+        for workflow, label, change, expected in mutations:
+            with self.subTest(mutation=label):
+                self.mutate(workflow, change)
+                errors = check_policy.check(self.root)
+                shutil.copyfile(ROOT / f'.github/workflows/{workflow}.yml', self.root / f'.github/workflows/{workflow}.yml')
+                self.assertTrue(any(expected in error for error in errors), (label, errors))
+        self.assertEqual(check_policy.check(self.root), [])
+        # Admitted: the cc logging switch, a literal reviewed GITHUB_ENV name, a per-command PATH and prose naming clients.
+        for workflow, label, change in (
+                ('agent', 'CC_ENABLE_DEBUG_OUTPUT', env_at('job', 'validate', 'CC_ENABLE_DEBUG_OUTPUT', '1')),
+                ('server', 'literal reviewed GITHUB_ENV name', insert('fuzz', {'shell': 'bash', 'run': 'echo "RICEVANTA_FLAG=$RUNNER_TEMP/x" >> "$GITHUB_ENV"'})),
+                ('server', 'per-command PATH', insert('fuzz', {'shell': 'bash', 'run': 'PATH="$PATH:/usr/sbin" sysctl -n kernel.ostype'})),
+                ('server', 'prose naming HTTP clients', insert('fuzz', {'shell': 'bash', 'run': 'echo "The console calls fetch() through HttpClient and WebClient wrappers"'}))):
+            with self.subTest(admitted=label):
+                self.mutate(workflow, change)
+                errors = check_policy.check(self.root)
+                shutil.copyfile(ROOT / f'.github/workflows/{workflow}.yml', self.root / f'.github/workflows/{workflow}.yml')
+                self.assertEqual(errors, [], label)
 
     def test_ci_contracts_format_and_vet_the_declaration_helper(self):
         self.assertEqual(inventory.checks('ci-contracts'), ['ci-go-helper', 'ci-unit', 'ci-policy'])
@@ -861,6 +925,14 @@ class PolicyTests(unittest.TestCase):
             ('job default shell', lambda d: d['jobs']['validate'].update(defaults={'run': {'shell': 'env PYTHONPATH=vendor bash -e {0}'}})),
             ('workflow default shell', lambda d: d.update(defaults={'run': {'shell': 'sh -e {0}'}})),
             ('toolcache path', after_install('cp sitecustomize.py /opt/hostedtoolcache/Python/3.14.8/x64/lib/python3.14/')),
+            # M-01: the patterns run over raw step strings, so a token at a line start, after a tab or after a continuation counts.
+            ('E01 venv after a continuation', after_install('cd "$RUNNER_TEMP" && cp /bin/true \\\nvalidator/bin/bash')),
+            ('E02 venv after a tab', after_install('cd "$RUNNER_TEMP" && cp /bin/true\tvalidator/bin/bash')),
+            ('E03b which on a second line', after_install('echo locate\nwhich python > "$RUNNER_TEMP/p"\ncp /bin/true "$RUNNER_TEMP/bash"')),
+            ('E04b type -P on a second line', after_install('echo locate\ntype -P python > "$RUNNER_TEMP/p"\ncp /bin/true "$RUNNER_TEMP/bash"')),
+            ('E05b command -v on a second line', after_install('echo locate\ncommand -v python > "$RUNNER_TEMP/p"\ncp /bin/true "$RUNNER_TEMP/bash"')),
+            ('E20 heredoc line starting with sys.executable', after_install(
+                "python - <<'PY'\nimport os, shutil, sys\nhere = os.path.dirname(\nsys.executable)\nshutil.copy('/bin/true', os.path.join(here, 'bash'))\nPY\n")),
         ]
         for label, change in probes:
             with self.subTest(probe=label):

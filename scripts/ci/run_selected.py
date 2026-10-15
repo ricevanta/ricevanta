@@ -17,6 +17,8 @@ import sys
 import threading
 import tomllib
 
+import rust_env
+
 ROOT = Path(__file__).resolve().parents[2]
 GO_LIST_NAME = re.compile(r'^(Test|Benchmark|Fuzz|Example)\w*$')
 GO_LIST_OK = re.compile(r'^ok\s+(\S+)\s+\S+$')
@@ -36,18 +38,16 @@ RUST_SECTION = re.compile(r'^running (\d+) tests?$')
 # Cargo and rustc read runners, wrappers, linkers, flags and toolchains from
 # .cargo/config files and from CARGO_*, RUST* and *RUSTFLAGS variables; any of
 # them could replace a harness with forged output. A Rust run therefore accepts
-# only this reviewed set of such variables, all of which the workflows or the
-# runner images set: cache and target locations, offline mode, terminal and
-# backtrace output, rustup's home and the proxy CA bundle for downloads.
-CARGO_CONTROLLED_ENV = re.compile(r'^(?:CARGO|RUST)|RUSTFLAGS|RUSTDOCFLAGS')
-# RUSTUP_AUTO_INSTALL comes from the admitted bootstrap's env file with CARGO_HOME and RUSTUP_HOME (CI hardening section 6).
-CARGO_ALLOWED_ENV = frozenset({'CARGO_HOME', 'CARGO_TARGET_DIR', 'CARGO_NET_OFFLINE', 'CARGO_INCREMENTAL', 'CARGO_TERM_COLOR',
-                               'CARGO_HTTP_CAINFO', 'RUSTUP_HOME', 'RUSTUP_AUTO_INSTALL', 'RUST_BACKTRACE'})
+# only rust_env.ADMITTED_RUST_ENV, and no mode accepts a C compiler, archiver,
+# flag or SDK variable that cc (zstd's build script) or cgo (the race detector)
+# would read.
 
 
 def cargo_environment_overrides(names):
     """Controlled Cargo/rustc variables outside the reviewed set (names compare case-insensitively)."""
-    return sorted(n for n in names if CARGO_CONTROLLED_ENV.search(n.upper()) and n.upper() not in CARGO_ALLOWED_ENV)
+    return rust_env.rust_overrides(names)
+
+
 GO_DURATION = re.compile(r'(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)')
 GO_DURATION_UNITS = {'ns': 1e-9, 'us': 1e-6, 'µs': 1e-6, 'ms': 1e-3, 's': 1, 'm': 60, 'h': 3600}
 SKIP_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$')
@@ -726,14 +726,19 @@ def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=
 
 
 def cargo_configs(root, cwd):
-    """Cargo configuration files inside the repository that cargo would read from cwd."""
-    found, directory, top = [], Path(os.path.abspath(cwd)), Path(os.path.abspath(root))
+    """Cargo configuration files cargo would read from cwd: every ancestor up to the filesystem root, so the runner
+    home above the checkout counts as much as the repository."""
+    found, directory = [], Path(os.path.abspath(cwd))
     while True:
         for name in ('config', 'config.toml'):
             path = directory / '.cargo' / name
             if os.path.lexists(path): found.append(path)
-        if directory == top or directory.parent == directory: return found
+        if directory.parent == directory: return found
         directory = directory.parent
+
+
+def same_path(left, right):
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
 
 
 def cargo_guard(target, env, root):
@@ -749,9 +754,24 @@ def cargo_guard(target, env, root):
     if configs: raise EvidenceError('Cargo configuration could replace the test runner, linker or flags: ' + ', '.join(map(str, configs)))
     overrides = cargo_environment_overrides(env)
     if overrides: raise EvidenceError('unreviewed Cargo or rustc variables in the environment: ' + ', '.join(overrides))
+    admitted = env.get('CI_ADMITTED_ROOT')
+    if admitted:
+        # After the bootstrap, Cargo and rustup may use only its fresh homes, and rustup may install nothing.
+        for key, name in (('CARGO_HOME', 'cargo-home'), ('RUSTUP_HOME', 'rustup-home')):
+            if not env.get(key) or not same_path(env[key], os.path.join(admitted, name)):
+                raise EvidenceError(f'{key} must be the admitted home {os.path.join(admitted, name)}, not {env.get(key)!r}')
+        if env.get('RUSTUP_AUTO_INSTALL') != '0':
+            raise EvidenceError('RUSTUP_AUTO_INSTALL must be 0 under the admitted toolchain, not %r' % env.get('RUSTUP_AUTO_INSTALL'))
+
+
+def child_environment(target, env):
+    """Go children ignore the per-user configuration file, so `go env -w` cannot supply CC, flags or a toolchain."""
+    return {**env, 'GOENV': 'off'} if target['mode'].startswith('go') else env
 
 
 def preconditions(target, env, root=ROOT):
+    refused = rust_env.c_toolchain_names(env)
+    if refused: raise EvidenceError('C toolchain variables in the environment could replace the compiler, archiver or flags: ' + ', '.join(refused))
     cargo_guard(target, env, root)
     if target['mode'] == 'go-interop':
         path = env.get('RICEVANTA_BATCH_VECTOR', '')
@@ -764,6 +784,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     if target_id not in targets: raise EvidenceError('unknown selected target: ' + target_id)
     target = targets[target_id]
     preconditions(target, env, root)
+    env = child_environment(target, env)
     evidence_dir = Path(evidence_root) / evidence_name(target_id)
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)

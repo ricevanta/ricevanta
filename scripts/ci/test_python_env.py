@@ -514,7 +514,8 @@ class StartupAndShadowTests(unittest.TestCase):
             tree(Path(tmp))
             self.assertEqual(python_env.shadow_errors(Path(tmp)), [])
         cases = {'jsonschema/__init__.py': 'jsonschema: shadows the validator closure module jsonschema',
-                 'rpds/README': 'rpds: shadows the validator closure module rpds',
+                 'rpds/__init__.cpython-314-x86_64-linux-gnu.so': 'rpds: shadows the validator closure module rpds',
+                 'six/__init__.pyc': 'six: shadows the validator closure module six',
                  'yaml.py': 'yaml.py: shadows the validator closure module yaml',
                  'six.cpython-314.pyc': 'six.cpython-314.pyc: shadows the validator closure module six',
                  'schemas/policy/referencing/__init__.py': 'schemas/policy/referencing: shadows the validator closure module referencing',
@@ -528,6 +529,39 @@ class StartupAndShadowTests(unittest.TestCase):
                 write_lf(root / relative, '')
                 self.assertEqual(python_env.shadow_errors(root), [message])
                 self.assertIn(message, python_env.lock_errors(root))
+        # M-04: a namespace directory (no importable __init__) or a dotted name cannot shadow a regular package.
+        for relative in ('yaml/README', 'yaml/helper.py', 'rpds/notes.txt', 'yaml.d/__init__.py', 'jsonschema.old/__init__.py',
+                         'schemas/policy/yaml/data.json', 'schemas/policy/six.d/x.py'):
+            with self.subTest(harmless=relative), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                tree(root)
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                write_lf(root / relative, '')
+                self.assertEqual(python_env.shadow_errors(root), [], relative)
+
+    def test_pyvenv_cfg_must_isolate_the_venv_from_the_base_site_packages(self):
+        """M-02: under -S the checker cannot see the venv's site directories, so it reads pyvenv.cfg itself."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base, prefix = Path(tmp) / 'base', Path(tmp) / 'venv'
+            (base / 'bin').mkdir(parents=True); prefix.mkdir()
+            def cfg(text):
+                write_lf(prefix / 'pyvenv.cfg', text)
+                return python_env.pyvenv_errors(prefix, base, windows=False)
+            self.assertEqual(cfg(f'home = {base / "bin"}\ninclude-system-site-packages = false\nversion = 3.14.8\n'), [])
+            self.assertEqual(cfg(f'home={base / "bin"}\nInclude-System-Site-Packages=False\n'), [])
+            for label, text, reason in (
+                    ('system site packages', f'home = {base / "bin"}\ninclude-system-site-packages = true\n', 'include-system-site-packages'),
+                    ('missing isolation key', f'home = {base / "bin"}\n', 'include-system-site-packages'),
+                    ('other base', f'home = {Path(tmp) / "other/bin"}\ninclude-system-site-packages = false\n', 'home'),
+                    ('missing home', 'include-system-site-packages = false\n', 'home')):
+                with self.subTest(case=label):
+                    errors = cfg(text)
+                    self.assertTrue(errors and reason in errors[0], errors)
+            (prefix / 'pyvenv.cfg').unlink()
+            self.assertTrue(python_env.pyvenv_errors(prefix, base, windows=False))
+            # On Windows the base interpreter sits in the base prefix itself.
+            write_lf(prefix / 'pyvenv.cfg', f'home = {base}\ninclude-system-site-packages = false\n')
+            self.assertEqual(python_env.pyvenv_errors(prefix, base, windows=True), [])
 
     def test_closure_module_list_follows_the_installed_names(self):
         with tempfile.TemporaryDirectory() as tmp:

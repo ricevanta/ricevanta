@@ -807,6 +807,59 @@ class RealToolTests(unittest.TestCase):
         source.write_text(source.read_text().replace('cases = 20_000usize', 'cases = 19_999usize'))
         with self.assertRaises(EvidenceError): run_selected.run('tiny-rust', self.root / 'evidence-reduced', root=self.root, env=self.env)
 
+    def test_go_children_ignore_the_per_user_go_env_file(self):
+        """A `go env -w` setting (here an invalid GOEXPERIMENT in the GOENV file) must not reach any Go child."""
+        self.assertIsNotNone(shutil.which('go'), 'go is required; missing tools fail instead of skipping')
+        config = self.root / 'go-user-env'
+        config.write_text('GOEXPERIMENT=nosuchexperiment\nCC=/nonexistent/cc\n')
+        probe = subprocess.run(['go', 'env', 'GOEXPERIMENT'], env={**self.env, 'GOENV': str(config)}, capture_output=True, text=True)
+        self.assertNotEqual(probe.returncode, 0, 'positive control: the file really breaks go when read')
+        self.env['GOENV'] = str(config)
+        self.assertEqual(self.run_id('tiny-suite')['summary']['tests'], 6)
+
+    def test_c_toolchain_variables_are_refused_in_every_mode(self):
+        for target_id in ('tiny-suite', 'tiny-fuzz', 'tiny-rust'):
+            for name in ('CC', 'CFLAGS_x86_64_unknown_linux_gnu', 'HOST_CXX', 'TARGET_AR', 'CGO_LDFLAGS', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET',
+                         'CROSS_COMPILE', 'VCINSTALLDIR', 'cc'):
+                with self.subTest(target=target_id, name=name):
+                    evidence = self.root / f'evidence-c-{target_id}-{name}'
+                    with self.assertRaises(EvidenceError) as caught:
+                        run_selected.run(target_id, evidence, root=self.root, env={**self.env, name: '/tmp/fake-cc'})
+                    self.assertIn(name, str(caught.exception))
+                    self.assertFalse(evidence.exists(), 'refused before any command runs')
+        target = run_selected.inventory(self.root)['tiny-rust']
+        run_selected.preconditions(target, {**self.env, 'CC_ENABLE_DEBUG_OUTPUT': '1'}, self.root)
+
+    def test_admitted_homes_are_required_when_bootstrapped(self):
+        admitted = self.root / 'admitted'
+        homes = {'CI_ADMITTED_ROOT': str(admitted), 'CARGO_HOME': str(admitted / 'cargo-home'),
+                 'RUSTUP_HOME': str(admitted / 'rustup-home'), 'RUSTUP_AUTO_INSTALL': '0'}
+        for home in ('cargo-home', 'rustup-home'): (admitted / home).mkdir(parents=True)
+        target = run_selected.inventory(self.root)['tiny-rust']
+        run_selected.preconditions(target, {**self.env, **homes}, self.root)
+        for label, change in (('runner cargo home', {'CARGO_HOME': str(self.root / 'runner-cargo')}),
+                              ('runner rustup home', {'RUSTUP_HOME': str(self.root / 'runner-rustup')}),
+                              ('auto install', {'RUSTUP_AUTO_INSTALL': '1'}), ('auto install unset', {'RUSTUP_AUTO_INSTALL': None})):
+            with self.subTest(case=label):
+                env = {**self.env, **homes, **change}
+                env = {k: v for k, v in env.items() if v is not None}
+                with self.assertRaises(EvidenceError) as caught:
+                    run_selected.preconditions(target, env, self.root)
+                self.assertIn('admitted', str(caught.exception))
+        # Without the bootstrap (a developer shell), the homes are not pinned.
+        run_selected.preconditions(target, {**self.env, 'CARGO_HOME': str(self.root / 'runner-cargo')}, self.root)
+
+    def test_cargo_configuration_above_the_repository_is_refused(self):
+        """Cargo reads every ancestor up to the filesystem root, including the runner home above the checkout."""
+        outer = self.root / 'home'
+        repository = outer / 'work' / 'repo'
+        shutil.copytree(self.root, repository, ignore=shutil.ignore_patterns('home'))
+        (outer / '.cargo').mkdir()
+        (outer / '.cargo' / 'config.toml').write_text("[target.'cfg(all())']\nrunner = '/bin/true'\n")
+        with self.assertRaises(EvidenceError) as caught:
+            run_selected.run('tiny-rust', self.root / 'evidence-ancestor', root=repository, env=self.env)
+        self.assertIn(str(outer / '.cargo' / 'config.toml'), str(caught.exception))
+
     def test_real_cargo_runner_configuration_is_refused(self):
         """Review probe: a repository .cargo/config.toml runner forges the selected property run."""
         self.assertIsNotNone(shutil.which('cargo'), 'cargo is required; missing tools fail instead of skipping')
