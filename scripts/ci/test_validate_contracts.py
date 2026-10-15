@@ -84,3 +84,29 @@ class BuildContractTests(unittest.TestCase):
         with patch.object(checker, 'load', side_effect=lambda p: data if p == path else original_load(p)):
             with self.assertRaises(ValueError), redirect_stdout(io.StringIO()):
                 checker.main()
+
+
+ADMISSION_PAIRS = (
+    ("schemas/extension/v1alpha1/extension-resource.schema.json",
+     "schemas/extension/v1alpha1/extension-resource/schema-cases.json"),
+    ("schemas/extension/v1alpha1/capability-grant.schema.json",
+     "schemas/extension/v1alpha1/capability-grant/schema-cases.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json",
+     "schemas/extension/v1alpha1/admission-vectors.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json",
+     "schemas/extension/v1alpha1/admission-vectors/schema-cases.json"),
+)
+
+
+class AdmissionContractTests(unittest.TestCase):
+    def test_admission_pairs_registered(self):
+        admission = tuple(pair for pair in checker.CONTRACTS if any(
+            pair[0].endswith(name) for name in (
+                "/extension-resource.schema.json",
+                "/capability-grant.schema.json",
+                "/admission-vectors.schema.json",
+            )))
+        self.assertEqual(admission, ADMISSION_PAIRS)
+        with redirect_stdout(io.StringIO()) as output:
+            checker.main()
+        self.assertIn("17 schemas, 24 pairs, 311 instances", output.getvalue())

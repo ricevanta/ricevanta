@@ -1,0 +1,1007 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/extension/v1alpha1/capability-grant.schema.json",
+  "title": "Ricevanta stored extension component grant",
+  "description": "One committed component grant: immutable package identity, recovery epoch, never-reused grant generation, the approval that authorized it and the exact granted values. docs/specs/extension-admission-contracts.md owns the semantic rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "extension_id",
+    "version",
+    "package_sha256",
+    "recovery_epoch",
+    "grant_generation",
+    "approval",
+    "grant"
+  ],
+  "properties": {
+    "extension_id": {
+      "$ref": "#/$defs/id"
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "package_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "recovery_epoch": {
+      "$ref": "#/$defs/uint64"
+    },
+    "grant_generation": {
+      "$ref": "#/$defs/uint64"
+    },
+    "approval": {
+      "$ref": "#/$defs/approval"
+    },
+    "grant": {
+      "$ref": "#/$defs/grant"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){1,15}$(?![\\s\\S])"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 128,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*))*)?$(?![\\s\\S])"
+    },
+    "digest": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "uint64": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]|1844674407370955161[0-4]|18446744073709551615)$(?![\\s\\S])"
+    },
+    "uuid": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\\s\\S])"
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_groups",
+        "all_devices",
+        "console",
+        "jobs"
+      ],
+      "properties": {
+        "device_groups": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        },
+        "all_devices": {
+          "type": "boolean"
+        },
+        "console": {
+          "type": "boolean"
+        },
+        "jobs": {
+          "type": "boolean"
+        }
+      }
+    },
+    "grant": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "content"
+            },
+            "interface": {
+              "const": "ext.ricevanta.io/content/v1"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "browser-adapter"
+            },
+            "interface": {
+              "const": "ext.ricevanta.io/browser-adapter/v1"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "registration",
+                "os"
+              ],
+              "properties": {
+                "registration": {
+                  "$ref": "#/$defs/id"
+                },
+                "os": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [],
+                  "properties": {
+                    "macos": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "policy_names",
+                        "native_host"
+                      ],
+                      "properties": {
+                        "policy_names": {
+                          "type": "array",
+                          "minItems": 0,
+                          "maxItems": 64,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                          }
+                        },
+                        "native_host": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "windows": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "policy_names",
+                        "native_host"
+                      ],
+                      "properties": {
+                        "policy_names": {
+                          "type": "array",
+                          "minItems": 0,
+                          "maxItems": 64,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                          }
+                        },
+                        "native_host": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "linux": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "policy_names",
+                        "native_host"
+                      ],
+                      "properties": {
+                        "policy_names": {
+                          "type": "array",
+                          "minItems": 0,
+                          "maxItems": 64,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$(?![\\s\\S])"
+                          }
+                        },
+                        "native_host": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  },
+                  "minProperties": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/classifier@1.0.0"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/parser@1.0.0"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms",
+                "mime_types"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                },
+                "mime_types": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 127,
+                    "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$(?![\\s\\S])"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/collector@1.0.0"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms",
+                "max_roots",
+                "max_path_depth",
+                "max_directory_entries",
+                "max_open_handles",
+                "max_list_requests",
+                "max_read_requests",
+                "max_bytes_per_file",
+                "max_input_bytes",
+                "max_rows",
+                "max_output_bytes",
+                "roots",
+                "disclosure_profile"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                },
+                "max_roots": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16
+                },
+                "max_path_depth": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 32
+                },
+                "max_directory_entries": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "max_open_handles": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                },
+                "max_list_requests": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1024
+                },
+                "max_read_requests": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "max_bytes_per_file": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16777216
+                },
+                "max_input_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 67108864
+                },
+                "max_rows": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "max_output_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16777216
+                },
+                "roots": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 16,
+                  "uniqueItems": true,
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "os",
+                          "path"
+                        ],
+                        "properties": {
+                          "os": {
+                            "enum": [
+                              "macos",
+                              "linux"
+                            ]
+                          },
+                          "path": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 256,
+                            "pattern": "^(?:/(?:[A-Za-z0-9_-]|\\.[A-Za-z0-9_-]|\\.\\.[A-Za-z0-9._-])(?:[A-Za-z0-9._ -]*[A-Za-z0-9._-])?)+$(?![\\s\\S])"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "os",
+                          "path"
+                        ],
+                        "properties": {
+                          "os": {
+                            "const": "windows"
+                          },
+                          "path": {
+                            "type": "string",
+                            "minLength": 4,
+                            "maxLength": 256,
+                            "pattern": "^[A-Z]:(?:\\\\(?:(?:[A-Za-z0-9_-]|\\.[A-Za-z0-9_-])(?:[A-Za-z0-9._ -]*[A-Za-z0-9_-])?|\\.\\.(?:[A-Za-z0-9_-]|[A-Za-z0-9._-][A-Za-z0-9._ -]*[A-Za-z0-9_-])))+$(?![\\s\\S])"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "disclosure_profile": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-z0-9][a-z0-9.-]{0,127}$(?![\\s\\S])"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "agent-module"
+            },
+            "interface": {
+              "const": "ricevanta:agent/responder@1.0.0"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "memory_pages",
+                "fuel_per_call",
+                "deadline_ms",
+                "actions",
+                "max_entities",
+                "max_parameters_bytes",
+                "max_plan_steps",
+                "max_plan_bytes"
+              ],
+              "properties": {
+                "memory_pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "fuel_per_call": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "deadline_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000
+                },
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 9,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "edr.kill_process",
+                      "edr.quarantine_file",
+                      "edr.restore_file",
+                      "edr.isolate_host",
+                      "edr.unisolate_host",
+                      "edr.kill_and_ban",
+                      "edr.unban",
+                      "edr.collect",
+                      "edr.scan"
+                    ]
+                  }
+                },
+                "max_entities": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "max_parameters_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65536
+                },
+                "max_plan_steps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "max_plan_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1048576
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "console-module"
+            },
+            "interface": {
+              "const": "ext.ricevanta.io/console-module/v1"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "slots"
+              ],
+              "properties": {
+                "slots": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [],
+                  "properties": {
+                    "navigation": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 23,
+                      "uniqueItems": true,
+                      "items": {
+                        "enum": [
+                          "listDevices",
+                          "getDevice",
+                          "getDeviceInventory",
+                          "listDeviceSoftware",
+                          "getDeviceCapabilities",
+                          "getDevicePolicyState",
+                          "getDeviceFootprint",
+                          "listComplianceResults",
+                          "listAlerts",
+                          "getAlert",
+                          "listInvestigations",
+                          "listResponseActions",
+                          "listDlpFindings",
+                          "getDlpFinding",
+                          "listClassifications",
+                          "listExceptions",
+                          "queryLineage",
+                          "getLineageEdge",
+                          "updateAlert",
+                          "createInvestigation",
+                          "updateInvestigation",
+                          "updateDlpFinding",
+                          "createResponseAction"
+                        ]
+                      }
+                    },
+                    "device-tab": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 23,
+                      "uniqueItems": true,
+                      "items": {
+                        "enum": [
+                          "listDevices",
+                          "getDevice",
+                          "getDeviceInventory",
+                          "listDeviceSoftware",
+                          "getDeviceCapabilities",
+                          "getDevicePolicyState",
+                          "getDeviceFootprint",
+                          "listComplianceResults",
+                          "listAlerts",
+                          "getAlert",
+                          "listInvestigations",
+                          "listResponseActions",
+                          "listDlpFindings",
+                          "getDlpFinding",
+                          "listClassifications",
+                          "listExceptions",
+                          "queryLineage",
+                          "getLineageEdge",
+                          "updateAlert",
+                          "createInvestigation",
+                          "updateInvestigation",
+                          "updateDlpFinding",
+                          "createResponseAction"
+                        ]
+                      }
+                    },
+                    "alert-panel": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 23,
+                      "uniqueItems": true,
+                      "items": {
+                        "enum": [
+                          "listDevices",
+                          "getDevice",
+                          "getDeviceInventory",
+                          "listDeviceSoftware",
+                          "getDeviceCapabilities",
+                          "getDevicePolicyState",
+                          "getDeviceFootprint",
+                          "listComplianceResults",
+                          "listAlerts",
+                          "getAlert",
+                          "listInvestigations",
+                          "listResponseActions",
+                          "listDlpFindings",
+                          "getDlpFinding",
+                          "listClassifications",
+                          "listExceptions",
+                          "queryLineage",
+                          "getLineageEdge",
+                          "updateAlert",
+                          "createInvestigation",
+                          "updateInvestigation",
+                          "updateDlpFinding",
+                          "createResponseAction"
+                        ]
+                      }
+                    },
+                    "finding-panel": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 23,
+                      "uniqueItems": true,
+                      "items": {
+                        "enum": [
+                          "listDevices",
+                          "getDevice",
+                          "getDeviceInventory",
+                          "listDeviceSoftware",
+                          "getDeviceCapabilities",
+                          "getDevicePolicyState",
+                          "getDeviceFootprint",
+                          "listComplianceResults",
+                          "listAlerts",
+                          "getAlert",
+                          "listInvestigations",
+                          "listResponseActions",
+                          "listDlpFindings",
+                          "getDlpFinding",
+                          "listClassifications",
+                          "listExceptions",
+                          "queryLineage",
+                          "getLineageEdge",
+                          "updateAlert",
+                          "createInvestigation",
+                          "updateInvestigation",
+                          "updateDlpFinding",
+                          "createResponseAction"
+                        ]
+                      }
+                    },
+                    "dashboard-panel": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 23,
+                      "uniqueItems": true,
+                      "items": {
+                        "enum": [
+                          "listDevices",
+                          "getDevice",
+                          "getDeviceInventory",
+                          "listDeviceSoftware",
+                          "getDeviceCapabilities",
+                          "getDevicePolicyState",
+                          "getDeviceFootprint",
+                          "listComplianceResults",
+                          "listAlerts",
+                          "getAlert",
+                          "listInvestigations",
+                          "listResponseActions",
+                          "listDlpFindings",
+                          "getDlpFinding",
+                          "listClassifications",
+                          "listExceptions",
+                          "queryLineage",
+                          "getLineageEdge",
+                          "updateAlert",
+                          "createInvestigation",
+                          "updateInvestigation",
+                          "updateDlpFinding",
+                          "createResponseAction"
+                        ]
+                      }
+                    },
+                    "settings": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 23,
+                      "uniqueItems": true,
+                      "items": {
+                        "enum": [
+                          "listDevices",
+                          "getDevice",
+                          "getDeviceInventory",
+                          "listDeviceSoftware",
+                          "getDeviceCapabilities",
+                          "getDevicePolicyState",
+                          "getDeviceFootprint",
+                          "listComplianceResults",
+                          "listAlerts",
+                          "getAlert",
+                          "listInvestigations",
+                          "listResponseActions",
+                          "listDlpFindings",
+                          "getDlpFinding",
+                          "listClassifications",
+                          "listExceptions",
+                          "queryLineage",
+                          "getLineageEdge",
+                          "updateAlert",
+                          "createInvestigation",
+                          "updateInvestigation",
+                          "updateDlpFinding",
+                          "createResponseAction"
+                        ]
+                      }
+                    }
+                  },
+                  "minProperties": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "kind",
+            "interface",
+            "values"
+          ],
+          "properties": {
+            "component": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "service-connector"
+            },
+            "interface": {
+              "enum": [
+                "ext.ricevanta.io/export-destination/v1",
+                "ext.ricevanta.io/ca-connector/v1",
+                "ext.ricevanta.io/notifier/v1",
+                "ext.ricevanta.io/enricher/v1"
+              ]
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "outbound"
+              ],
+              "properties": {
+                "outbound": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 64,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "host",
+                      "port",
+                      "transport"
+                    ],
+                    "properties": {
+                      "host": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 253,
+                        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$(?![\\s\\S])"
+                      },
+                      "port": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "transport": {
+                        "enum": [
+                          "tcp",
+                          "udp"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "approval": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "request_digest",
+            "approval_uid",
+            "approver",
+            "recovery_epoch"
+          ],
+          "properties": {
+            "kind": {
+              "const": "operator"
+            },
+            "request_digest": {
+              "$ref": "#/$defs/fingerprint"
+            },
+            "approval_uid": {
+              "$ref": "#/$defs/uuid"
+            },
+            "approver": {
+              "$ref": "#/$defs/uuid"
+            },
+            "recovery_epoch": {
+              "$ref": "#/$defs/uint64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "request_digest",
+            "approval_uid",
+            "principal",
+            "recovery_epoch"
+          ],
+          "properties": {
+            "kind": {
+              "const": "single-administrator"
+            },
+            "request_digest": {
+              "$ref": "#/$defs/fingerprint"
+            },
+            "approval_uid": {
+              "$ref": "#/$defs/uuid"
+            },
+            "principal": {
+              "$ref": "#/$defs/uuid"
+            },
+            "recovery_epoch": {
+              "$ref": "#/$defs/uint64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "release_version"
+          ],
+          "properties": {
+            "kind": {
+              "const": "release-fixed"
+            },
+            "release_version": {
+              "$ref": "#/$defs/version"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
