@@ -43,6 +43,10 @@ CONTRACTS = (
     ("schemas/extension/v1alpha1/fixtures.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
     ("schemas/extension/v1alpha1/loader-vectors.schema.json", "schemas/extension/v1alpha1/loader-vectors.json"),
     ("schemas/extension/v1alpha1/package-loader-vectors.schema.json", "schemas/extension/v1alpha1/package-loader-vectors.json"),
+    ("schemas/extension/v1alpha1/extension-resource.schema.json", "schemas/extension/v1alpha1/extension-resource/schema-cases.json"),
+    ("schemas/extension/v1alpha1/capability-grant.schema.json", "schemas/extension/v1alpha1/capability-grant/schema-cases.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json", "schemas/extension/v1alpha1/admission-vectors.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json", "schemas/extension/v1alpha1/admission-vectors/schema-cases.json"),
 )
 
 
