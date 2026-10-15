@@ -100,7 +100,10 @@ UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b
                                 r'\bwinget\b|\bcurl\b|\bwget\b|Invoke-WebRequest|Invoke-RestMethod|\biwr\b|\birm\b|Start-BitsTransfer|'
                                 r'\bbitsadmin\b|\bcertutil\b|\bnpm\s+(?:i|install|exec|x)\b|\bnpx\b|\bpnpx\b|\bpnpm\s+(?:dlx|create|env|self-update)\b|'
                                 r'\bpnpm\s+(?:add|install|i)\s+(?:-g|--global)\b|--pm-on-fail|\bgh\s+(?:release|run|attestation)\s+download\b|'
-                                r'\bgh\s+api\b|\bgit\s+clone\b|\burllib\b|\burlretrieve\b|\burlopen\b|\bhttp\.client\b|\brequests\.|'
+                                r'\bgh\s+api\b|\bgit\s+clone\b|\burllib\.request\b|\burllib3\b|\burlretrieve\b|\burlopen\b|\bhttp\.client\b|\brequests\.|'
+                                r'\bWebClient\b|\bDownload(?:File|String|Data)(?:Async)?\b|\bHttpClient\b|\bInvoke-WebRequest\b|'
+                                r'\brequire\(\s*[\'"](?:node:)?https?[\'"]\s*\)|\bimport\(\s*[\'"](?:node:)?https?[\'"]\s*\)|'
+                                r'\bfrom\s+[\'"](?:node:)?https?[\'"]|\bhttps?\.(?:get|request)\(|'
                                 r'\bfetch\(|\bgo\s+(?:install|get)\b|\bcargo\s+(?:install|binstall)\b|\bpip\s+download\b')
 TOOL_CONSUMERS = (('python', re.compile(r'\bpython3?\b')), ('go', re.compile(r'\bgo(?:fmt)?\s')),
                   ('rust', re.compile(r'\bcargo\b|\brustc\b|\brustfmt\b')), ('node', re.compile(r'\bnode\b|\bpnpm\b')),
@@ -247,7 +250,8 @@ def bootstrap_errors(data, name):
         for step in steps:
             run = step.get('run', '')
             if 'GITHUB_PATH' in run and run != python_env.VENV_COMMAND: fail('PATH changes outside the admitted bootstrap forbidden')
-            if 'GITHUB_ENV' in run and run != APPLY_COMMAND and ADMITTED_ENV_WRITE.search(run):
+            # Quotes and escapes cannot split a variable name past the check: "GO""ROOT=" is GOROOT=.
+            if 'GITHUB_ENV' in run and run != APPLY_COMMAND and ADMITTED_ENV_WRITE.search(re.sub(r'["\'\\`]', '', run)):
                 fail('admitted tool environment override forbidden')
             if 'tools.env' in run and run not in (BOOTSTRAP_COMMAND, APPLY_COMMAND): fail('the admitted environment file is written and applied only by its exact steps')
         bootstraps = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]

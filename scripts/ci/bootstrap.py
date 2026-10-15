@@ -28,6 +28,7 @@ import struct
 import subprocess
 import sys
 import tarfile
+import unicodedata
 import urllib.request
 import zipfile
 
@@ -162,12 +163,25 @@ class WindowsRegistry:
         return found
 
     def delete(self, registration):  # pragma: no cover - Windows only
+        try:
+            self._delete(registration)
+        except OSError as exc:
+            raise BootstrapError(f'could not remove the Python registration {registration[0]}\\{registration[1]}: {exc}') from exc
+
+    def _delete(self, registration):  # pragma: no cover - Windows only
         winreg = self._winreg()
         hive = {'HKCU': winreg.HKEY_CURRENT_USER, 'HKLM': winreg.HKEY_LOCAL_MACHINE, 'HKCR': winreg.HKEY_CLASSES_ROOT}[registration[0]]
         def remove(path):
             for child in self._children(hive, path): remove(f'{path}\\{child}')
             winreg.DeleteKeyEx(hive, path, winreg.KEY_WOW64_64KEY, 0)
         remove(registration[1])
+
+
+def require_ephemeral_host(host, entry, change):
+    """Replacing the runner's own Python is irreversible; allow it only on a fresh GitHub-hosted runner."""
+    if host.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
+        raise BootstrapError(f'{entry["id"]}: refusing to {change} outside a GitHub-hosted runner (RUNNER_ENVIRONMENT is '
+                             f'{host.environ.get("RUNNER_ENVIRONMENT")!r}); each hosted job gets a fresh machine, any other host keeps the damage')
 
 
 def python_registration_pattern(minor):
@@ -421,6 +435,11 @@ class Member:
         self.name, self.kind, self.size, self.mode, self.link, self.raw = name, kind, size, mode, link, raw
 
 
+def fold(name):
+    """How APFS, HFS+ and NTFS compare names: canonical decomposition, then case folding."""
+    return unicodedata.normalize('NFD', name).casefold()
+
+
 def normalize_name(raw, entry):
     if not isinstance(raw, str) or not raw or '\0' in raw or '\\' in raw: raise BootstrapError(f'{entry["id"]}: unsafe archive member name {raw!r}')
     if raw.startswith('/') or re.match(r'^[A-Za-z]:', raw): raise BootstrapError(f'{entry["id"]}: absolute archive member {raw!r}')
@@ -460,7 +479,7 @@ def inspect_archive(path, entry, host):
     seen, lowered, total = {}, set(), 0
     for member in members:
         member.name = normalize_name(member.name, entry)
-        folded = member.name.lower()
+        folded = fold(member.name)
         if folded in lowered and not (member.kind == 'dir' and seen.get(member.name) == 'dir'):
             raise BootstrapError(f'{entry["id"]}: case-insensitive name collision on {member.name!r}')
         lowered.add(folded); seen[member.name] = member.kind
@@ -474,12 +493,12 @@ def inspect_archive(path, entry, host):
             target = normalize_name(member.link, entry) if member.link and not member.link.startswith('/') else None
             if target is None or seen.get(target) != 'file': raise BootstrapError(f'{entry["id"]}: escaping link {member.name!r} -> {member.link!r}')
             member.link = target
-    # Names compare case-insensitively on every host: macOS and Windows file systems fold case.
-    links = {m.name.lower(): m.link for m in members if m.kind == 'symlink'}
+    # Names compare as macOS and Windows file systems compare them, on every host: normalization- and case-insensitively.
+    links = {fold(m.name): m.link for m in members if m.kind == 'symlink'}
     for member in members:
         parts = member.name.split('/')
         for depth in range(1, len(parts)):
-            if '/'.join(parts[:depth]).lower() in links:
+            if fold('/'.join(parts[:depth])) in links:
                 raise BootstrapError(f'{entry["id"]}: archive member {member.name!r} lies beneath the symbolic link {"/".join(parts[:depth])!r}')
     for member in members:
         if member.kind == 'symlink': resolve_virtual_link(member.name, links, entry)
@@ -490,16 +509,16 @@ def inspect_archive(path, entry, host):
 def resolve_virtual_link(name, links, entry):
     """Resolve a link through every other link in the archive, case-folded, and refuse any path above the archive root."""
     resolved, hops = [], 0
-    pending = list(PurePosixPath(name).parent.parts) + links[name.lower()].split('/')
+    pending = list(PurePosixPath(name).parent.parts) + links[fold(name)].split('/')
     while pending:
         part = pending.pop(0)
         if part in ('', '.'): continue
         if part == '..':
-            if not resolved: raise BootstrapError(f'{entry["id"]}: escaping link {name!r} -> {links[name.lower()]!r}')
+            if not resolved: raise BootstrapError(f'{entry["id"]}: escaping link {name!r} -> {links[fold(name)]!r}')
             resolved.pop()
             continue
         resolved.append(part)
-        target = links.get('/'.join(resolved).lower())
+        target = links.get(fold('/'.join(resolved)))
         if target is not None:
             hops += 1
             if hops > MAX_LINK_HOPS: raise BootstrapError(f'{entry["id"]}: link loop at {name!r}')
@@ -522,13 +541,33 @@ def links_inside(root, entry, what):
                 if not inside: raise BootstrapError(f'{entry["id"]}: link escapes the {what}: {candidate.relative_to(root)}')
 
 
-def elf_runpaths(path):
-    """(file offset, allocated length, value) of every DT_RUNPATH/DT_RPATH string in a little-endian ELF64 file, else []."""
+# Dynamic tags whose values are offsets into the dynamic string table.
+DYNAMIC_STRING_TAGS = {1, 14, 15, 29, 0x6ffffefa, 0x6ffffefb, 0x6ffffefc, 0x7ffffffd, 0x7fffffff}
+RUNPATH_TAGS = {15, 29}
+
+
+def elf_runpaths(path, entry=None):
+    """(file offset, allocated length, value) of every DT_RUNPATH/DT_RPATH string in a little-endian ELF64 file, else [].
+
+    Each runpath is returned only when no other reference into the dynamic string table (another dynamic tag, a
+    .dynsym name or a symbol-version name) points into its bytes: suffix sharing would make an in-place rewrite
+    corrupt that other string. Malformed headers are a typed refusal.
+    """
+    label = entry['id'] if entry else str(path)
     with open(path, 'rb') as stream:
         data = stream.read()
-    if data[:4] != b'\x7fELF' or data[4] != 2 or data[5] != 1: return []
-    phoff, = struct.unpack_from('<Q', data, 0x20)
-    phentsize, phnum = struct.unpack_from('<HH', data, 0x36)
+    if data[:4] != b'\x7fELF': return []
+    try:
+        if data[4] != 2 or data[5] != 1: raise ValueError('not a little-endian ELF64 file')
+        return _elf_runpaths(data, label)
+    except (struct.error, ValueError, IndexError) as exc:
+        if isinstance(exc, BootstrapError): raise
+        raise BootstrapError(f'{label}: malformed ELF file {Path(path).name}: {exc}') from exc
+
+
+def _elf_runpaths(data, label):
+    phoff, shoff = struct.unpack_from('<QQ', data, 0x20)
+    phentsize, phnum, shentsize, shnum = struct.unpack_from('<HHHH', data, 0x36)
     loads, dynamic = [], None
     for index in range(phnum):
         p_type, _, p_offset, p_vaddr, _, p_filesz, _, _ = struct.unpack_from('<IIQQQQQQ', data, phoff + index * phentsize)
@@ -542,13 +581,45 @@ def elf_runpaths(path):
         tags.append((tag, value))
     strtab = next((value for tag, value in tags if tag == 5), None)
     base = next((v_offset + strtab - vaddr for vaddr, v_offset, size in loads if strtab is not None and vaddr <= strtab < vaddr + size), None)
-    if base is None: return []
+    runpaths = [value for tag, value in tags if tag in RUNPATH_TAGS]
+    if not runpaths: return []
+    if base is None: raise ValueError('the dynamic string table lies outside every loadable segment')
+    # Every other reference into the dynamic string table.
+    references = {value for tag, value in tags if tag in DYNAMIC_STRING_TAGS - RUNPATH_TAGS}
+    if not shnum: raise ValueError('no section headers to account for symbol and version names')
+    for index in range(shnum):
+        _, sh_type, _, _, sh_offset, sh_size, _, sh_info, _, sh_entsize = struct.unpack_from('<IIQQQQIIQQ', data, shoff + index * shentsize)
+        if sh_type == 11:  # SHT_DYNSYM
+            if sh_entsize != 24: raise ValueError('unexpected .dynsym entry size')
+            references.update(struct.unpack_from('<I', data, sh_offset + i)[0] for i in range(0, sh_size, 24))
+        elif sh_type == 0x6ffffffe:  # SHT_GNU_verneed
+            cursor = sh_offset
+            for _ in range(sh_info):
+                _, count, file_name, aux, following = struct.unpack_from('<HHIII', data, cursor)
+                references.add(file_name)
+                item = cursor + aux
+                for _ in range(count):
+                    _, _, _, name, step = struct.unpack_from('<IHHII', data, item)
+                    references.add(name); item += step
+                if not following: break
+                cursor += following
+        elif sh_type == 0x6ffffffd:  # SHT_GNU_verdef
+            cursor = sh_offset
+            for _ in range(sh_info):
+                _, _, _, count, _, aux, following = struct.unpack_from('<HHHHIII', data, cursor)
+                item = cursor + aux
+                for _ in range(count):
+                    name, step = struct.unpack_from('<II', data, item)
+                    references.add(name); item += step
+                if not following: break
+                cursor += following
     found = []
-    for tag, value in tags:
-        if tag in (15, 29):
-            start = base + value
-            end = data.index(b'\0', start)
-            found.append((start, end - start, data[start:end].decode('utf-8', 'replace')))
+    for value in sorted(set(runpaths)):
+        start = base + value
+        end = data.index(b'\0', start)
+        shared = sorted(r for r in references if value <= r < value + (end - start))
+        if shared: raise ValueError(f'runpath string at {value} shares bytes with other dynamic strings at {shared}')
+        found.append((start, end - start, data[start:end].decode('utf-8', 'replace')))
     return found
 
 
@@ -559,7 +630,7 @@ def relocate_runpaths(root, old, new_from, entry):
         for name in files:
             path = Path(current) / name
             if path.is_symlink() or not path.is_file(): continue
-            for offset, length, value in elf_runpaths(path):
+            for offset, length, value in elf_runpaths(path, entry):
                 if value.startswith('$ORIGIN'): continue
                 if value != old: raise BootstrapError(f'{entry["id"]}: {path.relative_to(root)} has an unadmitted runpath {value!r}')
                 relative = os.path.relpath(new_from, path.parent).replace(os.sep, '/')
@@ -691,9 +762,14 @@ def install_python(ctx, entry, members, staging):
             raise BootstrapError(f'{entry["id"]}: a per-user Python {minor} is already registered; the installer would modify it instead of installing freshly')
         # The runner image installs this same bundle per machine; Burn would then repair that copy instead of installing.
         # Purge the runner's Python <minor> product registrations exactly as the payload's own setup.ps1 does.
-        for registration in registry.registrations(minor):
+        registrations = registry.registrations(minor)
+        if registrations: require_ephemeral_host(ctx.host, entry, f'remove {len(registrations)} Python {minor} registrations')
+        for registration in registrations:
             log('replaced runner-provided', 'Python registration', *registration)
-            registry.delete(registration)
+            try:
+                registry.delete(registration)
+            except OSError as exc:
+                raise BootstrapError(f'{entry["id"]}: could not remove the Python registration {registration[0]}\\{registration[1]}: {exc}') from exc
         if registry.registrations(minor): raise BootstrapError(f'{entry["id"]}: could not remove the runner Python {minor} registrations')
         installer = staging / f'python-{entry["version"]}-amd64.exe'
         ctx.run(entry, [installer, WINDOWS_INSTALLER_ARGS[0], WINDOWS_INSTALLER_ARGS[1], f'TargetDir={target}', *WINDOWS_INSTALLER_ARGS[2:]], timeout=1800)
@@ -706,6 +782,7 @@ def install_python(ctx, entry, members, staging):
     if ctx.host.is_macos:
         framework = ctx.host.framework_root / 'Versions' / minor
         if framework.exists() or framework.is_symlink():
+            require_ephemeral_host(ctx.host, entry, f'remove the runner Python framework {framework}')
             log('replaced runner-provided', 'Python framework at', framework)
             ctx.run(entry, ['sudo', '-n', 'rm', '-rf', framework])
             if framework.exists(): raise BootstrapError(f'{entry["id"]}: could not empty {framework}')
@@ -973,21 +1050,26 @@ def prepare_destination(dest):
     return path
 
 
+def strip_git_bash_prefix(entries, environ):
+    """Drop the directories Git for Windows' bash.exe prepends to PATH in every bash step (mingw64, usr, the user's bin)."""
+    entries = list(entries)
+    if not environ.get('MSYSTEM'): return entries
+    home = environ.get('USERPROFILE') or environ.get('HOME') or ''
+    def wrapper(value):
+        folded = ntpath.normcase(ntpath.normpath(value))
+        return (folded.endswith(ntpath.normcase('\\mingw64\\bin')) or folded.endswith(ntpath.normcase('\\usr\\bin'))
+                or (home and folded == ntpath.normcase(ntpath.normpath(ntpath.join(home, 'bin')))))
+    while entries and wrapper(entries[0]): entries.pop(0)
+    return entries
+
+
 def inherited_path(host):
     """The runner PATH to keep behind the admitted directories, without Git Bash's own prefix on Windows.
 
-    Git for Windows' bash.exe prepends its mingw64 and usr directories and the user's bin directory; exporting them
-    through GITHUB_ENV would put Git coreutils ahead of System32 in every later pwsh or cmd step.
+    Exporting that prefix through GITHUB_ENV would put Git coreutils ahead of System32 in every later pwsh or cmd step.
     """
     entries = [e for e in host.environ.get('PATH', '').split(';' if host.is_windows else os.pathsep) if e]
-    if host.is_windows and host.environ.get('MSYSTEM'):
-        home = host.environ.get('USERPROFILE') or host.environ.get('HOME') or ''
-        def wrapper(value):
-            folded = ntpath.normcase(ntpath.normpath(value))
-            return (folded.endswith(ntpath.normcase('\\mingw64\\bin')) or folded.endswith(ntpath.normcase('\\usr\\bin'))
-                    or (home and folded == ntpath.normcase(ntpath.normpath(ntpath.join(home, 'bin')))))
-        while entries and wrapper(entries[0]): entries.pop(0)
-    return entries
+    return strip_git_bash_prefix(entries, host.environ) if host.is_windows else entries
 
 
 def empty_destination(dest):

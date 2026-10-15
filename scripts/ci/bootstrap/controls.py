@@ -160,6 +160,21 @@ def patched_environ(values):
             else: os.environ[key] = value
 
 
+def step_path(windows):
+    """This step's PATH entries, without the directories Git for Windows' bash.exe prepends in every bash step."""
+    entries = [e for e in os.environ.get('PATH', '').split(';' if windows else os.pathsep) if e]
+    return bootstrap.strip_git_bash_prefix(entries, os.environ) if windows else entries
+
+
+def which(name, windows):
+    """Resolve an executable the way the evidence platform's later steps do, searching the step PATH in order."""
+    search = os.pathsep.join(step_path(windows))
+    for candidate in ([name + '.exe', name] if windows else [name]):
+        found = shutil.which(candidate, path=search)
+        if found: return found
+    return None
+
+
 def control_evidence(args):
     lock = bootstrap.load_lock(args.lock)
     entries = bootstrap.select(lock, args.platform, args.tools)
@@ -169,6 +184,7 @@ def control_evidence(args):
     except (OSError, ValueError) as exc:
         report['failures'].append(f'evidence unreadable: {exc}')
         return report
+    windows = args.platform.startswith('windows')
     recorded = {row.get('id'): row for row in evidence.get('entries', []) if isinstance(row, dict)}
     if evidence.get('platform') != args.platform: report['failures'].append(f'evidence platform {evidence.get("platform")!r} is not {args.platform}')
     if sorted(recorded) != sorted(e['id'] for e in entries): report['failures'].append(f'evidence lists {sorted(recorded)}, expected {sorted(e["id"] for e in entries)}')
@@ -184,7 +200,7 @@ def control_evidence(args):
                 report['failures'].append(f'{entry["id"]}: PLAYWRIGHT_BROWSERS_PATH does not hold the admitted {browser.name}')
             report['controls'].append({'control': 'browser', 'entry': entry['id'], 'directory': str(browser)})
         for name in EXECUTABLES.get(entry['tool'], ()):
-            found = shutil.which(name)
+            found = which(name, windows)
             if not found or not Path(found).resolve().is_relative_to(root.resolve()) and not Path(found).is_relative_to(root):
                 report['failures'].append(f'{entry["id"]}: {name} on PATH resolves to {found!r}, not under the admitted root {root}')
             report['controls'].append({'control': 'path', 'entry': entry['id'], 'executable': name, 'resolved': found})
@@ -192,9 +208,8 @@ def control_evidence(args):
     for key, value in sorted(admitted.items()):
         actual = os.environ.get(key)
         if key == 'PATH':
-            separator = ';' if evidence.get('platform', '').startswith('windows') else os.pathsep
             prefix = [p for p in evidence.get('path', [])]
-            if (actual or '').split(separator)[:len(prefix)] != prefix:
+            if step_path(windows)[:len(prefix)] != prefix:
                 report['failures'].append('PATH does not begin with the admitted directories')
         elif actual != value:
             report['failures'].append(f'{key} is {actual!r} in this step, not the admitted {value!r}')
