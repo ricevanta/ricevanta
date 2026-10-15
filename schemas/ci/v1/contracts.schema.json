@@ -187,8 +187,7 @@
           "enum": [
             "linux-x64",
             "linux-arm64",
-            "linux-x64-ubuntu22.04",
-            "linux-arm64-ubuntu22.04",
+            "linux-x64-ubuntu26.04",
             "windows-x64",
             "macos-arm64"
           ]

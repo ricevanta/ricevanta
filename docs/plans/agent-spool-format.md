@@ -85,9 +85,9 @@ Shared schemas and design documents are read-only implementation inputs. Report 
 
 | Runner label | Host target | runner.arch |
 |---|---|---|
-| `macos-15` | `aarch64-apple-darwin` | `ARM64` |
+| `macos-26` | `aarch64-apple-darwin` | `ARM64` |
 | `windows-2025` | `x86_64-pc-windows-msvc` | `X64` |
-| `ubuntu-24.04` | `x86_64-unknown-linux-gnu` | `X64` |
+| `ubuntu-26.04` | `x86_64-unknown-linux-gnu` | `X64` |
 
 - [x] Use these full action pins, with readable version comments. Checkout sets `persist-credentials: false`. Python 3.14.8 and the Rust 1.99.0 rustc, rust-std, cargo, rustfmt and clippy components come from the digest-checked bootstrap in [CI hardening section 8](../specs/ci-hardening.md#8-one-validator-environment-and-admitted-tools-ci-04-to-ci-07), which pins the versions in `.github/python-version` and `agent/rust-toolchain.toml` through `scripts/ci/toolchains.lock.json`. No setup action, rustup download or install script runs.
 

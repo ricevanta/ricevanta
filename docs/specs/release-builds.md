@@ -53,14 +53,16 @@ Use standard GitHub-hosted runners. [GitHub's runner reference](https://docs.git
 
 | Job / target | Runner | Required output after runtime prerequisites |
 |---|---|---|
-| `agent-macos-arm64` | `macos-15` | `ricevanta-agent`, target `aarch64-apple-darwin` |
+| `agent-macos-arm64` | `macos-26` | `ricevanta-agent`, target `aarch64-apple-darwin` |
 | `agent-windows-x64` | `windows-2025` | `ricevanta-agent.exe`, target `x86_64-pc-windows-msvc` |
-| `agent-linux-x64` | `ubuntu-22.04` | `ricevanta-agent`, target `x86_64-unknown-linux-gnu` |
-| `server-linux-x64` | `ubuntu-22.04` | `ricevanta-server`, Linux amd64 container archive |
-| `server-linux-arm64` | `ubuntu-22.04-arm` | `ricevanta-server`, Linux arm64 container archive |
-| `console-build` | `ubuntu-22.04` | Production console assets, compressed sidecars and notices; no browser runs here |
+| `agent-linux-x64` | `ubuntu-24.04` | `ricevanta-agent`, target `x86_64-unknown-linux-gnu` |
+| `server-linux-x64` | `ubuntu-24.04` | `ricevanta-server`, Linux amd64 container archive |
+| `server-linux-arm64` | `ubuntu-24.04-arm` | `ricevanta-server`, Linux arm64 container archive |
+| `console-build` | `ubuntu-26.04` | Production console assets, compressed sidecars and notices; no browser runs here |
 
 The plan stages this full output contract: Task 3 validates the unpacked console tree; Task 4 builds and compares unpacked native binaries and validated console assets across these six jobs. Task 5 consumes the reviewed image/deployment contract and both clean build passes to produce and compare images, distributable archives and SBOMs, then verifies the complete artifact set. Task 4 has no image or archive prerequisite.
+
+The Linux agent and server jobs use `ubuntu-24.04` and `ubuntu-24.04-arm`, the oldest Ubuntu images GitHub keeps in service. GitHub [deprecates and retires `ubuntu-22.04`](https://github.com/actions/runner-images/issues/14254) and fails its jobs during announced brownouts, which a tag build cannot absorb. A binary linked on that image needs at least its glibc, [2.39](https://packages.ubuntu.com/noble/libc6), against [2.35 on Ubuntu 22.04](https://packages.ubuntu.com/jammy/libc6) and [2.43 on Ubuntu 26.04](https://packages.ubuntu.com/resolute/libc6), so development archives start on the most eligible distributions a hosted runner allows. No hosted image sets the floor for every eligible Linux release; the per-distribution build roots below do. `console-build` emits static assets that link no C library, so it uses the newest image, `ubuntu-26.04`, and its tree comparison with the CI console leaf on `ubuntu-24.04` crosses two images. [CI hardening section 8](ci-hardening.md#runner-images-and-lock-platforms) owns the CI labels.
 
 Each recipe records its minimum OS, deployment target, linked libraries and ABI requirements in evidence. A hosted Ubuntu build does not prove compatibility with every eligible Linux distribution, and a Windows Server runner does not qualify Windows 11. The native package slice must select compatible per-distribution build roots and run loader/install probes across the platform manifest; missing ABI coverage blocks that support claim.
 
@@ -72,7 +74,7 @@ Archive names use `ricevanta-<component>_<version>_<target>_unsigned-dev.tar.gz`
 
 ## 4. Reproducibility and toolchain admission
 
-Use exact existing language pins from the component manifests, reviewed full-SHA action references and digest-pinned container bases. The reviewed `scripts/ci/toolchains.lock.json` from [CI hardening section 8](ci-hardening.md#8-one-validator-environment-and-admitted-tools-ci-04-to-ci-07) records the HTTPS URL, exact version, platform, byte size and SHA-256 of every downloaded toolchain and build tool: Go, Rust distribution components, Python, Node, pnpm, Playwright browser builds, SBOM tooling and any native SDK additions. No build job installs an operating-system package on its runner. Lock platforms name runner identities: jobs on `ubuntu-22.04` and `ubuntu-22.04-arm` consume `linux-x64-ubuntu22.04` and `linux-arm64-ubuntu22.04` rows, because Python and browser builds differ per Ubuntu release, and the bootstrap refuses a row for another release. Verify bytes before extracting, installing or executing them. A setup action's commit pin does not authenticate its downloaded payload.
+Use exact existing language pins from the component manifests, reviewed full-SHA action references and digest-pinned container bases. The reviewed `scripts/ci/toolchains.lock.json` from [CI hardening section 8](ci-hardening.md#8-one-validator-environment-and-admitted-tools-ci-04-to-ci-07) records the HTTPS URL, exact version, platform, byte size and SHA-256 of every downloaded toolchain and build tool: Go, Rust distribution components, Python, Node, pnpm, Playwright browser builds, SBOM tooling and any native SDK additions. No build job installs an operating-system package on its runner. Lock platforms name runner identities: jobs on `ubuntu-24.04` and `ubuntu-24.04-arm` consume `linux-x64` and `linux-arm64` rows, `console-build` on `ubuntu-26.04` consumes `linux-x64-ubuntu26.04` rows, because Python and browser builds differ per Ubuntu release, and the bootstrap refuses a row for another release. Verify bytes before extracting, installing or executing them. A setup action's commit pin does not authenticate its downloaded payload.
 
 The initial shell, OS utilities and GitHub runner image form the bootstrap trust boundary. Record runner image version, OS, architecture, Xcode/SDK or MSVC/SDK versions and compiler/linker versions. Validate required native tool versions before building; additions fetched by the workflow require lock entries. GitHub labels are mutable images, not immutable toolchains. Reproduction means two clean builds with the same recorded toolchain/image identity; it is not a promise of byte equality across arbitrary future runner images.
 

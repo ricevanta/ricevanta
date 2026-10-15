@@ -4,7 +4,7 @@ Every PR and master push requires Gitleaks secret detection, Semgrep Code static
 
 ## 1. Boundary and admission
 
-Add two direct leaf jobs, `gitleaks` and `semgrep`, to `.github/workflows/ci.yml`. Both use `ubuntu-24.04`, `contents: read`, the admitted checkout action, `persist-credentials: false`, full Git history and the route's exact `testedSha`. Each runs on every accepted event, including documentation-only PRs. Keep all native component checks and the console OSV audit. Linux scanner execution does not establish endpoint platform support; [platform support](../platform-support.md) remains authoritative.
+Add two direct leaf jobs, `gitleaks` and `semgrep`, to `.github/workflows/ci.yml`. Both use `ubuntu-26.04` ([CI hardening section 8](ci-hardening.md#runner-images-and-lock-platforms)), `contents: read`, the admitted checkout action, `persist-credentials: false`, full Git history and the route's exact `testedSha`. Each runs on every accepted event, including documentation-only PRs. Keep all native component checks and the console OSV audit. Linux scanner execution does not establish endpoint platform support; [platform support](../platform-support.md) remains authoritative.
 
 Use the standalone [Gitleaks CLI v8.30.1](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1), without the licensed organization Action. Use [Semgrep 1.178.0](https://github.com/semgrep/semgrep/releases/tag/v1.178.0) in its official Linux AMD64 container. `scripts/ci/security-tools.toml` owns exact versions, Gitleaks HTTPS asset URL, byte size and SHA-256, and Semgrep native image manifest digest and image/config digest, and the bundled Pro engine path, size, SHA-256 and version-marker bytes. No placeholder digest is an admitted tool.
 
