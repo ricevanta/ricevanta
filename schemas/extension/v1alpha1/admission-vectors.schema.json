@@ -85,7 +85,8 @@
               "registrations",
               "disclosure_profiles",
               "device_groups",
-              "consumed_approvals"
+              "consumed_approvals",
+              "automatic_release_floor"
             ],
             "properties": {
               "recovery_epoch": {
@@ -351,7 +352,8 @@
                     "id",
                     "browser",
                     "registration_generation",
-                    "os"
+                    "os",
+                    "recovery_epoch"
                   ],
                   "properties": {
                     "id": {
@@ -468,6 +470,9 @@
                           ]
                         }
                       }
+                    },
+                    "recovery_epoch": {
+                      "$ref": "#/$defs/uint64"
                     }
                   }
                 }
@@ -501,6 +506,16 @@
                 "items": {
                   "$ref": "#/$defs/uuid"
                 }
+              },
+              "automatic_release_floor": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/version"
+                  }
+                ]
               }
             }
           },
@@ -753,7 +768,9 @@
                         "approval.epoch",
                         "approval.digest",
                         "approval.separation",
-                        "approval.consumed"
+                        "approval.consumed",
+                        "component.registration_epoch",
+                        "approval.release_rollback"
                       ]
                     },
                     "subject": {
@@ -781,7 +798,8 @@
                   "grants",
                   "targets",
                   "registration_bind",
-                  "approval_consume"
+                  "approval_consume",
+                  "release_floor_raise"
                 ],
                 "properties": {
                   "operation": {
@@ -849,6 +867,16 @@
                       },
                       {
                         "$ref": "#/$defs/uuid"
+                      }
+                    ]
+                  },
+                  "release_floor_raise": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "#/$defs/version"
                       }
                     ]
                   }
