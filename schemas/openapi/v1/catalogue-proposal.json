@@ -1,0 +1,54 @@
+{
+  "base_revision": 3,
+  "revision": 4,
+  "add_permissions": [
+    {
+      "name": "identity.providers.create",
+      "owner": "identity",
+      "scope": "organization",
+      "protection": "always",
+      "approval": "identity_authority",
+      "rule": "identity_authority",
+      "grant": "role",
+      "status": "active",
+      "introduced": 4,
+      "uses": ["createIdentityProvider"],
+      "source": "docs/specs/identity-login.md#5",
+      "note": "Creating a provider adds an authentication authority; fresh authentication and an unaffected direct authority approver are required."
+    },
+    {
+      "name": "identity.providers.delete",
+      "owner": "identity",
+      "scope": "organization",
+      "protection": "always",
+      "approval": "identity_authority",
+      "rule": "identity_authority",
+      "grant": "role",
+      "status": "active",
+      "introduced": 4,
+      "uses": ["deleteIdentityProvider"],
+      "source": "docs/specs/identity-login.md#5",
+      "note": "Deleting a provider removes an authentication authority and its links; fresh authentication and an unaffected direct authority approver are required."
+    }
+  ],
+  "add_uses": [
+    {"name": "authz.approvals.approve", "use": "approveApprovalRequest"},
+    {"name": "authz.approvals.read", "use": "listApprovalRequests#all"},
+    {"name": "authz.approvals.read", "use": "getApprovalRequest#any"},
+    {"name": "authz.approvals.reject", "use": "rejectApprovalRequest"},
+    {"name": "identity.authority.approve", "use": "approveIdentityAuthorityRequest"},
+    {"name": "identity.authority.approve", "use": "rejectIdentityAuthorityRequest"},
+    {"name": "identity.break_glass.create", "use": "createBreakGlassAccount"},
+    {"name": "identity.break_glass.delete", "use": "deleteBreakGlassAccount"},
+    {"name": "identity.break_glass.disable", "use": "disableBreakGlassAccount"},
+    {"name": "identity.break_glass.enable", "use": "enableBreakGlassAccount"},
+    {"name": "identity.break_glass.read", "use": "listBreakGlassAccounts"},
+    {"name": "identity.break_glass.replace_factor", "use": "replaceBreakGlassFactor"},
+    {"name": "identity.break_glass.reset", "use": "resetBreakGlassAccount"},
+    {"name": "identity.principal_links.read", "use": "listPrincipalLinks"},
+    {"name": "identity.principal_links.read", "use": "listPrincipalLinkRequests"},
+    {"name": "identity.principal_links.update", "use": "createPrincipalLink"},
+    {"name": "identity.principal_links.update", "use": "deletePrincipalLink"},
+    {"name": "identity.sessions.revoke", "use": "revokeUserSessions"}
+  ]
+}

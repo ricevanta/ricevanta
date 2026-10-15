@@ -1,0 +1,161 @@
+{
+ "description": "RFC 6238 SHA-1 vectors from its appendix B truncated to six digits, and the verification window and replay rule of docs/specs/identity-login.md section 6.2.",
+ "cases": [
+  {
+   "id": "rfc-59",
+   "kind": "rfc",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "time": 59,
+   "rfc_code_8": "94287082",
+   "code_6": "287082"
+  },
+  {
+   "id": "rfc-1111111109",
+   "kind": "rfc",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "time": 1111111109,
+   "rfc_code_8": "07081804",
+   "code_6": "081804"
+  },
+  {
+   "id": "rfc-1111111111",
+   "kind": "rfc",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "time": 1111111111,
+   "rfc_code_8": "14050471",
+   "code_6": "050471"
+  },
+  {
+   "id": "rfc-1234567890",
+   "kind": "rfc",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "time": 1234567890,
+   "rfc_code_8": "89005924",
+   "code_6": "005924"
+  },
+  {
+   "id": "rfc-2000000000",
+   "kind": "rfc",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "time": 2000000000,
+   "rfc_code_8": "69279037",
+   "code_6": "279037"
+  },
+  {
+   "id": "rfc-20000000000",
+   "kind": "rfc",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "time": 20000000000,
+   "rfc_code_8": "65353130",
+   "code_6": "353130"
+  },
+  {
+   "id": "verify-current",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 59,
+   "code": "287082",
+   "last_step": null,
+   "expect": {
+    "accepted": true,
+    "step": 1
+   }
+  },
+  {
+   "id": "verify-previous-step",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 60,
+   "code": "287082",
+   "last_step": null,
+   "expect": {
+    "accepted": true,
+    "step": 1
+   }
+  },
+  {
+   "id": "verify-two-steps-old",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 90,
+   "code": "287082",
+   "last_step": null,
+   "expect": {
+    "accepted": false,
+    "reason": "mismatch"
+   }
+  },
+  {
+   "id": "verify-future-step",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 29,
+   "code": "287082",
+   "last_step": null,
+   "expect": {
+    "accepted": false,
+    "reason": "mismatch"
+   }
+  },
+  {
+   "id": "verify-replay-same-step",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 59,
+   "code": "287082",
+   "last_step": 1,
+   "expect": {
+    "accepted": false,
+    "reason": "replay"
+   }
+  },
+  {
+   "id": "verify-replay-older-step",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 60,
+   "code": "287082",
+   "last_step": 2,
+   "expect": {
+    "accepted": false,
+    "reason": "replay"
+   }
+  },
+  {
+   "id": "verify-after-older-use",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 59,
+   "code": "287082",
+   "last_step": 0,
+   "expect": {
+    "accepted": true,
+    "step": 1
+   }
+  },
+  {
+   "id": "verify-wrong-code",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 59,
+   "code": "287083",
+   "last_step": null,
+   "expect": {
+    "accepted": false,
+    "reason": "mismatch"
+   }
+  },
+  {
+   "id": "verify-leading-zero",
+   "kind": "verify",
+   "secret_base32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "now": 1111111109,
+   "code": "081804",
+   "last_step": null,
+   "expect": {
+    "accepted": true,
+    "step": 37037036
+   }
+  }
+ ]
+}

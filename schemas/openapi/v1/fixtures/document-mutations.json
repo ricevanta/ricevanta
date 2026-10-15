@@ -1,0 +1,362 @@
+{
+ "description": "Single mutations of openapi.yaml, each of which the validator must reject with the named rule code (schemas/openapi/v1/test_validate.py).",
+ "cases": [
+  {
+   "id": "remove-authorization",
+   "description": "An operation without its authorization binding",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1sessions/get/x-ricevanta-authorization"
+    }
+   ],
+   "expect": "R05"
+  },
+  {
+   "id": "unknown-permission",
+   "description": "Binding names a permission that is not in the catalogue",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/x-ricevanta-authorization/permissions/0/name",
+     "value": "identity.sessions.list"
+    }
+   ],
+   "expect": "R07"
+  },
+  {
+   "id": "foreign-use",
+   "description": "Binding names a catalogue use of another operation",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/x-ricevanta-authorization/permissions/0/uses",
+     "value": "listUsers"
+    }
+   ],
+   "expect": "R07"
+  },
+  {
+   "id": "protected-without-202",
+   "description": "Identity-authority operation answers without an approval request",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers/post/responses/202"
+    }
+   ],
+   "expect": "R09"
+  },
+  {
+   "id": "token-creation-without-reauth",
+   "description": "createApiToken without recent authentication",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1api-tokens/post/x-ricevanta-authorization/reauth",
+     "value": "none"
+    }
+   ],
+   "expect": "R08"
+  },
+  {
+   "id": "approval-by-token",
+   "description": "An approval decision that accepts API tokens",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1approve/post/x-ricevanta-authorization/credentials",
+     "value": [
+      "session",
+      "token"
+     ]
+    }
+   ],
+   "expect": "R08"
+  },
+  {
+   "id": "bound-reauth-on-ordinary-approval",
+   "description": "Bound re-authentication outside identity authority",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1approve/post/x-ricevanta-authorization/reauth",
+     "value": "bound"
+    }
+   ],
+   "expect": "R08"
+  },
+  {
+   "id": "logout-without-csrf",
+   "description": "Unsafe session operation without the synchronizer token",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session~1logout/post/x-ricevanta-authorization/csrf",
+     "value": "none"
+    }
+   ],
+   "expect": "R10"
+  },
+  {
+   "id": "open-request-object",
+   "description": "Request object accepts unknown members",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/schemas/LocalLoginRequest/additionalProperties"
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "unbounded-request-string",
+   "description": "Request string without maxLength",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/schemas/LocalLoginRequest/properties/password/maxLength"
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "missing-body-limit",
+   "description": "Request body without x-ricevanta-max-body-bytes",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1auth~1local/post/x-ricevanta-max-body-bytes"
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "duplicate-operation-id",
+   "description": "Two operations share an operationId",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/operationId",
+     "value": "getSession"
+    }
+   ],
+   "expect": "R04"
+  },
+  {
+   "id": "operation-id-grammar",
+   "description": "operationId outside the lowerCamelCase grammar",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/operationId",
+     "value": "List_Sessions"
+    }
+   ],
+   "expect": "R04"
+  },
+  {
+   "id": "path-grammar",
+   "description": "Path segment outside the lowercase kebab-case grammar",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1Sessions",
+     "value": {}
+    }
+   ],
+   "expect": "R03"
+  },
+  {
+   "id": "openapi-patch-version",
+   "description": "Document declares another 3.1 patch release",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/openapi",
+     "value": "3.1.0"
+    }
+   ],
+   "expect": "R01"
+  },
+  {
+   "id": "info-version",
+   "description": "info.version outside 1.<revision>",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/info/version",
+     "value": "2.0"
+    }
+   ],
+   "expect": "R02"
+  },
+  {
+   "id": "external-reference",
+   "description": "A schema reference outside the document",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session/get/responses/200/content/application~1json/schema",
+     "value": {
+      "$ref": "https://example.com/session.json"
+     }
+    }
+   ],
+   "expect": "R18"
+  },
+  {
+   "id": "security-mismatch",
+   "description": "Security requirement omits the CSRF scheme for an unsafe session operation",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session~1logout/post/security",
+     "value": [
+      {
+       "session": []
+      }
+     ]
+    }
+   ],
+   "expect": "R06"
+  },
+  {
+   "id": "public-with-credentials",
+   "description": "Public operation that declares credentials",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1auth~1options/get/x-ricevanta-authorization/credentials",
+     "value": [
+      "session"
+     ]
+    }
+   ],
+   "expect": "R05"
+  },
+  {
+   "id": "unknown-gate",
+   "description": "Operation gated on an unknown decision",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1setup/post/x-ricevanta-gates",
+     "value": [
+      "BE-99"
+     ]
+    }
+   ],
+   "expect": "R14"
+  },
+  {
+   "id": "path-parameter-not-uid",
+   "description": "Path parameter that is not a Uid",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/ProviderUid/schema",
+     "value": {
+      "type": "string",
+      "maxLength": 64
+     }
+    }
+   ],
+   "expect": "R15"
+  },
+  {
+   "id": "undeclared-request-header",
+   "description": "Operation reads a header outside the declared set",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/parameters/3",
+     "value": {
+      "name": "X-Debug",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "maxLength": 8
+      }
+     }
+    }
+   ],
+   "expect": "R21"
+  },
+  {
+   "id": "approval-without-idempotency",
+   "description": "A 202 operation without Idempotency-Key",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1break-glass-accounts/post/x-ricevanta-idempotency"
+    }
+   ],
+   "expect": "R09"
+  },
+  {
+   "id": "problem-table-drift",
+   "description": "Problem.type enum differs from the problem table",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/schemas/Problem/properties/type/enum/21"
+    }
+   ],
+   "expect": "R16"
+  },
+  {
+   "id": "navigation-with-problem",
+   "description": "Navigation operation that answers JSON problems",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1auth~1oidc~1{provider_uid}~1start/get/responses/default",
+     "value": {
+      "$ref": "#/components/responses/Problem"
+     }
+    }
+   ],
+   "expect": "R11"
+  },
+  {
+   "id": "stream-without-events",
+   "description": "Event stream without its declared events",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1changes/get/responses/200/content/text~1event-stream/x-ricevanta-events"
+    }
+   ],
+   "expect": "R17"
+  },
+  {
+   "id": "subject-unselected-permission",
+   "description": "Subject operation adds a permission without a selector",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests/get/x-ricevanta-authorization/permissions/0",
+     "value": {
+      "name": "authz.approvals.read",
+      "uses": "listApprovalRequests#all"
+     }
+    }
+   ],
+   "expect": "R19"
+  },
+  {
+   "id": "schema-violation",
+   "description": "Document violates the OpenAPI 3.1 schema",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session/get/responses",
+     "value": "none"
+    }
+   ],
+   "expect": "S01"
+  }
+ ]
+}
