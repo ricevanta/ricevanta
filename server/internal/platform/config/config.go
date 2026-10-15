@@ -390,13 +390,10 @@ func validateListener(r rawListener, field string) (Listener, error) {
 		return l, invalid(field+".address", "%v", err)
 	}
 	l.Address = *r.Address
-	l.TLS.Mode = "file"
-	if r.TLS != nil {
-		if r.TLS.Mode == nil {
-			return l, invalid(field+".tls.mode", "is required when tls is present")
-		}
-		l.TLS.Mode = *r.TLS.Mode
+	if r.TLS == nil || r.TLS.Mode == nil {
+		return l, invalid(field+".tls.mode", "is required whenever %s is present", field)
 	}
+	l.TLS.Mode = *r.TLS.Mode
 	var certFile, keyFile *string
 	if r.TLS != nil {
 		certFile, keyFile = r.TLS.CertificateFile, r.TLS.KeyFile

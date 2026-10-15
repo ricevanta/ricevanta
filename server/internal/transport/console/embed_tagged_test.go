@@ -29,7 +29,7 @@ func TestEmbeddedTreeVerifies(t *testing.T) {
 		t.Fatal("embedded manifest differs from the copied file")
 	}
 	other := buildinfo.Current()
-	other.Commit = "0123456789abcdef0123456789abcdef01234567"
+	other.Commit += "-other"
 	_, err = console.Verify(dist, manifest, other)
 	wantCode(t, err, console.CodeIdentityMismatch)
 }

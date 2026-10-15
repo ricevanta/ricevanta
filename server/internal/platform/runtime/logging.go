@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,19 +12,18 @@ var catalogue = map[string]bool{
 	"request": true, "stop_requested": true, "shutdown_complete": true, "shutdown_timeout": true, "startup_failed": true,
 }
 
-func newLogger(w io.Writer, level string) *slog.Logger {
-	var l slog.Level
+// parseLevel maps log.level to a slog level; configuration validation
+// admits only the four names.
+func parseLevel(level string) slog.Level {
 	switch level {
 	case "error":
-		l = slog.LevelError
+		return slog.LevelError
 	case "warn":
-		l = slog.LevelWarn
+		return slog.LevelWarn
 	case "debug":
-		l = slog.LevelDebug
-	default:
-		l = slog.LevelInfo
+		return slog.LevelDebug
 	}
-	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: l}))
+	return slog.LevelInfo
 }
 
 // recorder captures the status and body size for the request log. Unwrap

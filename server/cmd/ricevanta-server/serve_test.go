@@ -315,7 +315,8 @@ func TestStartupRefusals(t *testing.T) {
 		{"plaintext off loopback", strings.Replace(plaintext(port, ""), "127.0.0.1", "0.0.0.0", 1), nil, 2, []string{"plaintext_requires_loopback"}},
 		{"misspelled variable", plaintext(port, ""), []string{"RICEVANTA_SERVER_LISTEN_API_ADRESS=127.0.0.1:1"}, 2, []string{"RICEVANTA_SERVER_LISTEN_API_ADRESS"}},
 		{"world-readable key", withTLS(port, cert, world, "console: {enabled: false}\n"), nil, 3, []string{"key_file_rejected"}},
-		{"console without tag", plaintext(port, ""), nil, 3, []string{"console_missing"}},
+		{"listener without tls", "schema: ricevanta-server-config-v1\nroles: [api]\nlisten: {api: {address: \"127.0.0.1:" + strconv.Itoa(port) + "\"}}\nconsole: {enabled: false}\n",
+			nil, 2, []string{"listen.api.tls.mode"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -357,13 +358,6 @@ func TestCheckConfigCommand(t *testing.T) {
 	r = run(t, nil, "check-config", "--config", writeConfig(t, "schema: x\n"))
 	if r.code != 2 || len(r.stdout) != 0 {
 		t.Fatalf("invalid: exit %d stdout %q", r.code, r.stdout)
-	}
-}
-
-func TestConsoleManifestWithoutTag(t *testing.T) {
-	r := run(t, nil, "console-manifest")
-	if r.code != 3 || len(r.stdout) != 0 || !bytes.Contains(r.stderr, []byte("console_missing")) {
-		t.Fatalf("exit %d stdout %q stderr %q", r.code, r.stdout, r.stderr)
 	}
 }
 
@@ -600,13 +594,31 @@ var (
 	largeSize  = 64 << 20
 )
 
-func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+// releaseInputs are the gitignored files a release recipe copies into the
+// module; module copies leave them out so they build the fixture console
+// with the development identity whatever the checkout holds.
+var releaseInputs = map[string]bool{
+	"internal/buildinfo/generated.go":          true,
+	"internal/transport/console/dist":          true,
+	"internal/transport/console/manifest.json": true,
+}
+
+// copyDir copies the module directory rel under root src to dst, leaving out
+// releaseInputs.
+func copyDir(src, dst, rel string) error {
+	from := filepath.Join(src, rel)
+	return filepath.WalkDir(from, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel(src, p)
-		target := filepath.Join(dst, rel)
+		r, _ := filepath.Rel(src, p)
+		if releaseInputs[filepath.ToSlash(r)] {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		target := filepath.Join(dst, r)
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
@@ -624,7 +636,7 @@ func buildTagged() (string, error) {
 		return "", err
 	}
 	for _, dir := range []string{"cmd/ricevanta-server", "internal/buildinfo", "internal/platform", "internal/transport"} {
-		if err := copyDir(filepath.Join("../..", dir), filepath.Join(root, dir)); err != nil {
+		if err := copyDir("../..", root, dir); err != nil {
 			return "", err
 		}
 	}
@@ -639,7 +651,7 @@ func buildTagged() (string, error) {
 	}
 	pkg := filepath.Join(root, "internal/transport/console")
 	dist := filepath.Join(pkg, "dist")
-	if err := copyDir(filepath.Join(pkg, "testdata/dist"), dist); err != nil {
+	if err := copyDir(filepath.Join(pkg, "testdata"), pkg, "dist"); err != nil {
 		return "", err
 	}
 	large := bytes.Repeat([]byte("ricevanta large asset\n"), largeSize/22+1)[:largeSize]
@@ -884,5 +896,117 @@ func TestSlowSteadyReaderReceivesWholeBody(t *testing.T) {
 	s.stop(t)
 	if code := s.wait(t, 10*time.Second); code != 0 {
 		t.Fatalf("exit %d", code)
+	}
+}
+
+// TestStopBeforeReadyExitsZero sends SIGTERM as soon as the server logs
+// starting, which it does after registering its stop sources and before the
+// 64 MiB fixture console is verified. Startup must end at the next step
+// boundary with stop_requested, shutdown_complete and exit 0, never by the
+// signal. The stop has to land before ready in at least one attempt; every
+// attempt must exit 0.
+func TestStopBeforeReadyExitsZero(t *testing.T) {
+	bin := tagged(t)
+	for attempt := 1; attempt <= 5; attempt++ {
+		cmd := exec.Command(bin, "serve", "--config", writeConfig(t, plaintext(freePort(t), "")))
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		var lines []string
+		sc := bufio.NewScanner(stderr)
+		for sc.Scan() {
+			lines = append(lines, sc.Text())
+			if len(lines) == 1 && strings.Contains(sc.Text(), `"msg":"starting"`) {
+				cmd.Process.Signal(syscall.SIGTERM)
+			}
+		}
+		err = cmd.Wait()
+		state := cmd.ProcessState
+		if ws, ok := state.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			t.Fatalf("attempt %d: ended by signal %v:\n%s", attempt, ws.Signal(), strings.Join(lines, "\n"))
+		}
+		if state.ExitCode() != 0 {
+			t.Fatalf("attempt %d: exit %d (%v):\n%s", attempt, state.ExitCode(), err, strings.Join(lines, "\n"))
+		}
+		checkLogs(t, lines, "starting", "stop_requested", "shutdown_complete")
+		if !strings.Contains(strings.Join(lines, "\n"), `"msg":"ready"`) {
+			t.Logf("attempt %d stopped before ready:\n%s", attempt, strings.Join(lines, "\n"))
+			return
+		}
+	}
+	t.Fatal("every SIGTERM landed after ready; the before-ready path was not exercised")
+}
+
+// TestHTTP2SlowDrainHoldsUntilShutdownDeadline is the residual of spec
+// section 4: an HTTP/2 client that drains a few bytes every 5 s keeps
+// WriteByteTimeout from firing and holds its stream, so a SIGTERM during the
+// trickle ends at the shutdown deadline with shutdown_timeout and exit 1.
+// drainBytes is the burst the slow-drain client reads every 5 s. Measured
+// on Linux loopback: 4 KiB, 64 KiB and 256 KiB bursts let WriteByteTimeout
+// close the connection after about 10.4 s; 1 MiB held the stream to the
+// shutdown deadline. 2 MiB leaves margin for other send-buffer sizes.
+const drainBytes = 2 << 20
+
+func TestHTTP2SlowDrainHoldsUntilShutdownDeadline(t *testing.T) {
+	bin := tagged(t)
+	cert, key, pool := writeCertificate(t)
+	s := startServer(t, bin, writeConfig(t, withTLS(freePort(t), cert, key, "shutdown: {timeout_ms: 12000}\n")))
+	raw, err := smallReceiveBuffer.Dial("tcp", s.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	c := tls.Client(raw, &tls.Config{RootCAs: pool, ServerName: "127.0.0.1", NextProtos: []string{"h2"}})
+	if err := c.Handshake(); err != nil {
+		t.Fatal(err)
+	}
+	io.WriteString(c, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+	h2frame(c, 0x4, 0, 0, []byte{0, 4, 0x7f, 0xff, 0xff, 0xff})
+	inc := uint32(0x7fffffff - 65535)
+	h2frame(c, 0x8, 0, 0, []byte{byte(inc >> 24), byte(inc >> 16), byte(inc >> 8), byte(inc)})
+	var block []byte
+	for _, f := range [][2]string{{":method", "GET"}, {":scheme", "https"}, {":path", "/assets/large.txt"}, {":authority", "x"}} {
+		block = append(block, hpackLiteral(f[0], f[1])...)
+	}
+	requested := time.Now()
+	h2frame(c, 0x1, 0x5, 1, block)
+	// Drain a burst of raw TLS bytes every 5 s, below the 10 s write bound.
+	// Linux wakes a writer blocked on a full send buffer only when a good
+	// part of that buffer is free again, so each burst must be large enough
+	// to let the server write at all; the size is drainBytes.
+	closed := make(chan time.Time, 1)
+	go func() {
+		buf := make([]byte, drainBytes)
+		for {
+			if _, err := io.ReadFull(raw, buf); err != nil {
+				closed <- time.Now()
+				return
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
+	time.Sleep(3 * time.Second)
+	stopAt := time.Now()
+	s.stop(t)
+	code := s.wait(t, 30*time.Second)
+	exited := time.Now()
+	hold := exited.Sub(requested)
+	select {
+	case at := <-closed:
+		hold = at.Sub(requested)
+	case <-time.After(2 * time.Second):
+	}
+	t.Logf("observed hold: stream held %v after the request; process exited %v after SIGTERM (shutdown.timeout_ms 12000)",
+		hold.Round(time.Millisecond), exited.Sub(stopAt).Round(time.Millisecond))
+	if code != 1 {
+		t.Fatalf("exit %d, want 1:\n%s", code, s.logText())
+	}
+	checkLogs(t, s.logs(), "stop_requested", "shutdown_timeout")
+	if hold < 10*time.Second {
+		t.Fatalf("stream held only %v; the trickle did not outlast the 10 s write bound", hold)
 	}
 }

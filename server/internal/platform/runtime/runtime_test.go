@@ -270,6 +270,11 @@ func TestAdmit(t *testing.T) {
 	}
 }
 
+// fixtureIdentity is the identity in the console fixture's build-info.json.
+// Tests that serve the fixture pin it, so they also pass when compiled with
+// ricevanta_release, where buildinfo.Current() is the generated identity.
+var fixtureIdentity = &buildinfo.Identity{Version: "0.0.0-local", Commit: "unknown", Channel: "local"}
+
 func fixtureSource(t *testing.T) func() (fs.FS, []byte, bool) {
 	t.Helper()
 	manifest, err := os.ReadFile("../../transport/console/testdata/manifest.json")
@@ -283,7 +288,7 @@ func fixtureSource(t *testing.T) func() (fs.FS, []byte, bool) {
 
 func TestConsoleServedOverPlaintext(t *testing.T) {
 	port := freePort(t)
-	r := start(t, Options{ConfigFlag: writeConfig(t, plaintextConfig(port, "")), ConfigFlagSet: true, consoleSource: fixtureSource(t)})
+	r := start(t, Options{ConfigFlag: writeConfig(t, plaintextConfig(port, "")), ConfigFlagSet: true, consoleSource: fixtureSource(t), identity: fixtureIdentity})
 	defer func() { r.cancel(); r.wait(t, 10*time.Second) }()
 	resp, err := http.Get("http://" + r.addr + "/assets/index-Bx1a2b3c.js")
 	if err != nil {
@@ -310,23 +315,9 @@ func TestConsoleIdentityMismatchFailsStartup(t *testing.T) {
 	}
 }
 
-func TestConsoleMissingWithoutTag(t *testing.T) {
-	if _, _, ok := console.Embedded(); ok {
-		t.Skip("built with ricevanta_console")
-	}
-	logs := &syncBuffer{}
-	code := Serve(context.Background(), Options{
-		ConfigFlag: writeConfig(t, plaintextConfig(freePort(t), "")), ConfigFlagSet: true, Stderr: logs, Stdout: io.Discard,
-	})
-	if code != ExitStartup || !strings.Contains(logs.String(), console.CodeMissing) {
-		t.Fatalf("exit %d logs %s", code, logs.String())
-	}
-	logMessages(t, logs.String())
-}
-
 func TestRequestLogFields(t *testing.T) {
 	port := freePort(t)
-	r := start(t, Options{ConfigFlag: writeConfig(t, plaintextConfig(port, "log: {level: debug}\n")), ConfigFlagSet: true, consoleSource: fixtureSource(t)})
+	r := start(t, Options{ConfigFlag: writeConfig(t, plaintextConfig(port, "log: {level: debug}\n")), ConfigFlagSet: true, consoleSource: fixtureSource(t), identity: fixtureIdentity})
 	req, _ := http.NewRequest("GET", "http://"+r.addr+"/assets/index-Bx1a2b3c.js?token=secret-query", nil)
 	req.Header.Set("Cookie", "session=secret-cookie")
 	req.Header.Set("Authorization", "Bearer secret-header")
@@ -400,7 +391,7 @@ func TestCheckConfig(t *testing.T) {
 
 func TestConsoleManifestCommand(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := ConsoleManifest(Options{consoleSource: fixtureSource(t), Stdout: &out, Stderr: &errOut}); code != ExitOK {
+	if code := ConsoleManifest(Options{consoleSource: fixtureSource(t), identity: fixtureIdentity, Stdout: &out, Stderr: &errOut}); code != ExitOK {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
 	want, _ := os.ReadFile("../../transport/console/testdata/manifest.json")

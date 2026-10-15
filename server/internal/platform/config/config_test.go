@@ -144,11 +144,22 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-func TestListenerWithoutTLSDefaultsToFileMode(t *testing.T) {
+func TestListenerRequiresTLSMode(t *testing.T) {
 	doc := "schema: ricevanta-server-config-v1\nroles: [api]\nlisten:\n  api:\n    address: \"127.0.0.1:8443\"\n"
 	_, err := config.Load(writeFile(t, []byte(doc)), noEnv)
-	if err == nil || !strings.Contains(err.Error(), "certificate_file") {
-		t.Fatalf("want missing certificate_file under default mode file, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "listen.api.tls.mode") || !strings.Contains(err.Error(), "required") {
+		t.Fatalf("want listen.api.tls.mode required, got %v", err)
+	}
+	// The mode may come from the environment; validation runs after overrides.
+	c, err := config.Load(writeFile(t, []byte(doc)), envMap(map[string]string{"RICEVANTA_SERVER_LISTEN_API_TLS_MODE": "none"}))
+	if err != nil || c.Listen.API.TLS.Mode != "none" {
+		t.Fatalf("mode from environment: %+v %v", c.Listen.API, err)
+	}
+	// A listener created by the environment alone needs the mode as well.
+	bare := "schema: ricevanta-server-config-v1\nroles: [api]\n"
+	if _, err := config.Load(writeFile(t, []byte(bare)), envMap(map[string]string{"RICEVANTA_SERVER_LISTEN_API_ADDRESS": "127.0.0.1:8080"})); err == nil ||
+		!strings.Contains(err.Error(), "listen.api.tls.mode") {
+		t.Fatalf("environment listener without mode: %v", err)
 	}
 }
 

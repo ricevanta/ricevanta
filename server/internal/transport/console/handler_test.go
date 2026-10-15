@@ -531,3 +531,22 @@ func TestConsoleDisabled(t *testing.T) {
 		t.Fatalf("healthz %d", w.Code)
 	}
 }
+
+// TestAbsentAcceptServesIndex: RFC 9110 section 12.4.1, an absent Accept
+// field states no preference, so a console route gets index.html; the
+// "excludes both" row applies only to a present field.
+func TestAbsentAcceptServesIndex(t *testing.T) {
+	h := newHandler(t)
+	r := httptest.NewRequest("GET", "/devices/42", nil)
+	r.Header.Del("Accept")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 || w.Body.String() != body(t, "index.html") {
+		t.Fatalf("absent Accept: %d", w.Code)
+	}
+	r = httptest.NewRequest("GET", "/devices/42", nil)
+	r.Header.Set("Accept", "")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	checkProblem(t, w, 404)
+}

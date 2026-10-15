@@ -29,6 +29,13 @@ func copyTree(t *testing.T, src, dst string) {
 		if err != nil {
 			return err
 		}
+		// Leave out release inputs a checkout may hold at the package root.
+		if rel == "dist" || rel == "manifest.json" || rel == "generated.go" {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		target := filepath.Join(dst, rel)
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)

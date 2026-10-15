@@ -381,3 +381,18 @@ func TestStrictJSONKeysAndEscapes(t *testing.T) {
 	_, err = console.Verify(m, []byte(bad), devIdentity)
 	wantCode(t, err, console.CodeManifestInvalid)
 }
+
+// TestManifestCheckedBeforeFiles: a malformed or unsorted manifest is
+// console_manifest_invalid even when the tree would also mismatch, because
+// the manifest is parsed before any file is compared.
+func TestManifestCheckedBeforeFiles(t *testing.T) {
+	m, mf := fixture(t)
+	m["assets/extra.js"] = &fstest.MapFile{Data: []byte("x")}
+	for _, bad := range [][]byte{
+		mf[:len(mf)-3],
+		[]byte(strings.Replace(string(mf), `"schema":"ricevanta-console-manifest-v1"`, `"schema":1`, 1)),
+	} {
+		_, err := console.Verify(m, bad, devIdentity)
+		wantCode(t, err, console.CodeManifestInvalid)
+	}
+}

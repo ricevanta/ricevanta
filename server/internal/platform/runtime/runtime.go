@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -45,6 +46,7 @@ type Options struct {
 	consoleSource func() (fs.FS, []byte, bool)
 	identity      *buildinfo.Identity
 	wrap          func(http.Handler) http.Handler
+	atStep        func(step string)
 	ready         chan<- string
 }
 
@@ -127,9 +129,12 @@ func loadTLS(t config.TLS) (*tls.Config, error) {
 }
 
 // Serve runs the server until parent is cancelled or SIGTERM or SIGINT
-// arrives, and returns the exit code.
+// arrives, and returns the exit code. The stop sources are registered before
+// configuration loads, and a stop before ready ends startup at the next step
+// boundary with exit 0 after closing what was opened (spec section 4).
 func Serve(parent context.Context, o Options) (code int) {
-	logger := newLogger(o.Stderr, "info")
+	level := new(slog.LevelVar) // info until the configuration sets it
+	logger := slog.New(slog.NewJSONHandler(o.Stderr, &slog.HandlerOptions{Level: level}))
 	defer func() {
 		// A panic outside a handler ends the process with exit 1; the
 		// JSON handler writes synchronously, so earlier lines are flushed.
@@ -137,21 +142,65 @@ func Serve(parent context.Context, o Options) (code int) {
 			code = ExitFailure
 		}
 	}()
+
+	stopCtx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// A second channel counts stop requests; those after the first are
+	// counted and otherwise ignored.
+	var signals atomic.Int64
+	extra := make(chan os.Signal, 8)
+	signal.Notify(extra, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(extra)
+	counted := make(chan struct{})
+	defer close(counted)
+	go func() {
+		for {
+			select {
+			case <-extra:
+				signals.Add(1)
+			case <-counted:
+				return
+			}
+		}
+	}()
+	repeated := func() int64 { return max(signals.Load()-1, 0) }
+
 	id := o.id()
 	logger.Info("starting", "version", id.Version, "commit", id.Commit, "channel", id.Channel)
 	fail := func(step string, code int, err error) int {
 		logger.Error("startup_failed", "step", step, "error", err.Error())
 		return code
 	}
+	// stopped reports whether a stop arrived by the boundary after step; if
+	// so the caller has closed what it opened and startup ends with exit 0.
+	stopped := func(step string) bool {
+		if o.atStep != nil {
+			o.atStep(step)
+		}
+		if stopCtx.Err() == nil {
+			return false
+		}
+		logger.Info("stop_requested", "step", step)
+		logger.Info("shutdown_complete", "repeated_stop_requests", repeated())
+		return true
+	}
 
 	cfg, err := loadConfig(o)
 	if err != nil {
 		return fail("config", ExitConfig, err)
 	}
-	logger = newLogger(o.Stderr, cfg.Log.Level)
+	// Checked before the configured level applies, so the stop is logged
+	// at info whatever level the configuration names.
+	if stopped("config") {
+		return ExitOK
+	}
+	level.Set(parseLevel(cfg.Log.Level))
 	logger.Info("config_loaded", "roles", cfg.Roles, "console", cfg.Console.Enabled, "log_level", cfg.Log.Level)
 	if err := Admit(cfg.Roles); err != nil {
 		return fail("roles", ExitConfig, err)
+	}
+	if stopped("roles") {
+		return ExitOK
 	}
 
 	var tree *console.Tree
@@ -165,6 +214,9 @@ func Serve(parent context.Context, o Options) (code int) {
 		}
 		logger.Info("console_verified")
 	}
+	if stopped("console") {
+		return ExitOK
+	}
 
 	api := cfg.Listen.API
 	var tlsConfig *tls.Config
@@ -173,6 +225,9 @@ func Serve(parent context.Context, o Options) (code int) {
 			return fail("tls", ExitStartup, err)
 		}
 	}
+	if stopped("tls") {
+		return ExitOK
+	}
 	ln, err := net.Listen("tcp", api.Address)
 	if err != nil {
 		var oe *net.OpError
@@ -180,6 +235,10 @@ func Serve(parent context.Context, o Options) (code int) {
 			err = oe.Err
 		}
 		return fail("listen", ExitStartup, err)
+	}
+	if stopped("listen") {
+		ln.Close()
+		return ExitOK
 	}
 
 	registry := health.NewRegistry(cfg.Roles)
@@ -204,27 +263,6 @@ func Serve(parent context.Context, o Options) (code int) {
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
 
-	stopCtx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	// A second channel counts stop requests; those after the first are
-	// counted and otherwise ignored.
-	var signals atomic.Int64
-	extra := make(chan os.Signal, 8)
-	signal.Notify(extra, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(extra)
-	counted := make(chan struct{})
-	defer close(counted)
-	go func() {
-		for {
-			select {
-			case <-extra:
-				signals.Add(1)
-			case <-counted:
-				return
-			}
-		}
-	}()
-
 	served := make(chan error, 1)
 	go func() {
 		if tlsConfig != nil {
@@ -234,20 +272,30 @@ func Serve(parent context.Context, o Options) (code int) {
 		}
 	}()
 	logger.Info("listening", "role", "api", "address", ln.Addr().String(), "tls", tlsConfig != nil)
-	registry.Set("api", health.Ready)
-	logger.Info("ready")
-	if o.ready != nil {
-		o.ready <- ln.Addr().String()
-	}
 
 	result := ExitOK
-	select {
-	case <-stopCtx.Done():
-		logger.Info("stop_requested")
-	case err := <-served:
-		// The listener failed without a stop request.
-		logger.Error("stop_requested", "reason", "listener_failed", "error", err.Error())
-		result = ExitFailure
+	if o.atStep != nil {
+		o.atStep("serve")
+	}
+	if stopCtx.Err() != nil {
+		// A stop at the serve boundary, before ready, takes the drain
+		// path below without ever reporting ready.
+		logger.Info("stop_requested", "step", "serve")
+	} else {
+		registry.Set("api", health.Ready)
+		logger.Info("ready")
+		if o.ready != nil {
+			o.ready <- ln.Addr().String()
+		}
+		select {
+		case <-stopCtx.Done():
+			logger.Info("stop_requested")
+		case err := <-served:
+			// The listener failed without a stop request.
+			logger.Error("stop_requested", "reason", "listener_failed", "error", err.Error())
+			served <- err
+			result = ExitFailure
+		}
 	}
 
 	registry.SetAll(health.Stopping)
@@ -256,8 +304,13 @@ func Serve(parent context.Context, o Options) (code int) {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown_timeout", "timeout_ms", cfg.Shutdown.TimeoutMS)
 		srv.Close()
+		<-served
 		return ExitFailure
 	}
-	logger.Info("shutdown_complete", "repeated_stop_requests", max(signals.Load()-1, 0))
+	// Serve closes the listener when it returns. Waiting for it covers a
+	// stop at the serve boundary, where Shutdown can run before Serve has
+	// registered the listener and so cannot close it itself.
+	<-served
+	logger.Info("shutdown_complete", "repeated_stop_requests", repeated())
 	return result
 }

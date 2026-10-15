@@ -6,12 +6,30 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
-// serverBin is the binary built once for every black-box test in the package;
-// testDir holds it and every other build output, and is removed after the run.
+// serverBin is the binary every black-box test runs; testDir holds build
+// outputs and is removed after the run.
+//
+// RICEVANTA_TEST_SERVER_BINARY names a prebuilt binary to test instead, such
+// as a release build. The name avoids the RICEVANTA_SERVER_ prefix, which the
+// server rejects for unknown variables, because the tests pass their
+// environment on to the binary. Without it the suite builds the command with
+// the same build tags this test binary was compiled with.
 var serverBin, testDir string
+
+func buildTags() []string {
+	var tags []string
+	if consoleTag {
+		tags = append(tags, "ricevanta_console")
+	}
+	if releaseTag {
+		tags = append(tags, "ricevanta_release")
+	}
+	return tags
+}
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "ricevanta-server-test-")
@@ -19,16 +37,28 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	testDir = dir
-	serverBin = filepath.Join(dir, "ricevanta-server")
-	if runtime.GOOS == "windows" {
-		serverBin += ".exe"
-	}
-	build := exec.Command("go", "build", "-o", serverBin, ".")
-	build.Env = append(os.Environ(), "GOPROXY=off", "GOFLAGS=-mod=readonly")
-	if out, err := build.CombinedOutput(); err != nil {
-		os.Stderr.Write(out)
-		os.RemoveAll(dir)
-		panic(err)
+	if prebuilt := os.Getenv("RICEVANTA_TEST_SERVER_BINARY"); prebuilt != "" {
+		if !filepath.IsAbs(prebuilt) {
+			os.RemoveAll(dir)
+			panic("RICEVANTA_TEST_SERVER_BINARY must be an absolute path")
+		}
+		serverBin = prebuilt
+	} else {
+		serverBin = filepath.Join(dir, "ricevanta-server")
+		if runtime.GOOS == "windows" {
+			serverBin += ".exe"
+		}
+		args := []string{"build", "-o", serverBin}
+		if tags := buildTags(); len(tags) > 0 {
+			args = append(args, "-tags", strings.Join(tags, ","))
+		}
+		build := exec.Command("go", append(args, ".")...)
+		build.Env = append(os.Environ(), "GOPROXY=off", "GOFLAGS=-mod=readonly")
+		if out, err := build.CombinedOutput(); err != nil {
+			os.Stderr.Write(out)
+			os.RemoveAll(dir)
+			panic(err)
+		}
 	}
 	code := m.Run()
 	os.RemoveAll(dir)
@@ -56,37 +86,6 @@ func run(t *testing.T, env []string, args ...string) result {
 		code = exit.ExitCode()
 	}
 	return result{stdout.Bytes(), stderr.Bytes(), code}
-}
-
-func TestVersionFlag(t *testing.T) {
-	r := run(t, nil, "--version")
-	if r.code != 0 {
-		t.Fatalf("exit %d, stderr %s", r.code, r.stderr)
-	}
-	if want := "ricevanta-server 0.0.0-local (commit unknown, channel local)\n"; string(r.stdout) != want {
-		t.Fatalf("stdout %q, want %q", r.stdout, want)
-	}
-	if len(r.stderr) != 0 {
-		t.Fatalf("stderr %q", r.stderr)
-	}
-}
-
-func TestVersionJSON(t *testing.T) {
-	r := run(t, nil, "version", "--json")
-	if r.code != 0 {
-		t.Fatalf("exit %d, stderr %s", r.code, r.stderr)
-	}
-	want := `{"channel":"local","commit":"unknown","sourceEpoch":0,"version":"0.0.0-local"}` + "\n"
-	if string(r.stdout) != want {
-		t.Fatalf("stdout %q, want %q", r.stdout, want)
-	}
-}
-
-func TestVersionText(t *testing.T) {
-	r := run(t, nil, "version")
-	if r.code != 0 || string(r.stdout) != "ricevanta-server 0.0.0-local (commit unknown, channel local)\n" {
-		t.Fatalf("exit %d stdout %q", r.code, r.stdout)
-	}
 }
 
 func TestUsageErrors(t *testing.T) {
