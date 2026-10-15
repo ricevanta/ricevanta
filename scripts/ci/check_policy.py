@@ -94,6 +94,14 @@ INTEROP_PROOF = {
                  {'parent': 'TestRustWriterCaptureOverflow/stdout', 'Helper': 'TestRustWriterCaptureChild', 'Pipe': 'stdout', 'Outcome': 'overflow'},
                  {'parent': 'TestRustWriterCaptureOverflow/stderr', 'Helper': 'TestRustWriterCaptureChild', 'Pipe': 'stderr', 'Outcome': 'overflow'}],
 }
+# Where and how each selected ID executes; a row may not move its command elsewhere.
+SELECTED_PLACES = {
+    'server-unit': ('server', 'go-suite'), 'server-race': ('server', 'go-suite'), 'key-admission-bench': ('server', 'go-bench'),
+    'loader-extended': ('server', 'go-selected'), 'loader-repeat': ('server', 'go-selected'), 'loader-fuzz': ('server', 'go-fuzz'),
+    'loader-gate-b-extended': ('server', 'go-selected'), 'ocsf-native': ('server', 'go-suite'), 'agent-unit': ('agent', 'rust-suite'),
+    'spool-extended': ('agent', 'rust-selected'), 'batch-extended': ('agent', 'rust-selected'),
+    'interop-unit': ('server', 'go-interop'), 'interop-race': ('server', 'go-interop'),
+}
 SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
                     'loader-extended': {'marker': 'PARSER_MEASUREMENT'}, 'loader-gate-b-extended': {'marker': 'LOADER_MEASUREMENT'},
                     'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
@@ -124,10 +132,26 @@ SKIP_ALLOWANCES = [
     {'package': YAMLTOKENS, 'test': 'TestParserMeasurementChild', 'reason': 'fresh measurement child entry point',
      'proof': 'loader-extended', 'modes': ['server-unit', 'server-race']},
     {'package': 'ricevanta-spool', 'test': 'fuzz_recover_extended', 'reason': 'extended 100,000-case native property budget',
-     'proof': 'spool-extended', 'modes': ['agent-unit']},
+     'target': 'fuzz_recover', 'proof': 'spool-extended', 'modes': ['agent-unit']},
     {'package': 'ricevanta-batch', 'test': 'fuzz_seal_extended', 'reason': 'extended 20,000-case native property budget',
-     'proof': 'batch-extended', 'modes': ['agent-unit']},
+     'target': 'fuzz_seal', 'proof': 'batch-extended', 'modes': ['agent-unit']},
 ]
+
+
+# test2json treats a stdout line starting with 0x16 as its own framing, so a test
+# that prints the byte could forge run/pass events. No selected Go file needs it.
+FRAMING_BYTE = re.compile(rb'\x16|\\x16|\\u0016|\\U00000016|\\026')
+
+
+def framing_errors(root):
+    errors = []
+    paths = list((root / 'server').rglob('*.go')) + list((root / 'scripts').rglob('*_test.go'))
+    for path in sorted(paths):
+        try: data = path.read_bytes()
+        except OSError: continue
+        if FRAMING_BYTE.search(data):
+            errors.append(path.relative_to(root).as_posix() + ': test2json framing byte 0x16 is forbidden in Go sources')
+    return errors
 
 
 def selected_errors(root):
@@ -157,11 +181,13 @@ def selected_errors(root):
             errors.append('scripts/ci/targets.toml: missing selected target ' + target_id); continue
         if shlex.join(run_selected.discovery_command(target)) != discovery or shlex.join(run_selected.run_command(target)) != command:
             errors.append('scripts/ci/targets.toml: selected command mismatch: ' + target_id)
+        if (target['cwd'], target['mode']) != SELECTED_PLACES[target_id]:
+            errors.append('scripts/ci/targets.toml: selected directory or mode mismatch: ' + target_id)
         for key, value in SELECTED_BUDGETS.get(target_id, {}).items():
             if target.get(key) != value: errors.append('scripts/ci/targets.toml: selected budget mismatch: ' + target_id)
     for package, name in inventory.FUZZ_PAIRS:
         target = targets.get(f'go-fuzz:{package}:{name}')
-        if target is None or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2":
+        if target is None or (target['cwd'], target['mode']) != ('server', 'go-fuzz') or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2":
             errors.append(f'scripts/ci/targets.toml: fuzz command mismatch: {package} {name}')
     for row in targets.values():
         for allowance in row['skips'].values():
@@ -505,6 +531,7 @@ def check(root: Path) -> list[str]:
     except (OSError, ValueError, KeyError, TypeError):
         errors.append('scripts/ci/targets.toml: invalid fuzz inventory or budget')
     errors += selected_errors(root)
+    errors += framing_errors(root)
     try: selected_ids = set(run_selected.inventory(root))
     except (OSError, ValueError, KeyError, TypeError): selected_ids = set(SELECTED_COMMANDS)
     required_names = {'ci', 'design', 'server', 'agent', 'console', 'bootstrap'}

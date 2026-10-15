@@ -314,6 +314,51 @@ class PolicyTests(unittest.TestCase):
         path.write_text(baseline)
         self.assertEqual(check_policy.check(self.root), [])
 
+    def test_selected_rows_cannot_move_their_commands(self):
+        self.assertEqual(set(check_policy.SELECTED_PLACES), set(check_policy.SELECTED_COMMANDS))
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        # Review probe: a fixture-looking module with the real import path replaces the benchmark.
+        module = self.root / 'scripts/ci/fixtures/selected/benchdata'
+        (module / 'internal/signing/ed25519key').mkdir(parents=True)
+        (module / 'go.mod').write_text('module github.com/ricevanta/ricevanta/server\n\ngo 1.27\n')
+        (module / 'internal/signing/ed25519key/fake_test.go').write_text(
+            'package ed25519key\n\nimport "testing"\n\nfunc BenchmarkValidate(b *testing.B) {}\n')
+        bench = 'id = "key-admission-bench"\nmode = "go-bench"\ncwd = "server"'
+        mutations = {
+            'nested fixture module': baseline.replace(bench, bench.replace('cwd = "server"', 'cwd = "scripts/ci/fixtures/selected/benchdata"')),
+            'other top-level directory': baseline.replace(bench, bench.replace('cwd = "server"', 'cwd = "scripts"')),
+            'agent directory': baseline.replace(bench, bench.replace('cwd = "server"', 'cwd = "agent"')),
+            'parent directory': baseline.replace(bench, bench.replace('cwd = "server"', 'cwd = ".."')),
+            'moved Rust properties': baseline.replace('id = "batch-extended"\nmode = "rust-selected"\ncwd = "agent"', 'id = "batch-extended"\nmode = "rust-selected"\ncwd = "scripts"'),
+            'moved Gate B': baseline.replace('id = "loader-gate-b-extended"\nmode = "go-selected"\ncwd = "server"', 'id = "loader-gate-b-extended"\nmode = "go-selected"\ncwd = "console"'),
+            'interop as plain selection': baseline.replace('id = "interop-unit"\nmode = "go-interop"', 'id = "interop-unit"\nmode = "go-selected"'),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, baseline)
+                path.write_text(mutated)
+                self.assertTrue(any(error.startswith('scripts/ci/targets.toml') for error in check_policy.check(self.root)), label)
+        path.write_text(baseline)
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_go_sources_cannot_carry_test2json_framing(self):
+        self.assertEqual(check_policy.framing_errors(ROOT), [])
+        package = self.root / 'server/internal/forged'
+        package.mkdir(parents=True)
+        for label, text in (('raw byte', 'package forged\n\nconst frame = "\x16=== RUN"\n'),
+                            ('hex escape', 'package forged\n\nconst frame = "\\x16"\n'),
+                            ('unicode escape', 'package forged\n\nconst frame = "\\u0016"\n'),
+                            ('long unicode escape', 'package forged\n\nconst frame = "\\U00000016"\n'),
+                            ('octal escape', 'package forged\n\nconst frame = "\\026"\n')):
+            for name in ('forged_test.go', 'forged.go'):
+                with self.subTest(form=label, file=name):
+                    (package / name).write_text(text)
+                    self.assertTrue(any('framing byte' in error for error in check_policy.check(self.root)))
+                    (package / name).unlink()
+        (package / 'clean_test.go').write_text('package forged\n\nconst tls = 0x16\n')
+        self.assertEqual(check_policy.check(self.root), [])
+
     def test_wrapper_steps_are_classified_from_the_checked_root(self):
         self.assertEqual(check_policy.wrapper_toolchain(check_policy.wrapper('agent-unit'), self.root), 'cargo')
         self.assertEqual(check_policy.wrapper_toolchain(check_policy.wrapper('server-race'), self.root), 'go')

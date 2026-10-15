@@ -24,8 +24,16 @@ GO_LIST_NONE = re.compile(r'^\?\s+(\S+)\s+\[no test files\]$')
 GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op\s+(\d+) B/op\s+(\d+) allocs/op\s*$')
 GO_BASELINE = re.compile(r'^fuzz: elapsed: \S+, gathering baseline coverage: (\d+)/(\d+) completed(, now fuzzing with (\d+) workers)?$')
 GO_EXECS = re.compile(r'^fuzz: elapsed: (\S+), execs: (\d+) \(\d+/sec\), new interesting: \d+ \(total: \d+\)$')
-GO_PACKAGE = re.compile(r'^(\S+) (\d+) (\d+)$')
-GO_PACKAGE_FORMAT = '{{.ImportPath}} {{len .TestGoFiles}} {{len .XTestGoFiles}}'
+GO_PACKAGE_FIELDS = '-json=ImportPath,Dir,TestGoFiles,XTestGoFiles'
+# Declarations go test runs: tests and fuzz targets other than TestMain, and
+# examples with an output comment (examples without one are compiled only).
+GO_RUNNABLE = re.compile(r'^func\s+((?:Test|Fuzz)\w*)\s*[\[(]', re.M)
+GO_EXAMPLE = re.compile(r'^func\s+(Example\w*)\s*\(', re.M)
+GO_OUTPUT_COMMENT = re.compile(r'^\s*//\s*(?:unordered output|output):', re.M | re.I)
+SELECTED_CWD = re.compile(r'^[A-Za-z0-9_-]+$')
+RUST_RUNNING = re.compile(r'^\s+Running (.+) \((.+)\)$')
+RUST_DOCTESTS = re.compile(r'^\s+Doc-tests (\S+)$')
+RUST_SECTION = re.compile(r'^running (\d+) tests?$')
 GO_DURATION = re.compile(r'(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)')
 GO_DURATION_UNITS = {'ns': 1e-9, 'us': 1e-6, 'µs': 1e-6, 'ms': 1e-3, 's': 1, 'm': 60, 'h': 3600}
 SKIP_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$')
@@ -62,6 +70,9 @@ def inventory(root=ROOT):
     fuzz_pairs = sorted([row['package'], row['target']] for row in data.get('fuzz', [])) + [[loader['package'], loader['target']]]
     for row in data.get('selected', []):
         row = dict(row)
+        # A selected row runs in one top-level component directory; check_policy pins which.
+        if not isinstance(row.get('cwd'), str) or not SELECTED_CWD.match(row['cwd']):
+            raise ValueError('selected target must run in one top-level directory: ' + str(row.get('id')))
         if 'fuzz_inventory' in row:
             # The ordinary suites cross-check every discovered Fuzz* name against this inventory.
             if row['fuzz_inventory'] is True: row['fuzz_inventory'] = sorted(fuzz_pairs)
@@ -74,6 +85,7 @@ def inventory(root=ROOT):
             if key not in row: raise ValueError('incomplete skip allowance')
         if not row['reason'] or not row['modes']: raise ValueError('skip allowance needs a reason and its modes')
         if not SKIP_NAME.match(row['test']): raise ValueError('skip allowance must name one exact test: ' + row['test'])
+        if 'target' in row and not SKIP_NAME.match(row['target']): raise ValueError('skip allowance must name one exact harness: ' + row['test'])
         # The proving unit is separate: another selected ID outside the allowance's own
         # modes, or a parent test in the same package that must pass in the same run.
         if ('proof' in row) == ('parent' in row): raise ValueError('skip allowance needs exactly one proof or parent: ' + row['test'])
@@ -91,7 +103,7 @@ def inventory(root=ROOT):
 
 def allowance_record(package, test, allowance):
     record = {'package': package, 'test': test, 'reason': allowance['reason']}
-    record.update({k: allowance[k] for k in ('proof', 'parent') if k in allowance})
+    record.update({k: allowance[k] for k in ('target', 'proof', 'parent') if k in allowance})
     return record
 
 
@@ -102,7 +114,7 @@ def go_build_flags(target):
 def package_command(target):
     """Ordinary suites also list every package's test files with the same build flags."""
     if target['mode'] != 'go-suite': return None
-    return ['go', 'list', '-f', GO_PACKAGE_FORMAT, *go_build_flags(target), *target['packages']]
+    return ['go', 'list', GO_PACKAGE_FIELDS, *go_build_flags(target), *target['packages']]
 
 
 def discovery_command(target):
@@ -168,17 +180,41 @@ def parse_go_list(text, no_tests=None):
 
 
 def parse_go_packages(text):
-    """Map each package to its test-file counts from go list."""
-    packages = {}
-    for line in text.splitlines():
-        line = line.rstrip('\r')
-        if not line.strip(): continue
-        match = GO_PACKAGE.match(line)
-        if not match: raise EvidenceError('unexpected package inventory line: ' + line)
-        if match[1] in packages: raise EvidenceError('package inventoried twice: ' + match[1])
-        packages[match[1]] = int(match[2]) + int(match[3])
+    """Map each package to the test files go list reports with the suite's build flags."""
+    packages, decoder, index = {}, json.JSONDecoder(), 0
+    while True:
+        while index < len(text) and text[index].isspace(): index += 1
+        if index == len(text): break
+        try: item, index = decoder.raw_decode(text, index)
+        except ValueError: raise EvidenceError('malformed package inventory')
+        if not isinstance(item, dict) or not isinstance(item.get('ImportPath'), str) or not isinstance(item.get('Dir', ''), str):
+            raise EvidenceError('malformed package inventory entry')
+        files = []
+        for key in ('TestGoFiles', 'XTestGoFiles'):
+            names = item.get(key, [])
+            if not isinstance(names, list) or not all(isinstance(n, str) and n.endswith('_test.go') and '/' not in n and '\\' not in n for n in names):
+                raise EvidenceError('malformed package inventory entry')
+            files += [os.path.join(item.get('Dir', ''), n) for n in names]
+        if item['ImportPath'] in packages: raise EvidenceError('package inventoried twice: ' + item['ImportPath'])
+        packages[item['ImportPath']] = files
     if not packages: raise EvidenceError('package inventory is empty')
     return packages
+
+
+def runnable_declarations(paths):
+    """Names go test would run from these test files: Test/Fuzz functions and examples with output."""
+    names = []
+    for path in paths:
+        try:
+            with open(path, encoding='utf-8') as handle: source = handle.read()
+        except (OSError, UnicodeDecodeError): raise EvidenceError('cannot read test file ' + path)
+        names += [n for n in GO_RUNNABLE.findall(source) if n != 'TestMain']
+        starts = [m for m in GO_EXAMPLE.finditer(source)]
+        for index, match in enumerate(starts):
+            following = re.search(r'^(?:func|type|var|const)\b', source[match.end():], re.M)
+            body = source[match.end():match.end() + following.start()] if following else source[match.end():]
+            if GO_OUTPUT_COMMENT.search(body): names.append(match[1])
+    return sorted(names)
 
 
 def go_seconds(text):
@@ -322,8 +358,11 @@ def verify_go_suite(target, discovery, events, exit_code, packages_text=None):
         if package in no_tests and files: raise EvidenceError('discovery reports no test files in ' + package)
         if package in listed and not files: raise EvidenceError('discovery lists tests in a package without test files: ' + package)
         if package in listed and not expected[package]:
-            raise EvidenceError('package has test files but discovery lists no tests: ' + package)
-    if not expected: raise EvidenceError('discovery found no tests')
+            # Benchmarks and output-less examples are not run by a suite; anything
+            # runnable in the source but absent from discovery was hidden.
+            hidden = runnable_declarations(files)
+            if hidden: raise EvidenceError('package has test files but discovery lists no tests: %s (declares %s)' % (package, ', '.join(hidden)))
+    if not any(expected.values()): raise EvidenceError('discovery found no tests')
     if target['cwd'] == 'server' and 'fuzz_inventory' not in target:
         raise EvidenceError('server suites must cross-check the fuzz inventory')
     fuzz = []
@@ -507,7 +546,34 @@ def parse_rust_run(text):
     return executed, outcomes, summaries
 
 
-def verify_rust_suite(target, discovery, stdout, exit_code):
+def rust_binaries(stderr):
+    """Harness identities in the order cargo ran them: artifact stem or doc-tests crate."""
+    binaries = []
+    for line in stderr.splitlines():
+        line = line.rstrip('\r')
+        match = RUST_RUNNING.match(line)
+        if match:
+            stem = re.split(r'[\\/]', match[2])[-1].removesuffix('.exe')
+            binaries.append(re.sub(r'-[0-9a-f]{16}$', '', stem)); continue
+        match = RUST_DOCTESTS.match(line)
+        if match: binaries.append('doc-tests ' + match[1])
+    return binaries
+
+
+def rust_sections(stdout):
+    """Per-harness outcome lists, split at each harness's 'running N tests' header."""
+    sections = []
+    for line in stdout.splitlines():
+        line = line.rstrip('\r')
+        if RUST_SECTION.match(line): sections.append([]); continue
+        match = RUST_TEST.match(line)
+        if match:
+            if not sections: raise EvidenceError('Rust test outcome before any harness header')
+            sections[-1].append((match[1], match[2]))
+    return sections
+
+
+def verify_rust_suite(target, discovery, stdout, stderr, exit_code):
     if exit_code != 0: raise EvidenceError('cargo test exited %d' % exit_code)
     listed = parse_rust_list(discovery)
     if not listed: raise EvidenceError('discovery found no Rust tests')
@@ -516,14 +582,25 @@ def verify_rust_suite(target, discovery, stdout, exit_code):
     if not summaries or any(s[1] != 'ok' or int(s[3]) != 0 for s in summaries): raise EvidenceError('a Rust test binary did not report ok with zero failures')
     passed = sum(int(s[2]) for s in summaries)
     ignored = sum(int(s[4]) for s in summaries)
+    # Cargo runs harnesses one at a time, so its k-th Running line names the k-th stdout section.
+    binaries, sections = rust_binaries(stderr), rust_sections(stdout)
+    if len(binaries) != len(sections) or len(sections) != len(summaries):
+        raise EvidenceError('harness headers %d, sections %d and summaries %d disagree' % (len(binaries), len(sections), len(summaries)))
     allowed = {s['test']: s for s in target['skips'].values()}
     ok = sum(o == 'ok' for values in outcomes.values() for o in values)
-    skipped = [name for name, values in outcomes.items() for o in values if o.startswith('ignored')]
-    for name in skipped:
-        if name not in allowed or 'proof' not in allowed[name]: raise EvidenceError('unexpected ignored Rust test: ' + name)
+    skipped = []
+    for binary, section in zip(binaries, sections):
+        for name, outcome in section:
+            if not outcome.startswith('ignored'): continue
+            allowance = allowed.get(name)
+            # An allowance names one test in one harness; the name must be unique in the suite.
+            if allowance is None or 'proof' not in allowance or allowance.get('target') != binary or listed[name] != 1:
+                raise EvidenceError('unexpected ignored Rust test %s in %s' % (name, binary))
+            skipped.append(name)
+    if len(skipped) != len(set(skipped)): raise EvidenceError('a Rust test was ignored more than once')
     if any(o == 'FAILED' for values in outcomes.values() for o in values): raise EvidenceError('failed Rust test')
     if passed != ok or ignored != len(skipped): raise EvidenceError('harness summary disagrees with listed outcomes')
-    ignored = [{'test': name, 'reason': allowed[name]['reason'], 'proof': allowed[name]['proof']} for name in sorted(skipped)]
+    ignored = [{'test': name, 'target': allowed[name]['target'], 'reason': allowed[name]['reason'], 'proof': allowed[name]['proof']} for name in sorted(skipped)]
     return {'tests': sum(listed.values()), 'passed': passed, 'ignored': ignored, 'binaries': len(summaries)}
 
 
@@ -624,7 +701,7 @@ def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=
     if mode in ('go-selected', 'go-interop'): return verify_go_selected(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-bench': return verify_go_bench(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-fuzz': return verify_go_fuzz(target, discovery, parse_go_events(stdout), exit_code)
-    if mode == 'rust-suite': return verify_rust_suite(target, discovery, stdout.decode('utf-8', 'replace'), exit_code)
+    if mode == 'rust-suite': return verify_rust_suite(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
     if mode == 'rust-selected': return verify_rust_selected(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
     return verify_console(target, evidence_dir, exit_code)
 
@@ -702,7 +779,8 @@ def listing(root=ROOT):
     # Exact ordinary-suite skips with their reasons and separate proving units.
     for row in load_targets(root).get('skips', []):
         proof = row['proof'] if 'proof' in row else 'parent ' + row['parent']
-        lines.append('skip\t%s\t%s\t%s\t%s\t%s' % (row['package'], row['test'], row['reason'], proof, ','.join(row['modes'])))
+        package = row['package'] + (' harness ' + row['target'] if 'target' in row else '')
+        lines.append('skip\t%s\t%s\t%s\t%s\t%s' % (package, row['test'], row['reason'], proof, ','.join(row['modes'])))
     return '\n'.join(lines)
 
 

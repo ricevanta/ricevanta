@@ -48,6 +48,14 @@ def event(action, package, test=None, output=None):
     return (json.dumps(row) + '\n').encode()
 
 
+def go_package(path, tests=(), xtests=(), directory='/fixtures/none'):
+    """One go list -json record as the pinned runner prints it (empty lists omitted)."""
+    row = {'Dir': directory, 'ImportPath': path}
+    if tests: row['TestGoFiles'] = list(tests)
+    if xtests: row['XTestGoFiles'] = list(xtests)
+    return json.dumps(row, indent='\t') + '\n'
+
+
 def insert_before(data, needle, extra):
     lines = data.decode().splitlines(keepends=True)
     index = next(i for i, l in enumerate(lines) if needle in l)
@@ -73,9 +81,9 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(join(run_selected.discovery_command(TARGETS['server-race'])), 'go test -race -list .* ./...')
         # The package inventory keeps the suite's build flags; -race adds the race build tag.
         self.assertEqual(join(run_selected.package_command(TARGETS['server-race'])),
-                         'go list -f {{.ImportPath}} {{len .TestGoFiles}} {{len .XTestGoFiles}} -race ./...')
+                         'go list -json=ImportPath,Dir,TestGoFiles,XTestGoFiles -race ./...')
         self.assertEqual(join(run_selected.package_command(TARGETS['server-unit'])),
-                         'go list -f {{.ImportPath}} {{len .TestGoFiles}} {{len .XTestGoFiles}} ./...')
+                         'go list -json=ImportPath,Dir,TestGoFiles,XTestGoFiles ./...')
         for target_id in ('interop-race', 'loader-extended', 'key-admission-bench', 'loader-fuzz', 'agent-unit'):
             self.assertIsNone(run_selected.package_command(TARGETS[target_id]), target_id)
         self.assertEqual(join(run_selected.run_command(TARGETS['server-unit'])), 'go test -json -count=1 ./...')
@@ -147,8 +155,10 @@ class InventoryTests(unittest.TestCase):
             self.assertIn(target_id + '\t' + target['cwd'] + '\t', listing)
         for row in run_selected.load_targets()['skips']:
             proof = row['proof'] if 'proof' in row else 'parent ' + row['parent']
-            self.assertIn('skip\t%s\t%s\t%s\t%s\t%s' % (row['package'], row['test'], row['reason'], proof, ','.join(row['modes'])), listing)
-        self.assertIn('\tpackages\tgo list -f', listing)
+            package = row['package'] + (' harness ' + row['target'] if 'target' in row else '')
+            self.assertIn('skip\t%s\t%s\t%s\t%s\t%s' % (package, row['test'], row['reason'], proof, ','.join(row['modes'])), listing)
+        self.assertIn('skip\tricevanta-batch harness fuzz_seal\tfuzz_seal_extended\t', listing)
+        self.assertIn('\tpackages\tgo list -json=ImportPath,Dir,TestGoFiles,XTestGoFiles', listing)
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/run_selected.py'), '--list'], capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout.strip(), listing)
 
@@ -169,7 +179,11 @@ class InventoryTests(unittest.TestCase):
                              text + self_proof.replace('proof = "server-unit"', 'parent = "TestVerifyParent"\nproof = "loader-extended"'),
                              text + self_proof.replace('proof = "server-unit"\n', ''),
                              text.replace('parent = "TestDecodeVerifiedYAMLCallCounts"', 'parent = "TestDecodeVerifiedYAMLCallCounts*"'),
-                             text.replace('\nfuzz_inventory = true\n', '\nfuzz_inventory = "yes"\n', 1)):
+                             text.replace('\nfuzz_inventory = true\n', '\nfuzz_inventory = "yes"\n', 1),
+                             text.replace('id = "key-admission-bench"\nmode = "go-bench"\ncwd = "server"', 'id = "key-admission-bench"\nmode = "go-bench"\ncwd = "scripts/ci/fixtures/selected/benchdata"'),
+                             text.replace('id = "agent-unit"\nmode = "rust-suite"\ncwd = "agent"', 'id = "agent-unit"\nmode = "rust-suite"\ncwd = ".."'),
+                             text.replace('id = "ocsf-native"\nmode = "go-suite"\ncwd = "server"', 'id = "ocsf-native"\nmode = "go-suite"\ncwd = "."'),
+                             text.replace('target = "fuzz_seal"', 'target = "fuzz_*"')):
                 self.assertNotEqual(mutation, text)
                 (root / 'scripts/ci/targets.toml').write_text(mutation)
                 with self.assertRaises(ValueError): run_selected.inventory(root)
@@ -203,7 +217,7 @@ class GoSuiteTests(unittest.TestCase):
             'zero selector': dict(listing='ok  \t%s\t0.002s\n' % TINY),
             'renamed selector': dict(listing=self.listing.replace('TestBeta', 'TestGamma2')),
             'extra discovered test never ran': dict(listing=self.listing.replace('TestBeta\n', 'TestBeta\nTestDelta\n')),
-            'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n', packages=self.packages + 'example.com/other 1 0\n'),
+            'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n', packages=self.packages + go_package('example.com/other', ['other_test.go'])),
             'undiscovered package ran': dict(listing=self.listing.replace(TINY + '/sub', TINY + '/different')),
             'unexpected skip': dict(target={**self.target, 'skips': {}}),
             'duplicate event': dict(events=duplicate_line(events, '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"')),
@@ -224,11 +238,13 @@ class GoSuiteTests(unittest.TestCase):
             'skipped fuzz seeds': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Test":"FuzzThing/seed#0"', b'"Action":"skip","Package":"example.com/tiny","Test":"FuzzThing/seed#0"')),
             'example listed but not run': dict(events=drop_lines(events, '"Test":"ExampleHello"', 4)),
             'unexpected discovery line': dict(listing=self.listing.replace('ok  ', 'go: downloading x\nok  ', 1)),
-            'hidden package with test files': dict(listing=self.listing + 'ok  \t%s/hidden\t0.001s\n' % TINY, packages=self.packages + TINY + '/hidden 1 0\n', events=events + hidden),
-            'hidden package absent from discovery': dict(packages=self.packages + TINY + '/hidden 0 1\n'),
+            'hidden package with test files': dict(listing=self.listing + 'ok  \t%s/hidden\t0.001s\n' % TINY, packages=self.packages + go_package(TINY + '/hidden', ['hidden_test.go']), events=events + hidden),
+            'hidden package absent from discovery': dict(packages=self.packages + go_package(TINY + '/hidden', xtests=['hidden_test.go'])),
             'package inventory missing': dict(packages=''),
             'package inventory malformed': dict(packages=self.packages + 'garbage\n'),
-            'package inventory disagrees with discovery': dict(packages=self.packages.replace(TINY + '/sub 1 0', TINY + '/sub 0 0')),
+            'package inventory disagrees with discovery': dict(packages=self.packages.replace('"TestGoFiles": [\n\t\t"sub_test.go"\n\t]', '"TestGoFiles": []')),
+            'package inventory names a nested file': dict(packages=self.packages.replace('"sub_test.go"', '"../sub_test.go"')),
+            'package inventory twice': dict(packages=self.packages + go_package(TINY + '/sub', ['sub_test.go'])),
             'unlisted fuzz target': dict(listing=self.listing.replace('FuzzThing\n', 'FuzzThing\nFuzzOther\n'),
                                          events=insert_before(events, '"Action":"output","Package":"example.com/tiny","Output":"PASS',
                                                               event('run', TINY, 'FuzzOther') + event('pass', TINY, 'FuzzOther'))),
@@ -238,8 +254,45 @@ class GoSuiteTests(unittest.TestCase):
             'run event without a test name': dict(events=events + event('run', TINY)),
         }
         for name, change in controls.items():
-            with self.subTest(control=name), self.assertRaises(EvidenceError):
-                self.verify(**change)
+            with self.subTest(control=name):
+                for key, baseline in (('listing', self.listing), ('packages', self.packages), ('events', self.events)):
+                    if key in change: self.assertNotEqual(change[key], baseline)
+                with self.assertRaises(EvidenceError):
+                    self.verify(**change)
+
+    def test_packages_without_runnable_tests_follow_discovery(self):
+        """Benchmark-only and output-less example packages pass; hidden runnable tests do not."""
+        sources = {
+            'benchonly': 'package benchonly\n\nimport "testing"\n\nfunc BenchmarkX(b *testing.B) {}\n',
+            'doconly': 'package doconly_test\n\nimport "fmt"\n\nfunc ExampleHi() {\n\tfmt.Println("hi")\n}\n\nfunc helper() {\n\t// Output: not an example comment\n}\n',
+            'mainonly': 'package mainonly\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestMain(m *testing.M) { os.Exit(m.Run()) }\nfunc BenchmarkY(b *testing.B) {}\n',
+        }
+        hidden = {
+            'hiddentest': 'package hiddentest\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestMain(m *testing.M) { os.Exit(0) }\nfunc TestHidden(t *testing.T) {}\n',
+            'hiddenfuzz': 'package hiddenfuzz\n\nimport "testing"\n\nfunc FuzzHidden(f *testing.F) {}\n',
+            'hiddenexample': 'package hiddenexample\n\nimport "fmt"\n\nfunc ExampleHidden() {\n\tfmt.Println("hi")\n\t// Output: hi\n}\n',
+            'hiddenunordered': 'package hiddenunordered\n\nimport "fmt"\n\nfunc ExampleHidden() {\n\tfmt.Println("hi")\n\t// unordered output: hi\n}\n',
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, source in {**sources, **hidden}.items():
+                (Path(tmp) / name).mkdir()
+                (Path(tmp) / name / (name + '_test.go')).write_text(source)
+            def extend(names):
+                listing, packages, events = self.listing, self.packages, self.events
+                for name in names:
+                    path = TINY + '/' + name
+                    listing += ('BenchmarkX\n' if name == 'benchonly' else '') + 'ok  \t%s\t0.001s\n' % path
+                    packages += go_package(path, [name + '_test.go'], directory=str(Path(tmp) / name))
+                    events += event('start', path) + event('output', path, None, 'ok  \t%s\t0.001s [no tests to run]\n' % path) + event('pass', path)
+                return dict(listing=listing, packages=packages, events=events)
+            self.assertEqual(self.verify(**extend(sources))['packages'], sorted([TINY, TINY + '/sub'] + [TINY + '/' + n for n in sources]))
+            for name in hidden:
+                with self.subTest(hidden=name), self.assertRaises(EvidenceError) as caught:
+                    self.verify(**extend([name]))
+                self.assertIn('discovery lists no tests', str(caught.exception))
+        self.assertEqual(run_selected.runnable_declarations([str(FIXTURES / 'tiny-go/tiny_test.go')]),
+                         ['ExampleHello', 'FuzzThing', 'TestAlpha', 'TestBeta', 'TestSkipped'])
+        with self.assertRaises(EvidenceError): run_selected.runnable_declarations([str(FIXTURES / 'tiny-go/missing_test.go')])
 
     def test_build_failure_is_named(self):
         with self.assertRaises(EvidenceError) as caught:
@@ -438,11 +491,33 @@ class RustTests(unittest.TestCase):
                 self.verify(**change)
 
     def test_suite_positive_and_controls(self):
-        target = {'id': 'suite', 'mode': 'rust-suite', 'cwd': '.', 'cargo': [], 'skips': {('tiny', 'props_extended'): {'test': 'props_extended', 'reason': 'extended', 'proof': 'props'}}}
+        allowance = {'test': 'props_extended', 'target': 'props', 'reason': 'extended', 'proof': 'props'}
+        target = {'id': 'suite', 'mode': 'rust-suite', 'cwd': '.', 'cargo': [], 'skips': {('tiny', 'props_extended'): allowance}}
         listing, stdout = fixture('rust-suite-list.txt'), fixture('rust-suite-run.txt', binary=True)
-        summary = run_selected.verify(target, listing, stdout, b'', 0, None)
+        stderr = fixture('rust-suite-run.stderr.txt', binary=True)
+        summary = run_selected.verify(target, listing, stdout, stderr, 0, None)
         self.assertEqual((summary['tests'], summary['passed'], summary['binaries']), (2, 1, 3))
-        self.assertEqual(summary['ignored'], [{'test': 'props_extended', 'reason': 'extended', 'proof': 'props'}])
+        self.assertEqual(summary['ignored'], [allowance])
+        windows = stderr.replace(b'/tmp/ci4-scratch/tr-target/debug/deps/props-1075011cb3d0102d', b'D:\\a\\target\\debug\\deps\\props-1075011cb3d0102d.exe')
+        self.assertNotEqual(windows, stderr)
+        self.assertEqual(run_selected.verify(target, listing, stdout, windows, 0, None)['ignored'], [allowance])
+        # A second harness ignoring the same name, or the ignore in another harness, is not covered.
+        twice_stdout = stdout.replace(b'running 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored',
+                                      b'running 1 test\ntest props_extended ... ignored, extended\n\ntest result: ok. 0 passed; 0 failed; 1 ignored', 1)
+        twice_listing = listing.replace('0 tests, 0 benchmarks\n', 'props_extended: test\n\n1 test, 0 benchmarks\n', 1)
+        self.assertNotEqual(twice_stdout, stdout)
+        self.assertNotEqual(twice_listing, listing)
+        rust_controls = {
+            'same name ignored in two harnesses': dict(stdout=twice_stdout, listing=twice_listing),
+            'ignored in another harness': dict(stderr=stderr.replace(b'deps/props-', b'deps/other-')),
+            'allowance without harness': dict(target={**target, 'skips': {('tiny', 'props_extended'): {k: v for k, v in allowance.items() if k != 'target'}}}),
+            'missing harness header': dict(stderr=drop_lines(stderr, 'Doc-tests')),
+            'no harness headers': dict(stderr=b''),
+        }
+        for name, change in rust_controls.items():
+            with self.subTest(control=name), self.assertRaises(EvidenceError):
+                run_selected.verify(change.get('target', target), change.get('listing', listing), change.get('stdout', stdout),
+                                    change.get('stderr', stderr), 0, None)
         controls = {
             'ignored without allowance': dict(target={**target, 'skips': {}}),
             'executed differ from discovery': dict(listing=listing.replace('ordinary: test\n', 'ordinary: test\nextra: test\n').replace('2 tests,', '3 tests,')),
@@ -454,7 +529,7 @@ class RustTests(unittest.TestCase):
         }
         for name, change in controls.items():
             with self.subTest(control=name), self.assertRaises(EvidenceError):
-                run_selected.verify(change.get('target', target), change.get('listing', listing), change.get('stdout', stdout), b'', change.get('exit_code', 0), None)
+                run_selected.verify(change.get('target', target), change.get('listing', listing), change.get('stdout', stdout), stderr, change.get('exit_code', 0), None)
 
 
 class InteropTests(unittest.TestCase):
@@ -602,6 +677,7 @@ modes = ["go-suite", "go-fuzz"]
 [[skips]]
 package = "tiny"
 test = "props_extended"
+target = "props"
 reason = "extended property budget"
 proof = "tiny-rust"
 modes = ["tiny-rust-suite"]
@@ -653,6 +729,17 @@ class RealToolTests(unittest.TestCase):
         with self.assertRaises(EvidenceError): run_selected.run('tiny-selected', self.root / 'evidence-renamed', root=self.root, env=self.env)
         self.assertFalse((self.root / 'evidence-renamed' / run_selected.evidence_name('tiny-selected') / 'verified.json').exists())
 
+    def test_real_go_runner_accepts_packages_without_runnable_tests(self):
+        self.assertIsNotNone(shutil.which('go'), 'go is required; missing tools fail instead of skipping')
+        for name, source in (('benchonly', 'package benchonly\n\nimport "testing"\n\nfunc BenchmarkX(b *testing.B) {}\n'),
+                             ('doconly', 'package doconly\n\nimport "fmt"\n\nfunc ExampleHi() {\n\tfmt.Println(Hi())\n}\n')):
+            (self.root / 'gotiny' / name).mkdir()
+            (self.root / 'gotiny' / name / (name + '_test.go')).write_text(source)
+        (self.root / 'gotiny/doconly/doconly.go').write_text('// Package doconly documents Hi.\npackage doconly\n\n// Hi greets.\nfunc Hi() string { return "hi" }\n')
+        summary = run_selected.run('tiny-suite', self.root / 'evidence-norun', root=self.root, env=self.env)['summary']
+        self.assertEqual(summary['packages'], [TINY, TINY + '/benchonly', TINY + '/doconly', TINY + '/sub'])
+        self.assertEqual(summary['tests'], 6)
+
     def test_real_go_runner_rejects_hidden_and_unlisted_packages(self):
         self.assertIsNotNone(shutil.which('go'), 'go is required; missing tools fail instead of skipping')
         hidden = self.root / 'gotiny/hidden'
@@ -671,7 +758,7 @@ class RealToolTests(unittest.TestCase):
         self.assertIsNotNone(shutil.which('cargo'), 'cargo is required; missing tools fail instead of skipping')
         record = self.run_id('tiny-rust')
         self.assertEqual((record['summary']['seed'], record['summary']['cases']), ('0x5249564241544348', 20000))
-        self.assertEqual(self.run_id('tiny-rust-suite')['summary']['ignored'], [{'test': 'props_extended', 'reason': 'extended property budget', 'proof': 'tiny-rust'}])
+        self.assertEqual(self.run_id('tiny-rust-suite')['summary']['ignored'], [{'test': 'props_extended', 'target': 'props', 'reason': 'extended property budget', 'proof': 'tiny-rust'}])
         source = self.root / 'rusttiny/tests/props.rs'
         source.write_text(source.read_text().replace('cases = 20_000usize', 'cases = 19_999usize'))
         with self.assertRaises(EvidenceError): run_selected.run('tiny-rust', self.root / 'evidence-reduced', root=self.root, env=self.env)

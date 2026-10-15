@@ -1,3 +1,18 @@
-example.com/tiny 1 0
-example.com/tiny/notest 0 0
-example.com/tiny/sub 1 0
+{
+	"Dir": "/fixtures/tiny-go",
+	"ImportPath": "example.com/tiny",
+	"TestGoFiles": [
+		"tiny_test.go"
+	]
+}
+{
+	"Dir": "/fixtures/tiny-go/notest",
+	"ImportPath": "example.com/tiny/notest"
+}
+{
+	"Dir": "/fixtures/tiny-go/sub",
+	"ImportPath": "example.com/tiny/sub",
+	"TestGoFiles": [
+		"sub_test.go"
+	]
+}

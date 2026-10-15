@@ -4,7 +4,8 @@
 # ordinary suite cross-check discovered Fuzz* names against [[fuzz]] and [loader].
 # [[skips]] is the closed ordinary-suite allowance: each row names either a
 # separate proving ID outside its own modes (proof) or the parent test in the
-# same package that must pass in the same run (parent).
+# same package that must pass in the same run (parent). A Rust row also names
+# the test harness (target) that must report the ignore.
 
 [[fuzz]]
 package = "./internal/events/eventid"
@@ -324,6 +325,7 @@ modes = ["server-unit", "server-race"]
 package = "ricevanta-spool"
 test = "fuzz_recover_extended"
 reason = "extended 100,000-case native property budget"
+target = "fuzz_recover"
 proof = "spool-extended"
 modes = ["agent-unit"]
 
@@ -331,5 +333,6 @@ modes = ["agent-unit"]
 package = "ricevanta-batch"
 test = "fuzz_seal_extended"
 reason = "extended 20,000-case native property budget"
+target = "fuzz_seal"
 proof = "batch-extended"
 modes = ["agent-unit"]
