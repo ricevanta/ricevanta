@@ -690,7 +690,7 @@
               "reasons": {
                 "type": "array",
                 "minItems": 0,
-                "maxItems": 256,
+                "maxItems": 1029,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
@@ -728,6 +728,7 @@
                         "component.registration_names",
                         "component.registration_native_host",
                         "component.registration_bound",
+                        "component.registration_duplicate",
                         "targets.device_groups_required",
                         "targets.device_groups_forbidden",
                         "targets.all_devices",

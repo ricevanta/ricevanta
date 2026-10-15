@@ -18088,6 +18088,2353 @@
       }
     },
     {
+      "name": "registration-duplicate-in-package",
+      "description": "Two adapters in one package name one unbound registration; every adapter after the first is refused.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome.yaml"
+                ],
+                "file": "adapters/chrome.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              },
+              {
+                "name": "chrome2",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome2.yaml"
+                ],
+                "file": "adapters/chrome2.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            },
+            {
+              "path": "adapters/chrome2.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+        "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+        "envelope_sha256": "d8b727e3397c96592a22c9a8569547b1c3eb94dd1a8e76f15ab046ba19dfeee2"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [],
+        "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          },
+          {
+            "component": "chrome2",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "chrome",
+          "outcome": "ok"
+        },
+        {
+          "component": "chrome2",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "reject",
+        "stage": "component",
+        "reasons": [
+          {
+            "code": "component.registration_duplicate",
+            "subject": "chrome2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "registration-duplicate-pending-holder",
+      "description": "The same holds when a recovery_pending install holds the registration.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome.yaml"
+                ],
+                "file": "adapters/chrome.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              },
+              {
+                "name": "chrome2",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome2.yaml"
+                ],
+                "file": "adapters/chrome2.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            },
+            {
+              "path": "adapters/chrome2.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+        "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+        "envelope_sha256": "d8b727e3397c96592a22c9a8569547b1c3eb94dd1a8e76f15ab046ba19dfeee2"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [],
+        "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            },
+            "bound": {
+              "id": "io.ricevanta.browser-chrome",
+              "component": "chrome",
+              "state": "recovery_pending"
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          },
+          {
+            "component": "chrome2",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "chrome",
+          "outcome": "ok"
+        },
+        {
+          "component": "chrome2",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "reject",
+        "stage": "component",
+        "reasons": [
+          {
+            "code": "component.registration_duplicate",
+            "subject": "chrome2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "registration-duplicate-unknown",
+      "description": "The duplicate check does not depend on the registration being stored: the second adapter carries both codes.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome.yaml"
+                ],
+                "file": "adapters/chrome.yaml",
+                "capabilities": {
+                  "registration": "com.example.browser.registration",
+                  "os": {
+                    "windows": {
+                      "policy_names": [],
+                      "native_host": false
+                    }
+                  }
+                }
+              },
+              {
+                "name": "chrome2",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome2.yaml"
+                ],
+                "file": "adapters/chrome2.yaml",
+                "capabilities": {
+                  "registration": "com.example.browser.registration",
+                  "os": {
+                    "windows": {
+                      "policy_names": [],
+                      "native_host": false
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            },
+            {
+              "path": "adapters/chrome2.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+        "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+        "envelope_sha256": "d8b727e3397c96592a22c9a8569547b1c3eb94dd1a8e76f15ab046ba19dfeee2"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [],
+        "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "com.example.browser.registration",
+              "os": {
+                "windows": {
+                  "policy_names": [],
+                  "native_host": false
+                }
+              }
+            }
+          },
+          {
+            "component": "chrome2",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "com.example.browser.registration",
+              "os": {
+                "windows": {
+                  "policy_names": [],
+                  "native_host": false
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "chrome",
+          "outcome": "ok"
+        },
+        {
+          "component": "chrome2",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "reject",
+        "stage": "component",
+        "reasons": [
+          {
+            "code": "component.registration_duplicate",
+            "subject": "chrome2"
+          },
+          {
+            "code": "component.registration_unknown",
+            "subject": "chrome"
+          },
+          {
+            "code": "component.registration_unknown",
+            "subject": "chrome2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "identical-retry-set-order",
+      "description": "Set-valued grant arrays compare as sets: a proposal listing the same policy names in another order is an identical retry.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome.yaml"
+                ],
+                "file": "adapters/chrome.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist",
+                        "NativeMessagingUserLevelHosts"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+        "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+        "envelope_sha256": "d8b727e3397c96592a22c9a8569547b1c3eb94dd1a8e76f15ab046ba19dfeee2"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": {
+          "id": "com.example.browser",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
+        "tombstones": [
+          {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+            "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a"
+          }
+        ],
+        "install": {
+          "id": "com.example.browser",
+          "version": "1.0.0",
+          "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+          "state": "active",
+          "enabled": true,
+          "generation": "1",
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "grants": [
+            {
+              "extension_id": "com.example.browser",
+              "version": "1.0.0",
+              "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+              "recovery_epoch": "3",
+              "grant_generation": "1",
+              "approval": {
+                "kind": "operator",
+                "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+                "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+                "recovery_epoch": "3"
+              },
+              "grant": {
+                "component": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "values": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist",
+                        "NativeMessagingUserLevelHosts"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            },
+            "bound": {
+              "id": "com.example.browser",
+              "component": "chrome",
+              "state": "active"
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "NativeMessagingUserLevelHosts",
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "chrome",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "identical_retry",
+        "reasons": []
+      }
+    },
+    {
+      "name": "identical-retry-outbound-order",
+      "description": "Outbound tuples are a set ordered by their JCS bytes: the stored canonical order and the proposal's manifest order are one grant.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.notify",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.notify"
+          },
+          "spec": {
+            "requires": {
+              "service-connector": [
+                "ext.ricevanta.io/notifier/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "notifier",
+                "kind": "service-connector",
+                "interface": "ext.ricevanta.io/notifier/v1",
+                "files": [
+                  "connectors/notifier.yaml"
+                ],
+                "file": "connectors/notifier.yaml",
+                "capabilities": {
+                  "outbound": [
+                    {
+                      "host": "hooks.example.com",
+                      "port": 443,
+                      "transport": "tcp"
+                    },
+                    {
+                      "host": "alerts.example.com",
+                      "port": 443,
+                      "transport": "tcp"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "connectors/notifier.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "bffd9d4a8a4d28dc3508fe3b7ca6f27573e26a5afa03c8caed4dea734811b4b2",
+        "manifest_sha256": "add297ada191cd1b24b35e7e9b9f3ae2e1b13de051f9b2ba91bc22e3c31e0d4f",
+        "envelope_sha256": "5b75bc281d4f13fdea6c14ce340247068fb17ee5b7856530af3c16e704eb245d"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": {
+          "id": "com.example.notify",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
+        "tombstones": [
+          {
+            "id": "com.example.notify",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "add297ada191cd1b24b35e7e9b9f3ae2e1b13de051f9b2ba91bc22e3c31e0d4f",
+            "package_sha256": "bffd9d4a8a4d28dc3508fe3b7ca6f27573e26a5afa03c8caed4dea734811b4b2"
+          }
+        ],
+        "install": {
+          "id": "com.example.notify",
+          "version": "1.0.0",
+          "package_sha256": "bffd9d4a8a4d28dc3508fe3b7ca6f27573e26a5afa03c8caed4dea734811b4b2",
+          "state": "active",
+          "enabled": true,
+          "generation": "1",
+          "targets": {
+            "device_groups": [],
+            "all_devices": false,
+            "console": false,
+            "jobs": true
+          },
+          "grants": [
+            {
+              "extension_id": "com.example.notify",
+              "version": "1.0.0",
+              "package_sha256": "bffd9d4a8a4d28dc3508fe3b7ca6f27573e26a5afa03c8caed4dea734811b4b2",
+              "recovery_epoch": "3",
+              "grant_generation": "1",
+              "approval": {
+                "kind": "operator",
+                "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+                "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+                "recovery_epoch": "3"
+              },
+              "grant": {
+                "component": "notifier",
+                "kind": "service-connector",
+                "interface": "ext.ricevanta.io/notifier/v1",
+                "values": {
+                  "outbound": [
+                    {
+                      "host": "alerts.example.com",
+                      "port": 443,
+                      "transport": "tcp"
+                    },
+                    {
+                      "host": "hooks.example.com",
+                      "port": 443,
+                      "transport": "tcp"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "notifier",
+            "kind": "service-connector",
+            "interface": "ext.ricevanta.io/notifier/v1",
+            "values": {
+              "outbound": [
+                {
+                  "host": "hooks.example.com",
+                  "port": 443,
+                  "transport": "tcp"
+                },
+                {
+                  "host": "alerts.example.com",
+                  "port": 443,
+                  "transport": "tcp"
+                }
+              ]
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [],
+          "all_devices": false,
+          "console": false,
+          "jobs": true
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "notifier",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "identical_retry",
+        "reasons": []
+      }
+    },
+    {
+      "name": "request-digest-set-order",
+      "description": "Both digests canonicalize set-valued arrays, so an approval of the sorted proposal admits the reordered one.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome.yaml"
+                ],
+                "file": "adapters/chrome.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist",
+                        "NativeMessagingUserLevelHosts"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+        "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+        "envelope_sha256": "d8b727e3397c96592a22c9a8569547b1c3eb94dd1a8e76f15ab046ba19dfeee2"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [],
+        "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "NativeMessagingUserLevelHosts",
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:7d6b231719e9940ce33ef87b451b0d2aaa8ce9e253ba2ad2b2d6cd441027db05",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        }
+      },
+      "verdicts": [
+        {
+          "component": "chrome",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "operation": "install",
+        "closure_digest": "sha256:a563aa7060d04ebaa6dbffc26f8be0b5d2f9d262ea16e45c7f97f031c7de7fb7",
+        "request_digest": "sha256:7d6b231719e9940ce33ef87b451b0d2aaa8ce9e253ba2ad2b2d6cd441027db05",
+        "outcome": "admit",
+        "reasons": [],
+        "intent": {
+          "operation": "install",
+          "approval_kind": "operator",
+          "tombstone_create": true,
+          "ownership_create": true,
+          "enabled": false,
+          "grants": [
+            "chrome"
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "registration_bind": [
+            {
+              "registration": "io.ricevanta.browser.chrome",
+              "component": "chrome"
+            }
+          ],
+          "approval_consume": "017f22e2-79b0-7cc3-98c4-dc0c0c073991"
+        }
+      }
+    },
+    {
+      "name": "upgrade-drops-adapter-releases-binding",
+      "description": "An upgrade whose new version has no adapter commits an empty binding set; the coordinator releases the id's old binding.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "2.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "content": [
+                "ext.ricevanta.io/content/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "rules",
+                "kind": "content",
+                "interface": "ext.ricevanta.io/content/v1",
+                "files": [
+                  "content/rules.yaml"
+                ],
+                "format": "sigma",
+                "file": "content/rules.yaml",
+                "capabilities": {}
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "content/rules.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "ebc4eef1a0502b8834a9e47e179d5d16a01204e64a0892304a67765aa5e3750e",
+        "manifest_sha256": "1e0f13d4431028cf875d911964f498bf3dbd3dc7f51d513083fe0e05140469cb",
+        "envelope_sha256": "ef33c60f88e96f3ea08d49ef758c1fe94210ff209cac679ac0f5e91b29e9e943"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": {
+          "id": "com.example.browser",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
+        "tombstones": [
+          {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+            "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a"
+          }
+        ],
+        "install": {
+          "id": "com.example.browser",
+          "version": "1.0.0",
+          "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+          "state": "active",
+          "enabled": true,
+          "generation": "1",
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "grants": [
+            {
+              "extension_id": "com.example.browser",
+              "version": "1.0.0",
+              "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+              "recovery_epoch": "3",
+              "grant_generation": "1",
+              "approval": {
+                "kind": "operator",
+                "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+                "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+                "recovery_epoch": "3"
+              },
+              "grant": {
+                "component": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "values": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "rules",
+            "kind": "content",
+            "interface": "ext.ricevanta.io/content/v1",
+            "values": {}
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:8d597d4b6f7e9465692a39969cfeb5233f4b8ddcd95f4dea2914f1c9455e1528",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        }
+      },
+      "verdicts": [
+        {
+          "component": "rules",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "operation": "upgrade",
+        "closure_digest": "sha256:bacbc7e7bc7b32362f805fc2a894d3ff141b5b8825d2e1c1ab5f85d82827990e",
+        "request_digest": "sha256:8d597d4b6f7e9465692a39969cfeb5233f4b8ddcd95f4dea2914f1c9455e1528",
+        "outcome": "admit",
+        "reasons": [],
+        "intent": {
+          "operation": "upgrade",
+          "approval_kind": "operator",
+          "tombstone_create": true,
+          "ownership_create": false,
+          "enabled": true,
+          "grants": [
+            "rules"
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "registration_bind": [],
+          "approval_consume": "017f22e2-79b0-7cc3-98c4-dc0c0c073991"
+        }
+      }
+    },
+    {
+      "name": "upgrade-renames-adapter-same-registration",
+      "description": "A binding held by the same id never blocks: the new binding set replaces the id's bindings, so a renamed adapter keeps its registration across the upgrade.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "2.1.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome-next",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome-next.yaml"
+                ],
+                "file": "adapters/chrome-next.yaml",
+                "capabilities": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome-next.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "a380f8fd7212d7a461445b48ae0fceaf4b13c95c651eb9ed0df3af45bf79df60",
+        "manifest_sha256": "9538044e5854fe6dabda8475c941fc02cf2fc5ccbd8f138aa40d350e6bb8380c",
+        "envelope_sha256": "a353ae2977534f624bc64968c2fe6bba8914e928fce5ea13b3fa7636f5648d5d"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": {
+          "id": "com.example.browser",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
+        "tombstones": [
+          {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+            "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a"
+          }
+        ],
+        "install": {
+          "id": "com.example.browser",
+          "version": "1.0.0",
+          "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+          "state": "active",
+          "enabled": true,
+          "generation": "1",
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "grants": [
+            {
+              "extension_id": "com.example.browser",
+              "version": "1.0.0",
+              "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+              "recovery_epoch": "3",
+              "grant_generation": "1",
+              "approval": {
+                "kind": "operator",
+                "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+                "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+                "recovery_epoch": "3"
+              },
+              "grant": {
+                "component": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "values": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            },
+            "bound": {
+              "id": "com.example.browser",
+              "component": "chrome",
+              "state": "active"
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome-next",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "io.ricevanta.browser.chrome",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": true
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:dd945dd996e7260832f93f133d4ae7c45ec1b63cc9b55b56cf79167fdd393a90",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        }
+      },
+      "verdicts": [
+        {
+          "component": "chrome-next",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "operation": "upgrade",
+        "closure_digest": "sha256:d1baa4ba19965ed7e6679ed37cbe0346a6bf5ed0ea83689bb874cba828c8dffe",
+        "request_digest": "sha256:dd945dd996e7260832f93f133d4ae7c45ec1b63cc9b55b56cf79167fdd393a90",
+        "outcome": "admit",
+        "reasons": [],
+        "intent": {
+          "operation": "upgrade",
+          "approval_kind": "operator",
+          "tombstone_create": true,
+          "ownership_create": false,
+          "enabled": true,
+          "grants": [
+            "chrome-next"
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "registration_bind": [
+            {
+              "registration": "io.ricevanta.browser.chrome",
+              "component": "chrome-next"
+            }
+          ],
+          "approval_consume": "017f22e2-79b0-7cc3-98c4-dc0c0c073991"
+        }
+      }
+    },
+    {
+      "name": "upgrade-moves-adapter-registration",
+      "description": "An upgrade that moves the adapter to another registration binds the new one; the old binding, absent from the set, is released.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.browser",
+            "version": "3.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.browser"
+          },
+          "spec": {
+            "requires": {
+              "browser-adapter": [
+                "ext.ricevanta.io/browser-adapter/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "files": [
+                  "adapters/chrome.yaml"
+                ],
+                "file": "adapters/chrome.yaml",
+                "capabilities": {
+                  "registration": "com.example.registration.two",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": false
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "adapters/chrome.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "02d0f118d4e5ecb146d5ab8ff9af5baa643dc775de17edaf6851840cc80a33aa",
+        "manifest_sha256": "0b2b14004adbbc25369e6013242c5e2620477ae1f10492264cd3e023b864dc08",
+        "envelope_sha256": "eb1c609585c10e1c6529c54a8cfcc393baafda4bec55eed117eb154f4b25ae96"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": {
+          "id": "com.example.browser",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
+        "tombstones": [
+          {
+            "id": "com.example.browser",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "5a78873b0d6ca1188acace2fa9e2b5afece7f4a50d8389f569f75a6d4d3286c6",
+            "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a"
+          }
+        ],
+        "install": {
+          "id": "com.example.browser",
+          "version": "1.0.0",
+          "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+          "state": "active",
+          "enabled": true,
+          "generation": "1",
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "grants": [
+            {
+              "extension_id": "com.example.browser",
+              "version": "1.0.0",
+              "package_sha256": "cb0bf580f19c63423c455f66b349d2c65c2d4f9c53502aaaa3bd309c0c65544a",
+              "recovery_epoch": "3",
+              "grant_generation": "1",
+              "approval": {
+                "kind": "operator",
+                "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+                "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+                "recovery_epoch": "3"
+              },
+              "grant": {
+                "component": "chrome",
+                "kind": "browser-adapter",
+                "interface": "ext.ricevanta.io/browser-adapter/v1",
+                "values": {
+                  "registration": "io.ricevanta.browser.chrome",
+                  "os": {
+                    "windows": {
+                      "policy_names": [
+                        "ExtensionInstallForcelist"
+                      ],
+                      "native_host": true
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "registrations": [
+          {
+            "id": "com.example.registration.two",
+            "browser": "chrome",
+            "registration_generation": "1",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "chrome",
+            "kind": "browser-adapter",
+            "interface": "ext.ricevanta.io/browser-adapter/v1",
+            "values": {
+              "registration": "com.example.registration.two",
+              "os": {
+                "windows": {
+                  "policy_names": [
+                    "ExtensionInstallForcelist"
+                  ],
+                  "native_host": false
+                }
+              }
+            }
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:fe86e3cd1e20f57eb64685d23600c932d7e03d0587bbe6d8c9abdeaa3393f074",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        }
+      },
+      "verdicts": [
+        {
+          "component": "chrome",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "operation": "upgrade",
+        "closure_digest": "sha256:d0db85859ada7cec954da814c5f4426c32d3e67cc180acf8f912a0baad83c815",
+        "request_digest": "sha256:fe86e3cd1e20f57eb64685d23600c932d7e03d0587bbe6d8c9abdeaa3393f074",
+        "outcome": "admit",
+        "reasons": [],
+        "intent": {
+          "operation": "upgrade",
+          "approval_kind": "operator",
+          "tombstone_create": true,
+          "ownership_create": false,
+          "enabled": true,
+          "grants": [
+            "chrome"
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "registration_bind": [
+            {
+              "registration": "com.example.registration.two",
+              "component": "chrome"
+            }
+          ],
+          "approval_consume": "017f22e2-79b0-7cc3-98c4-dc0c0c073991"
+        }
+      }
+    },
+    {
       "name": "targets-device-groups-required",
       "description": "Agent-bound components need device groups, or all devices on a server-image request.",
       "evidence": {
@@ -24229,7 +26576,12 @@
         ],
         "revocations": [],
         "revocation_generation": "0",
-        "ownership": null,
+        "ownership": {
+          "id": "com.example.rules",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
         "tombstones": [
           {
             "id": "com.example.other",
@@ -24420,7 +26772,12 @@
         ],
         "revocations": [],
         "revocation_generation": "0",
-        "ownership": null,
+        "ownership": {
+          "id": "com.example.rules",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
         "tombstones": [
           {
             "id": "com.example.rules",
@@ -24650,7 +27007,7 @@
           },
           "grants": [
             {
-              "extension_id": "com.example.rules",
+              "extension_id": "com.example.other",
               "version": "1.0.0",
               "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
               "recovery_epoch": "3",
@@ -24851,7 +27208,12 @@
         ],
         "revocations": [],
         "revocation_generation": "0",
-        "ownership": null,
+        "ownership": {
+          "id": "com.example.rules",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
         "tombstones": [],
         "install": {
           "id": "com.example.rules",
@@ -26931,7 +29293,12 @@
         ],
         "revocations": [],
         "revocation_generation": "0",
-        "ownership": null,
+        "ownership": {
+          "id": "com.example.rules",
+          "owner": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+          "prior_owners": [],
+          "ownership_generation": "1"
+        },
         "tombstones": [
           {
             "id": "com.example.rules",
@@ -26942,6 +29309,425 @@
           }
         ],
         "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "rules",
+            "kind": "content",
+            "interface": "ext.ricevanta.io/content/v1",
+            "values": {}
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "rules",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "reject",
+        "stage": "input",
+        "reasons": [
+          {
+            "code": "input.snapshot",
+            "subject": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "input-snapshot-tombstone-without-ownership",
+      "description": "Rule 12: a tombstone exists only beside the id's ownership record.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.rules",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.rules"
+          },
+          "spec": {
+            "requires": {
+              "content": [
+                "ext.ricevanta.io/content/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "rules",
+                "kind": "content",
+                "interface": "ext.ricevanta.io/content/v1",
+                "files": [
+                  "content/rules.yaml"
+                ],
+                "format": "sigma",
+                "file": "content/rules.yaml",
+                "capabilities": {}
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "content/rules.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "manifest_sha256": "e03cbffe0d0cc6647369eb12934795343520b96c3b7f0e1e8a60cf7123a72ac4",
+        "envelope_sha256": "f1f4bfa0f41e80d6430232cd2acce5d0d7894637497d224d7f237c67aaab3f27"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [
+          {
+            "id": "com.example.rules",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "e03cbffe0d0cc6647369eb12934795343520b96c3b7f0e1e8a60cf7123a72ac4",
+            "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196"
+          }
+        ],
+        "install": null,
+        "registrations": [
+          {
+            "id": "io.ricevanta.browser.chrome",
+            "browser": "chrome",
+            "registration_generation": "2",
+            "os": {
+              "windows": {
+                "policy_names": [
+                  "ExtensionInstallForcelist",
+                  "NativeMessagingUserLevelHosts"
+                ],
+                "native_host": true
+              },
+              "macos": {
+                "policy_names": [
+                  "ExtensionInstallForcelist"
+                ],
+                "native_host": false
+              }
+            }
+          }
+        ],
+        "disclosure_profiles": [
+          "inventory.software.v1"
+        ],
+        "device_groups": [
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+          "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+        ],
+        "consumed_approvals": []
+      },
+      "request": {
+        "source": "upload",
+        "requester": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+        "grant_update": false,
+        "grants": [
+          {
+            "component": "rules",
+            "kind": "content",
+            "interface": "ext.ricevanta.io/content/v1",
+            "values": {}
+          }
+        ],
+        "targets": {
+          "device_groups": [
+            "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+          ],
+          "all_devices": false,
+          "console": false,
+          "jobs": false
+        },
+        "approval": null
+      },
+      "verdicts": [
+        {
+          "component": "rules",
+          "outcome": "ok"
+        }
+      ],
+      "expected": {
+        "outcome": "reject",
+        "stage": "input",
+        "reasons": [
+          {
+            "code": "input.snapshot",
+            "subject": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "input-snapshot-install-without-ownership",
+      "description": "Rule 12: an install exists only beside the id's ownership record.",
+      "evidence": {
+        "document": {
+          "apiVersion": "ricevanta.io/v1alpha1",
+          "kind": "Extension",
+          "metadata": {
+            "id": "com.example.rules",
+            "version": "1.0.0",
+            "publisher": {
+              "name": "Example Security",
+              "key": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+            },
+            "license": "Apache-2.0",
+            "source": "https://example.com/com.example.rules"
+          },
+          "spec": {
+            "requires": {
+              "content": [
+                "ext.ricevanta.io/content/v1"
+              ]
+            },
+            "components": [
+              {
+                "name": "rules",
+                "kind": "content",
+                "interface": "ext.ricevanta.io/content/v1",
+                "files": [
+                  "content/rules.yaml"
+                ],
+                "format": "sigma",
+                "file": "content/rules.yaml",
+                "capabilities": {}
+              }
+            ]
+          },
+          "files": [
+            {
+              "path": "content/rules.yaml",
+              "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+              "size": 3
+            }
+          ]
+        },
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "manifest_sha256": "e03cbffe0d0cc6647369eb12934795343520b96c3b7f0e1e8a60cf7123a72ac4",
+        "envelope_sha256": "f1f4bfa0f41e80d6430232cd2acce5d0d7894637497d224d7f237c67aaab3f27"
+      },
+      "snapshot": {
+        "recovery_epoch": "3",
+        "approval_policy_disabled": false,
+        "approval_policy_generation": "1",
+        "first_start": false,
+        "release_version": "0.1.0",
+        "project_key": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+        "served_interfaces": [
+          "ext.ricevanta.io/content/v1",
+          "ext.ricevanta.io/browser-adapter/v1",
+          "ricevanta:agent/classifier@1.0.0",
+          "ricevanta:agent/parser@1.0.0",
+          "ricevanta:agent/collector@1.0.0",
+          "ricevanta:agent/responder@1.0.0",
+          "ext.ricevanta.io/console-module/v1",
+          "ext.ricevanta.io/export-destination/v1",
+          "ext.ricevanta.io/ca-connector/v1",
+          "ext.ricevanta.io/notifier/v1",
+          "ext.ricevanta.io/enricher/v1"
+        ],
+        "trust_list": [
+          {
+            "fingerprint": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+            "name": "Example Security",
+            "prefixes": [
+              "com.example"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:24f6ed6acbfe1009c030d7ca567c33ca4830911498236b5561a6c82abec5de28",
+            "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+            "name": "Partner Tools",
+            "prefixes": [
+              "com.example.partner",
+              "org.other"
+            ],
+            "project_publisher": false,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          },
+          {
+            "fingerprint": "sha256:03396219237f75a64f12aeb7f39723abf400b160c364980a765dac24aeba2464",
+            "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+            "name": "Ricevanta project",
+            "prefixes": [
+              "io.ricevanta"
+            ],
+            "project_publisher": true,
+            "revoked": false,
+            "retired": false,
+            "generation": "1"
+          }
+        ],
+        "revocations": [],
+        "revocation_generation": "0",
+        "ownership": null,
+        "tombstones": [
+          {
+            "id": "com.example.rules",
+            "version": "1.0.0",
+            "publisher": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+            "manifest_sha256": "e03cbffe0d0cc6647369eb12934795343520b96c3b7f0e1e8a60cf7123a72ac4",
+            "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196"
+          }
+        ],
+        "install": {
+          "id": "com.example.rules",
+          "version": "1.0.0",
+          "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+          "state": "active",
+          "enabled": true,
+          "generation": "1",
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "grants": [
+            {
+              "extension_id": "com.example.rules",
+              "version": "1.0.0",
+              "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+              "recovery_epoch": "3",
+              "grant_generation": "1",
+              "approval": {
+                "kind": "operator",
+                "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+                "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+                "recovery_epoch": "3"
+              },
+              "grant": {
+                "component": "rules",
+                "kind": "content",
+                "interface": "ext.ricevanta.io/content/v1",
+                "values": {}
+              }
+            }
+          ]
+        },
         "registrations": [
           {
             "id": "io.ricevanta.browser.chrome",
