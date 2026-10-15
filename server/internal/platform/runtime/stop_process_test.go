@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"debug/buildinfo"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -105,10 +107,36 @@ func TestStopProcessHelper(t *testing.T) {
 	os.Exit(code)
 }
 
+// Build a separate helper: a race-instrumented os.Exit(0) runs race finalization
+// while the watchdog stays armed. That timing is not the release stop contract.
+// Keep the outer suite and the in-process controller tests race-instrumented.
+func buildStopProcessHelper(t *testing.T) string {
+	t.Helper()
+	helper := filepath.Join(t.TempDir(), "stop-helper.exe")
+	cmd := exec.Command("go", "test", "-c", "-race=false", "-trimpath", "-buildvcs=false", "-o", helper, ".")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build stop helper: %v\n%s", err, output)
+	}
+	info, err := buildinfo.ReadFile(helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := make(map[string]string)
+	for _, setting := range info.Settings {
+		settings[setting.Key] = setting.Value
+	}
+	if settings["-race"] == "true" || settings["-trimpath"] != "true" {
+		t.Fatalf("stop helper must use the release build configuration: %v", info.Settings)
+	}
+	t.Logf("stop helper toolchain=%s OS=%s race=false trimpath=true buildvcs=false", info.GoVersion, runtime.GOOS)
+	return helper
+}
+
 func TestStopProcessDeadline(t *testing.T) {
+	helper := buildStopProcessHelper(t)
 	for _, mode := range []string{"config", "pipe", "tls", "cleanup", "join", "stderr", "complete", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
-			cmd := exec.Command(os.Args[0], "-test.run=^TestStopProcessHelper$")
+			cmd := exec.Command(helper, "-test.run=^TestStopProcessHelper$")
 			cmd.Env = append(os.Environ(), "RICEVANTA_TEST_STOP_HELPER="+mode)
 			input, err := cmd.StdinPipe()
 			if err != nil {
