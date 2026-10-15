@@ -12,12 +12,15 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
 import tomllib
 
 import rust_env
+import python_env
+import bootstrap
 
 ROOT = Path(__file__).resolve().parents[2]
 GO_LIST_NAME = re.compile(r'^(Test|Benchmark|Fuzz|Example)\w*$')
@@ -792,12 +795,56 @@ def cargo_guard(target, env, root):
 
 def child_environment(target, env):
     """Go children ignore the per-user configuration file, so `go env -w` cannot supply CC, flags or a toolchain."""
-    result = {**env, 'GOENV': 'off'} if target['mode'].startswith('go') else env
+    result = {**env, 'GOENV': 'off', 'GOCACHEPROG': ''} if target['mode'].startswith('go') else env
     if target['mode'] == 'go-cost-model': result.update(RICEVANTA_COST_MODEL='full', GOGC='100')
     return result
 
 
+def admitted_tool_guard(env):
+    """Check bootstrap PATH order and tool resolution before discovering or executing tests."""
+    if not env.get('CI_ADMITTED_ROOT'): return
+    root = Path(env['CI_ADMITTED_ROOT'])
+    try:
+        evidence = json.loads((root / 'bootstrap-evidence.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError) as error:
+        raise EvidenceError(f'admitted tool evidence unreadable: {error}') from error
+    windows = evidence.get('platform', '').startswith('windows')
+    entries = [part for part in env.get('PATH', '').split(';' if windows else os.pathsep) if part]
+    if windows: entries = bootstrap.strip_git_bash_prefix(entries, env)
+    # GITHUB_PATH may prepend only the currently running, marker-created validator's scripts directory.
+    scripts = Path(sys.prefix) / ('Scripts' if windows else 'bin')
+    validator = None
+    if sys.prefix != sys.base_prefix and entries and bootstrap.path_identity(entries[0], windows) == bootstrap.path_identity(scripts, windows):
+        try:
+            marker = python_env.read_marker(sys.prefix)
+            current = python_env.scripts_manifest(scripts)
+            for name in ('python', 'python3', 'python.exe', 'python3.exe'):
+                if name in marker['scripts'] and marker['scripts'][name] != current.get(name):
+                    raise ValueError('validator interpreter changed')
+        except ValueError as error: raise EvidenceError(f'admitted validator: {error}') from error
+        validator = scripts
+        entries = entries[1:]
+    prefix = evidence.get('path', [])
+    if not prefix or [bootstrap.path_identity(p, windows) for p in entries[:len(prefix)]] != [bootstrap.path_identity(p, windows) for p in prefix]:
+        raise EvidenceError('PATH does not begin with the admitted directories')
+    tools = {row['tool'] for row in evidence['entries']}
+    names = {'python': ('python', 'python3'), 'go': ('go', 'gofmt'), 'rustc': ('cargo', 'rustc', 'rustdoc', 'rustfmt', 'cargo-clippy'),
+             'node': ('node',), 'pnpm': ('pnpm',)}
+    for tool, commands in names.items():
+        if tool not in tools: continue
+        for name in commands:
+            found = shutil.which(name + ('.exe' if windows else ''), path=env.get('PATH', ''))
+            allowed = found and Path(found).resolve().is_relative_to(root.resolve())
+            if validator and name in ('python', 'python3') and found:
+                allowed = allowed or python_env.path_key(Path(found).parent) == python_env.path_key(validator)
+            if not allowed: raise EvidenceError(f'admitted tool {name} resolves outside the admitted root: {found}')
+
+
 def preconditions(target, env, root=ROOT):
+    hooks = python_env.environment_errors(env)
+    if hooks: raise EvidenceError('; '.join(hooks))
+    external = [key for key, value in env.items() if key.upper() == 'GOCACHEPROG' and value]
+    if external: raise EvidenceError('external Go cache program forbidden: ' + ', '.join(external))
     refused = rust_env.c_toolchain_names(env)
     if refused: raise EvidenceError('C toolchain variables in the environment could replace the compiler, archiver or flags: ' + ', '.join(refused))
     cargo_guard(target, env, root)
@@ -812,6 +859,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     if target_id not in targets: raise EvidenceError('unknown selected target: ' + target_id)
     target = targets[target_id]
     preconditions(target, env, root)
+    admitted_tool_guard(env)
     env = child_environment(target, env)
     evidence_dir = Path(evidence_root) / evidence_name(target_id)
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))

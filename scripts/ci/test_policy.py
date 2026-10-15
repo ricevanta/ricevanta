@@ -5,11 +5,93 @@ import tempfile
 import subprocess
 from copy import deepcopy
 import inventory
+import json
 import unittest
 import yaml
 import check_policy
+import python_env
 
 ROOT = Path(__file__).resolve().parents[2]
+
+class EnvironmentAdmissionTests(unittest.TestCase):
+    def test_every_authoritative_job_and_copilot_rejects_startup_and_path_substitution(self):
+        names = ('PYTHONPATH', 'PythonStartup', 'BASH_ENV', 'ENV', 'BASH_FUNC_go%%', 'LD_PRELOAD', 'DYLD_LIBRARY_PATH',
+                 'PATH', 'GOCACHEPROG', 'gocacheprog')
+        forms = ('{name}=/tmp/shim python --version', 'export {name}', 'declare -x {name}', 'env {name}=/tmp/shim python --version',
+                 'unset {name}', 'env -u {name} python --version', 'env -u{name} python --version', 'env --unset={name} python --version',
+                 '$env:{name} = "shim"', '${{env:{name}}} = "shim"', 'Set-Item Env:{name} shim',
+                 '[Environment]::SetEnvironmentVariable("{name}", "shim")')
+        for workflow in ('ci', 'server', 'agent', 'console', 'design', 'bootstrap', 'copilot-code-review'):
+            data = yaml.load((ROOT / f'.github/workflows/{workflow}.yml').read_text(), Loader=yaml.BaseLoader)
+            for jid, job in data['jobs'].items():
+                if 'uses' in job: continue
+                for name in names:
+                    for scope in ('workflow', 'job', 'step'):
+                        fixture = {'jobs': {jid: {'steps': [{'run': 'true', 'shell': python_env.ADMISSION_SHELL}]}}}
+                        settings = fixture if scope == 'workflow' else fixture['jobs'][jid] if scope == 'job' else fixture['jobs'][jid]['steps'][0]
+                        settings['env'] = {name: 'shim'}
+                        with self.subTest(workflow=workflow, job=jid, scope=scope, name=name):
+                            self.assertTrue(check_policy.environment_admission_errors(fixture, workflow))
+                    for form in forms:
+                        for prefix in ('', '\t', 'echo ok\n', 'echo ok \\\n'):
+                            fixture = {'jobs': {jid: {'steps': [{'shell': python_env.ADMISSION_SHELL, 'run': prefix + form.format(name=name)}]}}}
+                            with self.subTest(workflow=workflow, job=jid, form=form, name=name):
+                                self.assertTrue(check_policy.environment_admission_errors(fixture, workflow))
+
+    def test_command_lookup_and_startup_shell_replacements_are_refused(self):
+        for run in ('function go() { echo fake; }', 'python () { echo fake; }', 'alias cargo=shim',
+                    'hash -p /tmp/shim node', 'source /tmp/startup', '. /tmp/startup', 'set -a', 'env -i python --version',
+                    'bash --rcfile /tmp/hook -c true', 'bash -lc true', 'bash --login -c true', 'if true; then source /tmp/hook; fi',
+                    'alias harmless=true go=shim'):
+            data = {'jobs': {'leaf': {'steps': [{'shell': python_env.ADMISSION_SHELL, 'run': run}]}}}
+            with self.subTest(run=run): self.assertTrue(check_policy.environment_admission_errors(data, 'server'))
+        for shell in ('bash', 'bash -l {0}', 'pwsh', 'bash --rcfile /tmp/hook {0}'):
+            data = {'jobs': {'leaf': {'steps': [{'shell': shell, 'run': 'true'}]}}}
+            with self.subTest(shell=shell): self.assertTrue(check_policy.environment_admission_errors(data, 'server'))
+
+    def test_closure_allows_benign_read_only_text(self):
+        data = yaml.load((ROOT / '.github/workflows/design.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(check_policy.python_errors(data), [])
+        job = data['jobs']['validate']
+        index = next(i for i, step in enumerate(job['steps']) if step.get('run') == python_env.CHECK_COMMAND)
+        job['steps'].insert(index, {'shell': python_env.ADMISSION_SHELL,
+                                   'run': 'echo "The client chooses which server to contact; PATH remains admitted"'})
+        self.assertEqual(check_policy.python_errors(data), [])
+
+    def test_admission_shell_does_not_execute_an_inherited_startup_hook(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hook = Path(tmp) / 'hook.sh'
+            hook.write_bytes(b'printf "hook-ran\\n"\n')
+            import os
+            env = {**os.environ, 'BASH_ENV': str(hook)}
+            unsafe = subprocess.run(['bash', '--noprofile', '--norc', '-c', 'printf consumer'], env=env, capture_output=True, text=True)
+            self.assertEqual(unsafe.returncode, 0, unsafe.stderr)
+            self.assertIn('hook-ran', unsafe.stdout)
+            safe = subprocess.run([*python_env.ADMISSION_SHELL.split()[:-1], '-c', 'printf consumer'], env=env, capture_output=True, text=True)
+            self.assertEqual(safe.returncode, 0, safe.stderr)
+            self.assertEqual(safe.stdout, 'consumer')
+
+    def test_native_powershell_exception_is_exact(self):
+        data = yaml.load((ROOT / '.github/workflows/agent.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(check_policy.environment_admission_errors(data, 'agent'), [])
+        step = next(s for s in data['jobs']['validate']['steps'] if s.get('name') == 'Record MSVC compiler')
+        original = dict(step)
+        for key, value in (('shell', 'pwsh'), ('working-directory', '.'), ('run', './other.ps1'), ('if', 'always()')):
+            with self.subTest(key=key):
+                step.update({key: value})
+                self.assertTrue(check_policy.environment_admission_errors(data, 'agent'))
+                step.clear(); step.update(original)
+        self.assertTrue(check_policy.environment_admission_errors(data, 'server'))
+
+    def test_benign_text_and_literal_environment_are_admitted(self):
+        data = {'jobs': {'leaf': {'steps': [{'shell': python_env.ADMISSION_SHELL,
+                  'run': 'echo "PATH stays admitted; the console calls fetch() through HttpClient"', 'env': {'UNIT': 'fixture'}}]}}}
+        self.assertEqual(check_policy.environment_admission_errors(data, 'server'), [])
+        for scope in (data, data['jobs']['leaf'], data['jobs']['leaf']['steps'][0]):
+            scope['env'] = '${{ inputs.env }}'
+            self.assertTrue(check_policy.environment_admission_errors(data, 'server'))
+            scope.pop('env')
+
 
 class PolicyTests(unittest.TestCase):
     def setUp(self):
@@ -17,6 +99,10 @@ class PolicyTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         shutil.copytree(ROOT / '.github', self.root / '.github')
         shutil.copytree(ROOT / 'scripts/ci', self.root / 'scripts/ci')
+        lock_path = self.root / 'scripts/ci/toolchains.lock.json'
+        lock = json.loads(lock_path.read_text())
+        lock['entries'] = [row for row in lock['entries'] if row['platform'] != 'linux-x64-ubuntu26.04']
+        lock_path.write_text(json.dumps(lock))
         shutil.copytree(ROOT / 'schemas/ci', self.root / 'schemas/ci')
         (self.root / 'docs').mkdir()
         shutil.copyfile(ROOT / 'docs/licensing.md', self.root / 'docs/licensing.md')
@@ -30,6 +116,20 @@ class PolicyTests(unittest.TestCase):
         data = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
         change(data)
         path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    def test_full_policy_applies_environment_admission_to_every_job_family(self):
+        for path in sorted((self.root / '.github/workflows').glob('*.yml')):
+            baseline = path.read_text()
+            data = yaml.load(baseline, Loader=yaml.BaseLoader)
+            for jid, job in data['jobs'].items():
+                if 'uses' in job: continue
+                with self.subTest(workflow=path.name, job=jid):
+                    job['steps'].append({'shell': python_env.ADMISSION_SHELL, 'run': 'PYTHONPATH=/tmp/shim python --version'})
+                    path.write_text(yaml.safe_dump(data, sort_keys=False))
+                    errors = check_policy.check(self.root)
+                    self.assertTrue(any('protected shell environment forbidden: PYTHONPATH' in e for e in errors), errors)
+                    job['steps'].pop()
+                    path.write_text(baseline)
 
     def test_current_policy(self): self.assertEqual(check_policy.check(ROOT), [])
 
@@ -163,7 +263,7 @@ class PolicyTests(unittest.TestCase):
                     path.write_text(yaml.safe_dump(data, sort_keys=False))
                     self.assertTrue(any('race: unsafe execution defaults at ' + scope in error
                                         for error in check_policy.check(self.root)))
-        for defaults in ({}, {'run': {}}, {'run': {'shell': 'bash'}},
+        for defaults in ({}, {'run': {}}, {'run': {'shell': python_env.ADMISSION_SHELL}},
                          {'run': {'working-directory': None}},
                          {'run': {'working-directory': ''}},
                          {'run': {'working-directory': 'server/internal/extensions/manifest'}},
@@ -183,9 +283,9 @@ class PolicyTests(unittest.TestCase):
     def test_race_execution_context_accepts_safe_defaults(self):
         path, baseline, _ = self.race_fixture()
         self.assertEqual(check_policy.check(self.root), [])
-        for workflow_defaults in ({}, {'run': {}}, {'run': {'shell': 'bash'}},
-                                  {'run': {'shell': 'bash', 'working-directory': '.'}}):
-            for job_shell in (None, 'bash'):
+        for workflow_defaults in ({}, {'run': {}}, {'run': {'shell': python_env.ADMISSION_SHELL}},
+                                  {'run': {'shell': python_env.ADMISSION_SHELL, 'working-directory': '.'}}):
+            for job_shell in (None, python_env.ADMISSION_SHELL):
                 with self.subTest(workflow_defaults=workflow_defaults, job_shell=job_shell):
                     data = deepcopy(baseline)
                     data['defaults'] = workflow_defaults
@@ -444,27 +544,27 @@ class PolicyTests(unittest.TestCase):
                      'CGO_CFLAGS'):
             for scope in ('workflow', 'job', 'step'):
                 mutations.append(('agent', f'{scope} {name}', env_at(scope, 'validate', name), 'C toolchain variable'))
-            mutations.append(('server', f'GITHUB_ENV {name}', insert('fuzz', {'shell': 'bash', 'run': f'echo "{name}=/tmp/x" >> "$GITHUB_ENV"'}), 'C toolchain variable'))
+            mutations.append(('server', f'GITHUB_ENV {name}', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': f'echo "{name}=/tmp/x" >> "$GITHUB_ENV"'}), 'C toolchain variable'))
         mutations += [
             ('server', 'race CC through step env', env_at('step', 'race', 'CC', '/tmp/cc'), 'C toolchain variable'),
             ('agent', 'LD job env', env_at('job', 'validate', 'LD', '/tmp/ld'), 'admitted tool environment override forbidden: LD'),
             ('server', 'GOTOOLDIR job env', env_at('job', 'validate', 'GOTOOLDIR', '/tmp/tools'), 'admitted tool environment override forbidden: GOTOOLDIR'),
             ('server', 'GOENV job env', env_at('job', 'validate', 'GOENV', '/tmp/go.env'), 'compiler cache environment override forbidden'),
-            ('server', 'GOENV through GITHUB_ENV', insert('fuzz', {'shell': 'bash', 'run': 'echo "GOENV=/tmp/go.env" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('server', 'GOENV through GITHUB_ENV', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "GOENV=/tmp/go.env" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             ('server', 'RUNNER_TEMP job env', env_at('job', 'validate', 'RUNNER_TEMP', '/tmp/elsewhere'), 'admitted tool environment override forbidden: RUNNER_TEMP'),
             ('agent', 'RUNNER_ENVIRONMENT workflow env', env_at('workflow', 'validate', 'RUNNER_ENVIRONMENT', 'github-hosted'), 'admitted tool environment override forbidden: RUNNER_ENVIRONMENT'),
-            ('server', 'RUNNER_TOOL_CACHE through GITHUB_ENV', insert('fuzz', {'shell': 'bash', 'run': 'echo "RUNNER_TOOL_CACHE=/tmp/c" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
-            ('agent', 'RUSTUP_HOME through GITHUB_ENV', insert('validate', {'shell': 'bash', 'run': 'echo "RUSTUP_HOME=/tmp/r" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('server', 'RUNNER_TOOL_CACHE through GITHUB_ENV', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "RUNNER_TOOL_CACHE=/tmp/c" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
+            ('agent', 'RUSTUP_HOME through GITHUB_ENV', insert('validate', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "RUSTUP_HOME=/tmp/r" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             # GITHUB_PATH by context in jobs that consume no Python closure.
-            ('server', 'github.path in a Go job', insert('fuzz', {'shell': 'bash', 'run': 'echo "$RUNNER_TEMP/shim" >> "${{ github.path }}"'}), 'PATH changes outside the admitted bootstrap'),
-            ('agent', 'runner add_path file in a Rust job', insert('validate', {'shell': 'bash', 'run': 'echo "$RUNNER_TEMP/shim" >> "$RUNNER_TEMP"/_runner_file_commands/add_path_x'}), 'PATH changes outside the admitted bootstrap'),
-            ('agent', 'github.path through step env', insert('validate', {'shell': 'bash', 'env': {'P': '${{ github.path }}'}, 'run': 'echo "$RUNNER_TEMP/shim" >> "$P"'}), 'PATH changes outside the admitted bootstrap'),
+            ('server', 'github.path in a Go job', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "$RUNNER_TEMP/shim" >> "${{ github.path }}"'}), 'PATH changes outside the admitted bootstrap'),
+            ('agent', 'runner add_path file in a Rust job', insert('validate', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "$RUNNER_TEMP/shim" >> "$RUNNER_TEMP"/_runner_file_commands/add_path_x'}), 'PATH changes outside the admitted bootstrap'),
+            ('agent', 'github.path through step env', insert('validate', {'shell': python_env.ADMISSION_SHELL, 'env': {'P': '${{ github.path }}'}, 'run': 'echo "$RUNNER_TEMP/shim" >> "$P"'}), 'PATH changes outside the admitted bootstrap'),
             # N-04r: names built at run time cannot be reviewed.
-            ('server', 'variable-built GOROOT', insert('fuzz', {'shell': 'bash', 'run': 'n=GO; echo "${n}ROOT=/opt/go" >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
-            ('server', 'printf-built name', insert('fuzz', {'shell': 'bash', 'run': 'printf "%sROOT=/opt/go\\n" GO >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
-            ('server', 'Python-built GOROOT', insert('fuzz', {'shell': 'bash', 'run': "python3 -c \"import os; open(os.environ['GITHUB_ENV'], 'a').write('GO' + 'ROOT=/opt/go\\n')\""}), 'environment file writes must be literal'),
-            ('server', 'github.env context', insert('fuzz', {'shell': 'bash', 'run': 'echo "GOFLAGS=-mod=mod" >> "${{ github.env }}"'}), 'environment file writes must be literal'),
-            ('server', 'heredoc block write', insert('fuzz', {'shell': 'bash', 'run': '{\n  echo "A=1"\n} >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
+            ('server', 'variable-built GOROOT', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'n=GO; echo "${n}ROOT=/opt/go" >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
+            ('server', 'printf-built name', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'printf "%sROOT=/opt/go\\n" GO >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
+            ('server', 'Python-built GOROOT', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': "python3 -c \"import os; open(os.environ['GITHUB_ENV'], 'a').write('GO' + 'ROOT=/opt/go\\n')\""}), 'environment file writes must be literal'),
+            ('server', 'github.env context', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "GOFLAGS=-mod=mod" >> "${{ github.env }}"'}), 'environment file writes must be literal'),
+            ('server', 'heredoc block write', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': '{\n  echo "A=1"\n} >> "$GITHUB_ENV"'}), 'environment file writes must be literal'),
             # Section 8: every job's CI_TOOLS is pinned, not merely a superset of what it runs.
             ('server', 'extra tool selected', lambda d: next(s for s in steps(d, 'validate') if s.get('run') == check_policy.BOOTSTRAP_COMMAND)['env'].update(CI_TOOLS='python,go,rust'),
              'CI_TOOLS differs from the reviewed selection'),
@@ -479,12 +579,11 @@ class PolicyTests(unittest.TestCase):
                 shutil.copyfile(ROOT / f'.github/workflows/{workflow}.yml', self.root / f'.github/workflows/{workflow}.yml')
                 self.assertTrue(any(expected in error for error in errors), (label, errors))
         self.assertEqual(check_policy.check(self.root), [])
-        # Admitted: the cc logging switch, a literal reviewed GITHUB_ENV name, a per-command PATH and prose naming clients.
+        # Admitted: the cc logging switch, a literal reviewed GITHUB_ENV name and prose naming clients.
         for workflow, label, change in (
                 ('agent', 'CC_ENABLE_DEBUG_OUTPUT', env_at('job', 'validate', 'CC_ENABLE_DEBUG_OUTPUT', '1')),
-                ('server', 'literal reviewed GITHUB_ENV name', insert('fuzz', {'shell': 'bash', 'run': 'echo "RICEVANTA_FLAG=$RUNNER_TEMP/x" >> "$GITHUB_ENV"'})),
-                ('server', 'per-command PATH', insert('fuzz', {'shell': 'bash', 'run': 'PATH="$PATH:/usr/sbin" sysctl -n kernel.ostype'})),
-                ('server', 'prose naming HTTP clients', insert('fuzz', {'shell': 'bash', 'run': 'echo "The console calls fetch() through HttpClient and WebClient wrappers"'}))):
+                ('server', 'literal reviewed GITHUB_ENV name', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "RICEVANTA_FLAG=$RUNNER_TEMP/x" >> "$GITHUB_ENV"'})),
+                ('server', 'prose naming HTTP clients', insert('fuzz', {'shell': python_env.ADMISSION_SHELL, 'run': 'echo "The console calls fetch() through HttpClient and WebClient wrappers"'}))):
             with self.subTest(admitted=label):
                 self.mutate(workflow, change)
                 errors = check_policy.check(self.root)
@@ -793,10 +892,10 @@ class PolicyTests(unittest.TestCase):
             ('server', 'job env tools', lambda d: d['jobs']['validate'].update(env={'CI_TOOLS': 'python,go'}), 'bootstrap inputs must be literal step env'),
             ('bootstrap', 'missing controls', lambda d: d['jobs']['validate']['steps'].remove(next(s for s in d['jobs']['validate']['steps'] if s.get('run') == check_policy.CONTROLS_COMMAND)), 'corruption controls must precede'),
             ('bootstrap', 'controls after install', lambda d: d['jobs']['validate']['steps'].insert(4, d['jobs']['validate']['steps'].pop(1)), 'corruption controls must precede'),
-            ('bootstrap', 'removed matrix tools', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][0].update(tools='python,go'), 'bootstrap tools omit rust'),
+            ('bootstrap', 'removed matrix tools', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][0].update(tools='python,go'), 'must select every lock tool for its host'),
             # The bootstrap's GITHUB_ENV write is admitted only in its exact shape; nothing else may redirect admitted tools.
             ('ci', 'bootstrap also writing GITHUB_PATH', lambda d: admitted(d, 'route').update(run=check_policy.BOOTSTRAP_COMMAND + ' --path-out "$GITHUB_PATH"'), 'missing exact bootstrap command'),
-            ('design', 'second GITHUB_ENV writer in a closure consumer', lambda d: d['jobs']['validate']['steps'].insert(4, {'shell': 'bash', 'working-directory': '.', 'run': 'cat "$RUNNER_TEMP/other.env" >> "$GITHUB_ENV"'}), 'environment writes outside the fresh cache helper and admitted bootstrap'),
+            ('design', 'second GITHUB_ENV writer in a closure consumer', lambda d: d['jobs']['validate']['steps'].insert(4, {'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': 'cat "$RUNNER_TEMP/other.env" >> "$GITHUB_ENV"'}), 'environment writes outside the fresh cache helper and admitted bootstrap'),
             ('server', 'PATH override through GITHUB_ENV', lambda d: d['jobs']['fuzz']['steps'].insert(4, {'run': 'echo "PATH=$RUNNER_TEMP/shim:$PATH" >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             ('server', 'RUSTC override through GITHUB_ENV', lambda d: d['jobs']['fuzz']['steps'].insert(4, {'run': 'printf "RUSTC=%s\\n" /usr/bin/rustc >> "$GITHUB_ENV"'}), 'admitted tool environment override'),
             ('server', 'GITHUB_PATH shim outside a closure consumer', lambda d: d['jobs']['fuzz']['steps'].insert(4, {'run': 'echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"'}), 'PATH changes outside the admitted bootstrap'),
@@ -808,7 +907,7 @@ class PolicyTests(unittest.TestCase):
             ('bootstrap', 'Rust dropped from the macOS row', lambda d: d['jobs']['validate']['strategy']['matrix']['include'][2].update(tools='python,go'), 'must select every lock tool'),
             ('console', 'pnpm dlx', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'pnpm dlx some-tool@1.0.0'}), 'unchecked download'),
             ('console', 'gh release download', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'gh release download v1 -R owner/tool'}), 'unchecked download'),
-            ('console', 'python urlretrieve', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'python -c "import urllib.request; urllib.request.urlretrieve(\'https://x.invalid/t\', \'t\')"'}), 'unchecked download'),
+            ('console', 'python urlretrieve', lambda d: d['jobs']['validate']['steps'].insert(5, {'shell': python_env.ADMISSION_SHELL, 'run': 'python -c "import urllib.request; urllib.request.urlretrieve(\'https://x.invalid/t\', \'t\')"'}), 'unchecked download'),
             ('console', 'pnpm pm-on-fail download', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'pnpm install --frozen-lockfile --pm-on-fail=download'}), 'unchecked download'),
             ('server', 'LD_PRELOAD job env', lambda d: d['jobs']['validate'].update(env={'LD_PRELOAD': '/tmp/hook.so'}), 'admitted tool environment override forbidden: LD_PRELOAD'),
             ('console', 'NODE_OPTIONS job env', lambda d: d['jobs']['validate']['env'].update(NODE_OPTIONS='--require /tmp/hook.js'), 'admitted tool environment override forbidden: NODE_OPTIONS'),
@@ -833,7 +932,7 @@ class PolicyTests(unittest.TestCase):
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
         # Parsing a URL is not a download: a plain urllib.parse step stays admissible (N-04 false positive).
-        self.mutate('console', lambda d: d['jobs']['validate']['steps'].insert(5, {'run': 'python -c "import urllib.parse; print(urllib.parse.quote(\'a b\'))"'}))
+        self.mutate('console', lambda d: d['jobs']['validate']['steps'].insert(5, {'shell': python_env.ADMISSION_SHELL, 'run': 'python -c "import urllib.parse; print(urllib.parse.quote(\'a b\'))"'}))
         self.assertEqual(check_policy.check(self.root), [])
         shutil.copyfile(ROOT / '.github/workflows/console.yml', self.root / '.github/workflows/console.yml')
         lock = self.root / 'scripts/ci/toolchains.lock.json'
@@ -894,7 +993,7 @@ class PolicyTests(unittest.TestCase):
             ('ci', 'copy and PATH between aggregate re-check and verifier', insert_after(check, {
                 'run': 'cp -a "$RUNNER_TEMP/validator" "$RUNNER_TEMP/v2" && echo "$RUNNER_TEMP/v2/bin" >> "${{ github.path }}"'}, 'ci-required')),
             ('ci', 'ci-contracts step between re-check and receipt', insert_after(check, {'run': 'true'}, 'ci-contracts')),
-            ('bootstrap', 'bootstrap step between re-check and receipt', insert_after(check, {'shell': 'bash', 'run': 'python3 -c 1'})),
+            ('bootstrap', 'bootstrap step between re-check and receipt', insert_after(check, {'shell': python_env.ADMISSION_SHELL, 'run': 'python3 -c 1'})),
             ('copilot-code-review', 'Copilot step after re-check', lambda d: steps(d, 'copilot-setup-steps').append({'run': 'python3 -c 1'})),
         ]
         for name, label, change in mutations:
@@ -1011,7 +1110,7 @@ class PolicyTests(unittest.TestCase):
     def test_windows_shell_defaults_and_overrides(self):
         # The agent job has Windows rows and is not a closure consumer, whose shells are limited to bash.
         for scope in ('step', 'job'):
-            for shell in ('bash', 'pwsh'):
+            for shell in (python_env.ADMISSION_SHELL,):
                 with self.subTest(scope=scope, shell=shell):
                     def change(data):
                         job = data['jobs']['validate']
@@ -1031,7 +1130,7 @@ class PolicyTests(unittest.TestCase):
             job.get('defaults', {}).get('run', {}).pop('shell', None)
             for step in job['steps']:
                 if 'run' in step and 'shell' not in step: step['shell'] = 'bash'
-            data['defaults'] = {'run': {'shell': 'bash'}}
+            data['defaults'] = {'run': {'shell': python_env.ADMISSION_SHELL}}
             job['steps'].insert(-1, {'run': 'python --version'})
         self.mutate('agent', workflow_default_only)
         self.assertTrue(any('Windows run step requires an explicit shell' in error
@@ -1072,11 +1171,15 @@ class PolicyTests(unittest.TestCase):
                         def change(data):
                             job = data['jobs']['ci-required']
                             job['steps'][-1].pop('shell', None)
-                            if step_shell: job['steps'][-1]['shell'] = 'bash'
-                            if job_shell: job['defaults'] = {'run': {'shell': 'bash'}}
-                            if workflow_shell: data['defaults'] = {'run': {'shell': 'bash'}}
+                            if step_shell: job['steps'][-1]['shell'] = python_env.ADMISSION_SHELL
+                            if job_shell: job['defaults'] = {'run': {'shell': python_env.ADMISSION_SHELL}}
+                            if workflow_shell: data['defaults'] = {'run': {'shell': python_env.ADMISSION_SHELL}}
                         self.mutate('ci', change)
-                        self.assertEqual(check_policy.check(self.root), [])
+                        errors = check_policy.check(self.root)
+                        if not (step_shell or job_shell or workflow_shell):
+                            self.assertTrue(any('admission shell' in e for e in errors), errors)
+                        else:
+                            self.assertEqual(errors, [])
                         shutil.copyfile(ROOT / '.github/workflows/ci.yml',
                                         self.root / '.github/workflows/ci.yml')
 

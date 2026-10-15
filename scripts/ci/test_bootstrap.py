@@ -26,7 +26,7 @@ import bootstrap
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = ROOT / 'scripts/ci/toolchains.lock.json'
 SIMULATED = os.environ.get('BOOTSTRAP_TEST_HOST')
-HOST = SIMULATED or bootstrap.host_platform()
+HOST = SIMULATED or bootstrap.host_platform(os_release={'ID': 'ubuntu', 'VERSION_ID': '24.04'})
 assert HOST in bootstrap.PLATFORMS, HOST
 POSIX = os.name != 'nt'
 # Captured from the admitted linux-x64 payloads; rustfmt and clippy print a ten-digit short hash, rustc nine.
@@ -1089,6 +1089,19 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('RUSTC', error)
         self.assertFalse((self.base / 'env').exists(), 'nothing is written when the env file would carry an unadmitted name')
 
+    def test_invalid_env_file_value_refuses_without_leaving_an_install(self):
+        self.fixtures.go()
+        original = bootstrap.RECIPES['go']
+        def leaky_value(ctx, entry):
+            original[2](ctx, entry)
+            ctx.env['GOROOT'] = 'bad\nRUSTC=/tmp/shim'
+        with mock.patch.dict(bootstrap.RECIPES, {'go': (original[0], original[1], leaky_value)}):
+            code, error, _, _, dest = self.run_bootstrap('go')
+        self.assertEqual(code, 1)
+        self.assertIn('environment value GOROOT', error)
+        self.assertFalse((self.base / 'env').exists())
+        self.assertFalse(any(dest.iterdir()))
+
     def test_ubuntu_release_must_match_the_platform(self):
         """24.04 and 22.04 runners are distinct identities: /etc/os-release decides, and a mismatch refuses before any download."""
         for name, base_name in (('linux-x64-ubuntu22.04', 'linux-x64'), ('linux-arm64-ubuntu22.04', 'linux-arm64')):
@@ -1131,6 +1144,12 @@ class BootstrapTests(unittest.TestCase):
                 code, error, journal, *_ = self.run_bootstrap('go', dest=self.base / ('dest-ok-' + platform))
                 self.assertEqual((code, error), (0, None), journal)
 
+    def test_windows_prefix_exception_does_not_admit_an_impostor_git_directory(self):
+        for directory in (r'C:\attacker\usr\bin', r'C:\attacker\ucrt64\bin', r'C:\attacker\mingw64\bin'):
+            with self.subTest(directory=directory):
+                entries = [directory, r'D:\a\_temp\admitted\go\bin']
+                self.assertEqual(bootstrap.strip_git_bash_prefix(entries, {'MSYSTEM': 'UCRT64', 'USERPROFILE': r'C:\Users\runneradmin'}), entries)
+
     def test_windows_path_drops_the_git_bash_prefix(self):
         runner = [r'C:\hostedtoolcache\windows\Python\3.12.10\x64', r'C:\Windows\system32', r'C:\Program Files\Git\usr\bin', r'C:\Program Files\Git\cmd']
         wrapper = [r'C:\Users\runneradmin\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin']
@@ -1161,13 +1180,16 @@ class BootstrapTests(unittest.TestCase):
         (sources / sha(payload)).write_bytes(payload)
         env = {k: v for k, v in os.environ.items() if k not in ('RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY')}
         env['CI_TOOLCHAIN_SOURCES'] = str(sources)
-        result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/bootstrap.py'), '--lock', str(self.fixtures.lock()), '--platform', HOST,
+        cli = [sys.executable, '-B', '-c',
+               "import sys; sys.path.insert(0, " + repr(str(ROOT / 'scripts/ci')) + "); import bootstrap; "
+               "bootstrap.read_os_release = lambda: {'ID': 'ubuntu', 'VERSION_ID': '24.04'}; sys.exit(bootstrap.main())"]
+        result = subprocess.run([*cli, '--lock', str(self.fixtures.lock()), '--platform', HOST,
                                  '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'sources', '--env-out', str(self.base / 'env')],
                                 env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('bootstrap: admitted go', result.stdout)
         self.assertEqual(self.env_lines()['PATH'].split(os.pathsep)[0], str(self.base / 'dest' / 'go' / 'bin'))
-        result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/bootstrap.py'), '--lock', str(self.fixtures.lock()), '--platform', HOST,
+        result = subprocess.run([*cli, '--lock', str(self.fixtures.lock()), '--platform', HOST,
                                  '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'none', '--env-out', str(self.base / 'env')],
                                 env=env, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
@@ -1252,13 +1274,13 @@ class ControlsTests(unittest.TestCase):
                           host=make_host('windows-x64', self.base, environ={'PATH': r'C:\Windows\system32'}))
         admitted = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
         home = r'C:\Users\runneradmin'
-        prefixed = ';'.join([home + r'\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin', admitted['PATH']])
+        prefixed = ';'.join([home + r'\bin', r'C:\Program Files\Git\ucrt64\bin', r'C:\Program Files\Git\usr\bin', admitted['PATH']])
         argv = ['evidence', '--lock', str(lock), '--platform', 'windows-x64', '--tools', 'go', '--evidence', str(dest / 'bootstrap-evidence.json')]
-        with mock.patch.dict(os.environ, {**admitted, 'PATH': prefixed, 'MSYSTEM': 'MINGW64', 'USERPROFILE': home}), contextlib.redirect_stdout(io.StringIO()):
+        with mock.patch.dict(os.environ, {**admitted, 'PATH': prefixed, 'MSYSTEM': 'UCRT64', 'USERPROFILE': home}), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(self.controls.run(argv)['failures'], [])
         # The allowance is the wrapper's own prefix only: outside Git Bash, or with any other directory first, PATH fails.
         for label, environ in (('not Git Bash', {**admitted, 'PATH': prefixed, 'MSYSTEM': ''}),
-                               ('other directory first', {**admitted, 'PATH': r'C:\hostedtoolcache\windows\go\1.27.1\x64\bin;' + prefixed, 'MSYSTEM': 'MINGW64', 'USERPROFILE': home})):
+                               ('other directory first', {**admitted, 'PATH': r'C:\hostedtoolcache\windows\go\1.27.1\x64\bin;' + prefixed, 'MSYSTEM': 'UCRT64', 'USERPROFILE': home})):
             with self.subTest(case=label), mock.patch.dict(os.environ, environ), contextlib.redirect_stdout(io.StringIO()):
                 failures = self.controls.run(argv)['failures']
                 self.assertTrue(any('PATH does not begin with the admitted directories' in f for f in failures), failures)

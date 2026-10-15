@@ -209,7 +209,7 @@ def control_evidence(args):
         actual = os.environ.get(key)
         if key == 'PATH':
             prefix = [p for p in evidence.get('path', [])]
-            if step_path(windows)[:len(prefix)] != prefix:
+            if [bootstrap.path_identity(p, windows) for p in step_path(windows)[:len(prefix)]] != [bootstrap.path_identity(p, windows) for p in prefix]:
                 report['failures'].append('PATH does not begin with the admitted directories')
         elif actual != value:
             report['failures'].append(f'{key} is {actual!r} in this step, not the admitted {value!r}')

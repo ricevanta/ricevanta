@@ -340,7 +340,8 @@ class RuntimeVerificationTests(unittest.TestCase):
         for key in ('PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP', 'PYTHONUSERBASE', 'PYTHONSAFEPATH', 'PYTHONPLATLIBDIR',
                     'PYTHONEXECUTABLE', 'PYTHONNOUSERSITE', 'PYTHONPYCACHEPREFIX', 'PYTHONINSPECT',
                     'PIP_INDEX_URL', 'PIP_EXTRA_INDEX_URL', 'PIP_FIND_LINKS', 'PIP_CONFIG_FILE', 'PIP_TARGET',
-                    'BASH_ENV', 'ENV', 'BASH_FUNC_python%%', 'LD_PRELOAD', 'LD_AUDIT', 'DYLD_INSERT_LIBRARIES'):
+                    'BASH_ENV', 'ENV', 'BASH_FUNC_python%%', 'SHELLOPTS', 'BASHOPTS', 'LD_PRELOAD', 'LD_AUDIT', 'LD_LIBRARY_PATH',
+                    'DYLD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES'):
             with self.subTest(key=key):
                 self.assertEqual(python_env.environment_errors({key: 'x'}), [f'python: environment variable {key} must not be set'])
 
@@ -353,9 +354,8 @@ class RuntimeVerificationTests(unittest.TestCase):
             for key, value in spelling.items():
                 with self.subTest(key=key):
                     self.assertEqual(python_env.environment_errors({key: value}), [f'python: environment variable {key} must not be set'])
-        # Admitted toggles stay admitted in any spelling; unrelated loader and build variables are not interpreter environment.
-        self.assertEqual(python_env.environment_errors({'pythonunbuffered': '1', 'PythonHashSeed': '0', 'PKG_CONFIG_PATH': '/x',
-                                                        'LD_LIBRARY_PATH': '/opt/lib'}), [])
+        # Admitted interpreter toggles and unrelated build variables stay admitted in any spelling.
+        self.assertEqual(python_env.environment_errors({'pythonunbuffered': '1', 'PythonHashSeed': '0', 'PKG_CONFIG_PATH': '/x'}), [])
         for key in ('pythonpath', 'PythonHome', 'pip_index_url', 'bash_env', 'Bash_Func_python%%', 'ld_preload'):
             with self.subTest(key=key):
                 self.assertEqual(python_env.environment_errors({key: 'x'}), [f'python: environment variable {key} must not be set'])

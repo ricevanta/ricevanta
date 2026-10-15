@@ -903,6 +903,44 @@ class RealToolTests(unittest.TestCase):
         self.env['GOENV'] = str(config)
         self.assertEqual(self.run_id('tiny-suite')['summary']['tests'], 6)
 
+    def test_bootstrap_tool_resolution_is_checked_before_discovery(self):
+        admitted = self.root / 'admitted'
+        tools = admitted / 'go/bin'
+        tools.mkdir(parents=True)
+        executable = tools / ('go.exe' if os.name == 'nt' else 'go')
+        executable.write_bytes(b'fixture')
+        executable.chmod(0o755)
+        (tools / ('gofmt.exe' if os.name == 'nt' else 'gofmt')).write_bytes(b'fixture')
+        (tools / ('gofmt.exe' if os.name == 'nt' else 'gofmt')).chmod(0o755)
+        proof = {'platform': 'windows-x64' if os.name == 'nt' else 'linux-x64', 'path': [str(tools)], 'entries': [{'tool': 'go'}]}
+        (admitted / 'bootstrap-evidence.json').write_text(json.dumps(proof))
+        env = {**self.env, 'CI_ADMITTED_ROOT': str(admitted), 'PATH': str(tools) + os.pathsep + self.env['PATH']}
+        run_selected.admitted_tool_guard(env)
+        for path in (self.env['PATH'], str(admitted / 'shim') + os.pathsep + env['PATH']):
+            with self.subTest(path=path):
+                evidence = self.root / 'path-refusal'
+                with self.assertRaisesRegex(EvidenceError, 'PATH does not begin'):
+                    run_selected.run('tiny-suite', evidence, root=self.root, env={**env, 'PATH': path})
+                self.assertFalse(evidence.exists())
+        executable.unlink()
+        with self.assertRaisesRegex(EvidenceError, 'go resolves outside'):
+            run_selected.admitted_tool_guard(env)
+        if os.name != 'nt':
+            executable.symlink_to(shutil.which('go'))
+            with self.assertRaisesRegex(EvidenceError, 'go resolves outside'):
+                run_selected.admitted_tool_guard(env)
+
+    def test_external_cache_program_and_startup_hooks_fail_before_discovery(self):
+        for name in ('GOCACHEPROG', 'gocacheprog', 'PYTHONPATH', 'BASH_ENV', 'ENV', 'BASH_FUNC_go%%', 'LD_PRELOAD', 'DYLD_LIBRARY_PATH'):
+            with self.subTest(name=name):
+                evidence = self.root / ('refused-' + name)
+                with self.assertRaises(EvidenceError) as caught:
+                    run_selected.run('tiny-suite', evidence, root=self.root, env={**self.env, name: '/tmp/shim'})
+                self.assertIn(name, str(caught.exception))
+                self.assertFalse(evidence.exists())
+        target = run_selected.inventory(self.root)['tiny-suite']
+        self.assertEqual(run_selected.child_environment(target, {**self.env, 'GOCACHEPROG': 'bad'})['GOCACHEPROG'], '')
+
     def test_c_toolchain_variables_are_refused_in_every_mode(self):
         for target_id in ('tiny-suite', 'tiny-fuzz', 'tiny-rust'):
             for name in ('CC', 'CFLAGS_x86_64_unknown_linux_gnu', 'HOST_CXX', 'TARGET_AR', 'CGO_LDFLAGS', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET',

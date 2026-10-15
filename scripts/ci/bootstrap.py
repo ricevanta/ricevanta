@@ -32,6 +32,9 @@ import unicodedata
 import urllib.request
 import zipfile
 
+import rust_env
+from rust_env import ADMITTED_RUST_ENV
+
 LOCK = 'scripts/ci/toolchains.lock.json'
 LICENSING = 'docs/licensing.md'
 MAX_REDIRECTS = 5
@@ -44,11 +47,13 @@ MAX_LINK_HOPS = 40
 SOURCES_ENV = 'CI_TOOLCHAIN_SOURCES'
 PLAYWRIGHT_VERSION = '1.59.1'
 PLATFORMS = {
-    'linux-x64': dict(system='Linux', machine=('x86_64',), go='linux/amd64', rust='x86_64-unknown-linux-gnu', node='linux-x64', process='linux-x64', exe=''),
-    'linux-arm64': dict(system='Linux', machine=('aarch64', 'arm64'), go='linux/arm64', rust='aarch64-unknown-linux-gnu', node='linux-arm64', process='linux-arm64', exe=''),
+    'linux-x64': dict(release='24.04', system='Linux', machine=('x86_64',), go='linux/amd64', rust='x86_64-unknown-linux-gnu', node='linux-x64', process='linux-x64', exe=''),
+    'linux-arm64': dict(release='24.04', system='Linux', machine=('aarch64', 'arm64'), go='linux/arm64', rust='aarch64-unknown-linux-gnu', node='linux-arm64', process='linux-arm64', exe=''),
     'windows-x64': dict(system='Windows', machine=('AMD64', 'x86_64'), go='windows/amd64', rust='x86_64-pc-windows-msvc', node='win-x64', process='win32-x64', exe='.exe'),
     'macos-arm64': dict(system='Darwin', machine=('arm64',), go='darwin/arm64', rust='aarch64-apple-darwin', node='darwin-arm64', process='darwin-arm64', exe=''),
 }
+for _arch in ('x64', 'arm64'):
+    PLATFORMS[f'linux-{_arch}-ubuntu22.04'] = {**PLATFORMS[f'linux-{_arch}'], 'release': '22.04'}
 TOOL_GROUPS = {'rust': ('rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy'),
                'playwright': ('chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg')}
 # Reviewed Playwright 1.59.1 browser builds: install directory prefix, Linux x64 executable, ldd directories and version evidence.
@@ -93,12 +98,27 @@ def log(phase, *parts):
     print('bootstrap: ' + ' '.join([phase, *map(str, parts)]), flush=True)
 
 
-def host_platform():
-    system, machine = platform.system(), platform.machine()
+def read_os_release(path=Path('/etc/os-release')):
+    """Read the literal OS identity; never execute os-release as shell code."""
+    try: lines = Path(path).read_text(encoding='utf-8').splitlines()
+    except OSError: return {}
+    values = {}
+    for line in lines:
+        if not line or line.startswith('#') or '=' not in line: continue
+        key, value = line.split('=', 1)
+        values[key] = value.strip().strip('"\'')
+    return values
+
+
+def host_platform(*, system=None, machine=None, os_release=None):
+    system = platform.system() if system is None else system
+    machine = platform.machine() if machine is None else machine
+    release = read_os_release() if system == 'Linux' and os_release is None else os_release
     for name, spec in PLATFORMS.items():
         if spec['system'] == system and machine in spec['machine']:
+            if system == 'Linux' and (release.get('ID') != 'ubuntu' or release.get('VERSION_ID') != spec['release']): continue
             return name
-    raise BootstrapError(f'unsupported host: {system} {machine}')
+    raise BootstrapError(f'unsupported host: {system} {machine}, Ubuntu identity {release}')
 
 
 class WindowsRegistry:
@@ -192,7 +212,7 @@ def python_registration_pattern(minor):
 
 class Host:
     """Facts about the machine running the bootstrap; tests inject other platforms, framework roots and registries."""
-    def __init__(self, platform_name, *, framework_root=None, registry=None, environ=None):
+    def __init__(self, platform_name, *, framework_root=None, registry=None, environ=None, os_release=None):
         if platform_name not in PLATFORMS: raise BootstrapError('unknown platform: ' + platform_name)
         self.platform = platform_name
         self.spec = PLATFORMS[platform_name]
@@ -202,6 +222,7 @@ class Host:
         self.framework_root = Path(framework_root) if framework_root else Path('/Library/Frameworks/Python.framework')
         self.registry = registry if registry is not None else (WindowsRegistry() if self.is_windows else None)
         self.environ = os.environ if environ is None else environ
+        self.os_release = read_os_release() if self.spec.get('release') and os_release is None else os_release
 
 
 def execute(argv, env=None, cwd=None, timeout=600, check=True, stderr=False):
@@ -617,7 +638,8 @@ def _elf_runpaths(data, label):
     for value in sorted(set(runpaths)):
         start = base + value
         end = data.index(b'\0', start)
-        shared = sorted(r for r in references if value <= r < value + (end - start))
+        shared = sorted(r for r in references
+                        if r <= end - base and value <= data.index(b'\0', base + r) - base)
         if shared: raise ValueError(f'runpath string at {value} shares bytes with other dynamic strings at {shared}')
         found.append((start, end - start, data[start:end].decode('utf-8', 'replace')))
     return found
@@ -736,11 +758,12 @@ def install_go(ctx, entry, members, staging):
 
 
 def check_go(ctx, entry):
-    output = ctx.run(entry, [ctx.installed['go'], 'version']).strip()
+    probe_env = {'GOENV': 'off', 'GOCACHEPROG': ''}
+    output = ctx.run(entry, [ctx.installed['go'], 'version'], env=probe_env).strip()
     expected = f'go version go{entry["version"]} {ctx.host.spec["go"]}'
     if output != expected: raise BootstrapError(f'{entry["id"]}: version check failed: {output!r} is not {expected!r}')
     # An inherited GOROOT would supply another standard library under the same version string.
-    goroot = ctx.run(entry, [ctx.installed['go'], 'env', 'GOROOT'], env={'GOROOT': ctx.env['GOROOT']}).strip()
+    goroot = ctx.run(entry, [ctx.installed['go'], 'env', 'GOROOT'], env={**probe_env, 'GOROOT': ctx.env['GOROOT']}).strip()
     if Path(goroot) != Path(ctx.env['GOROOT']):
         raise BootstrapError(f'{entry["id"]}: go env GOROOT is {goroot!r}, not the admitted {ctx.env["GOROOT"]}')
 
@@ -1037,6 +1060,25 @@ def safe_text(value, what):
     return text
 
 
+ENV_FILE_NAMES = frozenset({'PATH', 'GOROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'RUSTUP_AUTO_INSTALL',
+                            'PLAYWRIGHT_BROWSERS_PATH', 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD',
+                            'pnpm_config_pm_on_fail', 'pnpm_config_update_notifier', 'CI_ADMITTED_ROOT'})
+
+
+def env_file_errors(values):
+    """The bootstrap env file contains only the exact section 8 table, including the shared Rust names."""
+    errors = []
+    for name, value in values.items():
+        if name not in ENV_FILE_NAMES or (name.startswith(('CARGO', 'RUST')) and name not in ADMITTED_RUST_ENV):
+            errors.append(f'environment name {name} is outside the bootstrap table')
+        try:
+            safe_text(name, 'environment name')
+            safe_text(value, 'environment value ' + name)
+        except BootstrapError as error:
+            errors.append(str(error))
+    return errors
+
+
 def prepare_destination(dest):
     text = safe_text(dest, 'destination path')
     path = Path(text)
@@ -1054,12 +1096,18 @@ def strip_git_bash_prefix(entries, environ):
     entries = list(entries)
     if not environ.get('MSYSTEM'): return entries
     home = environ.get('USERPROFILE') or environ.get('HOME') or ''
+    git_bins = {ntpath.normcase(ntpath.join(r'C:\Program Files\Git', directory, 'bin'))
+                for directory in ('mingw64', 'ucrt64', 'usr')}
     def wrapper(value):
         folded = ntpath.normcase(ntpath.normpath(value))
-        return (folded.endswith(ntpath.normcase('\\mingw64\\bin')) or folded.endswith(ntpath.normcase('\\usr\\bin'))
-                or (home and folded == ntpath.normcase(ntpath.normpath(ntpath.join(home, 'bin')))))
+        return folded in git_bins or (home and folded == ntpath.normcase(ntpath.normpath(ntpath.join(home, 'bin'))))
     while entries and wrapper(entries[0]): entries.pop(0)
     return entries
+
+
+def path_identity(path, windows):
+    """Windows lookup treats slash styles and letter case as equivalent."""
+    return ntpath.normcase(ntpath.normpath(str(path))) if windows else os.path.normpath(str(path))
 
 
 def inherited_path(host):
@@ -1102,6 +1150,9 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
     args = parse_args(argv)
     host = host or Host(host_platform())
     if args.platform != host.platform: raise BootstrapError(f'unsupported host: this machine is {host.platform}, not {args.platform}')
+    if host.spec.get('release') and (not host.os_release or host.os_release.get('ID') != 'ubuntu'
+                                     or host.os_release.get('VERSION_ID') != host.spec['release']):
+        raise BootstrapError(f'Ubuntu release must be {host.spec["release"]} for {host.platform}, got {host.os_release}')
     log('host', host.platform, platform.system(), platform.machine(), 'bootstrap interpreter', sys.executable, platform.python_version(),
         'image', os.environ.get('ImageOS', '?'), os.environ.get('ImageVersion', '?'))
     lock = load_lock(args.lock)
@@ -1170,6 +1221,10 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
             if transient.exists(): shutil.rmtree(transient, ignore_errors=True)
     ctx.env['CI_ADMITTED_ROOT'] = str(dest)
     if ctx.paths: ctx.env['PATH'] = (';' if host.is_windows else os.pathsep).join([*ctx.paths, *inherited_path(host)])
+    errors = env_file_errors(ctx.env)
+    if errors:
+        empty_destination(dest)
+        raise BootstrapError('; '.join(errors))
     for key, value in ctx.env.items():
         safe_text(key, 'environment name'); safe_text(value, 'environment value ' + key)
     for path in ctx.paths: safe_text(path, 'PATH entry')

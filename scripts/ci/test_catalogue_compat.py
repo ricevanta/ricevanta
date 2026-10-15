@@ -574,7 +574,7 @@ class CatalogueCompatTests(unittest.TestCase):
         step = next(s for s in steps if s.get('run') == COMMAND)
         self.assertEqual(step.get('env'), {'BASE_SHA': '${{ fromJSON(inputs.route).baseSha }}',
                                            'CANDIDATE_SHA': '${{ fromJSON(inputs.route).testedSha }}'})
-        self.assertEqual(step.get('shell'), 'bash')
+        self.assertEqual(step.get('shell'), 'bash --noprofile --norc -p -e -o pipefail {0}')
         self.assertEqual(step.get('working-directory'), '.')
         self.assertNotIn('if', step)
         self.assertNotIn('continue-on-error', step)
