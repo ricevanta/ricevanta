@@ -56,18 +56,18 @@
     "totp": {
       "$ref": "#/$defs/wrapper",
       "properties": {"cases": {"items": {
-        "type": "object", "required": ["id", "kind", "secret_base32"],
+        "type": "object", "required": ["id", "kind", "rfc_seed_ascii"],
         "properties": {
           "id": {"$ref": "#/$defs/id"},
           "kind": {"enum": ["rfc", "verify"]},
-          "secret_base32": {"type": "string", "pattern": "^[A-Z2-7]{32}$"}
+          "rfc_seed_ascii": {"type": "string", "const": "12345678901234567890"}
         },
         "oneOf": [
           {"additionalProperties": false, "required": ["time", "rfc_code_8", "code_6"],
-           "properties": {"id": true, "kind": {"const": "rfc"}, "secret_base32": true, "time": {"type": "integer", "minimum": 0},
+           "properties": {"id": true, "kind": {"const": "rfc"}, "rfc_seed_ascii": true, "time": {"type": "integer", "minimum": 0},
                           "rfc_code_8": {"type": "string", "pattern": "^[0-9]{8}$"}, "code_6": {"type": "string", "pattern": "^[0-9]{6}$"}}},
           {"additionalProperties": false, "required": ["now", "code", "last_step", "expect"],
-           "properties": {"id": true, "kind": {"const": "verify"}, "secret_base32": true, "now": {"type": "integer", "minimum": 0},
+           "properties": {"id": true, "kind": {"const": "verify"}, "rfc_seed_ascii": true, "now": {"type": "integer", "minimum": 0},
                           "code": {"type": "string", "pattern": "^[0-9]{6}$"}, "last_step": {"type": ["integer", "null"]},
                           "expect": {"type": "object"}}}
         ]
@@ -170,6 +170,8 @@
           "expect": {"type": "string", "pattern": "^[RYSCU][0-9]{2}$"}
         }
       }}}
-    }
+    },
+    "security": {"$ref": "#/$defs/wrapper", "properties": {"cases": {"items": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "input", "expect"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["fresh", "authority", "decision", "enrollment"]}, "input": {"type": "object"}, "expect": {"type": "boolean"}}, "allOf": [{"if": {"properties": {"kind": {"const": "fresh"}}}, "then": {"properties": {"input": {"type": "object", "additionalProperties": false, "required": ["now", "authenticated_at", "verified", "binding", "evidence_purpose", "hash_match", "epoch_match", "consumed", "unaffected"], "properties": {"now": {"type": "integer"}, "authenticated_at": {"type": ["integer", "null"]}, "verified": {"type": "boolean"}, "binding": {"type": "string"}, "evidence_purpose": {"type": "string"}, "hash_match": {"type": "boolean"}, "epoch_match": {"type": "boolean"}, "consumed": {"type": "boolean"}, "unaffected": {"type": "boolean"}}}}}}, {"if": {"properties": {"kind": {"const": "authority"}}}, "then": {"properties": {"input": {"type": "object", "additionalProperties": false, "required": ["mac_valid", "epoch_current", "generation_current", "dependencies_current", "lease_live", "published", "denied"], "properties": {"mac_valid": {"type": "boolean"}, "epoch_current": {"type": "boolean"}, "generation_current": {"type": "boolean"}, "dependencies_current": {"type": "boolean"}, "lease_live": {"type": "boolean"}, "published": {"type": "boolean"}, "denied": {"type": "boolean"}}}}}}, {"if": {"properties": {"kind": {"const": "decision"}}}, "then": {"properties": {"input": {"type": "object", "additionalProperties": false, "required": ["route_kind", "request_kind", "decision", "pending", "hash_match", "eligible", "different_user", "target_user", "fresh", "bound", "unaffected"], "properties": {"route_kind": {"enum": ["access_policy", "identity_authority"]}, "request_kind": {"enum": ["access_policy", "identity_authority"]}, "decision": {"enum": ["approve", "reject"]}, "pending": {"type": "boolean"}, "hash_match": {"type": "boolean"}, "eligible": {"type": "boolean"}, "different_user": {"type": "boolean"}, "target_user": {"type": "boolean"}, "fresh": {"type": "boolean"}, "bound": {"type": "boolean"}, "unaffected": {"type": "boolean"}}}}}}, {"if": {"properties": {"kind": {"const": "enrollment"}}}, "then": {"properties": {"input": {"type": "object", "additionalProperties": false, "required": ["epoch_current", "generation_current", "consumed", "proof_valid", "now", "expires_at", "attempts"], "properties": {"epoch_current": {"type": "boolean"}, "generation_current": {"type": "boolean"}, "consumed": {"type": "boolean"}, "proof_valid": {"type": "boolean"}, "now": {"type": "integer", "minimum": 0}, "expires_at": {"type": "integer", "minimum": 0}, "attempts": {"type": "integer", "minimum": 0}}}}}}]}}}},
+    "wire": {"$ref": "#/$defs/wrapper", "properties": {"cases": {"items": {"type": "object", "additionalProperties": false, "required": ["id", "schema", "value", "valid"], "properties": {"id": {"$ref": "#/$defs/id"}, "schema": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]+$"}, "value": {}, "valid": {"type": "boolean"}}}}}}
   }
 }

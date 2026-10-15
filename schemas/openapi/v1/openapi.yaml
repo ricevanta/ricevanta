@@ -1,7 +1,7 @@
 openapi: 3.1.2
 info:
   title: Ricevanta administration API
-  version: '1.1'
+  version: '1.2'
   summary: The /api/v1 contract used by the console, the ricevanta CLI and GitOps.
   description: >-
     Hand-written contract under BE-05 and BE-16. Rules that every operation follows
@@ -33,6 +33,7 @@ paths:
   /api/v1/openapi.yaml:
     get:
       operationId: getOpenApiDocument
+      x-ricevanta-gates: [BE-12]
       tags: [platform]
       summary: Return this document.
       security:
@@ -56,6 +57,7 @@ paths:
   /api/v1/auth/options:
     get:
       operationId: listLoginOptions
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: List the enabled login methods for the login page.
       security: []
@@ -74,6 +76,7 @@ paths:
   /api/v1/auth/oidc/{provider_uid}/start:
     get:
       operationId: startOidcLogin
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Start an OIDC authorization code flow with PKCE as a top-level navigation.
       security: []
@@ -90,6 +93,7 @@ paths:
   /api/v1/auth/oidc/{provider_uid}/callback:
     get:
       operationId: completeOidcLogin
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Receive the authorization response and create or re-authenticate a session.
       security: []
@@ -111,6 +115,7 @@ paths:
   /api/v1/auth/saml/{provider_uid}/start:
     get:
       operationId: startSamlLogin
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Start an SP-initiated SAML login with the HTTP-Redirect binding.
       security: []
@@ -127,6 +132,7 @@ paths:
   /api/v1/auth/saml/{provider_uid}/acs:
     post:
       operationId: completeSamlLogin
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Assertion consumer service for the HTTP-POST binding.
       security: []
@@ -156,6 +162,7 @@ paths:
   /api/v1/auth/saml/{provider_uid}/metadata:
     get:
       operationId: getSamlServiceProviderMetadata
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Service-provider metadata for configuring the identity provider.
       security: []
@@ -176,6 +183,7 @@ paths:
   /api/v1/auth/local:
     post:
       operationId: loginLocal
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Break-glass login with user name, generated password and TOTP code.
       security: []
@@ -204,6 +212,7 @@ paths:
   /api/v1/auth/local/enrollment:
     post:
       operationId: startBreakGlassEnrollment
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Exchange a one-time enrollment code for the generated password and TOTP seed.
       security: []
@@ -232,12 +241,13 @@ paths:
   /api/v1/auth/local/enrollment/complete:
     post:
       operationId: completeBreakGlassEnrollment
+      x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Confirm the TOTP seed with a first code and activate the account.
       security: []
       x-ricevanta-authorization:
         principal: protocol
-        protocol: enrollment_code
+        protocol: enrollment_challenge
         reauth: none
         csrf: origin
       x-ricevanta-max-body-bytes: 1024
@@ -286,6 +296,7 @@ paths:
   /api/v1/session:
     get:
       operationId: getSession
+      x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: Return the current session, effective permissions and CSRF token.
       security:
@@ -308,6 +319,7 @@ paths:
   /api/v1/session/logout:
     post:
       operationId: logout
+      x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: End the current session.
       security:
@@ -329,6 +341,7 @@ paths:
   /api/v1/session/reauth/oidc/{provider_uid}/start:
     get:
       operationId: startOidcReauthentication
+      x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: Start a forced OIDC re-authentication for the current session.
       security:
@@ -348,6 +361,7 @@ paths:
   /api/v1/session/reauth/saml/{provider_uid}/start:
     get:
       operationId: startSamlReauthentication
+      x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: Start a SAML re-authentication with ForceAuthn for the current session.
       security:
@@ -367,6 +381,7 @@ paths:
   /api/v1/session/reauth/local:
     post:
       operationId: reauthenticateLocal
+      x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: Re-authenticate a break-glass session with password and a fresh TOTP code.
       security:
@@ -397,6 +412,7 @@ paths:
   /api/v1/sessions:
     get:
       operationId: listSessions
+      x-ricevanta-gates: [BE-12]
       tags: [sessions]
       summary: List active sessions.
       security:
@@ -425,6 +441,7 @@ paths:
   /api/v1/sessions/{session_uid}/revoke:
     post:
       operationId: revokeSession
+      x-ricevanta-gates: [BE-12]
       tags: [sessions]
       summary: Revoke one session immediately.
       security:
@@ -449,6 +466,7 @@ paths:
   /api/v1/users/{user_uid}/sessions/revoke:
     post:
       operationId: revokeUserSessions
+      x-ricevanta-gates: [BE-12]
       tags: [sessions]
       summary: Revoke every session of one user immediately.
       security:
@@ -476,6 +494,7 @@ paths:
   /api/v1/api-tokens:
     get:
       operationId: listApiTokens
+      x-ricevanta-gates: [BE-12]
       tags: [api-tokens]
       summary: List the caller's API tokens, or every token with owner=all.
       security:
@@ -527,8 +546,6 @@ paths:
       responses:
         '201':
           description: Token created.
-          headers:
-            Location: {$ref: '#/components/headers/Location'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApiTokenCreated'}
@@ -537,6 +554,7 @@ paths:
   /api/v1/api-tokens/{token_uid}/revoke:
     post:
       operationId: revokeApiToken
+      x-ricevanta-gates: [BE-12]
       tags: [api-tokens]
       summary: Revoke an API token immediately.
       security:
@@ -562,6 +580,7 @@ paths:
   /api/v1/identity-providers:
     get:
       operationId: listIdentityProviders
+      x-ricevanta-gates: [BE-12]
       tags: [identity-providers]
       summary: List configured identity providers; client secrets read back as has_client_secret.
       security:
@@ -667,6 +686,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -675,6 +700,7 @@ paths:
   /api/v1/principal-links:
     get:
       operationId: listPrincipalLinks
+      x-ricevanta-gates: [BE-12]
       tags: [principal-links]
       summary: List links between external principals and internal users.
       security:
@@ -751,6 +777,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -759,6 +791,7 @@ paths:
   /api/v1/principal-link-requests:
     get:
       operationId: listPrincipalLinkRequests
+      x-ricevanta-gates: [BE-12]
       tags: [principal-links]
       summary: List authenticated external principals that have no link yet.
       security:
@@ -787,6 +820,7 @@ paths:
   /api/v1/break-glass-accounts:
     get:
       operationId: listBreakGlassAccounts
+      x-ricevanta-gates: [BE-12]
       tags: [break-glass]
       summary: List break-glass accounts without any credential material.
       security:
@@ -861,6 +895,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -887,6 +927,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -913,6 +959,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -939,6 +991,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -965,6 +1023,12 @@ paths:
         csrf: synchronizer
       x-ricevanta-gates: [BE-12]
       x-ricevanta-idempotency: required
+      x-ricevanta-max-body-bytes: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/JustificationRequest'}
       responses:
         '202':
           $ref: '#/components/responses/ApprovalAccepted'
@@ -973,6 +1037,7 @@ paths:
   /api/v1/approval-requests:
     get:
       operationId: listApprovalRequests
+      x-ricevanta-gates: [BE-12]
       tags: [approvals]
       summary: List my requests and requests awaiting my decision, or every request with view=all.
       security:
@@ -1001,6 +1066,7 @@ paths:
   /api/v1/approval-requests/{request_uid}:
     get:
       operationId: getApprovalRequest
+      x-ricevanta-gates: [BE-12]
       tags: [approvals]
       summary: Read one approval request as its requester, an eligible decider or a queue reader.
       security:
@@ -1022,6 +1088,36 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApprovalRequest'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}/targets:
+    get:
+      operationId: getApprovalRequestTargets
+      x-ricevanta-gates: [BE-12]
+      tags: [approvals]
+      summary: Inspect a page of the frozen targets and sanitized before/after views.
+      description: Same subject or queue-reader visibility as getApprovalRequest, plus each target resource read permission. Never returns secrets.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session, token]
+        permissions:
+          - {name: authz.approvals.read, uses: 'getApprovalRequestTargets#any', selector: any}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: Immutable target page under current read authorization.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalTargetPage'}
         default:
           $ref: '#/components/responses/Problem'
   /api/v1/approval-requests/{request_uid}/approve:
@@ -1184,6 +1280,7 @@ paths:
   /api/v1/changes:
     get:
       operationId: streamChanges
+      x-ricevanta-gates: [BE-12]
       tags: [changes]
       summary: Server-Sent Events stream of per-topic invalidation tokens; never row data.
       security:
@@ -1400,7 +1497,6 @@ components:
             - https://ricevanta.io/problems/precondition_required
             - https://ricevanta.io/problems/rate_limited
             - https://ricevanta.io/problems/internal_error
-            - https://ricevanta.io/problems/not_implemented
             - https://ricevanta.io/problems/unavailable
             - https://ricevanta.io/problems/recovery_sealed
         title: {type: string, minLength: 1, maxLength: 128}
@@ -1439,9 +1535,18 @@ components:
     AuthMethodRef:
       type: object
       required: [method]
+      allOf:
+        - if: {properties: {method: {const: local}}}
+          then:
+            required: [account_uid]
+            not: {required: [provider_uid]}
+          else:
+            required: [provider_uid]
+            not: {required: [account_uid]}
       properties:
         method: {type: string, enum: [oidc, saml, local]}
         provider_uid: {$ref: '#/components/schemas/Uid'}
+        account_uid: {$ref: '#/components/schemas/Uid'}
         display_name: {$ref: '#/components/schemas/DisplayName'}
     LoginErrorCode:
       type: string
@@ -1470,15 +1575,21 @@ components:
         scope:
           type: object
           required: [kind]
+          allOf:
+            - if: {properties: {kind: {const: device_groups}}}
+              then: {required: [device_groups]}
+              else: {not: {required: [device_groups]}}
           properties:
             kind: {type: string, enum: [all, device_groups]}
             device_groups:
               type: array
+              minItems: 1
               maxItems: 1024
+              uniqueItems: true
               items: {$ref: '#/components/schemas/Uid'}
     Session:
       type: object
-      required: [session_uid, user, kind, authentication, csrf_token, permissions, idle_timeout_seconds, idle_expires_at, absolute_expires_at, server_version, approval_policies_disabled, recovery_quorum]
+      required: [session_uid, user, kind, authentication, csrf_token, permissions, idle_timeout_seconds, idle_expires_at, absolute_expires_at, server_version, recovery_epoch, approval_policies_disabled, recovery_quorum]
       properties:
         session_uid: {$ref: '#/components/schemas/Uid'}
         user:
@@ -1490,7 +1601,7 @@ components:
         kind: {type: string, enum: [sso, break_glass]}
         authentication:
           type: object
-          required: [method, authenticated_at]
+          required: [method]
           properties:
             method: {type: string, enum: [oidc, saml, local]}
             provider_uid: {$ref: '#/components/schemas/Uid'}
@@ -1508,6 +1619,7 @@ components:
         idle_expires_at: {$ref: '#/components/schemas/Timestamp'}
         absolute_expires_at: {$ref: '#/components/schemas/Timestamp'}
         server_version: {type: string, maxLength: 64}
+        recovery_epoch: {type: string, pattern: '^[1-9][0-9]{0,19}$'}
         approval_policies_disabled: {type: boolean}
         recovery_quorum:
           type: object
@@ -1526,8 +1638,9 @@ components:
     LocalReauthRequest:
       type: object
       additionalProperties: false
-      required: [password, totp_code, purpose]
+      required: [account_uid, password, totp_code, purpose]
       properties:
+        account_uid: {$ref: '#/components/schemas/Uid'}
         password: {type: string, minLength: 1, maxLength: 64}
         totp_code: {type: string, pattern: '^[0-9]{6}$', maxLength: 6}
         purpose: {$ref: '#/components/schemas/ReauthPurpose'}
@@ -1539,8 +1652,9 @@ components:
         enrollment_code: {type: string, pattern: '^[A-Z2-7]{26}$', maxLength: 26}
     BreakGlassEnrollmentChallenge:
       type: object
-      required: [enrollment_uid, username, password, totp, expires_at]
+      required: [enrollment_uid, username, mode, totp, expires_at]
       properties:
+        mode: {type: string, enum: [create, reset, replace_factor]}
         enrollment_uid: {$ref: '#/components/schemas/Uid'}
         username: {$ref: '#/components/schemas/Username'}
         password: {type: string, pattern: '^[A-Z2-7]{24}$', description: Generated, 120 bits, shown once.}
@@ -1564,6 +1678,10 @@ components:
                   maxItems: 177
                   items: {type: string, pattern: '^[01]{21,177}$'}
         expires_at: {$ref: '#/components/schemas/Timestamp'}
+      allOf:
+        - if: {properties: {mode: {enum: [create, reset]}}}
+          then: {required: [password]}
+          else: {not: {required: [password]}}
     BreakGlassEnrollmentComplete:
       type: object
       additionalProperties: false
@@ -1627,7 +1745,7 @@ components:
     ApiTokenCreate:
       type: object
       additionalProperties: false
-      required: [name, permissions, expires_at]
+      required: [name, permissions]
       properties:
         name: {$ref: '#/components/schemas/DisplayName'}
         permissions:
@@ -1663,8 +1781,9 @@ components:
         total: {$ref: '#/components/schemas/Total'}
     IdentityProvider:
       type: object
-      required: [uid, revision, display_name, protocol, enabled, created_at, updated_at]
+      required: [etag, uid, revision, display_name, protocol, enabled, created_at, updated_at]
       properties:
+        etag: {type: string, pattern: '^"r[1-9][0-9]{0,18}"$', maxLength: 22}
         uid: {$ref: '#/components/schemas/Uid'}
         revision: {type: integer, minimum: 1}
         display_name: {$ref: '#/components/schemas/DisplayName'}
@@ -1715,8 +1834,9 @@ components:
     OidcProviderInput:
       type: object
       additionalProperties: false
-      required: [protocol, display_name, enabled, issuer, client_id, client_auth_method]
+      required: [protocol, display_name, enabled, issuer, client_id, client_auth_method, justification]
       properties:
+        justification: {$ref: '#/components/schemas/Justification'}
         protocol: {type: string, const: oidc}
         display_name: {$ref: '#/components/schemas/DisplayName'}
         enabled: {type: boolean}
@@ -1726,7 +1846,7 @@ components:
         client_secret: {type: string, minLength: 1, maxLength: 1024, writeOnly: true, description: Omit on update to keep the stored secret.}
         extra_scopes:
           type: array
-          maxItems: 8
+          maxItems: 2
           uniqueItems: true
           items: {type: string, enum: [profile, email]}
         allowed_signing_algs:
@@ -1738,8 +1858,9 @@ components:
     SamlProviderInput:
       type: object
       additionalProperties: false
-      required: [protocol, display_name, enabled, idp_metadata_xml]
+      required: [protocol, display_name, enabled, idp_metadata_xml, justification]
       properties:
+        justification: {$ref: '#/components/schemas/Justification'}
         protocol: {type: string, const: saml}
         display_name: {$ref: '#/components/schemas/DisplayName'}
         enabled: {type: boolean}
@@ -1755,16 +1876,25 @@ components:
     PrincipalKey:
       type: object
       required: [protocol, issuer]
+      allOf:
+        - if: {properties: {protocol: {const: oidc}}}
+          then:
+            required: [subject]
+            not: {anyOf: [{required: [name_id]}, {required: [name_id_format]}]}
+          else:
+            required: [name_id, name_id_format]
+            not: {required: [subject]}
       properties:
         protocol: {type: string, enum: [oidc, saml]}
-        issuer: {type: string, maxLength: 2048}
-        subject: {type: string, maxLength: 255, description: OIDC sub.}
+        issuer: {type: string, minLength: 1, maxLength: 2048}
+        subject: {type: string, minLength: 1, maxLength: 255, description: OIDC sub.}
         name_id_format: {type: string, const: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'}
-        name_id: {type: string, maxLength: 256}
+        name_id: {type: string, minLength: 1, maxLength: 256}
     PrincipalLink:
       type: object
-      required: [link_uid, revision, user_uid, provider_uid, principal_key, created_at]
+      required: [etag, link_uid, revision, user_uid, provider_uid, principal_key, created_at]
       properties:
+        etag: {type: string, pattern: '^"r[1-9][0-9]{0,18}"$', maxLength: 22}
         link_uid: {$ref: '#/components/schemas/Uid'}
         revision: {type: integer, minimum: 1}
         user_uid: {$ref: '#/components/schemas/Uid'}
@@ -1800,14 +1930,16 @@ components:
     PrincipalLinkCreate:
       type: object
       additionalProperties: false
-      required: [link_request_uid, user_uid]
+      required: [link_request_uid, user_uid, justification]
       properties:
+        justification: {$ref: '#/components/schemas/Justification'}
         link_request_uid: {$ref: '#/components/schemas/Uid'}
         user_uid: {$ref: '#/components/schemas/Uid'}
     BreakGlassAccount:
       type: object
-      required: [account_uid, revision, user_uid, username, state, created_at]
+      required: [etag, account_uid, revision, user_uid, username, state, created_at]
       properties:
+        etag: {type: string, pattern: '^"r[1-9][0-9]{0,18}"$', maxLength: 22}
         account_uid: {$ref: '#/components/schemas/Uid'}
         revision: {type: integer, minimum: 1}
         user_uid: {$ref: '#/components/schemas/Uid'}
@@ -1826,10 +1958,11 @@ components:
     BreakGlassAccountCreate:
       type: object
       additionalProperties: false
-      required: [username, display_name]
+      required: [user_uid, username, justification]
       properties:
+        user_uid: {$ref: '#/components/schemas/Uid'}
+        justification: {$ref: '#/components/schemas/Justification'}
         username: {$ref: '#/components/schemas/Username'}
-        display_name: {$ref: '#/components/schemas/DisplayName'}
     EnrollmentCodeClaim:
       type: object
       required: [account_uid, enrollment_code, expires_at]
@@ -1861,6 +1994,34 @@ components:
         items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/ApprovalRequest'}}
         next_page_token: {$ref: '#/components/schemas/PageToken'}
         total: {$ref: '#/components/schemas/Total'}
+    Justification:
+      type: string
+      minLength: 1
+      maxLength: 2000
+    JustificationRequest:
+      type: object
+      additionalProperties: false
+      required: [justification]
+      properties:
+        justification: {$ref: '#/components/schemas/Justification'}
+    ApprovalTarget:
+      type: object
+      required: [resource_kind, uid, before_hash, after_hash, before_view, after_view]
+      properties:
+        resource_kind: {type: string, maxLength: 64}
+        uid: {$ref: '#/components/schemas/Uid'}
+        before_hash: {oneOf: [{$ref: '#/components/schemas/Sha256'}, {type: 'null'}]}
+        after_hash: {oneOf: [{$ref: '#/components/schemas/Sha256'}, {type: 'null'}]}
+        before_view: {type: [string, 'null'], maxLength: 262144, description: Canonical sanitized JSON matching the resource read schema; null means absent.}
+        after_view: {type: [string, 'null'], maxLength: 262144, description: Canonical sanitized JSON matching the resource read schema; no secret or write-only fields.}
+    ApprovalTargetPage:
+      type: object
+      required: [binding_hash, items, total]
+      properties:
+        binding_hash: {$ref: '#/components/schemas/Sha256'}
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/ApprovalTarget'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
     ApprovalDecision:
       type: object
       additionalProperties: false
@@ -1870,7 +2031,7 @@ components:
         binding_hash: {$ref: '#/components/schemas/Sha256'}
     ChangeToken:
       type: string
-      pattern: '^[A-Za-z0-9_-]{22}$'
+      pattern: '^[A-Za-z0-9_-]{21}[AQgw]$'
     ChangeSnapshot:
       type: object
       required: [stream_uid, topics]

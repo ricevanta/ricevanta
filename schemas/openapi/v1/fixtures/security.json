@@ -1,0 +1,539 @@
+{
+  "description": "Acceptance predicates for verified freshness, current authority, approval and one-use enrollment. Not a journal/fencing implementation or qualification proof.",
+  "cases": [
+    {
+      "id": "verified-recent",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "general",
+        "evidence_purpose": "general",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": true
+    },
+    {
+      "id": "at-six-hundred",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 400,
+        "verified": true,
+        "binding": "general",
+        "evidence_purpose": "general",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "future-time",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 1001,
+        "verified": true,
+        "binding": "general",
+        "evidence_purpose": "general",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "issuance-is-not-auth",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": false,
+        "binding": "general",
+        "evidence_purpose": "general",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "missing-auth-time",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": null,
+        "verified": true,
+        "binding": "general",
+        "evidence_purpose": "general",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "exact-bound-evidence",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "approval:one",
+        "evidence_purpose": "approval:one",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": true
+    },
+    {
+      "id": "bound-hash-match",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "approval:one",
+        "evidence_purpose": "approval:one",
+        "hash_match": false,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "bound-epoch-match",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "approval:one",
+        "evidence_purpose": "approval:one",
+        "hash_match": true,
+        "epoch_match": false,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "bound-unaffected",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "approval:one",
+        "evidence_purpose": "approval:one",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": false
+      },
+      "expect": false
+    },
+    {
+      "id": "bound-consumed",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "approval:one",
+        "evidence_purpose": "approval:one",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": true,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "bound-other-request",
+      "kind": "fresh",
+      "input": {
+        "now": 1000,
+        "authenticated_at": 999,
+        "verified": true,
+        "binding": "approval:one",
+        "evidence_purpose": "approval:two",
+        "hash_match": true,
+        "epoch_match": true,
+        "consumed": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "current-authority",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "dependencies_current": true,
+        "lease_live": true,
+        "published": true,
+        "denied": false
+      },
+      "expect": true
+    },
+    {
+      "id": "authority-mac-valid",
+      "kind": "authority",
+      "input": {
+        "mac_valid": false,
+        "epoch_current": true,
+        "generation_current": true,
+        "dependencies_current": true,
+        "lease_live": true,
+        "published": true,
+        "denied": false
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-epoch-current",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": false,
+        "generation_current": true,
+        "dependencies_current": true,
+        "lease_live": true,
+        "published": true,
+        "denied": false
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-generation-current",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": true,
+        "generation_current": false,
+        "dependencies_current": true,
+        "lease_live": true,
+        "published": true,
+        "denied": false
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-dependencies-current",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "dependencies_current": false,
+        "lease_live": true,
+        "published": true,
+        "denied": false
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-lease-live",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "dependencies_current": true,
+        "lease_live": false,
+        "published": true,
+        "denied": false
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-published",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "dependencies_current": true,
+        "lease_live": true,
+        "published": false,
+        "denied": false
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-denied",
+      "kind": "authority",
+      "input": {
+        "mac_valid": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "dependencies_current": true,
+        "lease_live": true,
+        "published": true,
+        "denied": true
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-approval",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true
+      },
+      "expect": true
+    },
+    {
+      "id": "wrong-decision-route",
+      "kind": "decision",
+      "input": {
+        "route_kind": "access_policy",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "self-approval",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": false,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "target-approval",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": true,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "unbound-approval",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": false,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "affected-method",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": false
+      },
+      "expect": false
+    },
+    {
+      "id": "ineligible-decider",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": false,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "stale-request-hash",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": false,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true
+      },
+      "expect": false
+    },
+    {
+      "id": "authority-rejection-no-grant",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "reject",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": false,
+        "unaffected": false
+      },
+      "expect": true
+    },
+    {
+      "id": "enrollment-valid",
+      "kind": "enrollment",
+      "input": {
+        "epoch_current": true,
+        "generation_current": true,
+        "consumed": false,
+        "now": 1000,
+        "expires_at": 1001,
+        "attempts": 0,
+        "proof_valid": true
+      },
+      "expect": true
+    },
+    {
+      "id": "enrollment-code-replayed",
+      "kind": "enrollment",
+      "input": {
+        "epoch_current": true,
+        "generation_current": true,
+        "consumed": true,
+        "now": 1000,
+        "expires_at": 1001,
+        "attempts": 0,
+        "proof_valid": true
+      },
+      "expect": false
+    },
+    {
+      "id": "enrollment-expired",
+      "kind": "enrollment",
+      "input": {
+        "epoch_current": true,
+        "generation_current": true,
+        "consumed": false,
+        "now": 1001,
+        "expires_at": 1001,
+        "attempts": 0,
+        "proof_valid": true
+      },
+      "expect": false
+    },
+    {
+      "id": "enrollment-attempt-cap",
+      "kind": "enrollment",
+      "input": {
+        "epoch_current": true,
+        "generation_current": true,
+        "consumed": false,
+        "now": 1000,
+        "expires_at": 1001,
+        "attempts": 5,
+        "proof_valid": true
+      },
+      "expect": false
+    },
+    {
+      "id": "enrollment-old-epoch",
+      "kind": "enrollment",
+      "input": {
+        "epoch_current": false,
+        "generation_current": true,
+        "consumed": false,
+        "now": 1000,
+        "expires_at": 1001,
+        "attempts": 0,
+        "proof_valid": true
+      },
+      "expect": false
+    },
+    {
+      "id": "enrollment-replaced-generation",
+      "kind": "enrollment",
+      "input": {
+        "epoch_current": true,
+        "generation_current": false,
+        "consumed": false,
+        "now": 1000,
+        "expires_at": 1001,
+        "attempts": 0,
+        "proof_valid": true
+      },
+      "expect": false
+    }
+  ]
+}

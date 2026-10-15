@@ -298,6 +298,28 @@
     "value": ""
    },
    "expect": "__Host-rv_enroll=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+  },
+  {
+   "id": "denied-request-no-renewal",
+   "kind": "activity",
+   "input": {
+    "background": false,
+    "now": 100,
+    "stored_last_activity": 0,
+    "authorized": false
+   },
+   "expect": 0
+  },
+  {
+   "id": "expired-session-no-renewal",
+   "kind": "activity",
+   "input": {
+    "background": false,
+    "now": 100,
+    "stored_last_activity": 0,
+    "expired": true
+   },
+   "expect": 0
   }
  ]
 }

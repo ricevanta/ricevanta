@@ -21,7 +21,7 @@ PROBLEMS = {
     'conflict': 409, 'approval_stale': 409, 'idempotency_in_progress': 409,
     'precondition_failed': 412, 'payload_too_large': 413, 'unsupported_media_type': 415,
     'idempotency_key_reused': 422, 'precondition_required': 428, 'rate_limited': 429,
-    'internal_error': 500, 'not_implemented': 501, 'unavailable': 503, 'recovery_sealed': 503,
+    'internal_error': 500, 'unavailable': 503, 'recovery_sealed': 503,
 }
 ONLY_WITH = {'errors': {'validation_failed'}, 'permission': {'permission_denied'},
              'reauth': {'reauth_required'}, 'retry_after_seconds': {'rate_limited', 'unavailable', 'recovery_sealed'}}
@@ -32,7 +32,7 @@ LOGIN_ERRORS = {'provider_error', 'state_mismatch', 'expired', 'invalid_response
                 'session_required'}
 
 RESERVED_PREFIXES = ('/api', '/agent', '/ext', '/assets', '/brand', '/mdm', '/scep', '/acme',
-                     '/healthz', '/readyz', '/login', '/__test__')
+                     '/healthz', '/readyz', '/metrics', '/login', '/__test__')
 
 TOPIC_PERMISSIONS = {
     'devices': 'mdm.devices.read', 'alerts': 'edr.alerts.read', 'dlp.findings': 'dlp.findings.read',
@@ -64,6 +64,8 @@ COOKIE_VALUE = re.compile(r'^[A-Za-z0-9_-]{43}$')
 
 def problem_semantics(problem):
     code = problem['type'].rsplit('/', 1)[1]
+    if problem['title'] != code.replace('_', ' ').capitalize():
+        return False
     if PROBLEMS.get(code) != problem['status']:
         return False
     if 'instance' in problem and problem['instance'] != 'urn:uuid:' + problem['request_id']:
@@ -75,7 +77,7 @@ def media_essence(value):
     if value is None:
         return None
     parts = [p.strip().lower() for p in value.split(';')]
-    if any(p and p != 'charset=utf-8' for p in parts[1:]):
+    if len(parts) > 2 or any(p != 'charset=utf-8' for p in parts[1:]):
         return None
     return parts[0]
 
@@ -84,6 +86,8 @@ def guard(c):
     """Credential, resource-isolation and request-forgery checks (identity-sessions section 4)."""
     unsafe = c['method'] in ('POST', 'PUT', 'PATCH', 'DELETE')
     credentials = c['credentials']
+    if not credentials and c['bearer'] != 'absent':
+        return 'unauthenticated'
     if credentials and c['session_cookie'] != 'absent' and c['bearer'] != 'absent':
         return 'credentials_ambiguous'
     site = c['sec_fetch_site']
@@ -155,7 +159,7 @@ def session_state(c):
 
 
 def activity(c):
-    if c['background'] or c['now'] - c['stored_last_activity'] < ACTIVITY_GRANULARITY:
+    if not c.get('authorized', True) or c.get('expired', False) or c['background'] or c['now'] - c['stored_last_activity'] < ACTIVITY_GRANULARITY:
         return c['stored_last_activity']
     return c['now']
 
@@ -268,7 +272,7 @@ def subscribe(c):
     topics = c['topics']
     if not 1 <= len(topics) <= 16 or len(set(topics)) != len(topics):
         return {'problem': 'validation_failed'}
-    if not all(TOPIC.match(t) for t in topics):
+    if not all(TOPIC.fullmatch(t) for t in topics):
         return {'problem': 'validation_failed'}
     for topic in topics:
         permission = TOPIC_PERMISSIONS[topic.split('/')[0]]
@@ -301,7 +305,10 @@ def check(name, data, bundle, instance_validator, operations):
             if return_path(case['input']) != case['expect']:
                 out.append(f'{where}: model gives {return_path(case["input"])}')
         elif name == 'totp':
-            secret = _b32(case['secret_base32'])
+            seed = case['rfc_seed_ascii'].encode('ascii')
+            secret = _b32(base64.b32encode(seed).decode('ascii').rstrip('='))
+            if secret != seed:
+                out.append(f'{where}: base32 round trip mismatch')
             if case['kind'] == 'rfc':
                 if hotp(secret, case['time'] // 30, 8) != case['rfc_code_8'] or \
                         hotp(secret, case['time'] // 30, 6) != case['code_6']:
@@ -346,7 +353,44 @@ def check(name, data, bundle, instance_validator, operations):
                 out.append(f'{where}: model gives {got}')
             if got not in LOGIN_ERRORS | {'session_created', 'reauthenticated'}:
                 out.append(f'{where}: unknown outcome {got}')
+        elif name == 'security':
+            got = security(case['kind'], case['input'])
+            if got != case['expect']:
+                out.append(f'{where}: security model mismatch')
+        elif name == 'wire':
+            valid = instance_validator(bundle, case['schema']).is_valid(case['value'])
+            if valid != case['valid']:
+                out.append(f'{where}: wire schema acceptance mismatch')
         elif name == 'document-mutations':
             if not case['expect'].startswith(('R', 'Y', 'S', 'C')):
                 out.append(f'{where}: expectation must name a rule code')
     return out
+
+
+def fresh(c):
+    """Verified evidence, not session issuance, supplies freshness (sessions section 5)."""
+    at = c.get('authenticated_at')
+    if not c['verified'] or at is None or not 0 <= c['now'] - at < 600:
+        return False
+    if c['binding'] == 'general':
+        return True
+    return (c['evidence_purpose'] == c['binding'] and c['hash_match']
+            and c['epoch_match'] and not c['consumed'] and c['unaffected'])
+
+
+def security(kind, c):
+    if kind == 'fresh':
+        return fresh(c)
+    if kind == 'authority':
+        # This is an acceptance predicate, not an implementation of the BE-12 fence.
+        return all(c[k] for k in ('mac_valid', 'epoch_current', 'generation_current',
+                                  'dependencies_current', 'lease_live', 'published')) and not c['denied']
+    if kind == 'decision':
+        return (c['route_kind'] == c['request_kind'] and c['pending'] and c['hash_match']
+                and c['eligible'] and c['different_user'] and not c['target_user']
+                and c['fresh'] and (c['request_kind'] != 'identity_authority'
+                    or c['decision'] == 'reject' or (c['bound'] and c['unaffected'])))
+    if kind == 'enrollment':
+        return (c['epoch_current'] and c['generation_current'] and not c['consumed']
+                and c['now'] < c['expires_at'] and c['attempts'] < 5 and c['proof_valid'])
+    raise ValueError('unknown security fixture kind')

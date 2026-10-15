@@ -7,6 +7,7 @@ import copy
 import json
 from pathlib import Path
 import sys
+import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate  # noqa: E402
@@ -54,10 +55,7 @@ def run_document(root, document, catalogue, registry):
     return {line[:3] for line in diagnostics}
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='.')
-    root = Path(parser.parse_args().root)
+def run(root):
     failures = []
     text = (root / validate.HERE / 'openapi.yaml').read_text(encoding='utf-8')
     original = validate.load_yaml(text)
@@ -99,6 +97,33 @@ def main():
         return 1
     print(f'PASS: {len(cases)} document mutations and {len(YAML_DEFECTS)} YAML defects rejected')
     return 0
+
+
+class ContractTests(unittest.TestCase):
+    def test_document_mutations(self):
+        self.assertEqual(run(Path(__file__).resolve().parents[3]), 0)
+
+    def test_all_fixtures(self):
+        diagnostics, _ = validate.validate(Path(__file__).resolve().parents[3])
+        self.assertEqual(diagnostics, [])
+
+    def test_duplicate_json_and_nonfinite_rejected(self):
+        for data in ('{"x":1,"x":2}', '{"x":NaN}', '{"x":Infinity}'):
+            with self.subTest(data=data), self.assertRaises(validate.Failure):
+                validate.load_json(data)
+
+    def test_catalogue_proposal_cannot_reapply(self):
+        root = Path(__file__).resolve().parents[3]
+        catalogue = validate.merged_catalogue(root)
+        proposal = validate.load_json((root / validate.HERE / 'catalogue-proposal.json').read_text())
+        with self.assertRaisesRegex(validate.Failure, 'C01'):
+            validate.merged_catalogue_from(catalogue, proposal, root)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--root', default='.')
+    return run(Path(parser.parse_args().root))
 
 
 if __name__ == '__main__':
