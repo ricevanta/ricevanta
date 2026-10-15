@@ -1,0 +1,114 @@
+# Ingest admission implementation plan
+
+> **For agentic workers:** Use superpowers:subagent-driven-development or superpowers:executing-plans task by task. Checkboxes record evidence, not intent.
+
+**Goal:** Implement the byte-weighted decode admission limiter, the additive `body` frame split, the allocation-lean key walk with its sort-based duplicate check and the CI cost-model proof that [the ingest admission spec](../specs/ingest-admission.md) defines (EV-11), without implementing the HTTP handler.
+
+**Architecture:** `server/internal/events/admission` is a standard-library limiter with a fake clock and injected randomness. `body` gains `ReadFrame` and `DecodeFrame` so the handler can charge window and content size before decompression, then replaces its token walk with a byte scanner whose state is fixed per `Decode` call. A non-race measurement test proves the weight model, for single and concurrent decodes, on every CI run against the final walker.
+
+**Tech stack:** Go 1.27.1, standard library, existing `batch`, `wire` and `body` packages, pinned `github.com/klauspost/compress/zstd` v1.20.1 for test-time frame generation.
+
+**Spec:** [Ingest decode admission](../specs/ingest-admission.md); [event batch body](../specs/event-batch-body.md) sections 2, 3, 4 and 6; `schemas/events/v1/fixtures/response.json` case `retry-upper-bound-429`.
+
+## Global constraints
+
+- A `design_reviewer` must approve the spec, this plan and the fixture change before code. This plan records no approval or implementation result.
+- An `implementer` owns the code paths below; designer and reviewer never implement. Reviews and fix confirmations use `design_reviewer` for documents and `code_reviewer` for code, under the [role table](../../AGENTS.md#agents-and-models).
+- Keep module `github.com/ricevanta/ricevanta/server`, Go 1.27.1 and no toolchain directive. No new dependency; `go.mod` and `go.sum` do not change.
+- Implementation may change `server/internal/events/admission/` (new), `server/internal/events/body/`, the command additions to `instructions/testing.md`, and in `.github/workflows/server.yml` only the cost-model steps, log capture and artifact upload of Task 4 plus the `ingest-cost-model` entry in `CHECKS`, with the matching entry in `scripts/ci/inventory.py` and its tests. No other server package, CI or schema change is authorized.
+- Treat the specs and `schemas/events/v1/` as read-only. Contract fixes return to design and independent review. Do not loosen an expected error, a weight constant or a measurement assertion to make a test pass.
+- Use a separate implementation worktree. Tasks 1 and 2 may run in parallel in separate worktrees because they share no files; Task 3 follows Task 1, and Task 4 follows Tasks 2 and 3, so the CI proof measures the walker that ships. The primary agent owns Git, integration and final verification; workers never commit or push.
+- Write tests first, observe the intended failure, then add the least implementation that passes. Compile failures count only for the planned missing API.
+- No HTTP handler, authentication, storage, ledger, acknowledgement or configuration loading. `Defaults` computes numbers from arguments; reading `server.memory_limit` belongs to the handler slice.
+
+## Review focus
+
+- `Weight` reproduces the spec formula exactly, including `H` below 1 KiB and below 2 MiB, the `s/4` rounding term and `T` below 1 MiB, and returns `ErrArgument`, never a panic, for arguments EV-09 already rejects.
+- Receive refusals never block and never read; decode waits end on budget, timer or context, each releasing exactly once.
+- The reserve admits `findings` and `audit` while refusing other classes; a non-fitting head blocks only its own queue; the bucket is charged on the `Decode` call and never refunded.
+- Per-device slots, the bucket, the refusal and attribution counters and the finding suppression are keyed by the authenticated device string the caller supplies; idle entries are removed and the map stays bounded.
+- An unmodified agent is never refused for rate, including with abandoned requests and clock drift, and never triggers the oversize finding; a modified client triggers each finding at most once per ten minutes.
+- `Retry-After` stays in 5 through 60 for every drain, queue and random value, including zero drain, empty queues and in-flight refusals.
+- `Decode` keeps the stage 1 precondition order; `ReadFrame` plus `DecodeFrame` equals `Decode` byte for byte on every body fixture.
+- The lean walk produces identical `identityFields` to the reference oracle on every fixture line, generated line and fuzz input, uses no hash, and never grows its arena or entry slice.
+- The cost-model test proves the model under a memory limit the child sets itself, on generated single and concurrent inputs, and fails on a measured excess rather than logging it.
+
+### Task 1: Frame split in `body`
+
+**Owned files:** `server/internal/events/body/frame.go`, `decode.go`, `frame_test.go`, `decode_test.go`.
+
+**Consumes:** the canonical reader left by `wire.Decode`. **Produces:** `Frame` with unexported fields and the `ContentSize` and `Window` accessors, `ReadFrame` and `DecodeFrame`; `inspectFrame` returns the effective window beside the content size.
+
+- [ ] Add `TestReadFrameFixtures`, `TestReadFrameWindow`, `TestDecodeFrameZero` and `TestDecodeSplitEquivalence` first. For every body fixture, assert that `ReadFrame` returns the sentinel `Decode` returns for reader, compressed-limit and preflight failures, consumes the same number of reader bytes, and that `DecodeFrame(ReadFrame(...))` returns lines and errors equal to `Decode` under `errors.Is` and byte comparison of every `Raw`.
+- [ ] Assert `Window()` equals the content size for single-segment frames and the Window_Descriptor value otherwise, on `window-at-64MiB`, `window-below-64MiB`, `valid-one` and the content-size width fixtures; assert `ContentSize()` equals the declared size.
+- [ ] Assert `DecodeFrame` checks `d.Validate()`, then the device precondition, then rejects a zero `Frame` with `ErrReaderBound`, before touching frame bytes; that `ReadFrame` checks the reader precondition first; and that the existing `TestDecodeCallerPrecedence` passes unchanged, proving `Decode` still runs its stage 1 preconditions in order with no read on failure.
+- [ ] Run `cd server && go test -count=1 ./internal/events/body -run 'Test(ReadFrame|DecodeFrame|DecodeSplit)'` and record the intended missing-API failure.
+- [ ] Implement the split without changing preflight order, limits, options or error mapping: `Decode` runs the stage 1 preconditions, then `ReadFrame`, then `DecodeFrame`.
+- [ ] Run `cd server && go test -count=1 ./internal/events/body` and require PASS. Obtain independent code review before Task 3 builds on it.
+
+### Task 2: Admission limiter
+
+**Owned files:** create `server/internal/events/admission/weight.go`, `limiter.go`, `clock.go`, `errors.go`, `weight_test.go`, `limiter_test.go`, `retry_test.go`.
+
+**Consumes:** spec sections 2, 3 and 6. **Produces:** the exact API of spec section 6 with a fake `Clock` in tests.
+
+- [ ] Add `TestWeightTable` first with the spec's three worked values (167,529,280; 25,971,520; 9,278,784), the `H` boundary at windows 0, 100, 1,023, 1 KiB, 1 MiB, 2 MiB minus one, 2 MiB and 64 MiB (windows below 1 KiB give `H` = 2 KiB), the `S` rounding term at sizes 0, 3, 4 and 64 MiB, the `T` boundary at sizes 0, 1 MiB minus one, 1 MiB and 64 MiB, and `ErrArgument` for 64 MiB plus one in either argument.
+- [ ] Add `TestDefaults` for `agentOnly` true and false at the four section 4 limits, asserting the budgets and `max_inflight` values in the spec table and `ErrConfig` below 512 MiB (agent only) and 1 GiB (all roles), and `TestNewRejectsConfig` for each invariant with `ErrConfig`, including a `Budget` one byte above 0.5 × `MemoryLimit` (agent only) and above 0.25 × `MemoryLimit` (all roles).
+- [ ] Add `TestReceiveRefusals`: a third upload for one device is 429, `device_concurrency`, `RetryAfter` 5 and no slot taken; `max_inflight` exhaustion is 503, `inflight`, with `ahead` equal to the total waiting weight and `weight` equal to `C`; an admitted call returns `Status` 0; refused calls return a nil ticket and change no counters except the refusal counts in `Snapshot`.
+- [ ] Add `TestDecodeBudgetAndReserve`: fill the budget with `raw` tickets down to the reserve and assert the next `raw` decode waits while a `findings` decode of the same weight is admitted immediately; release one `raw` ticket and assert the waiter wakes; drive the fake timer and assert a 503 with `budget` or `reserve` after `DecodeWait`, with the ticket still in the receive phase.
+- [ ] Add `TestQueueOrder`: with a large `findings` head that does not fit and a small `raw` waiter that does, assert a release admits the `raw` waiter while the `findings` head keeps waiting; with two waiters in one queue, assert a fitting second waiter never overtakes a non-fitting first; assert `findings` heads are examined before `raw` heads on every release.
+- [ ] Add `TestDeviceBucket`: admit 64 MiB for a fresh device; assert a second 64 MiB request is 429, `device_rate`, `RetryAfter` 16, and charges nothing; advance the fake clock 2 s and assert a 4 MiB request passes (8.125 MiB refilled at `ServerRefill`); advance 15 s and assert a 64 MiB request passes. Assert the bucket is charged when `Decode` is called, before waiting, and is not refunded when the wait times out, the context ends or the budget refuses.
+- [ ] Add `TestAgentConformance`: drive a simulated unmodified agent (bucket of 4 MiB/s and 8 MiB burst starting empty and after simulated restarts, at most two in flight, batches of 4 MiB or less, server charge delays from 0 to 6,104 s, abandoned requests the server still charges up to two at a time, and the agent's clock running 500 ppm fast against the server's) through 100,000 scripted requests from a fixed seed and assert no `device_rate` refusal and no `Finding`.
+- [ ] Add `TestFindings`: 20 `device_rate` refusals in ten fake minutes give no finding and the 21st gives `Finding` `rate`; a decode declaring a size or window of `SealingLimit` + 1 gives `oversize_frame` on an admitted decision, while exactly `SealingLimit` gives none; after either finding no other is raised for that device for ten minutes, and one is raised again afterwards, while the device's oversize counters and the per-class oversize count in `Snapshot` still count every oversize frame. Assert idle device entries are removed within two later calls and that 20,000 devices refused once each stay within the spec's memory bound.
+- [ ] Add `TestAttribution`: report decode durations with `Decoded` for 20 devices and assert `Snapshot().TopDevices` lists the ten with the most decode time in the trailing ten minutes, in order, each with its oversize-frame count, and drops a device's time after ten fake minutes; assert `Decoded` after `Release` changes nothing.
+- [ ] Add `TestRetryAfterBounds`: zero drain gives 60; a drain that yields a base of 1 gives 5; a base of 100 gives 60; random factors 0, 0.5 and 1 produce 0.8, 1.0 and 1.2 multiples rounded half up and clamped; the drain ring uses ten one-second counters; `Unavailable` follows the same rule.
+- [ ] Add `TestCancellationAndState`: cancel a waiting context and assert the wait returns `ctx.Err()` with the receive charge still held until `Release`; `Decode` twice is `ErrState`; `Decode` after `Release` is `ErrState`; `Release` and `Decoded` after `Release` are no-ops; empty device is `ErrDevice`.
+- [ ] Add `TestInvariants` driving 10,000 scripted operations from a fixed seed and asserting after each that in-use bytes never exceed the budget, never go negative, equal the sum of held tickets, and that no device holds more than two slots.
+- [ ] Run `cd server && go test -count=1 ./internal/events/admission` and record the intended missing-package failure.
+- [ ] Implement with one mutex, two FIFO queues of waiters, per-device entries holding slot counts, bucket, refusal, byte and decode-time counters and finding suppression in a map with an idle list, a ring of ten one-second release counters for the drain estimate, and timers from the injected clock. No goroutines, logging, HTTP or database imports.
+- [ ] Run `cd server && go test -count=1 ./internal/events/admission` and `cd server && go test -race -count=1 ./internal/events/admission`; require PASS. Obtain independent code review with an adversarial pass on accounting, starvation and per-device state before integration.
+
+### Task 3: Allocation-lean key walk
+
+**Owned files:** `server/internal/events/body/line.go`, `line_test.go`, `oracle_test.go`, `walk_bench_test.go`, `decode.go` for the per-call walker state.
+
+**Consumes:** body spec section 6 and spec section 7. **Produces:** `walkFields` as a byte scanner with a sort-based duplicate check and per-call state; unchanged `extractLine` results.
+
+- [ ] Add `TestWalkFieldsOracle` first, comparing the new walk with `referenceValue` on every fixture line, on generated flat, nested, dense, densenested, arrayobjs, singlechar, random3, numbers, strings, prefix and realistic lines, and on the parity cases of escaped exact names, Unicode fold collisions among unknown and recognized names, duplicate names inside arrays of objects, duplicates in sibling and nested objects with equal names, surrogate pairs in recognized values, non-string recognized values and non-object `metadata`. Extend `FuzzExtractLine` to compare against the oracle on every input that passes `validLineJSON`.
+- [ ] Add `TestWalkCapacity`: on the 5-byte duplicate line (`"":0` repeated to 1 MiB), the arrayobjs line, the singlechar line and the 1,000-byte shared-prefix line, assert the arena and entry slice keep their initial capacity (`L` and `L / 5 + 1`), and assert with `testing.AllocsPerRun` that a 1 MiB line allocates nothing after the per-call state exists.
+- [ ] Add `TestWalkAllocations` asserting at most 32 allocations for a 1 MiB flat line and at most 64 for a realistic line through `extractLine`, and `TestDecodeWalkerNotRetained` asserting that two consecutive `Decode` calls do not share walker state and that retained live bytes after a 1 MiB-line batch return to within 2 MiB of the baseline.
+- [ ] Add `BenchmarkWalk` with the hostile-input cases flat, dense, densenested, arrayobjs, singlechar, random3, the 5-byte duplicate line and the shared-prefix line, each reporting `ns/op`, bytes and allocations, beside the reference token walk.
+- [ ] Run `cd server && go test -count=1 ./internal/events/body -run 'Test(WalkFields|WalkCapacity|WalkAllocations|DecodeWalkerNotRetained)'` and record the intended failure.
+- [ ] Implement the scanner: container stack bounded by `MaxJSONDepth`, decoded names in an arena (unescape only names containing a backslash, including surrogate pairs), one 12-byte entry per member, `slices.SortFunc` by object number then name bytes at line end with a neighbour comparison, no hash, exact and `bytes.EqualFold` checks against the recognized names of the current scope, and capture of the three identity tokens as `string`, `json.Number` or a non-string marker. Size the arena and entries from `min(declared content size, MaxLineBytes)` once per `Decode` call. Keep `validLineJSON` unchanged.
+- [ ] Run `cd server && go test -count=1 ./internal/events/body`, `cd server && go test ./internal/events/body -fuzz=FuzzExtractLine -fuzztime=60s -parallel=2` and `cd server && go test ./internal/events/body -fuzz=FuzzDecode -fuzztime=60s -parallel=2`; require PASS. Run `BenchmarkWalk` and record its output. Obtain independent code review with hostile-input analysis, including comparison counts on adversarial orderings and name prefixes.
+
+### Task 4: Cost-model proof in CI
+
+**Owned files:** `server/internal/events/body/costmodel_norace_test.go`, `costmodel_bench_test.go`; the authorized lines of `.github/workflows/server.yml`, `scripts/ci/inventory.py` and its tests; the two command additions to `instructions/testing.md`.
+
+**Consumes:** Tasks 2 and 3, spec sections 1, 2 and 9. **Produces:** `TestDecodeCostModel` and `BenchmarkDecodeCost`, published by the `validate` job.
+
+- [ ] Write `TestDecodeCostModel` first with the shape generators and cases of spec section 9, single and concurrent. The parent generates frames into a temp directory, enumerates expected case keys and spawns one child per case with `GOGC=100` and `GOMEMLIMIT=off`. The child reads only its frame, calls `runtime.GC()`, measures its baseline as total minus released memory, calls `debug.SetMemoryLimit(baseline + N × admission.Weight(w, s))`, logs both, runs N concurrent decodes, samples every millisecond and prints exactly one `COST_MEASUREMENT` line. A second child per case runs without a limit for the wall-time reference.
+- [ ] Assert per case: expected line count and no line error, `/gc/limiter/last-enabled:gc-cycle` equal to 0 as the primary condition, sampled peak of total minus released at most 1.1 times the limit, and wall at most twice the reference. The parent fails on a missing, duplicate or malformed measurement line.
+- [ ] Write `BenchmarkDecodeCost` over the same shapes with `ReportAllocs` and `SetBytes`.
+- [ ] Run `cd server && GOGC=100 go test -count=1 ./internal/events/body -run '^TestDecodeCostModel$' -v` and record the intended failure, then implement the generators and harness and require PASS. Record every `COST_MEASUREMENT` line in the handoff.
+- [ ] Add to the `validate` job, after the key-admission benchmark, the two spec section 9 commands with `set -euo pipefail`, `tee` into `$RUNNER_TEMP/ingest-measurements/cost-model.log`, an `if: always()` upload named `ingest-measurements-${{ github.run_id }}-${{ github.run_attempt }}` with 30-day retention, a nonempty-log check, and `ingest-cost-model` in `CHECKS`; add the same check to `server-validate` in `scripts/ci/inventory.py`. Run `python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v`, `python -B scripts/ci/check_policy.py --root .` and `actionlint .github/workflows/*.yml`; require exit 0.
+- [ ] From the first `ubuntu-24.04` run, record in the handoff the largest peak-to-limit ratio, the largest wall ratio, the ratio of the largest hostile-shape CPU to the largest flat-shape CPU in the same job, and the job's added duration, with the random3, singlechar, badid and minok cases included. A memory ratio above 1.1 or an engaged limiter returns the model to design; a wall ratio above 2 fails the case and goes to design review as a harness or model question, never to a looser bound; only the CPU ratio is report-only, and a CPU ratio above 1.5 returns the 5.0 s planning maximum to design without failing the run.
+
+### Task 5: Module checks and review
+
+- [ ] Run `cd server && gofmt -l .` (prints nothing), `cd server && go vet ./...`, `cd server && go mod verify`, `cd server && go test -count=1 ./...` and `cd server && go test -race -count=1 -timeout=15m ./...`; require PASS and exit 0. The race run skips the `!race` files; run `cd server && GOGC=100 GOMEMLIMIT=off go test ./internal/events/body -run '^TestDecodePeakMemory$' -count=1 -v` and the cost-model command separately and require PASS.
+- [ ] Run `git diff --check` and inspect the full diff: no dependency change, no schema change, no handler code, CI changes limited to the authorized lines.
+- [ ] Obtain independent code review of the whole slice against the spec, including the adversarial pass on accounting, starvation, cancellation, per-device state and the lean walk. Resolve findings through the implementer and obtain independent fix confirmation. The primary agent reruns the key checks before accepting the slice.
+
+## Obligations for later slices
+
+This plan implements none of the following; the slices named own them, and their plans must carry these tests.
+
+- Handler slice: an end-to-end test over HTTP/2 and HTTP/1.1 with a client throttled to 900 bytes per second sending a 4,210,736-byte body, which must receive its final status before the agent deadline of events section 2.4 (410 s after the last DATA frame over HTTP/2, 5,230 s after the first body byte over HTTP/1.1); the same client at 700 bytes per second, which must see the stream reset or the connection closed and never a status; and tests that every no-response path of spec section 5 (failed or expired read, canceled request, expired storage or write deadline) ends in `panic(http.ErrAbortHandler)` and produces no 200 on either protocol, while `Release` still runs.
+- Agent upload slice: table-driven deadline vectors for events section 2.4: over HTTP/2, measured from the final DATA frame sent under stream credit, 4,210,736 bytes with a 262,144-byte window → 410 s and 100,000 bytes → 212.07 s; over HTTP/1.1, measured from the first body byte, 4,210,736 bytes → 5,230.06 s and 1,000 bytes → 91.22 s. Also a fake-transport test that 60 s without HTTP/2 stream credit while body bytes remain abandons the upload and 59 s does not; a test that a client library buffering the body beyond the stream window does not start the response timer early; an HTTP/1.1 test over a socket with a 4 MiB operating-system send buffer to a server reading 900 bytes per second that the agent does not abandon before the server answers; a malformed or empty 200 keeps the file and backs off; and a test that the upload bucket starts empty, charges retries and meters declared content size.
+- Transport slice: measure the mutual-TLS handshake and header bytes for the pinned certificate profiles and record the resulting link floor in events section 2.4; enforce about eight connections per device certificate per replica and record the per-device exposure in architecture section 3.4.
+
+## Handoff evidence
+
+Report changed files, the intended failing-test commands and output, passing checks with exit status, every `COST_MEASUREMENT` line from Task 4 with the host and toolchain, the `BenchmarkWalk` output of Task 3, fuzz durations and corpus changes, and unresolved findings. Design approval, implementation and code review are separate evidence. No limiter result authorizes storage or acknowledgement; the handler slice remains gated on its own design.
