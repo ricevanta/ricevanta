@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/server/config/v1/config.schema.json",
+  "title": "Ricevanta server runtime configuration v1",
+  "description": "JSON projection of the strictly decoded server.yaml of docs/specs/server-runtime.md section 3. The Go loader repeats these bounds; the loopback rule for tls.mode none and the blocked-role rule are semantic checks outside this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "roles"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ricevanta-server-config-v1"
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "api",
+          "agent",
+          "device",
+          "radius",
+          "jobs"
+        ]
+      }
+    },
+    "listen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "api": {
+          "$ref": "#/$defs/listener"
+        }
+      }
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ]
+        }
+      }
+    },
+    "http": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "read_header_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 60000
+        },
+        "idle_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 600000
+        },
+        "max_header_bytes": {
+          "type": "integer",
+          "minimum": 4096,
+          "maximum": 1048576
+        }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "roles": {
+            "contains": {
+              "const": "api"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "listen"
+        ],
+        "properties": {
+          "listen": {
+            "required": [
+              "api"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "absolutePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 1024,
+      "pattern": "^/[^\\u0000]+$(?![\\s\\S])"
+    },
+    "listener": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}|\\[[0-9A-Fa-f:.]+\\])?:(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$(?![\\s\\S])",
+          "description": "IPv4 literal with octets 0 to 255, bracketed IPv6 literal, or empty host; port 1 to 65535. The Go validator repeats the same bounds and additionally parses the IPv6 literal."
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        }
+      }
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "file",
+            "none"
+          ]
+        },
+        "certificate_file": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "key_file": {
+          "$ref": "#/$defs/absolutePath"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "file"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "certificate_file",
+              "key_file"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "certificate_file"
+                  ]
+                },
+                {
+                  "required": [
+                    "key_file"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

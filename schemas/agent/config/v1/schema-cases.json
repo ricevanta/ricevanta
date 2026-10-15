@@ -1,0 +1,71 @@
+{
+  "schema": "config.schema.json",
+  "cases": [
+    {
+      "id": "minimal-schema-only",
+      "valid": true,
+      "instance": { "schema": "ricevanta-agent-config-v1" }
+    },
+    {
+      "id": "windows-paths",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-config-v1",
+        "paths": {
+          "state_dir": "C:\\ProgramData\\Ricevanta\\state",
+          "runtime_dir": "C:\\ProgramData\\Ricevanta\\run",
+          "log_dir": "C:\\ProgramData\\Ricevanta\\logs"
+        }
+      }
+    },
+    {
+      "id": "health-burst-profile",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-config-v1",
+        "log": { "level": "debug", "max_file_bytes": 65536 },
+        "health": { "interval_ms": 100 }
+      }
+    },
+    {
+      "id": "missing-schema",
+      "valid": false,
+      "instance": { "log": { "level": "info" } }
+    },
+    {
+      "id": "wrong-schema-token",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v2" }
+    },
+    {
+      "id": "unknown-top-level-key",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "server_url": "https://example.invalid" }
+    },
+    {
+      "id": "interval-below-minimum",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "health": { "interval_ms": 99 } }
+    },
+    {
+      "id": "timeout-above-maximum",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "shutdown": { "timeout_ms": 60001 } }
+    },
+    {
+      "id": "level-as-integer",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "log": { "level": 3 } }
+    },
+    {
+      "id": "relative-path",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "state" } }
+    },
+    {
+      "id": "fractional-interval",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "health": { "interval_ms": 1000.5 } }
+    }
+  ]
+}

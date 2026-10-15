@@ -296,7 +296,7 @@ Automated rules find only part of the failures, 57 % of issues on average in Deq
 | `/api/v1/*` | API | `no-store` |
 | Any other `GET` that accepts `text/html` | `index.html` | `no-cache`, `ETag` from the build digest |
 
-Paths under `/api/`, `/agent/`, `/ext/`, `/assets/`, `/brand/`, `/mdm/`, `/scep` and `/acme` never fall back to `index.html`; they answer their own 404, so a missing extension asset cannot load the console document inside a module frame.
+Paths under `/api/`, `/agent/`, `/ext/`, `/assets/`, `/brand/`, `/mdm/`, `/scep`, `/acme`, `/metrics`, `/healthz` and `/readyz` never fall back to `index.html`; they answer their own 404, so a missing extension asset cannot load the console document inside a module frame.
 
 Version pinning: the console carries the product version (SH-04) and `getSession` returns the server's. During a rolling upgrade an open tab can meet a replica of the other version; a mismatch shows a reload banner, and a failed chunk load, reported by Vite's `vite:preloadError` event (Vite build guide), reloads the page once, guarded by a `sessionStorage` flag. `/api/v1` changes additively within a major (`../architecture.md` section 7), so an older tab keeps working until it reloads.
 

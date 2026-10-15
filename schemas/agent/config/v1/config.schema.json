@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/agent/config/v1/config.schema.json",
+  "title": "Ricevanta agent runtime configuration v1",
+  "description": "The complete agent.json document of docs/specs/agent-runtime.md section 3. Every key is optional except schema; absent keys take the documented defaults. Unknown keys are errors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema"],
+  "properties": {
+    "schema": { "const": "ricevanta-agent-config-v1" },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["error", "warn", "info", "debug"] },
+        "sink": { "enum": ["file", "stderr"] },
+        "max_file_bytes": { "type": "integer", "minimum": 65536, "maximum": 268435456 },
+        "max_files": { "type": "integer", "minimum": 1, "maximum": 16 }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interval_ms": { "type": "integer", "minimum": 100, "maximum": 3600000 }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_ms": { "type": "integer", "minimum": 1000, "maximum": 60000 }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state_dir": { "$ref": "#/$defs/absolutePath" },
+        "runtime_dir": { "$ref": "#/$defs/absolutePath" },
+        "log_dir": { "$ref": "#/$defs/absolutePath" }
+      }
+    }
+  },
+  "$defs": {
+    "absolutePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 1024,
+      "pattern": "^(?:/[^\\u0000]+|[A-Za-z]:\\\\[^\\u0000]+)$(?![\\s\\S])"
+    }
+  }
+}

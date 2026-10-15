@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/server/health/v1/readiness.schema.json",
+  "title": "Ricevanta server health and readiness bodies v1",
+  "description": "Bodies of /healthz and /readyz in docs/specs/server-runtime.md section 5. The liveness body carries only status ok; the readiness body carries the process state and one state per configured role and nothing else.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "const": "ok" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "roles"],
+      "properties": {
+        "status": { "enum": ["ready", "starting", "stopping"] },
+        "roles": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 5,
+          "additionalProperties": false,
+          "properties": {
+            "api": { "$ref": "#/$defs/roleState" },
+            "agent": { "$ref": "#/$defs/roleState" },
+            "device": { "$ref": "#/$defs/roleState" },
+            "radius": { "$ref": "#/$defs/roleState" },
+            "jobs": { "$ref": "#/$defs/roleState" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "roleState": { "enum": ["starting", "ready", "stopping"] }
+  }
+}

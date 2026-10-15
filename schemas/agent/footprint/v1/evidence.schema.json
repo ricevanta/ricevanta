@@ -1,0 +1,881 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/agent/footprint/v1/evidence.schema.json",
+  "title": "Ricevanta footprint evidence v1",
+  "description": "One run of the AG-09 footprint harness (docs/specs/footprint-harness.md). A baseline file is an evidence document with outcome pass, smoke false and identity.channel master or prerelease. Budgets are copied into the record so it is self-describing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "identity",
+    "smoke",
+    "target",
+    "environment",
+    "binary",
+    "processes",
+    "phases",
+    "budgets",
+    "results",
+    "baseline",
+    "outcome",
+    "started_unix_ms",
+    "finished_unix_ms"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ricevanta-footprint-evidence-v1"
+    },
+    "identity": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/identity"
+        }
+      ]
+    },
+    "smoke": {
+      "type": "boolean"
+    },
+    "target": {
+      "enum": [
+        "macos-arm64",
+        "windows-x64",
+        "linux-x64"
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_os",
+        "runner_arch",
+        "os_version",
+        "runner_label",
+        "cpu_count",
+        "memory_bytes",
+        "python_version",
+        "clk_tck"
+      ],
+      "properties": {
+        "runner_os": {
+          "enum": [
+            "Linux",
+            "Windows",
+            "macOS"
+          ]
+        },
+        "runner_arch": {
+          "enum": [
+            "X64",
+            "ARM64"
+          ]
+        },
+        "os_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Per-OS comparison key of docs/specs/footprint-harness.md section 6"
+        },
+        "runner_label": {
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+$(?![\\s\\S])",
+          "maxLength": 64
+        },
+        "cpu_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "memory_bytes": {
+          "$ref": "#/$defs/u64"
+        },
+        "python_version": {
+          "type": "string",
+          "pattern": "^3\\.[0-9]+\\.[0-9]+$(?![\\s\\S])"
+        },
+        "clk_tck": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          ]
+        },
+        "mach_timebase": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "numer",
+            "denom"
+          ],
+          "properties": {
+            "numer": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            "denom": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            }
+          }
+        },
+        "run_id": {
+          "$ref": "#/$defs/u64"
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "os_release": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "size",
+        "sha256",
+        "reported_identity"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "ricevanta-agent",
+            "ricevanta-agent.exe"
+          ]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reported_identity": {
+          "$ref": "#/$defs/reportedIdentity"
+        }
+      }
+    },
+    "processes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "role"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^ricevanta-[a-z]+(?:\\.exe)?$(?![\\s\\S])"
+          },
+          "role": {
+            "enum": [
+              "core",
+              "helper"
+            ]
+          }
+        }
+      }
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+    "budgets": {
+      "$ref": "#/$defs/budgets"
+    },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/result"
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "identity",
+        "environment_match"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "initial",
+            "release"
+          ]
+        },
+        "identity": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/identity"
+            }
+          ]
+        },
+        "environment_match": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "outcome": {
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "started_unix_ms": {
+      "$ref": "#/$defs/u64"
+    },
+    "finished_unix_ms": {
+      "$ref": "#/$defs/u64"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "smoke": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "$ref": "#/$defs/identity"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "const": "linux-x64"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "properties": {
+              "clk_tck": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "environment": {
+            "properties": {
+              "clk_tck": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "const": "macos-arm64"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "required": [
+              "mach_timebase"
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "environment": {
+            "not": {
+              "required": [
+                "mach_timebase"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "u64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "nonNegative": {
+      "type": "number",
+      "minimum": 0
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "commit",
+        "channel",
+        "sourceEpoch"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-(?:(?:alpha|beta|rc)\\.[1-9][0-9]*|dev\\.0\\+g[0-9a-f]{40})$(?![\\s\\S])"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"
+        },
+        "channel": {
+          "enum": [
+            "pr",
+            "master",
+            "prerelease"
+          ]
+        },
+        "sourceEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "profile",
+        "warmup_ms",
+        "duration_ms",
+        "sample_interval_ms",
+        "samples",
+        "failed_samples",
+        "shutdown_ms",
+        "exit_code",
+        "metrics",
+        "self_sample"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "idle",
+            "load"
+          ]
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "sha256"
+          ],
+          "properties": {
+            "name": {
+              "enum": [
+                "idle",
+                "health-burst"
+              ]
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "warmup_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600000
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000
+        },
+        "sample_interval_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "failed_samples": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "shutdown_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600000
+        },
+        "exit_code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "footprint_bytes",
+            "cpu_core_pct",
+            "threads",
+            "descriptors"
+          ],
+          "properties": {
+            "footprint_bytes": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "metric",
+                "min",
+                "max",
+                "mean",
+                "p50",
+                "p95"
+              ],
+              "properties": {
+                "metric": {
+                  "enum": [
+                    "phys_footprint",
+                    "private_working_set",
+                    "pss"
+                  ]
+                },
+                "min": {
+                  "$ref": "#/$defs/nonNegative"
+                },
+                "max": {
+                  "$ref": "#/$defs/nonNegative"
+                },
+                "mean": {
+                  "$ref": "#/$defs/nonNegative"
+                },
+                "p50": {
+                  "$ref": "#/$defs/nonNegative"
+                },
+                "p95": {
+                  "$ref": "#/$defs/nonNegative"
+                }
+              }
+            },
+            "cpu_core_pct": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mean",
+                "max"
+              ],
+              "properties": {
+                "mean": {
+                  "$ref": "#/$defs/nonNegative"
+                },
+                "max": {
+                  "$ref": "#/$defs/nonNegative"
+                }
+              }
+            },
+            "threads": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "min",
+                "max"
+              ],
+              "properties": {
+                "min": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "max": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "descriptors": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "min",
+                "max"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "fd",
+                    "handle"
+                  ]
+                },
+                "min": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "self_sample": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "footprint_bytes",
+                "footprint_metric",
+                "threads",
+                "written_unix_ms"
+              ],
+              "properties": {
+                "footprint_bytes": {
+                  "$ref": "#/$defs/u64"
+                },
+                "footprint_metric": {
+                  "enum": [
+                    "phys_footprint",
+                    "private_working_set",
+                    "pss"
+                  ]
+                },
+                "threads": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "written_unix_ms": {
+                  "$ref": "#/$defs/u64"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "footprint_p95_bytes",
+        "aggregate_footprint_p95_bytes",
+        "cpu_core_pct_mean",
+        "threads_max",
+        "descriptors_max",
+        "self_sample_tolerance",
+        "regression"
+      ],
+      "properties": {
+        "footprint_p95_bytes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "idle",
+            "load"
+          ],
+          "properties": {
+            "idle": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "load": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "aggregate_footprint_p95_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_core_pct_mean": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "idle_target",
+            "idle_hosted_gate"
+          ],
+          "properties": {
+            "idle_target": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            },
+            "idle_hosted_gate": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "threads_max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "descriptors_max": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fd",
+            "handle"
+          ],
+          "properties": {
+            "fd": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "handle": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "self_sample_tolerance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ratio",
+            "bytes"
+          ],
+          "properties": {
+            "ratio": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "regression": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "footprint_ratio",
+            "footprint_bytes",
+            "threads",
+            "descriptors_fd",
+            "descriptors_handle"
+          ],
+          "properties": {
+            "footprint_ratio": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "footprint_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "threads": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            },
+            "descriptors_fd": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            },
+            "descriptors_handle": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4096
+            }
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check",
+        "phase",
+        "observed",
+        "limit",
+        "baseline",
+        "outcome"
+      ],
+      "properties": {
+        "check": {
+          "enum": [
+            "clk_tck_agreement",
+            "identity_mismatch",
+            "footprint_nonzero",
+            "footprint_p95",
+            "aggregate_footprint_p95",
+            "cpu_mean",
+            "threads_max",
+            "descriptors_max",
+            "shutdown_ms",
+            "exit_code",
+            "failed_samples",
+            "self_sample_agreement",
+            "baseline_present",
+            "baseline_invalid",
+            "baseline_environment",
+            "regression_footprint_p95",
+            "regression_threads_max",
+            "regression_descriptors_max",
+            "regression_cpu_mean",
+            "regression_shutdown_ms"
+          ]
+        },
+        "phase": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "idle",
+                "load"
+              ]
+            }
+          ]
+        },
+        "observed": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 128
+            }
+          ]
+        },
+        "limit": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "baseline": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "pass",
+            "fail",
+            "recorded"
+          ]
+        }
+      }
+    },
+    "reportedIdentity": {
+      "description": "The measured binary's own `version --json` output. check.py compares it with identity and emits identity_mismatch; a local build reports 0.0.0-local, unknown, local and 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "commit",
+        "channel",
+        "sourceEpoch"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[0-9A-Za-z.+-]+$(?![\\s\\S])"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|unknown)$(?![\\s\\S])"
+        },
+        "channel": {
+          "enum": [
+            "pr",
+            "master",
+            "prerelease",
+            "local"
+          ]
+        },
+        "sourceEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  }
+}
