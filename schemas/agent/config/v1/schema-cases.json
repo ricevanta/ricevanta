@@ -63,6 +63,51 @@
       "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "state" } }
     },
     {
+      "id": "double-separator",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "/var//lib/ricevanta" } }
+    },
+    {
+      "id": "dot-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "runtime_dir": "/run/./ricevanta" } }
+    },
+    {
+      "id": "dotdot-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "log_dir": "/var/log/../tmp/ricevanta" } }
+    },
+    {
+      "id": "trailing-separator",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "/var/lib/ricevanta/" } }
+    },
+    {
+      "id": "windows-dotdot-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "C:\\ProgramData\\..\\Ricevanta\\state" } }
+    },
+    {
+      "id": "windows-unc-path",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "log_dir": "\\\\server\\share\\logs" } }
+    },
+    {
+      "id": "windows-segment-trailing-period",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "state_dir": "C:\\a.\\b" } }
+    },
+    {
+      "id": "windows-reserved-device-name",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "log_dir": "C:\\x\\NUL" } }
+    },
+    {
+      "id": "windows-reserved-name-with-extension",
+      "valid": false,
+      "instance": { "schema": "ricevanta-agent-config-v1", "paths": { "runtime_dir": "C:\\x\\com1.txt" } }
+    },
+    {
       "id": "fractional-interval",
       "valid": false,
       "instance": { "schema": "ricevanta-agent-config-v1", "health": { "interval_ms": 1000.5 } }
