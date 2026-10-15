@@ -20,6 +20,8 @@ const (
 	AgentRate    uint64 = 4 << 20
 	ServerRefill uint64 = AgentRate + AgentRate/64
 	SealingLimit uint64 = 4 << 20
+	// MinCharge is the least bucket charge of one request, taken at Receive.
+	MinCharge uint64 = 128 << 10
 
 	maxFrameBytes uint64 = 64 << 20 // EV-09 content and window ceiling
 	historyFloor  uint64 = 1 << 10  // the decoder's MinWindowSize

@@ -15,11 +15,13 @@ import (
 	"github.com/ricevanta/ricevanta/server/internal/events/batch"
 )
 
-// fakeClock fires timers only when the test advances it.
+// fakeClock fires timers only when the test advances it. Its times are
+// base.Add(d) from one time.Now() base, so each carries a monotonic reading.
 type fakeClock struct {
 	mu     sync.Mutex
 	now    time.Time
 	timers []*fakeTimer
+	hold   bool // the next timer never fires on its own
 }
 
 type fakeTimer struct {
@@ -29,9 +31,9 @@ type fakeTimer struct {
 	fired bool
 }
 
-func newFakeClock() *fakeClock {
-	return &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-}
+func newFakeClock() *fakeClock { return newFakeClockAt(time.Now()) }
+
+func newFakeClockAt(base time.Time) *fakeClock { return &fakeClock{now: base} }
 
 func (c *fakeClock) Now() time.Time {
 	c.mu.Lock()
@@ -43,6 +45,10 @@ func (c *fakeClock) NewTimer(d time.Duration) Timer {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	t := &fakeTimer{clock: c, at: c.now.Add(d), ch: make(chan time.Time, 1)}
+	if c.hold {
+		c.hold = false
+		t.at = c.now.Add(1 << 62)
+	}
 	c.timers = append(c.timers, t)
 	return t
 }
@@ -189,6 +195,10 @@ func (h *harness) tokens(device string) uint64 {
 	return e.tokens
 }
 
+// capacity is BucketCapacity as a variable, so tests also compile against
+// mutated capacities.
+var capacity = BucketCapacity
+
 func charge(window, size uint64) int64 {
 	w, err := Weight(window, size)
 	if err != nil {
@@ -216,52 +226,52 @@ func TestReceiveRefusals(t *testing.T) {
 	if _, _, err := h.l.Receive("x", batch.SpoolClass(0)); !errors.Is(err, ErrArgument) {
 		t.Fatalf("unknown class: %v", err)
 	}
-	released := int64(0)
-	h.receive("drain", batch.ClassRaw).Release()
-	released += C
-
+	// Slots first: a third upload is refused for concurrency and charged MinCharge.
 	a, b := h.receive("d1", batch.ClassRaw), h.receive("d1", batch.ClassFindings)
+	if h.tokens("d1") != BucketCapacity-2*MinCharge {
+		t.Fatalf("admission charge: %d", h.tokens("d1"))
+	}
 	ticket, d, err := h.l.Receive("d1", batch.ClassAudit)
 	if err != nil || ticket != nil || d != (Decision{Status: 429, RetryAfter: 5, Reason: ReasonDeviceConcurrency}) {
 		t.Fatalf("third upload: %v %+v %v", ticket, d, err)
 	}
 	s := h.l.Snapshot()
-	if s.Inflight != 2 || s.InUse != 2*C || h.l.devices["d1"].slots != 2 || s.Refused[ReasonDeviceConcurrency] != 1 || len(s.Refused) != 1 {
-		t.Fatalf("refusal changed state: %+v", s)
+	if s.Inflight != 2 || s.InUse != 2*C || h.l.devices["d1"].slots != 2 || s.Refused[ReasonDeviceConcurrency] != 1 || len(s.Refused) != 1 || h.tokens("d1") != BucketCapacity-3*MinCharge {
+		t.Fatalf("concurrency refusal: %+v, tokens %d", s, h.tokens("d1"))
 	}
+	// Both slots held and an empty bucket: still a concurrency refusal, charging nothing.
+	h.l.mu.Lock()
+	h.l.devices["d1"].tokens = MinCharge - 1
+	h.l.mu.Unlock()
+	if _, d, _ := h.l.Receive("d1", batch.ClassRaw); d.Reason != ReasonDeviceConcurrency || h.tokens("d1") != MinCharge-1 {
+		t.Fatalf("concurrency before bucket: %+v, tokens %d", d, h.tokens("d1"))
+	}
+	// A free slot and a bucket below MinCharge: device_rate, charging nothing.
 	a.Release()
+	ticket, d, err = h.l.Receive("d1", batch.ClassRaw)
+	if err != nil || ticket != nil || d != (Decision{Status: 429, RetryAfter: 5, Reason: ReasonDeviceRate}) || h.tokens("d1") != MinCharge-1 {
+		t.Fatalf("bucket refusal: %+v %v, tokens %d", d, err, h.tokens("d1"))
+	}
+	if h.l.devices["d1"].slots != 1 || h.l.Snapshot().Inflight != 1 {
+		t.Fatal("bucket refusal took a slot")
+	}
 	b.Release()
-	released += 2 * C
 
-	// Ten in flight: T1 findings admitted at 64 MiB, T2 findings waiting at 24 MiB.
-	tickets := make([]*Ticket, 10)
-	for i := range tickets {
-		class := batch.ClassRaw
-		if i < 2 {
-			class = batch.ClassFindings
-		}
-		tickets[i] = h.receive(fmt.Sprintf("n%d", i), class)
+	// In-flight capacity last, after MinCharge; Retry-After follows slot releases:
+	// two releases in the last ten seconds give ceil(100 / 2) = 50.
+	for i := range 10 {
+		h.receive(fmt.Sprintf("n%d", i), batch.ClassRaw)
 	}
-	h.admit(tickets[0], 64*mib, 64*mib)
-	waiting := h.decodeAsync(context.Background(), tickets[1], 24*mib, 24*mib)
-	if !pending(waiting) {
-		t.Fatal("24 MiB decode did not wait")
-	}
-	available := testBudget - 10*C - charge(64*mib, 64*mib)
-	want := expectRetry(charge(24*mib, 24*mib)+C-available, released/10, 0.5)
 	ticket, d, err = h.l.Receive("n10", batch.ClassRaw)
-	if err != nil || ticket != nil || d != (Decision{Status: 503, RetryAfter: want, Reason: ReasonInflight}) {
-		t.Fatalf("eleventh request: %+v %v, want Retry-After %d", d, err, want)
+	if err != nil || ticket != nil || d != (Decision{Status: 503, RetryAfter: 50, Reason: ReasonInflight}) {
+		t.Fatalf("eleventh request: %+v %v", d, err)
 	}
-	if want == 5 || want == 60 {
-		t.Fatalf("Retry-After %d does not discriminate the formula", want)
+	if s := h.l.Snapshot(); s.Inflight != 10 || s.Refused[ReasonInflight] != 1 || h.l.devices["n10"].slots != 0 || h.tokens("n10") != BucketCapacity-MinCharge {
+		t.Fatalf("in-flight refusal: %+v, tokens %d", s, h.tokens("n10"))
 	}
-	if s := h.l.Snapshot(); s.Inflight != 10 || s.Refused[ReasonInflight] != 1 || h.l.devices["n10"] != nil && h.l.devices["n10"].slots != 0 {
-		t.Fatalf("in-flight refusal changed state: %+v", s)
-	}
-	h.clock.Advance(2 * time.Second)
-	if r := h.result(waiting); r.d.Status != 503 || r.d.Reason != ReasonBudget {
-		t.Fatalf("waiter: %+v", r)
+	h.clock.Advance(10 * time.Second)
+	if _, d, _ := h.l.Receive("n11", batch.ClassRaw); d.RetryAfter != 60 {
+		t.Fatalf("no release in ten seconds: %+v", d)
 	}
 }
 
@@ -403,6 +413,31 @@ func TestQueueOrder(t *testing.T) {
 	if res := h.result(wr); res.d.Reason != ReasonReserve {
 		t.Fatalf("raw waiter: %+v", res)
 	}
+
+	// A waiter that times out behind a larger head was held back by that head,
+	// not by the reserve: its refusal is budget.
+	h = newHarness(t)
+	g1, g2 = h.receive("g1", batch.ClassFindings), h.receive("g2", batch.ClassFindings)
+	r1, r2 = h.receive("r1", batch.ClassRaw), h.receive("r2", batch.ClassRaw)
+	h.admit(g1, 64*mib, 64*mib)
+	h.admit(g2, 4*mib, 4*mib)
+	ctx, cancel := context.WithCancel(context.Background())
+	h.clock.mu.Lock()
+	h.clock.hold = true // the head's timer never fires
+	h.clock.mu.Unlock()
+	w1 = h.decodeAsync(ctx, r1, 64*mib, 64*mib)
+	w2 = h.decodeAsync(context.Background(), r2, 4*mib, 4*mib)
+	if avail := testBudget - h.inUse(); avail < x || avail-x >= testReserve {
+		t.Fatalf("setup: available %d", avail)
+	}
+	h.clock.Advance(2 * time.Second)
+	if res := h.result(w2); res.d.Status != 503 || res.d.Reason != ReasonBudget {
+		t.Fatalf("waiter behind a larger head: %+v", res)
+	}
+	cancel()
+	if res := h.result(w1); !errors.Is(res.err, context.Canceled) {
+		t.Fatalf("head: %+v", res)
+	}
 }
 
 func TestDeviceBucket(t *testing.T) {
@@ -410,26 +445,37 @@ func TestDeviceBucket(t *testing.T) {
 	tk := h.receive("x", batch.ClassRaw)
 	h.admit(tk, 4*mib, 64*mib)
 	tk.Release()
+	if h.tokens("x") != 0 {
+		t.Fatalf("64 MiB request left %d", h.tokens("x"))
+	}
+	ticket, d, err := h.l.Receive("x", batch.ClassRaw)
+	if err != nil || ticket != nil || d != (Decision{Status: 429, RetryAfter: 5, Reason: ReasonDeviceRate}) || h.tokens("x") != 0 {
+		t.Fatalf("receive with an empty bucket: %+v %v", d, err)
+	}
+	h.clock.Advance(2 * time.Second)
+	if got := h.tokens("x"); got != 2*ServerRefill || got < 8*mib+mib/8 {
+		t.Fatalf("refill after 2 s: %d", got)
+	}
 	tk = h.receive("x", batch.ClassRaw)
 	before := h.inUse()
-	d, err := tk.Decode(context.Background(), 4*mib, 64*mib)
-	if err != nil || d != (Decision{Status: 429, RetryAfter: 16, Reason: ReasonDeviceRate}) {
+	d, err = tk.Decode(context.Background(), 4*mib, 64*mib)
+	// Deficit 64 MiB - MinCharge - (2 s of refill - MinCharge) = 58,589,184 bytes.
+	if err != nil || d != (Decision{Status: 429, RetryAfter: 14, Reason: ReasonDeviceRate}) {
 		t.Fatalf("second 64 MiB: %+v %v", d, err)
 	}
-	if h.tokens("x") != 0 || h.inUse() != before {
+	if h.tokens("x") != 2*ServerRefill-MinCharge || h.inUse() != before {
 		t.Fatal("refusal charged the bucket or the budget")
 	}
 	if _, err := tk.Decode(context.Background(), 0, 0); !errors.Is(err, ErrState) {
 		t.Fatalf("Decode after a refusal: %v", err)
 	}
 	tk.Release()
-	h.clock.Advance(2 * time.Second)
-	if got := h.tokens("x"); got != 2*ServerRefill || got < 8*mib+mib/8 {
-		t.Fatalf("refill after 2 s: %d", got)
-	}
 	tk = h.receive("x", batch.ClassRaw)
 	h.admit(tk, 4*mib, 4*mib)
 	tk.Release()
+	if got := h.tokens("x"); got != 2*ServerRefill-MinCharge-4*mib {
+		t.Fatalf("4 MiB request charged %d", 2*ServerRefill-MinCharge-got)
+	}
 	h.clock.Advance(15 * time.Second)
 	tk = h.receive("x", batch.ClassRaw)
 	h.admit(tk, 4*mib, 64*mib)
@@ -439,29 +485,92 @@ func TestDeviceBucket(t *testing.T) {
 	f1, f2 := h.receive("f1", batch.ClassFindings), h.receive("f2", batch.ClassFindings)
 	h.admit(f1, 64*mib, 64*mib)
 	h.admit(f2, 24*mib, 24*mib)
+	h.clock.Advance(20 * time.Second)
 	y1, y2 := h.receive("y", batch.ClassRaw), h.receive("y", batch.ClassRaw)
-	wy := h.decodeAsync(context.Background(), y1, 4*mib, 64*mib)
-	if !pending(wy) || h.tokens("y") != 0 {
+	wy := h.decodeAsync(context.Background(), y1, 4*mib, 32*mib)
+	if !pending(wy) || h.tokens("y") != capacity-2*MinCharge-(32*mib-MinCharge) {
 		t.Fatalf("bucket not charged before waiting: %d", h.tokens("y"))
 	}
 	h.clock.Advance(2 * time.Second)
 	if r := h.result(wy); r.d.Status != 503 {
 		t.Fatalf("expected a budget refusal: %+v", r)
 	}
-	if got := h.tokens("y"); got != 2*ServerRefill {
-		t.Fatalf("bucket refunded after timeout: %d", got)
+	after := capacity - 2*MinCharge - (32*mib - MinCharge) + 2*ServerRefill
+	if got := h.tokens("y"); got != after {
+		t.Fatalf("bucket refunded after timeout: %d, want %d", got, after)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	wy = h.decodeAsync(ctx, y2, 0, 2*ServerRefill)
-	if !pending(wy) || h.tokens("y") != 0 {
+	wy = h.decodeAsync(ctx, y2, 0, 4*mib)
+	if !pending(wy) || h.tokens("y") != after-(4*mib-MinCharge) {
 		t.Fatal("second waiter not charged")
 	}
 	cancel()
 	if r := h.result(wy); !errors.Is(r.err, context.Canceled) {
 		t.Fatalf("canceled waiter: %+v", r)
 	}
-	if h.tokens("y") != 0 {
+	if h.tokens("y") != after-(4*mib-MinCharge) {
 		t.Fatal("bucket refunded after cancellation")
+	}
+}
+
+func TestMinimumCharge(t *testing.T) {
+	h := newHarness(t)
+	tk := h.receive("m", batch.ClassRaw)
+	if h.tokens("m") != BucketCapacity-MinCharge {
+		t.Fatal("Receive did not charge MinCharge")
+	}
+	h.admit(tk, 0, 100)
+	tk.Release()
+	if h.tokens("m") != BucketCapacity-MinCharge {
+		t.Fatal("a decode below MinCharge charged more")
+	}
+	tk = h.receive("m", batch.ClassRaw)
+	h.admit(tk, 0, MinCharge+5)
+	tk.Release()
+	if h.tokens("m") != BucketCapacity-2*MinCharge-5 {
+		t.Fatalf("a decode above MinCharge: %d", h.tokens("m"))
+	}
+	h.receive("m", batch.ClassRaw).Release()
+	if h.tokens("m") != BucketCapacity-3*MinCharge-5 {
+		t.Fatal("MinCharge refunded on release without decoding")
+	}
+	for i := range 10 {
+		h.receive(fmt.Sprintf("n%d", i), batch.ClassRaw)
+	}
+	if _, d, _ := h.l.Receive("m", batch.ClassRaw); d.Reason != ReasonInflight || h.tokens("m") != BucketCapacity-4*MinCharge-5 {
+		t.Fatalf("in-flight refusal: %+v, tokens %d", d, h.tokens("m"))
+	}
+
+	// One-line batches as fast as two slots allow: a burst of 512, then 32.5 per second.
+	h = newHarnessConfig(t, Config{MemoryLimit: 1 << 40, AgentOnly: true, Budget: 1 << 39, MaxInflight: 256, DecodeWait: 2 * time.Second})
+	request := func() bool {
+		tk, d, err := h.l.Receive("fast", batch.ClassRaw)
+		if err != nil || tk == nil && d.Reason != ReasonDeviceRate {
+			t.Fatalf("%+v %v", d, err)
+		}
+		if tk == nil {
+			return false
+		}
+		h.admit(tk, 0, 103)
+		tk.Release()
+		return true
+	}
+	burst := 0
+	for request() {
+		burst++
+	}
+	if burst != int(BucketCapacity/MinCharge) {
+		t.Fatalf("burst of %d requests", burst)
+	}
+	admitted := 0
+	for range 10_000 {
+		h.clock.Advance(time.Millisecond)
+		for request() {
+			admitted++
+		}
+	}
+	if want := int(10 * ServerRefill / MinCharge); admitted != want {
+		t.Fatalf("%d requests in 10 s, want %d", admitted, want)
 	}
 }
 
@@ -494,20 +603,116 @@ func (q *simQueue) Pop() any {
 	return x
 }
 
+// TestAgentConformance drives a simulated unmodified agent: a bucket of 4 MiB/s
+// and 8 MiB burst on a clock 500 ppm fast against the server's, charging
+// max(s, MinCharge) for every request it sends, retries included, at most two
+// in flight. No phase may meet a device_rate refusal or a Finding.
 func TestAgentConformance(t *testing.T) {
 	const (
-		agentBurst   = 8 * mib
-		agentRate    = float64(AgentRate) * (1 + 500e-6) // the agent's clock runs 500 ppm fast
-		requests     = 100_000
-		maxChargeLag = 6104 * time.Second
+		agentBurst = float64(8 * mib)
+		agentRate  = float64(AgentRate) * (1 + 500e-6)
 	)
+	config := Config{MemoryLimit: 1 << 40, AgentOnly: true, Budget: 1 << 39, MaxInflight: 256, DecodeWait: 2 * time.Second}
+	agentCharge := func(size uint64) float64 { return float64(max(size, MinCharge)) }
+	type phase struct {
+		h        *harness
+		start    time.Time
+		minimum  uint64
+		requests int
+	}
+	newPhase := func() *phase {
+		h := newHarnessConfig(t, config)
+		return &phase{h: h, start: h.clock.Now(), minimum: BucketCapacity}
+	}
+	// serve receives, decodes and releases one request at the current time.
+	serve := func(p *phase, window, size uint64) {
+		t.Helper()
+		ticket, d, err := p.h.l.Receive("agent", batch.ClassRaw)
+		if err != nil || ticket == nil {
+			t.Fatalf("request %d refused at receive: %+v %v", p.requests, d, err)
+		}
+		d, err = ticket.Decode(context.Background(), window, size)
+		if err != nil || d != (Decision{}) {
+			t.Fatalf("request %d refused or flagged at decode: %+v %v", p.requests, d, err)
+		}
+		p.minimum = min(p.minimum, p.h.tokens("agent"))
+		ticket.Release()
+		p.requests++
+	}
+	// stream sends batches of size back to back at the agent's full rate.
+	stream := func(p *phase, size uint64, tokens float64, duration time.Duration) float64 {
+		end := p.h.clock.Now().Add(duration)
+		for p.h.clock.Now().Before(end) {
+			if need := agentCharge(size) - tokens; need > 0 {
+				wait := time.Duration(math.Ceil(need / agentRate * 1e9))
+				p.h.clock.Advance(wait)
+				tokens = min(agentBurst, tokens+agentRate*wait.Seconds())
+			}
+			tokens -= agentCharge(size)
+			serve(p, size, size)
+		}
+		return tokens
+	}
+	assertClean := func(name string, p *phase) {
+		t.Helper()
+		s := p.h.l.Snapshot()
+		if s.Refused[ReasonDeviceRate] != 0 || s.Findings != 0 {
+			t.Fatalf("%s: %+v", name, s)
+		}
+		t.Logf("%s: %d requests over %s, lowest bucket %d bytes (drawdown %.2f MiB)", name, p.requests, p.h.clock.Now().Sub(p.start), p.minimum, float64(BucketCapacity-p.minimum)/mib)
+	}
+
+	// Sustained full-rate drain of 4 MiB batches for two hours, from an empty agent bucket.
+	p := newPhase()
+	stream(p, SealingLimit, 0, 2*time.Hour)
+	assertClean("sustained 4 MiB", p)
+
+	// The agent's smallest real batches, one record each, at its full rate.
+	p = newPhase()
+	stream(p, 100, 0, 10*time.Minute)
+	assertClean("sustained one-record", p)
+
+	// Worst-case bunching: from a full agent bucket, two requests abandoned and
+	// two in flight, all delayed in the network, reach the server at once; the
+	// in-flight pair completes and the agent spends its refilled burst at once.
+	p = newPhase()
+	for cycle := range 50 {
+		tokens := agentBurst
+		tokens -= 2 * agentCharge(SealingLimit) // A and B, later abandoned
+		p.h.clock.Advance(2 * time.Second)
+		tokens = min(agentBurst, tokens+agentRate*2)
+		tokens -= 2 * agentCharge(SealingLimit) // C and D
+		p.h.clock.Advance(8 * time.Second)
+		tokens = min(agentBurst, tokens+agentRate*8)
+		for range 4 { // A, B, C, D arrive together
+			serve(p, SealingLimit, SealingLimit)
+		}
+		for range 2 { // E and F, sent as C and D complete
+			tokens -= agentCharge(SealingLimit)
+			serve(p, SealingLimit, SealingLimit)
+		}
+		if tokens < 0 {
+			t.Fatalf("cycle %d: the simulated agent overspent", cycle)
+		}
+		tokens = stream(p, SealingLimit, tokens, 30*time.Second)
+		p.h.clock.Advance(time.Minute)
+	}
+	if p.minimum != capacity-24*mib {
+		t.Fatalf("bunching drew the bucket to %d, want %d", p.minimum, capacity-24*mib)
+	}
+	assertClean("bunching", p)
+
+	// Randomized: charge delays up to 6,104 s, abandoned requests the server
+	// still charges up to two at a time, pauses and restarts.
 	const (
 		eventTry = iota
 		eventDecode
 		eventDone
+		requests     = 100_000
+		maxChargeLag = 6104 * time.Second
 	)
-	h := newHarnessConfig(t, Config{MemoryLimit: 1 << 40, AgentOnly: true, Budget: 1 << 39, MaxInflight: 256, DecodeWait: 2 * time.Second})
-	start := h.clock.Now()
+	p = newPhase()
+	h := p.h
 	rng := rand.New(rand.NewPCG(20261015, 11))
 	var q simQueue
 	seq := 0
@@ -517,21 +722,23 @@ func TestAgentConformance(t *testing.T) {
 	}
 	tokens, last := 0.0, time.Duration(0) // the agent bucket starts empty
 	inflight, tries, abandoned, issued, refusedSlots, restarts := 0, 0, 0, 0, 0, 0
-	nextSize, minTokens := uint64(0), BucketCapacity
 	pickSize := func() uint64 {
-		if rng.IntN(10) < 7 {
-			return SealingLimit
+		switch rng.IntN(10) {
+		case 0, 1:
+			return 1 + rng.Uint64N(MinCharge)
+		case 2, 3, 4:
+			return 1 + rng.Uint64N(SealingLimit)
 		}
-		return 1 + rng.Uint64N(SealingLimit)
+		return SealingLimit
 	}
-	nextSize = pickSize()
+	nextSize := pickSize()
 	schedule := func(now time.Duration) {
 		if inflight+tries >= PerDeviceInflight || issued+inflight+tries >= requests+PerDeviceInflight {
 			return
 		}
 		tries++
 		wait := time.Duration(0)
-		if need := float64(nextSize) - tokens; need > 0 {
+		if need := agentCharge(nextSize) - tokens; need > 0 {
 			wait = time.Duration(math.Ceil(need / agentRate * 1e9))
 		}
 		if rng.IntN(5) == 0 {
@@ -544,7 +751,7 @@ func TestAgentConformance(t *testing.T) {
 	for q.Len() > 0 {
 		ev := heap.Pop(&q).(*simEvent)
 		now := ev.at
-		h.clock.Set(start.Add(now))
+		h.clock.Set(p.start.Add(now))
 		tokens = min(agentBurst, tokens+agentRate*(now-last).Seconds())
 		last = now
 		switch ev.kind {
@@ -553,13 +760,13 @@ func TestAgentConformance(t *testing.T) {
 			if issued >= requests {
 				continue
 			}
-			if tokens < float64(nextSize) {
+			if tokens < agentCharge(nextSize) {
 				schedule(now)
 				continue
 			}
 			size := nextSize
 			nextSize = pickSize()
-			tokens -= float64(size)
+			tokens -= agentCharge(size)
 			inflight++
 			issued++
 			ticket, d, err := h.l.Receive("agent", batch.ClassRaw)
@@ -567,7 +774,7 @@ func TestAgentConformance(t *testing.T) {
 				t.Fatal(err)
 			}
 			if ticket == nil {
-				if d.Reason != ReasonDeviceConcurrency {
+				if d.Reason != ReasonDeviceConcurrency || d.Finding != "" {
 					t.Fatalf("request %d refused: %+v", issued, d)
 				}
 				refusedSlots++
@@ -580,12 +787,12 @@ func TestAgentConformance(t *testing.T) {
 			}
 			req := &simRequest{ticket: ticket, window: window, size: size}
 			var lag time.Duration
-			switch p := rng.IntN(10); {
-			case p < 4:
+			switch r := rng.IntN(10); {
+			case r < 4:
 				lag = 0
-			case p < 7:
+			case r < 7:
 				lag = time.Duration(rng.Int64N(int64(time.Second)))
-			case p < 9:
+			case r < 9:
 				lag = time.Duration(rng.Int64N(int64(time.Minute)))
 			default:
 				lag = time.Duration(rng.Int64N(int64(maxChargeLag)))
@@ -597,13 +804,14 @@ func TestAgentConformance(t *testing.T) {
 			}
 			push(now+lag, eventDecode, req)
 		case eventDecode:
-			minTokens = min(minTokens, h.tokens("agent"))
 			d, err := ev.req.ticket.Decode(context.Background(), ev.req.window, ev.req.size)
-			if err != nil || d.Status != 0 || d.Finding != "" {
+			if err != nil || d != (Decision{}) {
 				t.Fatalf("unmodified agent refused or flagged after %d requests: %+v %v", issued, d, err)
 			}
+			p.minimum = min(p.minimum, h.tokens("agent"))
 			ev.req.ticket.Decoded(time.Millisecond)
 			ev.req.ticket.Release()
+			p.requests++
 			if ev.req.abandoned {
 				abandoned--
 			} else {
@@ -618,14 +826,11 @@ func TestAgentConformance(t *testing.T) {
 			schedule(now)
 		}
 	}
-	s := h.l.Snapshot()
-	if issued != requests || s.Refused[ReasonDeviceRate] != 0 || s.Findings != 0 {
-		t.Fatalf("issued %d, snapshot %+v", issued, s)
+	if issued != requests {
+		t.Fatalf("issued %d", issued)
 	}
-	t.Logf("%d requests over %s of server time, %d slot refusals, %d restarts, lowest server bucket %d bytes before a charge", issued, h.clock.Now().Sub(start), refusedSlots, restarts, minTokens)
-	if minTokens > BucketCapacity-agentBurst {
-		t.Fatalf("simulation never drew the server bucket below %d bytes", BucketCapacity-agentBurst)
-	}
+	t.Logf("randomized: %d slot refusals, %d restarts", refusedSlots, restarts)
+	assertClean("randomized", p)
 }
 
 func TestFindings(t *testing.T) {
@@ -637,19 +842,17 @@ func TestFindings(t *testing.T) {
 		tk.Release()
 	}
 	for i := 1; i <= 22; i++ {
-		h.clock.Advance(10 * time.Millisecond)
-		tk = h.receive("r", batch.ClassRaw)
-		d, err := tk.Decode(context.Background(), 0, SealingLimit)
+		ticket, d, err := h.l.Receive("r", batch.ClassRaw)
 		want := Finding("")
 		if i == 21 {
 			want = FindingRate
 		}
-		if err != nil || d.Reason != ReasonDeviceRate || d.Finding != want {
+		if err != nil || ticket != nil || d.Reason != ReasonDeviceRate || d.Finding != want {
 			t.Fatalf("refusal %d: %+v %v", i, d, err)
 		}
-		tk.Release()
 	}
 	// Suppressed for ten minutes, but every oversize frame is still counted.
+	h.clock.Advance(100 * time.Millisecond)
 	tk = h.receive("r", batch.ClassFindings)
 	d, err := tk.Decode(context.Background(), SealingLimit+1, 0)
 	if err != nil || d != (Decision{}) {
@@ -678,7 +881,7 @@ func TestFindings(t *testing.T) {
 		t.Fatalf("oversize counts %+v findings %d", s.OversizeFrames, s.Findings)
 	}
 	h.l.mu.Lock()
-	oversize := h.l.devices["r"].counters(h.clock.Now(), counterOversize)
+	oversize := h.l.devices["r"].counters(h.l.minute(h.clock.Now()), counterOversize)
 	h.l.mu.Unlock()
 	if oversize != 2 {
 		t.Fatalf("device oversize counter %d in the trailing ten minutes", oversize)
@@ -695,11 +898,9 @@ func TestFindings(t *testing.T) {
 	tk = h.receive("old", batch.ClassRaw)
 	h.admit(tk, 0, 64*mib)
 	tk.Release()
-	tk = h.receive("old", batch.ClassRaw)
-	if d, _ := tk.Decode(context.Background(), 0, 64*mib); d.Reason != ReasonDeviceRate {
+	if _, d, _ := h.l.Receive("old", batch.ClassRaw); d.Reason != ReasonDeviceRate {
 		t.Fatal(d)
 	}
-	tk.Release()
 	h.clock.Advance(11 * time.Minute)
 	if h.l.devices["old"] == nil {
 		t.Fatal("entry removed early")
@@ -725,11 +926,9 @@ func TestFindings(t *testing.T) {
 		tk := h.receive(device, batch.ClassRaw)
 		h.admit(tk, 0, 64*mib)
 		tk.Release()
-		tk = h.receive(device, batch.ClassRaw)
-		if d, _ := tk.Decode(context.Background(), 0, 1); d.Reason != ReasonDeviceRate {
+		if _, d, _ := h.l.Receive(device, batch.ClassRaw); d.Reason != ReasonDeviceRate {
 			t.Fatal(d)
 		}
-		tk.Release()
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&after)
@@ -775,6 +974,89 @@ func TestAttribution(t *testing.T) {
 	if top := h.l.Snapshot().TopDevices; len(top) != 0 {
 		t.Fatalf("decode time kept after ten minutes: %+v", top)
 	}
+
+	// Time is counted in microseconds: short decodes are never rounded away.
+	h = newHarness(t)
+	many, one := h.receive("many", batch.ClassRaw), h.receive("one", batch.ClassRaw)
+	for range 10_000 {
+		many.Decoded(999 * time.Microsecond)
+	}
+	one.Decoded(2 * time.Millisecond)
+	top = h.l.Snapshot().TopDevices
+	if len(top) != 2 || top[0].Device != "many" || top[0].DecodeTime != 9_990*time.Millisecond || top[1].DecodeTime != 2*time.Millisecond {
+		t.Fatalf("microsecond attribution: %+v", top)
+	}
+}
+
+// TestElapsedIndexing starts the clock 1 ms before a wall-clock minute and
+// second boundary. Every index follows now.Sub(start), so crossing the wall
+// boundary moves nothing, while indexes derived from Unix time would.
+func TestElapsedIndexing(t *testing.T) {
+	now := time.Now()
+	base := now.Add(time.Minute - time.Duration(now.UnixNano()%int64(time.Minute)) - time.Millisecond)
+	if base.Second() != 59 || base.Nanosecond() != int(999*time.Millisecond) {
+		t.Fatalf("base %v", base)
+	}
+	h := &harness{t: t, clock: newFakeClockAt(base), random: 0.5}
+	l, err := New(Config{MemoryLimit: 1 << 30, AgentOnly: true, Budget: testBudget, MaxInflight: 10, DecodeWait: 2 * time.Second}, h.clock, func() float64 { return h.random })
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.l = l
+	at := func(d time.Duration) { h.clock.Set(base.Add(d)) }
+	for _, d := range []time.Duration{0, time.Millisecond, time.Minute - 1, time.Minute, 61 * time.Minute} {
+		if got := l.minute(base.Add(d)); got != int64(d/time.Minute) {
+			t.Fatalf("minute index at %s: %d", d, got)
+		}
+	}
+	// At elapsed 0: ten releases (nine receive-only tickets and the oversize
+	// decode), one second of decode time and an oversize finding.
+	for i := range 9 {
+		h.receive(fmt.Sprintf("r%d", i), batch.ClassRaw).Release()
+	}
+	m := h.receive("m", batch.ClassRaw)
+	m.Decoded(time.Second)
+	oversize := func() Finding {
+		tk := h.receive("s", batch.ClassRaw)
+		defer tk.Release()
+		d, err := tk.Decode(context.Background(), SealingLimit+1, 0)
+		if err != nil || d.Status != 0 {
+			t.Fatalf("oversize decode: %+v %v", d, err)
+		}
+		return d.Finding
+	}
+	if oversize() != FindingOversize {
+		t.Fatal("first oversize frame")
+	}
+	rings := func() (int, int) {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		drain := (10*C + charge(SealingLimit+1, 0)) / 10
+		return l.inflightRetryAfter(h.clock.Now()), l.retryAfter(h.clock.Now(), 0, testBudget-l.inUse+20*drain)
+	}
+	at(9*time.Second + 999*time.Millisecond)
+	if slot, drain := rings(); slot != 10 || drain != 20 {
+		t.Fatalf("rings before ten seconds: slot %d, drain %d", slot, drain)
+	}
+	at(10 * time.Second)
+	if slot, drain := rings(); slot != 60 || drain != 60 {
+		t.Fatalf("rings after ten seconds: slot %d, drain %d", slot, drain)
+	}
+	at(10*time.Minute - time.Millisecond)
+	if top := l.Snapshot().TopDevices; len(top) != 1 || top[0].DecodeTime != time.Second {
+		t.Fatalf("minute counters before ten minutes: %+v", top)
+	}
+	if oversize() != "" {
+		t.Fatal("finding inside the suppression")
+	}
+	at(10 * time.Minute)
+	if top := l.Snapshot().TopDevices; len(top) != 0 {
+		t.Fatalf("minute counters after ten minutes: %+v", top)
+	}
+	if oversize() != FindingOversize {
+		t.Fatal("no finding after the suppression")
+	}
+	m.Release()
 }
 
 func TestCancellationAndState(t *testing.T) {
@@ -797,6 +1079,19 @@ func TestCancellationAndState(t *testing.T) {
 	w.Release()
 	if h.inUse() != C+charge(64*mib, 64*mib) {
 		t.Fatal("release after cancel")
+	}
+	// Release while Decode waits: the wait ends with ErrState and frees everything.
+	w2 := h.receive("w2", batch.ClassFindings)
+	ch = h.decodeAsync(context.Background(), w2, 64*mib, 64*mib)
+	if !pending(ch) {
+		t.Fatal("not waiting")
+	}
+	w2.Release()
+	if r := h.result(ch); !errors.Is(r.err, ErrState) || r.d.Status != 0 {
+		t.Fatalf("release during wait: %+v", r)
+	}
+	if s := h.l.Snapshot(); s.Waiting != 0 || s.WaitingBytes != 0 || s.InUse != C+charge(64*mib, 64*mib) || s.Inflight != 1 {
+		t.Fatalf("after release during wait: %+v", s)
 	}
 	if _, err := g.Decode(context.Background(), 0, 0); !errors.Is(err, ErrState) {
 		t.Fatalf("Decode twice: %v", err)
@@ -848,7 +1143,7 @@ func TestInvariants(t *testing.T) {
 	finish := func(x *held) {
 		r := h.result(x.result)
 		x.result = nil
-		if r.err != nil && !errors.Is(r.err, context.Canceled) {
+		if r.err != nil && !errors.Is(r.err, context.Canceled) && !errors.Is(r.err, ErrState) {
 			t.Fatalf("decode: %v", r.err)
 		}
 	}
@@ -887,11 +1182,12 @@ func TestInvariants(t *testing.T) {
 				continue
 			}
 			i := rng.IntN(len(live))
-			if live[i].result != nil {
-				continue
-			}
-			live[i].ticket.Release()
+			x := live[i]
+			x.ticket.Release()
 			live = append(live[:i], live[i+1:]...)
+			if x.result != nil {
+				finish(x) // a Release during the wait ends it
+			}
 			for _, x := range live {
 				if x.result != nil && !pending(x.result) {
 					finish(x)
@@ -929,5 +1225,21 @@ func TestInvariants(t *testing.T) {
 			t.Fatalf("op %d: in use %d, held %d, in flight %d of %d", op, h.l.inUse, sum, h.l.inflight, len(live))
 		}
 		h.l.mu.Unlock()
+	}
+}
+
+// TestRefillRemainder refills a bucket every 200 ns: the fraction of a byte
+// each call adds is carried, so 10 ms refill exactly as one 10 ms step does.
+func TestRefillRemainder(t *testing.T) {
+	h := newHarness(t)
+	tk := h.receive("v", batch.ClassRaw)
+	h.admit(tk, 0, 64*mib)
+	tk.Release()
+	for range 50_000 {
+		h.clock.Advance(200 * time.Nanosecond)
+		h.tokens("v")
+	}
+	if got, want := h.tokens("v"), uint64(10*time.Millisecond)*ServerRefill/uint64(time.Second); got != want {
+		t.Fatalf("refill over 50,000 calls: %d, want %d", got, want)
 	}
 }

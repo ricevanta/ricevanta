@@ -1,6 +1,8 @@
 package admission
 
 import (
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -66,12 +68,69 @@ func TestRetryAfterBounds(t *testing.T) {
 	if got := unavailable(0.5, testBudget+20*drain); got != 60 {
 		t.Fatalf("all releases expired: %d", got)
 	}
+	// A NaN random value counts as 0.5; infinities clamp to the factor bounds.
+	h.receive("c", batch.ClassRaw).Release()
+	h.receive("d", batch.ClassRaw).Release()
+	drain = 2 * C / 10
+	for random, want := range map[float64]int{math.NaN(): 25, math.Inf(1): 30, math.Inf(-1): 20} {
+		if got := unavailable(random, testBudget+25*drain); got != want {
+			t.Fatalf("random %v: %d, want %d", random, got, want)
+		}
+	}
 	// Ahead counts every waiter in both queues; each refusal stays in 5 through 60.
-	for _, random := range []float64{0, 0.3, 0.5, 0.999, 1} {
+	for _, random := range []float64{0, 0.3, 0.5, 0.999, 1, math.NaN(), math.Inf(1), -2} {
 		for _, weight := range []int64{-1 << 40, 0, 1, testBudget, 1 << 40} {
 			if got := unavailable(random, weight); got < 5 || got > 60 {
 				t.Fatalf("random %v weight %d: %d", random, weight, got)
 			}
 		}
+	}
+}
+
+// In-flight refusals take Retry-After from the slot-release ring:
+// base = ceil(100 / n) for n releases in the last ten seconds, 60 for none.
+func TestInflightRetryAfter(t *testing.T) {
+	h := newHarness(t)
+	held := make([]*Ticket, 10)
+	for i := range held {
+		held[i] = h.receive(fmt.Sprintf("held%d", i), batch.ClassRaw)
+	}
+	refuse := func(random float64) int {
+		t.Helper()
+		h.random = random
+		ticket, d, err := h.l.Receive("late", batch.ClassRaw)
+		if err != nil || ticket != nil || d.Status != 503 || d.Reason != ReasonInflight {
+			t.Fatalf("expected an in-flight refusal: %+v %v", d, err)
+		}
+		return d.RetryAfter
+	}
+	if got := refuse(0.5); got != 60 {
+		t.Fatalf("no release: %d", got)
+	}
+	if got := refuse(0); got != 48 {
+		t.Fatalf("no release, random 0: %d", got)
+	}
+	// One release per second for ten seconds: base 10.
+	for i := range 10 {
+		h.clock.Advance(time.Second)
+		held[i].Release()
+		held[i] = h.receive(fmt.Sprintf("next%d", i), batch.ClassRaw)
+	}
+	h.clock.Advance(500 * time.Millisecond)
+	for random, want := range map[float64]int{0.5: 10, 0: 8, 1: 12} {
+		if got := refuse(random); got != want {
+			t.Fatalf("one release per second, random %v: %d, want %d", random, got, want)
+		}
+	}
+	// 100 releases per second: base 1, clamped to 5.
+	for second := range 10 {
+		h.clock.Advance(time.Second)
+		for i := range 100 {
+			held[0].Release()
+			held[0] = h.receive(fmt.Sprintf("churn%d-%d", second, i), batch.ClassRaw)
+		}
+	}
+	if got := refuse(0.5); got != 5 {
+		t.Fatalf("100 releases per second: %d", got)
 	}
 }

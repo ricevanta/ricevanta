@@ -5,13 +5,11 @@ package body
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"runtime/debug"
 	"runtime/metrics"
@@ -33,32 +31,26 @@ var costMeasurementKeys = []string{"case", "mode", "shape", "n", "window", "size
 // every frame, then runs one child per case under a memory limit the child
 // sets itself, and one without a limit for the wall-time reference.
 //
-// Every case runs when the test is selected alone with
-// -run '^TestDecodeCostModel$', as the CI command does. Other runs, such as the
-// ordinary suite, measure only costModelSmoke. RICEVANTA_COST_MODEL_CASES
-// selects case keys by regular expression for reduced local runs.
+// The test runs only with RICEVANTA_COST_MODEL=full, and then runs all 34
+// cases of the fixed table whatever -run selects; ordinary go test runs skip
+// it. The limited child of each case logs one COST_MEASUREMENT line, the
+// reference child one COST_REFERENCE line, and the parent ends with
+// COST_MODEL_CASES n=34, which the CI step counts.
 func TestDecodeCostModel(t *testing.T) {
 	if os.Getenv(costChildEnv) != "" {
 		costChild(t)
 		return
 	}
+	if os.Getenv("RICEVANTA_COST_MODEL") != "full" {
+		t.Skip("set RICEVANTA_COST_MODEL=full to run the ingest cost model")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	pattern := os.Getenv("RICEVANTA_COST_MODEL_CASES")
-	if run := flag.Lookup("test.run"); pattern == "" && (run == nil || run.Value.String() != "^TestDecodeCostModel$") {
-		pattern = costModelSmoke
-	}
-	selector := regexp.MustCompile(pattern)
-	var cases []costCase
-	for _, c := range costCases() {
-		if selector.MatchString(c.key()) {
-			cases = append(cases, c)
-		}
-	}
-	if len(cases) == 0 {
-		t.Fatal("no cost-model case selected")
+	cases := costCases()
+	if len(cases) != costModelCases {
+		t.Fatalf("%d cost-model cases, want %d", len(cases), costModelCases)
 	}
 	type generated struct {
 		path                 string
@@ -104,7 +96,7 @@ func TestDecodeCostModel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s %s child failed: %v\n%s", c.key(), mode, err, output)
 			}
-			fields, err := parseCostMeasurement(output, c.key(), mode)
+			fields, err := parseCostMeasurement(output, costTag(mode), c.key(), mode)
 			if err != nil {
 				t.Fatalf("%s %s: %v\n%s", c.key(), mode, err, output)
 			}
@@ -123,8 +115,10 @@ func TestDecodeCostModel(t *testing.T) {
 		refWall, _ := strconv.ParseInt(reference["wall_ms"], 10, 64)
 		ratio := float64(wall) / float64(max(refWall, 1))
 		t.Logf("COST_CASE case=%s peak_ratio=%.3f wall_ratio=%.3f", c.key(), peak, ratio)
-		if wall > 2*refWall {
-			t.Errorf("%s: limited wall %d ms exceeds twice the reference %d ms", c.key(), wall, refWall)
+		// Twice the reference from 500 ms, else the reference plus 500 ms:
+		// children of 25 to 100 ms vary by more than twice between identical runs.
+		if bound := costWallBound(refWall); wall > bound {
+			t.Errorf("%s: limited wall %d ms exceeds %d ms for a reference of %d ms", c.key(), wall, bound, refWall)
 		}
 		if c.n == 1 {
 			cpu, _ := strconv.ParseInt(reference["cpu_ms"], 10, 64)
@@ -136,6 +130,7 @@ func TestDecodeCostModel(t *testing.T) {
 			}
 		}
 	}
+	t.Logf("COST_MODEL_CASES n=%d", len(cases))
 	if hostileCPU > 0 && flatCPU > 0 {
 		ratio := float64(hostileCPU) / float64(flatCPU)
 		t.Logf("COST_CPU_RATIO hostile_cpu_ms=%d flat_cpu_ms=%d ratio=%.3f", hostileCPU, flatCPU, ratio)
@@ -145,12 +140,30 @@ func TestDecodeCostModel(t *testing.T) {
 	}
 }
 
-// parseCostMeasurement requires exactly one well-formed COST_MEASUREMENT line
-// for the expected case and mode.
-func parseCostMeasurement(output []byte, key, mode string) (map[string]string, error) {
+const costModelCases = 34
+
+// costWallBound is the most wall time in milliseconds the limited child may
+// take: twice a reference of at least 500 ms, else the reference plus 500 ms.
+func costWallBound(reference int64) int64 {
+	if reference >= 500 {
+		return 2 * reference
+	}
+	return reference + 500
+}
+
+func costTag(mode string) string {
+	if mode == "limited" {
+		return "COST_MEASUREMENT"
+	}
+	return "COST_REFERENCE"
+}
+
+// parseCostMeasurement requires exactly one well-formed line with tag for the
+// expected case and mode.
+func parseCostMeasurement(output []byte, tag, key, mode string) (map[string]string, error) {
 	var found map[string]string
 	for _, line := range strings.Split(string(output), "\n") {
-		i := strings.Index(line, "COST_MEASUREMENT ")
+		i := strings.Index(line, tag+" ")
 		if i < 0 {
 			continue
 		}
@@ -158,7 +171,7 @@ func parseCostMeasurement(output []byte, key, mode string) (map[string]string, e
 			return nil, errorString("duplicate measurement line")
 		}
 		found = map[string]string{"line": strings.TrimSpace(line[i:])}
-		for _, field := range strings.Fields(line[i+len("COST_MEASUREMENT "):]) {
+		for _, field := range strings.Fields(line[i+len(tag)+1:]) {
 			k, v, ok := strings.Cut(field, "=")
 			if !ok || v == "" {
 				return nil, errorString("malformed field " + field)
@@ -202,10 +215,7 @@ type errorString string
 
 func (e errorString) Error() string { return string(e) }
 
-const (
-	costChildEnv   = "RICEVANTA_COST_CHILD"
-	costModelSmoke = `^(badid-10000-single|minok-10000-single)/1$`
-)
+const costChildEnv = "RICEVANTA_COST_CHILD"
 
 func costEnvInt(t *testing.T, name string) int64 {
 	t.Helper()
@@ -358,6 +368,32 @@ func costChild(t *testing.T) {
 		}
 	}
 	runtime.KeepAlive(results)
-	fmt.Printf("COST_MEASUREMENT case=%s mode=%s shape=%s n=%d window=%d size=%d weight=%d baseline=%d limit=%d lines=%d allocs=%d cpu_ms=%d wall_ms=%d peak=%d peak_ratio=%.3f vmhwm=%d gc_cycles=%d limiter_cycle=%d\n",
-		key, mode, shape, n, window, size, weight, baseline, limit, lines, allocs, cpu.Milliseconds(), wall.Milliseconds(), peak.Load(), float64(peak.Load())/float64(limit), hwm, cycles, limiterCycle)
+	fmt.Printf("%s case=%s mode=%s shape=%s n=%d window=%d size=%d weight=%d baseline=%d limit=%d lines=%d allocs=%d cpu_ms=%d wall_ms=%d peak=%d peak_ratio=%.3f vmhwm=%d gc_cycles=%d limiter_cycle=%d\n",
+		costTag(mode), key, mode, shape, n, window, size, weight, baseline, limit, lines, allocs, cpu.Milliseconds(), wall.Milliseconds(), peak.Load(), float64(peak.Load())/float64(limit), hwm, cycles, limiterCycle)
+}
+
+func TestCostModelHarness(t *testing.T) {
+	if n := len(costCases()); n != costModelCases {
+		t.Fatalf("%d cases", n)
+	}
+	for _, c := range []struct{ reference, bound int64 }{{0, 500}, {31, 531}, {499, 999}, {500, 1000}, {3128, 6256}} {
+		if got := costWallBound(c.reference); got != c.bound {
+			t.Fatalf("reference %d: bound %d, want %d", c.reference, got, c.bound)
+		}
+	}
+	line := "COST_MEASUREMENT case=a/1 mode=limited shape=a n=1 window=1 size=1 weight=1 baseline=1 limit=1 lines=1 allocs=1 cpu_ms=1 wall_ms=1 peak=1 peak_ratio=0.5 vmhwm=1 gc_cycles=1 limiter_cycle=0"
+	if _, err := parseCostMeasurement([]byte("x\n"+line+"\n"), "COST_MEASUREMENT", "a/1", "limited"); err != nil {
+		t.Fatal(err)
+	}
+	for name, output := range map[string]string{
+		"missing":   "nothing\n",
+		"duplicate": line + "\n" + line + "\n",
+		"malformed": strings.Replace(line, "wall_ms=1", "wall_ms=x", 1),
+		"short":     strings.Replace(line, " limiter_cycle=0", "", 1),
+		"other":     strings.Replace(line, "case=a/1", "case=b/1", 1),
+	} {
+		if _, err := parseCostMeasurement([]byte(output), "COST_MEASUREMENT", "a/1", "limited"); err == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
 }

@@ -69,11 +69,11 @@ go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./inter
 
 The first consumer owns performance qualification and its request and candidate bounds.
 
-CI, `server/`: the `validate` job proves the ingest admission cost model ([ingest admission section 9](../docs/specs/ingest-admission.md#9-ci-evidence)) and uploads the combined output as `ingest-measurements-<runId>-<runAttempt>`. Selected alone, `TestDecodeCostModel` measures every case; the ordinary suite measures two small cases.
+CI, `server/`: the `validate` job proves the ingest admission cost model ([ingest admission section 9](../docs/specs/ingest-admission.md#9-ci-evidence)), fails unless the log holds `COST_MODEL_CASES n=34` and 34 `COST_MEASUREMENT` lines, and uploads the combined output as `ingest-measurements-<runId>-<runAttempt>`. Without `RICEVANTA_COST_MODEL=full`, `TestDecodeCostModel` skips.
 
 ```sh
-GOGC=100 go test -count=1 ./internal/events/body -run '^TestDecodeCostModel$' -v
-go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x ./internal/events/body
+RICEVANTA_COST_MODEL=full GOGC=100 go test -count=1 -timeout=15m ./internal/events/body -run '^TestDecodeCostModel$' -v
+go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body
 ```
 
 Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in PR/master CI. Console browser checks run in `.github/workflows/console.yml`.

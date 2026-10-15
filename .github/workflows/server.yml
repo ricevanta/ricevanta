@@ -50,9 +50,12 @@ jobs:
     - name: Ingest cost model
       run: |
         set -euo pipefail
+        log="$RUNNER_TEMP/ingest-measurements/cost-model.log"
         mkdir -p "$RUNNER_TEMP/ingest-measurements"
-        GOGC=100 go test -count=1 ./internal/events/body -run '^TestDecodeCostModel$' -v 2>&1 | tee "$RUNNER_TEMP/ingest-measurements/cost-model.log"
-        go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x ./internal/events/body 2>&1 | tee -a "$RUNNER_TEMP/ingest-measurements/cost-model.log"
+        RICEVANTA_COST_MODEL=full GOGC=100 go test -count=1 -timeout=15m ./internal/events/body -run '^TestDecodeCostModel$' -v 2>&1 | tee "$log"
+        go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body 2>&1 | tee -a "$log"
+        test "$(grep -c 'COST_MODEL_CASES n=34$' "$log")" -eq 1
+        test "$(grep -c 'COST_MEASUREMENT ' "$log")" -eq 34
     - name: Verify ingest measurement log
       if: always()
       run: |

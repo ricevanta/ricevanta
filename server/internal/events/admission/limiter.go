@@ -81,7 +81,7 @@ const (
 const (
 	counterRate = iota
 	counterBytes
-	counterDecode // milliseconds
+	counterDecode // microseconds
 	counterOversize
 	counterKinds
 )
@@ -95,32 +95,40 @@ type deviceEntry struct {
 	slots         int
 	tokens        uint64
 	refilled      time.Time
-	minute        int64
-	suppressUntil int64 // UnixNano
+	remainder     uint64 // refill credit below one byte, in byte-nanoseconds per second
+	minute        int64  // minutes since the limiter started
+	suppressUntil time.Duration
 	counts        [counterKinds][counterMinutes]uint32
 }
 
+// refill adds ServerRefill bytes per second of elapsed time and carries the
+// fraction of a byte to the next call, so frequent calls lose nothing.
 func (e *deviceEntry) refill(now time.Time) {
 	elapsed := now.Sub(e.refilled)
+	if elapsed <= 0 {
+		return
+	}
 	e.refilled = now
-	if elapsed <= 0 || e.tokens >= BucketCapacity {
+	if e.tokens >= BucketCapacity {
+		e.tokens, e.remainder = BucketCapacity, 0
 		return
 	}
 	full := time.Duration((BucketCapacity*uint64(time.Second) + ServerRefill - 1) / ServerRefill)
 	if elapsed >= full {
-		e.tokens = BucketCapacity
+		e.tokens, e.remainder = BucketCapacity, 0
 		return
 	}
-	e.tokens = min(BucketCapacity, e.tokens+uint64(elapsed)*ServerRefill/uint64(time.Second))
+	credit := e.remainder + uint64(elapsed)*ServerRefill
+	e.tokens += credit / uint64(time.Second)
+	e.remainder = credit % uint64(time.Second)
+	if e.tokens >= BucketCapacity {
+		e.tokens, e.remainder = BucketCapacity, 0
+	}
 }
 
-func minuteOf(now time.Time) int64 {
-	return now.Unix() / 60
-}
-
-// advance zeroes the buckets of minutes that left the ten-minute window.
-func (e *deviceEntry) advance(now time.Time) {
-	m := minuteOf(now)
+// advance zeroes the buckets of minutes that left the ten-minute window; m
+// counts minutes since the limiter started.
+func (e *deviceEntry) advance(m int64) {
 	if m <= e.minute {
 		return
 	}
@@ -136,15 +144,15 @@ func (e *deviceEntry) advance(now time.Time) {
 	e.minute = m
 }
 
-func (e *deviceEntry) add(now time.Time, kind int, n uint64) {
-	e.advance(now)
+func (e *deviceEntry) add(m int64, kind int, n uint64) {
+	e.advance(m)
 	slot := &e.counts[kind][e.minute%counterMinutes]
 	*slot = uint32(min(uint64(*slot)+n, math.MaxUint32))
 }
 
 // counters returns the trailing ten-minute sum of one counter.
-func (e *deviceEntry) counters(now time.Time, kind int) uint64 {
-	e.advance(now)
+func (e *deviceEntry) counters(m int64, kind int) uint64 {
+	e.advance(m)
 	var sum uint64
 	for _, v := range e.counts[kind] {
 		sum += uint64(v)
@@ -152,15 +160,15 @@ func (e *deviceEntry) counters(now time.Time, kind int) uint64 {
 	return sum
 }
 
-func (e *deviceEntry) idle(now time.Time) bool {
-	if e.slots > 0 || now.UnixNano() < e.suppressUntil {
+func (e *deviceEntry) idle(now time.Time, elapsed time.Duration) bool {
+	if e.slots > 0 || elapsed < e.suppressUntil {
 		return false
 	}
 	e.refill(now)
 	if e.tokens < BucketCapacity {
 		return false
 	}
-	e.advance(now)
+	e.advance(int64(elapsed / time.Minute))
 	return e.counts == [counterKinds][counterMinutes]uint32{}
 }
 
@@ -180,14 +188,15 @@ type Limiter struct {
 	reserve      int64
 	clock        Clock
 	random       func() float64
+	start        time.Time // every counter index is time elapsed since start
 	inUse        int64
 	inflight     int
 	queues       [2][]*waiter // 0: findings and audit; 1: raw, context and lineage
 	waitingBytes int64
 	devices      map[string]*deviceEntry
 	head, tail   *deviceEntry
-	drain        [drainSeconds]int64
-	drainSecond  [drainSeconds]int64
+	drain        secondRing // bytes released per second
+	slotReleases secondRing // tickets released per second
 	refused      map[Reason]uint64
 	oversize     map[batch.SpoolClass]uint64
 	findings     uint64
@@ -212,15 +221,60 @@ func New(c Config, clock Clock, random func() float64) (*Limiter, error) {
 	if clock == nil || random == nil {
 		return nil, fmt.Errorf("%w: nil clock or random source", ErrConfig)
 	}
-	return &Limiter{
+	l := &Limiter{
 		config:   c,
 		reserve:  c.Budget / 4,
 		clock:    clock,
 		random:   random,
+		start:    clock.Now(),
 		devices:  make(map[string]*deviceEntry),
 		refused:  make(map[Reason]uint64),
 		oversize: make(map[batch.SpoolClass]uint64),
-	}, nil
+	}
+	l.drain.reset()
+	l.slotReleases.reset()
+	return l, nil
+}
+
+// elapsed is the time since the limiter started, computed from the clock's
+// monotonic reading when it carries one, so wall-clock steps move no index.
+func (l *Limiter) elapsed(now time.Time) time.Duration {
+	return max(now.Sub(l.start), 0)
+}
+
+func (l *Limiter) minute(now time.Time) int64 {
+	return int64(l.elapsed(now) / time.Minute)
+}
+
+// secondRing holds ten one-second counters indexed by elapsed seconds.
+type secondRing struct {
+	value  [drainSeconds]int64
+	second [drainSeconds]int64
+}
+
+func (r *secondRing) reset() {
+	for i := range r.second {
+		r.second[i] = math.MinInt64
+	}
+}
+
+func (r *secondRing) add(sec, n int64) {
+	i := sec % drainSeconds
+	if r.second[i] != sec {
+		r.second[i], r.value[i] = sec, 0
+	}
+	r.value[i] += n
+}
+
+// sum returns the total over the current second and the nine before it.
+func (r *secondRing) sum(sec int64) int64 {
+	var total int64
+	for i, s := range r.second {
+		if s > sec-drainSeconds && s <= sec {
+			total += r.value[i]
+		}
+	}
+	return total
 }
 
 func priorityQueue(class batch.SpoolClass) int {
@@ -231,7 +285,11 @@ func priorityQueue(class batch.SpoolClass) int {
 }
 
 // Receive admits a request after authentication and header parsing, before any
-// body byte. It never blocks. A refusal returns a nil ticket.
+// body byte. It checks the device's slots, then its bucket, then in-flight
+// capacity, and charges MinCharge on admission and on concurrency and
+// in-flight refusals whenever the bucket holds it; a bucket below MinCharge
+// refuses with device_rate and charges nothing. It never blocks. A refusal
+// returns a nil ticket.
 func (l *Limiter) Receive(device string, class batch.SpoolClass) (*Ticket, Decision, error) {
 	if device == "" {
 		return nil, Decision{}, ErrDevice
@@ -244,28 +302,38 @@ func (l *Limiter) Receive(device string, class batch.SpoolClass) (*Ticket, Decis
 	now := l.clock.Now()
 	l.sweep(now)
 	e := l.devices[device]
-	if e != nil && e.slots >= PerDeviceInflight {
+	if e == nil {
+		e = &deviceEntry{device: device, tokens: BucketCapacity, refilled: now, minute: l.minute(now)}
+		l.devices[device] = e
+	}
+	l.touch(e)
+	// Check order: device slots, then the bucket, then in-flight capacity.
+	e.refill(now)
+	if e.slots >= PerDeviceInflight {
+		if e.tokens >= MinCharge {
+			e.tokens -= MinCharge
+		}
 		l.refused[ReasonDeviceConcurrency]++
 		return nil, Decision{Status: 429, RetryAfter: retryMin, Reason: ReasonDeviceConcurrency}, nil
 	}
+	if e.tokens < MinCharge {
+		return nil, l.rateRefusal(e, now, MinCharge, ""), nil
+	}
+	e.tokens -= MinCharge
 	// The in-flight invariant normally guarantees room for C; refusing when it
 	// does not keeps the bytes in use within the budget.
 	if l.inflight >= l.config.MaxInflight || l.inUse+CompressedWeight > l.config.Budget {
 		l.refused[ReasonInflight]++
-		return nil, Decision{Status: 503, RetryAfter: l.retryAfter(now, l.waitingBytes, CompressedWeight), Reason: ReasonInflight}, nil
+		return nil, Decision{Status: 503, RetryAfter: l.inflightRetryAfter(now), Reason: ReasonInflight}, nil
 	}
-	if e == nil {
-		e = &deviceEntry{device: device, tokens: BucketCapacity, refilled: now, minute: minuteOf(now)}
-		l.devices[device] = e
-	}
-	l.touch(e)
 	e.slots++
 	l.inflight++
 	l.inUse += CompressedWeight
 	return &Ticket{l: l, entry: e, class: class}, Decision{}, nil
 }
 
-// Decode charges the device bucket the declared size, then waits at most
+// Decode charges the device bucket max(size, MinCharge) - MinCharge, the rest
+// of the request's charge after Receive, then waits at most
 // DecodeWait, or until ctx ends, for H(w) + S(s) + T(s) bytes of budget. A
 // refusal leaves the ticket in the receive phase. A canceled wait returns
 // ctx.Err(). Decode may be called once per ticket.
@@ -287,23 +355,19 @@ func (t *Ticket) Decode(ctx context.Context, window, size uint64) (Decision, err
 	l.touch(e)
 	var finding Finding
 	if size > SealingLimit || window > SealingLimit {
-		e.add(now, counterOversize, 1)
+		e.add(l.minute(now), counterOversize, 1)
 		l.oversize[t.class]++
 		finding = l.flag(e, now, FindingOversize)
 	}
+	// Receive already took MinCharge; the request costs max(size, MinCharge).
+	rest := max(size, MinCharge) - MinCharge
 	e.refill(now)
-	if e.tokens < size {
-		l.refused[ReasonDeviceRate]++
-		e.add(now, counterRate, 1)
-		if finding == "" && e.counters(now, counterRate) > rateFindingLimit {
-			finding = l.flag(e, now, FindingRate)
-		}
-		deficit := size - e.tokens
-		retry := int(min(max((deficit+ServerRefill-1)/ServerRefill, retryMin), retryMax))
+	if e.tokens < rest {
+		d := l.rateRefusal(e, now, rest, finding)
 		l.mu.Unlock()
-		return Decision{Status: 429, RetryAfter: retry, Reason: ReasonDeviceRate, Finding: finding}, nil
+		return d, nil
 	}
-	e.tokens -= size
+	e.tokens -= rest
 	need := weight - CompressedWeight
 	q := priorityQueue(t.class)
 	if len(l.queues[q]) == 0 && l.fits(q, need) {
@@ -335,13 +399,16 @@ func (t *Ticket) Decode(ctx context.Context, window, size uint64) (Decision, err
 		return Decision{Finding: finding}, ErrState
 	}
 	now = l.clock.Now()
+	// Only a head that fits the whole budget was held back by the reserve; a
+	// waiter behind a larger head was held back by that head.
+	head := len(l.queues[q]) > 0 && l.queues[q][0] == w
 	l.unqueue(w)
 	l.dispatch(now)
 	if canceled {
 		return Decision{Finding: finding}, ctx.Err()
 	}
 	reason := ReasonBudget
-	if q == 1 && l.config.Budget-l.inUse-need >= 0 {
+	if q == 1 && head && l.config.Budget-l.inUse-need >= 0 {
 		reason = ReasonReserve
 	}
 	l.refused[reason]++
@@ -360,7 +427,7 @@ func (t *Ticket) Decoded(d time.Duration) {
 	now := l.clock.Now()
 	l.sweep(now)
 	l.touch(t.entry)
-	t.entry.add(now, counterDecode, uint64(d/time.Millisecond))
+	t.entry.add(l.minute(now), counterDecode, uint64(d/time.Microsecond))
 }
 
 // Release returns every byte and slot the ticket holds. It is idempotent and
@@ -385,7 +452,9 @@ func (t *Ticket) Release() {
 	l.inflight--
 	t.entry.slots--
 	l.touch(t.entry)
-	l.recordDrain(now, freed)
+	sec := int64(l.elapsed(now) / time.Second)
+	l.drain.add(sec, freed)
+	l.slotReleases.add(sec, 1)
 	l.dispatch(now)
 }
 
@@ -422,12 +491,13 @@ func (l *Limiter) Snapshot() Snapshot {
 	for k, v := range l.oversize {
 		s.OversizeFrames[k] = v
 	}
+	m := l.minute(now)
 	for _, e := range l.devices {
-		ms := e.counters(now, counterDecode)
-		if ms == 0 {
+		us := e.counters(m, counterDecode)
+		if us == 0 {
 			continue
 		}
-		u := DeviceUsage{Device: e.device, DecodeTime: time.Duration(ms) * time.Millisecond, DeclaredBytes: e.counters(now, counterBytes), OversizeFrames: e.counters(now, counterOversize)}
+		u := DeviceUsage{Device: e.device, DecodeTime: time.Duration(us) * time.Microsecond, DeclaredBytes: e.counters(m, counterBytes), OversizeFrames: e.counters(m, counterOversize)}
 		if len(s.TopDevices) == topDevices && compareUsage(u, s.TopDevices[topDevices-1]) >= 0 {
 			continue
 		}
@@ -460,7 +530,7 @@ func (l *Limiter) fits(q int, need int64) bool {
 func (l *Limiter) admit(t *Ticket, need int64, size uint64, now time.Time) {
 	l.inUse += need
 	t.charge = need
-	t.entry.add(now, counterBytes, size)
+	t.entry.add(l.minute(now), counterBytes, size)
 }
 
 // dispatch admits queue heads in priority order until neither head fits. A
@@ -492,21 +562,40 @@ func (l *Limiter) unqueue(w *waiter) {
 
 // flag returns f unless the device's finding suppression runs, and starts it.
 func (l *Limiter) flag(e *deviceEntry, now time.Time, f Finding) Finding {
-	if now.UnixNano() < e.suppressUntil {
+	elapsed := l.elapsed(now)
+	if elapsed < e.suppressUntil {
 		return ""
 	}
-	e.suppressUntil = now.Add(findingSuppression).UnixNano()
+	e.suppressUntil = elapsed + findingSuppression
 	l.findings++
 	return f
 }
 
-func (l *Limiter) recordDrain(now time.Time, freed int64) {
-	sec := now.Unix()
-	i := ((sec % drainSeconds) + drainSeconds) % drainSeconds
-	if l.drainSecond[i] != sec {
-		l.drainSecond[i], l.drain[i] = sec, 0
+// rateRefusal refuses a bucket deficit for need bytes: it charges nothing,
+// counts the refusal toward the rate finding and returns
+// ceil(deficit / ServerRefill) clamped to 5 through 60.
+func (l *Limiter) rateRefusal(e *deviceEntry, now time.Time, need uint64, finding Finding) Decision {
+	l.refused[ReasonDeviceRate]++
+	m := l.minute(now)
+	e.add(m, counterRate, 1)
+	if finding == "" && e.counters(m, counterRate) > rateFindingLimit {
+		finding = l.flag(e, now, FindingRate)
 	}
-	l.drain[i] += freed
+	deficit := need - e.tokens
+	retry := int(min(max((deficit+ServerRefill-1)/ServerRefill, retryMin), retryMax))
+	return Decision{Status: 429, RetryAfter: retry, Reason: ReasonDeviceRate, Finding: finding}
+}
+
+// inflightRetryAfter paces in-flight refusals by how fast slots free:
+// base = ceil(100 / n) for n tickets released in the last ten seconds, 60
+// when none was, then jittered and clamped.
+func (l *Limiter) inflightRetryAfter(now time.Time) int {
+	n := l.slotReleases.sum(int64(l.elapsed(now) / time.Second))
+	base := int64(retryMax)
+	if n > 0 {
+		base = (100 + n - 1) / n
+	}
+	return l.jitter(base)
 }
 
 // retryAfter returns the jittered 503 Retry-After: base =
@@ -515,14 +604,7 @@ func (l *Limiter) recordDrain(now time.Time, freed int64) {
 // is clamped to 5 through 60, multiplied by a factor in 0.8 through 1.2,
 // rounded half up and clamped again.
 func (l *Limiter) retryAfter(now time.Time, ahead, weight int64) int {
-	sec := now.Unix()
-	var released int64
-	for i, s := range l.drainSecond {
-		if s > sec-drainSeconds && s <= sec {
-			released += l.drain[i]
-		}
-	}
-	drain := released / drainSeconds
+	drain := l.drain.sum(int64(l.elapsed(now)/time.Second)) / drainSeconds
 	base := int64(retryMax)
 	if drain > 0 {
 		need := ahead + weight - (l.config.Budget - l.inUse)
@@ -531,8 +613,19 @@ func (l *Limiter) retryAfter(now time.Time, ahead, weight int64) int {
 			base = min(need/drain+min(need%drain, 1), retryMax)
 		}
 	}
+	return l.jitter(base)
+}
+
+// jitter clamps base to 5 through 60, multiplies it by a factor in 0.8 through
+// 1.2 from the random source, rounds half up and clamps again. A random value
+// outside [0, 1] is clamped, and NaN counts as 0.5.
+func (l *Limiter) jitter(base int64) int {
 	base = min(max(base, retryMin), retryMax)
-	r := min(max(l.random(), 0), 1)
+	r := l.random()
+	if math.IsNaN(r) {
+		r = 0.5
+	}
+	r = min(max(r, 0), 1)
 	jittered := math.Floor(float64(base)*(0.8+0.4*r) + 0.5)
 	return int(min(max(jittered, retryMin), retryMax))
 }
@@ -575,7 +668,7 @@ func (l *Limiter) sweep(now time.Time) {
 		if e == nil {
 			return
 		}
-		if e.idle(now) {
+		if e.idle(now, l.elapsed(now)) {
 			l.unlink(e)
 			delete(l.devices, e.device)
 			continue
