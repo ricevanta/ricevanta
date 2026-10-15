@@ -23,7 +23,12 @@ GO_LIST_OK = re.compile(r'^ok\s+(\S+)\s+\S+$')
 GO_LIST_NONE = re.compile(r'^\?\s+(\S+)\s+\[no test files\]$')
 GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op\s+(\d+) B/op\s+(\d+) allocs/op\s*$')
 GO_BASELINE = re.compile(r'^fuzz: elapsed: \S+, gathering baseline coverage: (\d+)/(\d+) completed(, now fuzzing with (\d+) workers)?$')
-GO_EXECS = re.compile(r'^fuzz: elapsed: \S+, execs: (\d+) \(\d+/sec\), new interesting: \d+ \(total: \d+\)$')
+GO_EXECS = re.compile(r'^fuzz: elapsed: (\S+), execs: (\d+) \(\d+/sec\), new interesting: \d+ \(total: \d+\)$')
+GO_PACKAGE = re.compile(r'^(\S+) (\d+) (\d+)$')
+GO_PACKAGE_FORMAT = '{{.ImportPath}} {{len .TestGoFiles}} {{len .XTestGoFiles}}'
+GO_DURATION = re.compile(r'(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)')
+GO_DURATION_UNITS = {'ns': 1e-9, 'us': 1e-6, 'µs': 1e-6, 'ms': 1e-3, 's': 1, 'm': 60, 'h': 3600}
+SKIP_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$')
 RUST_LIST = re.compile(r'^(.+): test$')
 RUST_LIST_TOTAL = re.compile(r'^(\d+) tests?, (\d+) benchmarks?$')
 RUST_TEST = re.compile(r'^test (.+?) \.\.\. (ok|FAILED|ignored(?:, .*)?)$')
@@ -54,21 +59,50 @@ def inventory(root=ROOT):
     loader = data['loader']
     add({'id': 'loader-fuzz', 'mode': 'go-fuzz', 'cwd': 'server', 'packages': [loader['package']],
          'target': loader['target'], 'fuzztime': loader['fuzztime'], 'parallel': loader['parallel']})
+    fuzz_pairs = sorted([row['package'], row['target']] for row in data.get('fuzz', [])) + [[loader['package'], loader['target']]]
     for row in data.get('selected', []):
-        add(dict(row))
+        row = dict(row)
+        if 'fuzz_inventory' in row:
+            # The ordinary suites cross-check every discovered Fuzz* name against this inventory.
+            if row['fuzz_inventory'] is True: row['fuzz_inventory'] = sorted(fuzz_pairs)
+            elif not (isinstance(row['fuzz_inventory'], list) and all(isinstance(p, list) and len(p) == 2 for p in row['fuzz_inventory'])):
+                raise ValueError('fuzz_inventory must be true or a list of package/target pairs: ' + row['id'])
+        add(row)
     skips = data.get('skips', [])
     for row in skips:
-        for key in ('package', 'test', 'reason', 'proof', 'modes'):
+        for key in ('package', 'test', 'reason', 'modes'):
             if key not in row: raise ValueError('incomplete skip allowance')
-        if not row['proof'] or not row['reason']: raise ValueError('skip allowance needs a reason and a proving unit')
+        if not row['reason'] or not row['modes']: raise ValueError('skip allowance needs a reason and its modes')
+        if not SKIP_NAME.match(row['test']): raise ValueError('skip allowance must name one exact test: ' + row['test'])
+        # The proving unit is separate: another selected ID outside the allowance's own
+        # modes, or a parent test in the same package that must pass in the same run.
+        if ('proof' in row) == ('parent' in row): raise ValueError('skip allowance needs exactly one proof or parent: ' + row['test'])
+        if 'proof' in row:
+            proof = targets.get(row['proof'])
+            if proof is None or row['proof'] in row['modes'] or proof['mode'] in row['modes']:
+                raise ValueError('skip allowance must name a separate proving unit: ' + row['test'])
+        elif not SKIP_NAME.match(row['parent']) or not row['parent'].startswith('Test') or row['parent'] == row['test']:
+            raise ValueError('skip allowance parent must be another exact test: ' + row['test'])
     for target in targets.values():
         if target['mode'] not in MODES: raise ValueError('unknown mode: ' + target['id'])
         target['skips'] = {(s['package'], s['test']): s for s in skips if target['mode'] in s['modes'] or target['id'] in s['modes']}
     return targets
 
 
+def allowance_record(package, test, allowance):
+    record = {'package': package, 'test': test, 'reason': allowance['reason']}
+    record.update({k: allowance[k] for k in ('proof', 'parent') if k in allowance})
+    return record
+
+
 def go_build_flags(target):
     return list(target.get('build_flags', []))
+
+
+def package_command(target):
+    """Ordinary suites also list every package's test files with the same build flags."""
+    if target['mode'] != 'go-suite': return None
+    return ['go', 'list', '-f', GO_PACKAGE_FORMAT, *go_build_flags(target), *target['packages']]
 
 
 def discovery_command(target):
@@ -109,8 +143,12 @@ def run_command(target):
     return list(target['command'])
 
 
-def parse_go_list(text):
-    """Map each tested package to its listed names; reject unexpected lines."""
+def parse_go_list(text, no_tests=None):
+    """Map each tested package to its listed names; reject unexpected lines.
+
+    Packages the runner reports as having no test files go into no_tests when
+    the caller collects them; selected modes never expect such a line.
+    """
     packages, pending = {}, []
     for line in text.splitlines():
         line = line.rstrip('\r')
@@ -118,12 +156,36 @@ def parse_go_list(text):
         if GO_LIST_NAME.match(line): pending.append(line); continue
         ok = GO_LIST_OK.match(line)
         if ok:
-            if ok[1] in packages: raise EvidenceError('package listed twice: ' + ok[1])
+            if ok[1] in packages or (no_tests is not None and ok[1] in no_tests): raise EvidenceError('package listed twice: ' + ok[1])
             packages[ok[1]] = pending; pending = []; continue
-        if GO_LIST_NONE.match(line): continue
+        none = GO_LIST_NONE.match(line)
+        if none and no_tests is not None and not pending:
+            if none[1] in packages or none[1] in no_tests: raise EvidenceError('package listed twice: ' + none[1])
+            no_tests.add(none[1]); continue
         raise EvidenceError('unexpected discovery output: ' + line)
     if pending: raise EvidenceError('discovery output ended without its package line')
     return packages
+
+
+def parse_go_packages(text):
+    """Map each package to its test-file counts from go list."""
+    packages = {}
+    for line in text.splitlines():
+        line = line.rstrip('\r')
+        if not line.strip(): continue
+        match = GO_PACKAGE.match(line)
+        if not match: raise EvidenceError('unexpected package inventory line: ' + line)
+        if match[1] in packages: raise EvidenceError('package inventoried twice: ' + match[1])
+        packages[match[1]] = int(match[2]) + int(match[3])
+    if not packages: raise EvidenceError('package inventory is empty')
+    return packages
+
+
+def go_seconds(text):
+    """Parse a Go duration string such as 1m0s into seconds."""
+    parts = GO_DURATION.findall(text)
+    if not text or ''.join(n + u for n, u in parts) != text: raise EvidenceError('malformed Go duration: ' + repr(text))
+    return sum(float(n) * GO_DURATION_UNITS[u] for n, u in parts)
 
 
 def parse_go_events(data):
@@ -132,7 +194,14 @@ def parse_go_events(data):
         if not line.strip(): continue
         try: event = json.loads(line)
         except ValueError: raise EvidenceError('truncated or non-JSON test output: ' + line[:120])
-        if not isinstance(event, dict) or 'Action' not in event or 'Package' not in event:
+        if not isinstance(event, dict) or not isinstance(event.get('Action'), str):
+            raise EvidenceError('malformed test2json event')
+        if event['Action'] in ('build-output', 'build-fail'):
+            # The runner reports build steps by ImportPath, not Package.
+            if not isinstance(event.get('ImportPath'), str): raise EvidenceError('malformed build event')
+            if event['Action'] == 'build-fail': raise EvidenceError('build failure in ' + event['ImportPath'])
+            continue
+        if not isinstance(event.get('Package'), str) or not isinstance(event.get('Test', ''), str) or not isinstance(event.get('Output', ''), str):
             raise EvidenceError('malformed test2json event')
         events.append(event)
     if not events: raise EvidenceError('empty test output')
@@ -149,6 +218,7 @@ def go_results(events):
         key = (event['Package'], event.get('Test'))
         action = event['Action']
         if action == 'run':
+            if key[1] is None: raise EvidenceError('run event without a test name in ' + key[0])
             if key in started: raise EvidenceError('duplicate run event: %s %s' % key)
             started.add(key)
             if key[1].startswith('Benchmark'): benchmarks.add(key)
@@ -160,8 +230,6 @@ def go_results(events):
                 if key not in started: raise EvidenceError('result without run event: %s %s' % key)
                 if key in results: raise EvidenceError('duplicate test result: %s %s' % key)
                 results[key] = action
-        elif action in ('build-fail',):
-            raise EvidenceError('build failure in ' + key[0])
     for key in started - benchmarks:
         if key not in results: raise EvidenceError('unfinished test: %s %s' % key)
     for key in benchmarks:
@@ -169,16 +237,64 @@ def go_results(events):
     return results, packages, benchmarks
 
 
-def go_outputs(events, test=None):
-    return [e['Output'] for e in events if e['Action'] == 'output' and (test is None or e.get('Test') == test)]
+def go_lines(events):
+    """Reassemble output into lines per (package, test).
+
+    test2json flushes partial lines as separate events, for example a benchmark
+    name before its result, so an Output field is a fragment, not a line.
+    """
+    buffers, lines = {}, []
+    for event in events:
+        if event['Action'] != 'output': continue
+        key = (event['Package'], event.get('Test'))
+        text = buffers.get(key, '') + event.get('Output', '')
+        *complete, buffers[key] = text.split('\n')
+        lines += [(key[0], key[1], line.rstrip('\r')) for line in complete]
+    lines += [(package, test, rest.rstrip('\r')) for (package, test), rest in buffers.items() if rest]
+    return lines
 
 
-def check_go_package_success(packages, expected, exit_code):
+def go_outputs(events, test=None, subtests=False):
+    """Output lines of one test (and optionally its subtests), or of every event."""
+    def wanted(name):
+        return test is None or name == test or (subtests and name is not None and name.startswith(test + '/'))
+    return [line for _, name, line in go_lines(events) if wanted(name)]
+
+
+def check_go_package_success(packages, expected, exit_code, no_tests=()):
+    """Tested packages pass; only discovered test-less packages may report skip."""
     if exit_code != 0: raise EvidenceError('go test exited %d' % exit_code)
     for name in expected:
         if packages.get(name) != 'pass': raise EvidenceError('package did not pass: ' + name)
+    for name in no_tests:
+        if packages.get(name) != 'skip': raise EvidenceError('package without test files did not report skip: ' + name)
     for name, result in packages.items():
+        if name in no_tests: continue
         if result != 'pass': raise EvidenceError('package did not pass: ' + name)
+        if name not in expected: raise EvidenceError('undiscovered package reported a result: ' + name)
+
+
+def check_skip(target, results, package, test):
+    """A skipped test needs its exact allowance and, for a helper, its passing parent."""
+    allowance = target['skips'].get((package, test))
+    if allowance is None: raise EvidenceError('unexpected skip %s %s' % (package, test))
+    if 'parent' in allowance and results.get((package, allowance['parent'])) != 'pass':
+        raise EvidenceError('skipped helper %s %s has no passing parent %s' % (package, test, allowance['parent']))
+    return allowance_record(package, test, allowance)
+
+
+def fuzz_inventory_matches(inventory_pairs, packages, whole_module):
+    """Map each discovered package to the inventoried fuzz names it must contain."""
+    wanted = {package: set() for package in packages}
+    for path, name in inventory_pairs:
+        relative = path.removeprefix('./')
+        matches = [p for p in packages if relative and (p == relative or p.endswith('/' + relative))]
+        if len(matches) > 1: raise EvidenceError('fuzz inventory package %s is ambiguous: %s' % (path, matches))
+        if not matches:
+            if whole_module: raise EvidenceError('fuzz inventory names a package the suite did not discover: %s %s' % (path, name))
+            continue
+        wanted[matches[0]].add(name)
+    return wanted
 
 
 def check_go_subtests(results, target):
@@ -188,28 +304,54 @@ def check_go_subtests(results, target):
             raise EvidenceError('subtest %s %s: %s' % (package, test, result))
 
 
-def verify_go_suite(target, discovery, events, exit_code):
-    listed = parse_go_list(discovery)
-    expected = {pkg: [n for n in names if n.startswith(('Test', 'Fuzz'))] for pkg, names in listed.items()}
-    if not any(expected.values()): raise EvidenceError('discovery found no tests')
+def verify_go_suite(target, discovery, events, exit_code, packages_text=None):
+    """An ordinary suite runs every discovered test of every package with test files.
+
+    go list supplies each package's test-file counts with the same build flags,
+    so a package whose tests are hidden from discovery and execution (for
+    example a TestMain that exits before m.Run) fails instead of passing empty.
+    """
+    if packages_text is None: raise EvidenceError('package inventory missing')
+    inventoried = parse_go_packages(packages_text)
+    no_tests = set()
+    listed = parse_go_list(discovery, no_tests)
+    if set(inventoried) != set(listed) | no_tests:
+        raise EvidenceError('package inventory %s differs from discovery %s' % (sorted(inventoried), sorted(set(listed) | no_tests)))
+    expected = {pkg: [n for n in names if n.startswith(('Test', 'Fuzz', 'Example'))] for pkg, names in listed.items()}
+    for package, files in inventoried.items():
+        if package in no_tests and files: raise EvidenceError('discovery reports no test files in ' + package)
+        if package in listed and not files: raise EvidenceError('discovery lists tests in a package without test files: ' + package)
+        if package in listed and not expected[package]:
+            raise EvidenceError('package has test files but discovery lists no tests: ' + package)
+    if not expected: raise EvidenceError('discovery found no tests')
+    if target['cwd'] == 'server' and 'fuzz_inventory' not in target:
+        raise EvidenceError('server suites must cross-check the fuzz inventory')
+    fuzz = []
+    if 'fuzz_inventory' in target:
+        wanted = fuzz_inventory_matches(target['fuzz_inventory'], list(expected), target['packages'] == ['./...'])
+        for package, names in expected.items():
+            found = {n for n in names if n.startswith('Fuzz')}
+            if found != wanted[package]:
+                raise EvidenceError('fuzz targets %s in %s differ from the inventory %s; add each target to targets.toml'
+                                    % (sorted(found), package, sorted(wanted[package])))
+            fuzz += ['%s %s' % (package, n) for n in sorted(found)]
     results, packages, benchmarks = go_results(events)
     if benchmarks: raise EvidenceError('ordinary suite ran benchmarks')
-    check_go_package_success(packages, expected, exit_code)
+    check_go_package_success(packages, expected, exit_code, no_tests)
     check_go_subtests(results, target)
-    executed = {}
-    for (package, test), result in results.items():
+    executed, skipped = {}, []
+    for (package, test), result in sorted(results.items()):
         if '/' in test: continue
         executed.setdefault(package, set()).add(test)
-        allowance = target['skips'].get((package, test))
         if result == 'fail': raise EvidenceError('failed test %s %s' % (package, test))
-        if result == 'skip' and allowance is None: raise EvidenceError('unexpected skip %s %s' % (package, test))
+        if result == 'skip': skipped.append(check_skip(target, results, package, test))
     for package, names in expected.items():
         if set(names) != executed.get(package, set()):
             raise EvidenceError('executed tests differ from discovery in ' + package)
     for package in executed:
         if package not in expected: raise EvidenceError('tests ran in an undiscovered package: ' + package)
-    return {'packages': sorted(expected), 'tests': sum(map(len, expected.values())),
-            'skipped': sorted('%s %s' % k for k, v in results.items() if v == 'skip')}
+    return {'packages': sorted(expected), 'tests': sum(map(len, expected.values())), 'no_test_files': sorted(no_tests),
+            'skipped': skipped, 'fuzz_targets': sorted(fuzz)}
 
 
 def verify_go_selected(target, discovery, events, exit_code):
@@ -236,7 +378,9 @@ def verify_go_selected(target, discovery, events, exit_code):
     marker = target.get('marker')
     if marker:
         samples = []
-        for line in go_outputs(events):
+        # Records count only from the selected tests' own output and their subtests.
+        lines = [line for name in target['tests'] for line in go_outputs(events, name, subtests=True)]
+        for line in lines:
             _, found, record = line.partition(marker + ' ')
             if found:
                 try: samples.append(json.loads(record))
@@ -255,15 +399,15 @@ def verify_go_selected(target, discovery, events, exit_code):
 def verify_interop_children(target, events, results):
     """Helper entry points prove nothing by passing; their parents must record each child."""
     seen = []
-    for event in events:
-        if event['Action'] != 'output': continue
-        _, found, record = event['Output'].partition('RUST_WRITER_CHILD ')
+    for package, test, line in go_lines(events):
+        _, found, record = line.partition('RUST_WRITER_CHILD ')
         if not found: continue
         try: child = json.loads(record)
         except ValueError: raise EvidenceError('malformed RUST_WRITER_CHILD record')
-        if results.get((event['Package'], event.get('Test'))) != 'pass':
+        if not isinstance(child, dict): raise EvidenceError('malformed RUST_WRITER_CHILD record')
+        if test is None or results.get((package, test)) != 'pass':
             raise EvidenceError('child proof attributed to a test that did not pass')
-        seen.append({'parent': event.get('Test'), **child})
+        seen.append({'parent': test, **child})
     expected = [dict(row) for row in target['children']]
     if sorted(seen, key=json.dumps) != sorted(expected, key=json.dumps):
         raise EvidenceError('helper child proofs %s differ from %s' % (seen, expected))
@@ -285,10 +429,11 @@ def verify_go_bench(target, discovery, events, exit_code):
     # Results belong to leaf benchmarks; each leaf reports once with the exact iteration count.
     leaves = {n for n in names if not any(other.startswith(n + '/') for other in names)}
     rows = {}
-    for line in go_outputs(events):
-        match = GO_BENCH.match(line.rstrip('\r\n'))
+    for _, test, line in go_lines(events):
+        match = GO_BENCH.match(line)
         if not match: continue
         if match[1] in rows: raise EvidenceError('duplicate benchmark result: ' + match[1])
+        if test != match[1]: raise EvidenceError('benchmark result %s attributed to %s' % (match[1], test))
         rows[match[1]] = match
     if set(rows) != leaves: raise EvidenceError('benchmark results %s differ from the started leaves %s' % (sorted(rows), sorted(leaves)))
     summary = {'package': package, 'results': {}}
@@ -309,23 +454,29 @@ def verify_go_fuzz(target, discovery, events, exit_code):
     if benchmarks: raise EvidenceError('fuzz run executed benchmarks')
     check_go_package_success(packages, [package], exit_code)
     check_go_subtests(results, target)
-    for (pkg, test), result in results.items():
+    skipped = []
+    for (pkg, test), result in sorted(results.items()):
         if result == 'fail': raise EvidenceError('failed test ' + test)
-        if result == 'skip' and target['skips'].get((pkg, test)) is None: raise EvidenceError('unexpected skip ' + test)
+        if result == 'skip' and '/' not in test: skipped.append(check_skip(target, results, pkg, test))
     if results.get((package, target['target'])) != 'pass': raise EvidenceError('fuzz target did not pass')
-    baseline, workers, execs, progress = None, None, 0, 0
+    baseline, workers, execs, progress, elapsed = None, None, 0, 0, None
     for line in go_outputs(events, target['target']):
-        line = line.rstrip('\r\n')
         match = GO_BASELINE.match(line)
         if match:
             baseline = (int(match[1]), int(match[2]))
             if match[4]: workers = int(match[4])
         match = GO_EXECS.match(line)
-        if match: execs = max(execs, int(match[1])); progress += 1
+        if match:
+            execs = max(execs, int(match[2])); progress += 1
+            if elapsed is None or go_seconds(match[1]) >= go_seconds(elapsed): elapsed = match[1]
     if baseline is None or baseline[0] != baseline[1] or baseline[1] == 0: raise EvidenceError('seed corpus baseline incomplete')
     if workers != target['parallel']: raise EvidenceError('fuzzing did not start with %d workers' % target['parallel'])
     if progress == 0 or execs <= 0: raise EvidenceError('no fuzz execution progress beyond seed collection')
-    return {'package': package, 'seeds': baseline[1], 'workers': workers, 'execs': execs, 'progress_lines': progress}
+    # The coordinator's clock starts before the -fuzztime deadline, so a complete run reports at least the budget.
+    if go_seconds(elapsed) < go_seconds(target['fuzztime']):
+        raise EvidenceError('fuzzing reported %s elapsed, less than the required %s' % (elapsed, target['fuzztime']))
+    return {'package': package, 'seeds': baseline[1], 'workers': workers, 'execs': execs, 'progress_lines': progress,
+            'elapsed': elapsed, 'skipped': skipped}
 
 
 def parse_rust_list(text):
@@ -365,14 +516,15 @@ def verify_rust_suite(target, discovery, stdout, exit_code):
     if not summaries or any(s[1] != 'ok' or int(s[3]) != 0 for s in summaries): raise EvidenceError('a Rust test binary did not report ok with zero failures')
     passed = sum(int(s[2]) for s in summaries)
     ignored = sum(int(s[4]) for s in summaries)
-    allowed = {s['test'] for s in target['skips'].values()}
+    allowed = {s['test']: s for s in target['skips'].values()}
     ok = sum(o == 'ok' for values in outcomes.values() for o in values)
     skipped = [name for name, values in outcomes.items() for o in values if o.startswith('ignored')]
     for name in skipped:
-        if name not in allowed: raise EvidenceError('unexpected ignored Rust test: ' + name)
+        if name not in allowed or 'proof' not in allowed[name]: raise EvidenceError('unexpected ignored Rust test: ' + name)
     if any(o == 'FAILED' for values in outcomes.values() for o in values): raise EvidenceError('failed Rust test')
     if passed != ok or ignored != len(skipped): raise EvidenceError('harness summary disagrees with listed outcomes')
-    return {'tests': sum(listed.values()), 'passed': passed, 'ignored': sorted(skipped), 'binaries': len(summaries)}
+    ignored = [{'test': name, 'reason': allowed[name]['reason'], 'proof': allowed[name]['proof']} for name in sorted(skipped)]
+    return {'tests': sum(listed.values()), 'passed': passed, 'ignored': ignored, 'binaries': len(summaries)}
 
 
 def verify_rust_selected(target, discovery, stdout, stderr, exit_code):
@@ -466,9 +618,9 @@ def execute(command, cwd, env, stdout_path, stderr_path):
         return process.wait()
 
 
-def verify(target, discovery, stdout, stderr, exit_code, evidence_dir):
+def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=None):
     mode = target['mode']
-    if mode == 'go-suite': return verify_go_suite(target, discovery, parse_go_events(stdout), exit_code)
+    if mode == 'go-suite': return verify_go_suite(target, discovery, parse_go_events(stdout), exit_code, packages)
     if mode in ('go-selected', 'go-interop'): return verify_go_selected(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-bench': return verify_go_bench(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-fuzz': return verify_go_fuzz(target, discovery, parse_go_events(stdout), exit_code)
@@ -493,6 +645,12 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
     cwd = root / target['cwd']
+    packages_command, packages_text = package_command(target), None
+    if packages_command:
+        print('packages:', shlex.join(packages_command), flush=True)
+        code = execute(packages_command, cwd, env, evidence_dir / 'packages.txt', evidence_dir / 'packages.stderr.txt')
+        packages_text = (evidence_dir / 'packages.txt').read_bytes().decode('utf-8', 'replace')
+        if code != 0: raise EvidenceError('package inventory exited %d' % code)
     discovery = discovery_command(target)
     discovery_text = ''
     if discovery:
@@ -503,9 +661,11 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     command = [part.replace('{report}', str(evidence_dir / 'report.json')) for part in run_command(target)]
     print('command:', shlex.join(command), flush=True)
     exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
-    summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(), exit_code, evidence_dir)
+    summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(),
+                     exit_code, evidence_dir, packages_text)
     record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'mode': target['mode'], 'cwd': target['cwd'],
-              'discovery': discovery, 'command': command, 'exit': exit_code, 'result': 'success', 'summary': summary}
+              'packages': packages_command, 'discovery': discovery, 'command': command, 'exit': exit_code, 'result': 'success',
+              'summary': summary}
     for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA'):
         if env.get(key): record[key] = env[key]
     (evidence_dir / 'verified.json').write_text(json.dumps(record, sort_keys=True) + '\n', encoding='utf-8')
@@ -513,13 +673,23 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     return record
 
 
-def verified(evidence_root, target_id):
-    """Read the verified record one leaf receipt requires for a check ID."""
+RUN_BINDING = ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA')
+
+
+def verified(evidence_root, target_id, binding=None):
+    """Read the verified record one leaf receipt requires for a check ID.
+
+    binding maps GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT or GITHUB_SHA to the value of
+    the invocation that must have produced the record; each named key must match.
+    """
     path = Path(evidence_root) / evidence_name(target_id) / 'verified.json'
     if not path.is_file() or path.is_symlink(): raise ValueError('missing verified selected run: ' + target_id)
     record = json.loads(path.read_text(encoding='utf-8'))
-    if record.get('kind') != 'selected-run' or record.get('id') != target_id or record.get('result') != 'success' or record.get('exit') != 0:
+    if not isinstance(record, dict) or record.get('kind') != 'selected-run' or record.get('id') != target_id or record.get('result') != 'success' or record.get('exit') != 0:
         raise ValueError('verified record does not prove ' + target_id)
+    for key, value in (binding or {}).items():
+        if key not in RUN_BINDING: raise ValueError('unknown run binding: ' + key)
+        if not value or record.get(key) != value: raise ValueError('verified record of %s comes from another invocation (%s)' % (target_id, key))
     return record
 
 
@@ -527,8 +697,12 @@ def listing(root=ROOT):
     lines = []
     for target_id, target in sorted(inventory(root).items()):
         lines.append('%s\t%s\t%s' % (target_id, target['cwd'], shlex.join(run_command(target))))
-        discovery = discovery_command(target)
-        if discovery: lines.append('\tdiscovery\t%s' % shlex.join(discovery))
+        for label, command in (('packages', package_command(target)), ('discovery', discovery_command(target))):
+            if command: lines.append('\t%s\t%s' % (label, shlex.join(command)))
+    # Exact ordinary-suite skips with their reasons and separate proving units.
+    for row in load_targets(root).get('skips', []):
+        proof = row['proof'] if 'proof' in row else 'parent ' + row['parent']
+        lines.append('skip\t%s\t%s\t%s\t%s\t%s' % (row['package'], row['test'], row['reason'], proof, ','.join(row['modes'])))
     return '\n'.join(lines)
 
 

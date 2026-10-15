@@ -252,7 +252,7 @@ class PolicyTests(unittest.TestCase):
                          "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetSmoke)$' -args -loader-budget-repeat=comment-collections/262144/combined -loader-budget-repeat-count=50")
         self.assertEqual(check_policy.SELECTED_COMMANDS['loader-fuzz'][1],
                          "go test -json -count=1 ./internal/extensions/loader '-fuzz=^FuzzParserQualification$' -fuzztime=60s -parallel=2")
-        self.assertEqual(check_policy.SELECTED_BUDGETS['loader-repeat'], {'marker_samples': 50})
+        self.assertEqual(check_policy.SELECTED_BUDGETS['loader-repeat'], {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50})
         self.assertEqual(tomllib.loads((ROOT / 'scripts/ci/targets.toml').read_text())['loader'],
                          {'package': './internal/extensions/loader', 'target': 'FuzzParserQualification', 'fuzztime': '60s', 'parallel': 2})
 
@@ -293,6 +293,16 @@ class PolicyTests(unittest.TestCase):
             'renamed interop selector': baseline.replace('run = "^TestRustWriter"', 'run = "^TestRustWrite"'),
             'wildcard skip': baseline.replace('test = "TestParserBudgetExtended"', 'test = "TestParser*"', 1),
             'unproven skip': baseline.replace('proof = "loader-extended"\nmodes = ["server-unit", "server-race", "go-fuzz"]', 'proof = "nothing"\nmodes = ["server-unit", "server-race", "go-fuzz"]', 1),
+            'unknown selected id': baseline + '\n[[selected]]\nid = "server-unit-shadow"\nmode = "console-vitest"\ncwd = "console"\ncommand = ["bash", "-c", "echo pwned > {report}"]\ntests = []\n',
+            'extra skip allowance': baseline + '\n[[skips]]\npackage = "github.com/ricevanta/ricevanta/server/internal/signing/dsse"\ntest = "TestVerifyRejectsForgedSignature"\nreason = "x"\nproof = "server-race"\nmodes = ["server-unit"]\n',
+            'removed skip allowance': baseline.replace('[[skips]]\npackage = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"\ntest = "TestLoaderMeasurementChild"\nreason = "fresh measurement child entry point"\nproof = "loader-gate-b-extended"\nmodes = ["server-unit", "server-race", "go-fuzz"]\n', ''),
+            'widened skip modes': baseline.replace('proof = "loader-gate-b-extended"\nmodes = ["server-unit", "server-race", "go-fuzz"]', 'proof = "loader-gate-b-extended"\nmodes = ["server-unit", "server-race", "go-fuzz", "ocsf-native"]', 1),
+            'dropped interop children': baseline.replace('children = [\n  { parent = "TestRustWriterMutations", Helper = "TestRustWriterPrecondition", Pipe = "", Outcome = "rejected" },\n', 'children = [\n', 1),
+            'dropped interop subtests': baseline.replace('subtests = ["TestRustWriterCaptureOverflow/stdout", "TestRustWriterCaptureOverflow/stderr"]', 'subtests = []', 1),
+            'dropped interop prefixes': baseline.replace('subtest_prefixes = ["TestRustWriterFixtures/body/", "TestRustWriterFixtures/header/", "TestRustWriterFixtures/descriptor/"]', 'subtest_prefixes = []', 1),
+            'dropped interop helper': baseline.replace('helpers = ["TestRustWriterPrecondition", "TestRustWriterCaptureChild"]', 'helpers = ["TestRustWriterPrecondition"]', 1),
+            'dropped loader marker': baseline.replace('args = ["-loader-budget-extended"]\nmarker = "LOADER_MEASUREMENT"', 'args = ["-loader-budget-extended"]'),
+            'dropped fuzz inventory cross-check': baseline.replace('packages = ["./..."]\nfuzz_inventory = true\n\n[[selected]]\nid = "server-race"', 'packages = ["./..."]\n\n[[selected]]\nid = "server-race"'),
             'extra fuzz flag': baseline.replace('[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "60s"',
                                                 '[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "30s"'),
         }
@@ -303,6 +313,20 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(any(error.startswith('scripts/ci/targets.toml') for error in check_policy.check(self.root)), label)
         path.write_text(baseline)
         self.assertEqual(check_policy.check(self.root), [])
+
+    def test_wrapper_steps_are_classified_from_the_checked_root(self):
+        self.assertEqual(check_policy.wrapper_toolchain(check_policy.wrapper('agent-unit'), self.root), 'cargo')
+        self.assertEqual(check_policy.wrapper_toolchain(check_policy.wrapper('server-race'), self.root), 'go')
+        self.assertEqual(check_policy.wrapper_toolchain(check_policy.FUZZ_WRAPPER, self.root), 'go')
+        self.assertEqual(check_policy.wrapper_toolchain(check_policy.wrapper('mystery'), self.root), 'unknown')
+        self.assertIsNone(check_policy.wrapper_toolchain('echo fuzz', self.root))
+        self.assertEqual(check_policy.wrapper_id('echo fuzz --id'), None)
+        self.assertEqual(check_policy.wrapper_id(check_policy.FUZZ_WRAPPER), 'go-fuzz:${FUZZ_PACKAGE}:${FUZZ_TARGET}')
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        path.write_text(baseline.replace('id = "agent-unit"\nmode = "rust-suite"', 'id = "agent-unit"\nmode = "go-suite"'))
+        self.assertEqual(check_policy.wrapper_toolchain(check_policy.wrapper('agent-unit'), self.root), 'go')
+        path.write_text(baseline)
 
     def test_receipts_bind_verified_selected_evidence(self):
         for workflow, jid in (('server', 'validate'), ('server', 'race'), ('server', 'fuzz'), ('server', 'loader-gate-a'),

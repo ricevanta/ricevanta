@@ -257,10 +257,29 @@ func decodeLoaderMeasurement(data []byte) (loaderMeasurement, error) {
 	return m, nil
 }
 
+// loaderModeCalls is the call count each mode's record must carry: two Load
+// calls for serial and two-call, one conversion or Load for combined and full,
+// and the oracle's decode count for the assembled path.
+func loaderModeCalls(mode string, decodeCalls int) (int, error) {
+	switch mode {
+	case "serial", "two-call":
+		return 2, nil
+	case "combined", "full":
+		return 1, nil
+	case "assembled":
+		return decodeCalls, nil
+	}
+	return 0, fmt.Errorf("unknown measurement mode %q", mode)
+}
+
 // verifyLoaderChild checks one cold child's plain -v output: the measurement
 // test itself passed, nothing was skipped or failed, and exactly one complete
-// record carries the child's recipe and mode.
-func verifyLoaderChild(output []byte, name, mode string) (loaderMeasurement, error) {
+// record carries the child's recipe, mode and that mode's call count.
+func verifyLoaderChild(output []byte, name, mode string, decodeCalls int) (loaderMeasurement, error) {
+	wantCalls, err := loaderModeCalls(mode, decodeCalls)
+	if err != nil {
+		return loaderMeasurement{}, err
+	}
 	var record loaderMeasurement
 	if len(bytes.TrimSpace(output)) == 0 {
 		return record, errors.New("empty measurement child output")
@@ -281,6 +300,9 @@ func verifyLoaderChild(output []byte, name, mode string) (loaderMeasurement, err
 			}
 			if m.Input != name || m.Mode != mode {
 				return record, fmt.Errorf("wrong measurement identity %s/%s, want %s/%s", m.Input, m.Mode, name, mode)
+			}
+			if m.Calls != wantCalls {
+				return record, fmt.Errorf("%s measurement reports %d calls, want %d", mode, m.Calls, wantCalls)
 			}
 			record = m
 			records++
@@ -367,7 +389,7 @@ func runLoaderBudget(t *testing.T, extended bool) {
 				if e != nil {
 					t.Fatalf("cold child: %v", e)
 				}
-				if _, e := verifyLoaderChild(output, c.Name, mode); e != nil {
+				if _, e := verifyLoaderChild(output, c.Name, mode, ref.DecodeCalls); e != nil {
 					t.Fatalf("cold child evidence: %v", e)
 				}
 				seen[key]++
@@ -417,7 +439,7 @@ func TestLoaderBudgetEvidence(t *testing.T) {
 		return "=== RUN   TestLoaderMeasurementChild\nLOADER_MEASUREMENT " + record(name, mode) + "\n--- PASS: TestLoaderMeasurementChild (0.01s)\nPASS\n"
 	}
 	for key := range expected {
-		if _, err := verifyLoaderChild([]byte(valid(key.Input, key.Mode)), key.Input, key.Mode); err != nil {
+		if _, err := verifyLoaderChild([]byte(valid(key.Input, key.Mode)), key.Input, key.Mode, 1); err != nil {
 			t.Fatalf("valid %+v rejected: %v", key, err)
 		}
 	}
@@ -437,14 +459,45 @@ func TestLoaderBudgetEvidence(t *testing.T) {
 		"non-numeric-counter": strings.ReplaceAll(good, `"Nanoseconds":5,`, `"Nanoseconds":"NaN",`),
 		"negative-counter":    strings.ReplaceAll(good, `"Nanoseconds":5,`, `"Nanoseconds":-5,`),
 		"wrong-call-count":    strings.ReplaceAll(good, `"Calls":2,`, `"Calls":3,`),
+		"single-call-serial":  strings.ReplaceAll(good, `"Calls":2,`, `"Calls":1,`),
 		"truncated":           good[:len(good)/2],
 	}
 	for name, output := range controls {
 		t.Run(name, func(t *testing.T) {
-			if _, err := verifyLoaderChild([]byte(output), "golden/valid-yaml", "serial"); err == nil {
+			if _, err := verifyLoaderChild([]byte(output), "golden/valid-yaml", "serial", 1); err == nil {
 				t.Fatal("defective child evidence accepted")
 			}
 		})
+	}
+	// Each mode owns one call count: two for serial/two-call, one for combined and
+	// full, and the oracle's decode count for assembled.
+	for _, tc := range []struct {
+		mode               string
+		calls, decodeCalls int
+		ok                 bool
+	}{{"full", 1, 1, true}, {"full", 2, 1, false}, {"full", 0, 0, false}, {"combined", 1, 0, true}, {"combined", 2, 1, false},
+		{"serial", 2, 0, true}, {"serial", 1, 1, false}, {"two-call", 2, 1, true}, {"two-call", 1, 1, false},
+		{"assembled", 0, 0, true}, {"assembled", 1, 1, true}, {"assembled", 1, 0, false}, {"assembled", 0, 1, false}} {
+		t.Run(fmt.Sprintf("calls/%s/%d/%d", tc.mode, tc.calls, tc.decodeCalls), func(t *testing.T) {
+			recorded := 1
+			if tc.mode == "serial" || tc.mode == "two-call" {
+				recorded = 2
+			}
+			output := valid("golden/valid-yaml", tc.mode)
+			if tc.calls != recorded {
+				output = strings.ReplaceAll(output, fmt.Sprintf(`"Calls":%d,`, recorded), fmt.Sprintf(`"Calls":%d,`, tc.calls))
+				if output == valid("golden/valid-yaml", tc.mode) {
+					t.Fatal("call-count mutation did not apply")
+				}
+			}
+			_, err := verifyLoaderChild([]byte(output), "golden/valid-yaml", tc.mode, tc.decodeCalls)
+			if (err == nil) != tc.ok {
+				t.Fatalf("calls %d in %s with decode calls %d: err=%v", tc.calls, tc.mode, tc.decodeCalls, err)
+			}
+		})
+	}
+	if _, err := verifyLoaderChild([]byte(valid("golden/valid-yaml", "full")), "golden/valid-yaml", "other", 1); err == nil {
+		t.Fatal("unknown mode accepted")
 	}
 	if len(expectedLoaderEvidence(nil)) != 0 {
 		t.Fatal("empty corpus must expect nothing")

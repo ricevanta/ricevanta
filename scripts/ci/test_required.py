@@ -10,7 +10,7 @@ import tempfile
 import inventory
 import required
 
-def verified_evidence(root, checks):
+def verified_evidence(root, checks, run_id='123', attempt='1'):
     """Write verified selected-run records so emission can bind every wrapper check."""
     import run_selected
     selected = run_selected.inventory()
@@ -19,7 +19,8 @@ def verified_evidence(root, checks):
             directory = root / run_selected.evidence_name(check)
             directory.mkdir(exist_ok=True)
             (directory / 'verified.json').write_text(json.dumps(
-                {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0}))
+                {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
+                 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': 'b' * 40}))
 
 
 class RequiredTests(unittest.TestCase):
@@ -169,8 +170,15 @@ class RequiredTests(unittest.TestCase):
                 self.assertEqual(required.receipt(self.route, unit, checks, root)['checks'], checks)
                 victim = next(c for c in checks if c in selected)
                 (root / run_selected.evidence_name(victim) / 'verified.json').write_text(json.dumps(
-                    {'kind': 'selected-run', 'version': 1, 'id': victim, 'result': 'success', 'exit': 1}))
+                    {'kind': 'selected-run', 'version': 1, 'id': victim, 'result': 'success', 'exit': 1,
+                     'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}))
                 with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, root)
+                # Evidence from another run, another attempt or without a run binding proves nothing here.
+                for run_id, attempt in (('124', '1'), ('123', '2'), (None, None)):
+                    other = root / ('other-%s-%s' % (run_id, attempt))
+                    other.mkdir()
+                    verified_evidence(other, checks, run_id, attempt)
+                    with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, other)
 
     def test_artifact_names_are_collision_free(self):
         self.assertNotEqual(required.artifact_name(self.route, 'a:b'), required.artifact_name(self.route, 'a/b'))

@@ -17,6 +17,7 @@ from run_selected import EvidenceError
 ROOT = Path(inventory.ROOT)
 FIXTURES = ROOT / 'scripts/ci/fixtures/selected'
 TARGETS = run_selected.inventory()
+TINY = 'example.com/tiny'
 
 
 def fixture(name, binary=False):
@@ -40,6 +41,19 @@ def duplicate_line(data, needle):
     return (''.join(lines) + line).encode()
 
 
+def event(action, package, test=None, output=None):
+    row = {'Action': action, 'Package': package}
+    if test is not None: row['Test'] = test
+    if output is not None: row['Output'] = output
+    return (json.dumps(row) + '\n').encode()
+
+
+def insert_before(data, needle, extra):
+    lines = data.decode().splitlines(keepends=True)
+    index = next(i for i, l in enumerate(lines) if needle in l)
+    return ''.join(lines[:index]).encode() + extra + ''.join(lines[index:]).encode()
+
+
 class InventoryTests(unittest.TestCase):
     def test_every_fixed_id_outside_console_is_present(self):
         fixed = {'server-unit', 'server-race', 'key-admission-bench', 'loader-extended', 'loader-repeat', 'loader-fuzz',
@@ -57,6 +71,13 @@ class InventoryTests(unittest.TestCase):
         join = lambda command: ' '.join(command)
         self.assertEqual(join(run_selected.run_command(TARGETS['server-race'])), 'go test -json -race -count=1 -timeout=15m ./...')
         self.assertEqual(join(run_selected.discovery_command(TARGETS['server-race'])), 'go test -race -list .* ./...')
+        # The package inventory keeps the suite's build flags; -race adds the race build tag.
+        self.assertEqual(join(run_selected.package_command(TARGETS['server-race'])),
+                         'go list -f {{.ImportPath}} {{len .TestGoFiles}} {{len .XTestGoFiles}} -race ./...')
+        self.assertEqual(join(run_selected.package_command(TARGETS['server-unit'])),
+                         'go list -f {{.ImportPath}} {{len .TestGoFiles}} {{len .XTestGoFiles}} ./...')
+        for target_id in ('interop-race', 'loader-extended', 'key-admission-bench', 'loader-fuzz', 'agent-unit'):
+            self.assertIsNone(run_selected.package_command(TARGETS[target_id]), target_id)
         self.assertEqual(join(run_selected.run_command(TARGETS['server-unit'])), 'go test -json -count=1 ./...')
         self.assertEqual(join(run_selected.run_command(TARGETS['key-admission-bench'])),
                          'go test -json -run ^$ -bench ^BenchmarkValidate$ -benchmem -benchtime=100x ./internal/signing/ed25519key')
@@ -88,64 +109,102 @@ class InventoryTests(unittest.TestCase):
                          'go test -race -tags rustinterop -list ^TestRustWriter ./internal/events/body')
         self.assertEqual(join(run_selected.run_command(TARGETS['ocsf-native'])), 'go test -json -count=1 ./internal/events/ocsf')
 
-    def test_skip_allowance_is_exact_and_mode_specific(self):
+    def test_server_suites_carry_the_fuzz_inventory(self):
+        for target_id in ('server-unit', 'server-race', 'ocsf-native'):
+            pairs = TARGETS[target_id]['fuzz_inventory']
+            self.assertEqual(set(map(tuple, pairs)), inventory.FUZZ_PAIRS | {('./internal/extensions/loader', 'FuzzParserQualification')})
+            self.assertEqual(len(pairs), 24)
+        for target_id in ('interop-unit', 'loader-extended', 'key-admission-bench'):
+            self.assertNotIn('fuzz_inventory', TARGETS[target_id])
+
+    def test_skip_allowance_is_exact_mode_specific_and_separately_proven(self):
         for target_id in ('server-unit', 'server-race'):
             skips = TARGETS[target_id]['skips']
             self.assertEqual({t for _, t in skips}, {'TestParserBudgetExtended', 'TestLoaderBudgetExtended', 'TestLoaderMeasurementChild',
                                                     'TestDecodeVerifiedYAMLInstrumented', 'TestAgreementOutcomeChild',
                                                     'TestParserBudgetHarness', 'TestParserMeasurementChild'})
-            for row in skips.values():
-                self.assertTrue(row['reason'] and row['proof'] in TARGETS, row)
+            parents = {}
+            for (package, test), row in skips.items():
+                self.assertTrue(row['reason'], row)
+                if 'parent' in row:
+                    parents[test] = row['parent']
+                    continue
+                self.assertIn(row['proof'], TARGETS, row)
+                self.assertNotEqual(row['proof'], target_id, row)
+                self.assertNotIn(row['proof'], row['modes'], row)
+                self.assertNotIn(TARGETS[row['proof']]['mode'], row['modes'], row)
+            self.assertEqual(parents, {'TestDecodeVerifiedYAMLInstrumented': 'TestDecodeVerifiedYAMLCallCounts',
+                                       'TestAgreementOutcomeChild': 'TestAgreementRejectsOutcomeMismatch'})
         self.assertEqual({t for _, t in TARGETS['agent-unit']['skips']}, {'fuzz_recover_extended', 'fuzz_seal_extended'})
         for target_id in ('loader-extended', 'loader-repeat', 'loader-gate-b-extended', 'ocsf-native', 'spool-extended', 'interop-unit', 'key-admission-bench'):
             self.assertEqual(TARGETS[target_id]['skips'], {}, target_id)
         self.assertIn(('github.com/ricevanta/ricevanta/server/internal/extensions/loader', 'TestParserBudgetExtended'), TARGETS['loader-fuzz']['skips'])
         self.assertNotIn(('github.com/ricevanta/ricevanta/server/internal/extensions/loader/internal/yamltokens', 'TestParserBudgetHarness'), TARGETS['loader-fuzz']['skips'])
 
-    def test_listing_prints_every_id_and_command(self):
+    def test_listing_prints_every_id_command_and_skip_reason(self):
         listing = run_selected.listing()
         for target_id, target in TARGETS.items():
             self.assertIn(target_id + '\t' + target['cwd'] + '\t', listing)
+        for row in run_selected.load_targets()['skips']:
+            proof = row['proof'] if 'proof' in row else 'parent ' + row['parent']
+            self.assertIn('skip\t%s\t%s\t%s\t%s\t%s' % (row['package'], row['test'], row['reason'], proof, ','.join(row['modes'])), listing)
+        self.assertIn('\tpackages\tgo list -f', listing)
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/run_selected.py'), '--list'], capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout.strip(), listing)
 
-    def test_incomplete_or_wildcard_allowance_is_rejected(self):
+    def test_incomplete_wildcard_or_self_proving_allowance_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'scripts/ci').mkdir(parents=True)
             text = (ROOT / 'scripts/ci/targets.toml').read_text()
+            self_proof = '\n[[skips]]\npackage = "github.com/ricevanta/ricevanta/server/internal/signing/dsse"\ntest = "TestVerify"\nreason = "x"\nproof = "server-unit"\nmodes = ["server-unit"]\n'
+            mode_proof = self_proof.replace('modes = ["server-unit"]', 'modes = ["go-suite"]')
             for mutation in (text.replace('proof = "loader-extended"\nmodes = ["server-unit", "server-race", "go-fuzz"]', 'proof = ""\nmodes = ["server-unit", "server-race", "go-fuzz"]', 1),
                              text.replace('reason = "native extended parser corpus"\n', '', 1),
                              text + '\n[[selected]]\nid = "server-unit"\nmode = "go-suite"\ncwd = "server"\npackages = ["./..."]\n',
-                             text + '\n[[selected]]\nid = "mystery"\nmode = "shell"\ncwd = "server"\ncommand = ["true"]\n'):
+                             text + '\n[[selected]]\nid = "mystery"\nmode = "shell"\ncwd = "server"\ncommand = ["true"]\n',
+                             text + self_proof, text + mode_proof,
+                             text + self_proof.replace('test = "TestVerify"', 'test = "TestVerify*"').replace('proof = "server-unit"', 'proof = "server-race"'),
+                             text + self_proof.replace('proof = "server-unit"', 'parent = "TestVerify"'),
+                             text + self_proof.replace('proof = "server-unit"', 'parent = "TestVerifyParent"\nproof = "loader-extended"'),
+                             text + self_proof.replace('proof = "server-unit"\n', ''),
+                             text.replace('parent = "TestDecodeVerifiedYAMLCallCounts"', 'parent = "TestDecodeVerifiedYAMLCallCounts*"'),
+                             text.replace('\nfuzz_inventory = true\n', '\nfuzz_inventory = "yes"\n', 1)):
+                self.assertNotEqual(mutation, text)
                 (root / 'scripts/ci/targets.toml').write_text(mutation)
                 with self.assertRaises(ValueError): run_selected.inventory(root)
 
 
 class GoSuiteTests(unittest.TestCase):
     def setUp(self):
-        self.target = {'id': 'tiny', 'mode': 'go-suite', 'cwd': '.', 'packages': ['./...'],
-                       'skips': {('example.com/tiny', 'TestSkipped'): {'reason': 'helper', 'proof': 'tiny'}}}
+        self.target = {'id': 'tiny', 'mode': 'go-suite', 'cwd': '.', 'packages': ['./...'], 'fuzz_inventory': [['tiny', 'FuzzThing']],
+                       'skips': {(TINY, 'TestSkipped'): {'reason': 'helper', 'proof': 'tiny-selected'}}}
         self.listing = fixture('go-list.txt')
+        self.packages = fixture('go-packages.txt')
         self.events = fixture('go-suite.jsonl', binary=True)
 
-    def verify(self, listing=None, events=None, exit_code=0, target=None):
+    def verify(self, listing=None, events=None, exit_code=0, target=None, packages=None):
         return run_selected.verify(target or self.target, self.listing if listing is None else listing,
-                                   self.events if events is None else events, b'', exit_code, None)
+                                   self.events if events is None else events, b'', exit_code, None,
+                                   packages=self.packages if packages is None else packages)
 
     def test_positive_captured_output(self):
         summary = self.verify()
-        self.assertEqual(summary['tests'], 4)
-        self.assertEqual(summary['skipped'], ['example.com/tiny TestSkipped'])
+        self.assertEqual(summary['tests'], 6)
+        self.assertEqual(summary['packages'], [TINY, TINY + '/sub'])
+        self.assertEqual(summary['no_test_files'], [TINY + '/notest'])
+        self.assertEqual(summary['skipped'], [{'package': TINY, 'test': 'TestSkipped', 'reason': 'helper', 'proof': 'tiny-selected'}])
+        self.assertEqual(summary['fuzz_targets'], [TINY + ' FuzzThing'])
 
     def test_negative_controls(self):
         events = self.events
+        hidden = event('start', TINY + '/hidden') + event('pass', TINY + '/hidden')
         controls = {
-            'zero selector': dict(listing='ok  \texample.com/tiny\t0.002s\n'),
-            'renamed selector': dict(listing=self.listing.replace('TestBeta', 'TestGamma')),
+            'zero selector': dict(listing='ok  \t%s\t0.002s\n' % TINY),
+            'renamed selector': dict(listing=self.listing.replace('TestBeta', 'TestGamma2')),
             'extra discovered test never ran': dict(listing=self.listing.replace('TestBeta\n', 'TestBeta\nTestDelta\n')),
-            'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n'),
-            'undiscovered package ran': dict(listing='TestAlpha\nTestBeta\nTestSkipped\nok  \texample.com/different\t0.002s\n'),
+            'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n', packages=self.packages + 'example.com/other 1 0\n'),
+            'undiscovered package ran': dict(listing=self.listing.replace(TINY + '/sub', TINY + '/different')),
             'unexpected skip': dict(target={**self.target, 'skips': {}}),
             'duplicate event': dict(events=duplicate_line(events, '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"')),
             'duplicate run': dict(events=duplicate_line(events, '"Action":"run","Package":"example.com/tiny","Test":"TestBeta"')),
@@ -153,6 +212,9 @@ class GoSuiteTests(unittest.TestCase):
             'package failure after test pass': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Elapsed"', b'"Action":"fail","Package":"example.com/tiny","Elapsed"'), exit_code=1),
             'package failure with zero exit': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Elapsed"', b'"Action":"fail","Package":"example.com/tiny","Elapsed"')),
             'missing package result': dict(events=drop_lines(events, '"Action":"pass","Package":"example.com/tiny","Elapsed"')),
+            'tested package reported as skipped': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny/sub","Elapsed"', b'"Action":"skip","Package":"example.com/tiny/sub","Elapsed"')),
+            'no-test package skip for an undiscovered package': dict(events=events + event('skip', TINY + '/other')),
+            'no-test package missing from the run': dict(events=drop_lines(events, '"Action":"skip","Package":"example.com/tiny/notest"')),
             'truncated output': dict(events=events[:-40]),
             'plain text PASS only': dict(events=b'PASS\nok  \texample.com/tiny\t0.002s\n'),
             'empty output': dict(events=b''),
@@ -160,11 +222,29 @@ class GoSuiteTests(unittest.TestCase):
             'failed subtest': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Test":"TestAlpha/sub"', b'"Action":"fail","Package":"example.com/tiny","Test":"TestAlpha/sub"')),
             'skipped subtest': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Test":"TestAlpha/sub"', b'"Action":"skip","Package":"example.com/tiny","Test":"TestAlpha/sub"')),
             'skipped fuzz seeds': dict(events=events.replace(b'"Action":"pass","Package":"example.com/tiny","Test":"FuzzThing/seed#0"', b'"Action":"skip","Package":"example.com/tiny","Test":"FuzzThing/seed#0"')),
-            'unexpected discovery line': dict(listing=self.listing.replace('ok  ', 'go: downloading x\nok  ')),
+            'example listed but not run': dict(events=drop_lines(events, '"Test":"ExampleHello"', 4)),
+            'unexpected discovery line': dict(listing=self.listing.replace('ok  ', 'go: downloading x\nok  ', 1)),
+            'hidden package with test files': dict(listing=self.listing + 'ok  \t%s/hidden\t0.001s\n' % TINY, packages=self.packages + TINY + '/hidden 1 0\n', events=events + hidden),
+            'hidden package absent from discovery': dict(packages=self.packages + TINY + '/hidden 0 1\n'),
+            'package inventory missing': dict(packages=''),
+            'package inventory malformed': dict(packages=self.packages + 'garbage\n'),
+            'package inventory disagrees with discovery': dict(packages=self.packages.replace(TINY + '/sub 1 0', TINY + '/sub 0 0')),
+            'unlisted fuzz target': dict(listing=self.listing.replace('FuzzThing\n', 'FuzzThing\nFuzzOther\n'),
+                                         events=insert_before(events, '"Action":"output","Package":"example.com/tiny","Output":"PASS',
+                                                              event('run', TINY, 'FuzzOther') + event('pass', TINY, 'FuzzOther'))),
+            'fuzz inventory names a missing target': dict(target={**self.target, 'fuzz_inventory': [['tiny', 'FuzzThing'], ['tiny/sub', 'FuzzMissing']]}),
+            'fuzz inventory required for the server suites': dict(target={k: v for k, v in self.target.items() if k != 'fuzz_inventory'} | {'cwd': 'server'}),
+            'build failure': dict(events=fixture('go-build-fail.jsonl', binary=True), exit_code=1),
+            'run event without a test name': dict(events=events + event('run', TINY)),
         }
         for name, change in controls.items():
             with self.subTest(control=name), self.assertRaises(EvidenceError):
                 self.verify(**change)
+
+    def test_build_failure_is_named(self):
+        with self.assertRaises(EvidenceError) as caught:
+            self.verify(events=fixture('go-build-fail.jsonl', binary=True), exit_code=1)
+        self.assertIn('build', str(caught.exception))
 
 
 class GoSelectedTests(unittest.TestCase):
@@ -172,7 +252,7 @@ class GoSelectedTests(unittest.TestCase):
         self.target = {'id': 'beta', 'mode': 'go-selected', 'cwd': '.', 'packages': ['.'], 'tests': ['TestBeta'], 'skips': {}}
         self.listing = 'TestBeta\nok  \texample.com/tiny\t0.002s\n'
         self.events = b''.join(line for line in fixture('go-suite.jsonl', binary=True).splitlines(keepends=True)
-                               if b'"Test":"TestBeta"' in line or b'"Test"' not in line)
+                               if b'"Test":"TestBeta"' in line or (b'"Test"' not in line and b'"Package":"example.com/tiny"' in line))
 
     def test_positive_and_controls(self):
         self.assertEqual(run_selected.verify(self.target, self.listing, self.events, b'', 0, None)['tests'], ['TestBeta'])
@@ -190,37 +270,57 @@ class GoSelectedTests(unittest.TestCase):
                 run_selected.verify(change.get('target', self.target), change.get('listing', self.listing),
                                     change.get('events', self.events), b'', change.get('exit_code', 0), None)
 
-    def test_marker_sample_identities(self):
+    def test_marker_sample_identities_from_the_selected_test_only(self):
         target = {**self.target, 'marker': 'PARSER_MEASUREMENT', 'marker_samples': 3}
-        def events(samples):
-            lines = self.events.decode().splitlines(keepends=True)
-            extra = ''.join(json.dumps({'Action': 'output', 'Package': 'example.com/tiny', 'Test': 'TestBeta',
-                                        'Output': '    x_test.go:1: PARSER_MEASUREMENT ' + json.dumps({'Input': 'a', 'Sample': s}) + '\n'}) + '\n' for s in samples)
-            index = next(i for i, l in enumerate(lines) if '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"' in l)
-            return ''.join(lines[:index] + [extra] + lines[index:]).encode()
+        def events(samples, test='TestBeta', split=False):
+            extra = b''
+            for s in samples:
+                output = '    x_test.go:1: PARSER_MEASUREMENT ' + json.dumps({'Input': 'a', 'Sample': s}) + '\n'
+                if split:
+                    extra += event('output', TINY, test, output[:20]) + event('output', TINY, test, output[20:])
+                else:
+                    extra += event('output', TINY, test, output)
+            return insert_before(self.events, '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"', extra)
         self.assertEqual(run_selected.verify(target, self.listing, events([1, 2, 3]), b'', 0, None)['measurements'], 3)
+        self.assertEqual(run_selected.verify(target, self.listing, events([1, 2, 3], split=True), b'', 0, None)['measurements'], 3)
+        with_subtest = insert_before(events([1, 2]), '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"',
+                                     event('run', TINY, 'TestBeta/sub') + event('output', TINY, 'TestBeta/sub', 'PARSER_MEASUREMENT {"Input":"a","Sample":3}\n') + event('pass', TINY, 'TestBeta/sub'))
+        self.assertEqual(run_selected.verify(target, self.listing, with_subtest, b'', 0, None)['measurements'], 3)
         for samples in ([1, 1, 1], [1, 2], [1, 2, 3, 4], [2, 3, 4], []):
             with self.subTest(samples=samples), self.assertRaises(EvidenceError):
                 run_selected.verify(target, self.listing, events(samples), b'', 0, None)
+        package_level = insert_before(events([1, 2]), '"Action":"output","Package":"example.com/tiny","Output":"PASS',
+                                      event('output', TINY, None, 'PARSER_MEASUREMENT {"Input":"a","Sample":3}\n'))
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(target, self.listing, package_level, b'', 0, None)
+        foreign = insert_before(events([1, 2]), '"Action":"output","Package":"example.com/tiny","Output":"PASS',
+                                event('run', TINY, 'TestOther') + event('output', TINY, 'TestOther', 'PARSER_MEASUREMENT {"Input":"a","Sample":3}\n') + event('pass', TINY, 'TestOther'))
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(target, self.listing, foreign, b'', 0, None)
 
 
 class GoFuzzTests(unittest.TestCase):
     def setUp(self):
         self.target = {'id': 'go-fuzz:.:FuzzThing', 'mode': 'go-fuzz', 'cwd': '.', 'packages': ['.'], 'target': 'FuzzThing',
-                       'fuzztime': '1s', 'parallel': 2, 'skips': {('example.com/tiny', 'TestSkipped'): {'reason': 'helper', 'proof': 'tiny'}}}
+                       'fuzztime': '1s', 'parallel': 2, 'skips': {(TINY, 'TestSkipped'): {'reason': 'helper', 'proof': 'tiny'}}}
         self.listing = fixture('go-fuzz-list.txt')
         self.events = fixture('go-fuzz.jsonl', binary=True)
 
     def test_positive_and_controls(self):
         summary = run_selected.verify(self.target, self.listing, self.events, b'', 0, None)
         self.assertGreater(summary['execs'], 0)
-        self.assertEqual((summary['seeds'], summary['workers']), (1, 2))
+        self.assertEqual((summary['seeds'], summary['workers'], summary['elapsed']), (1, 2, '1s'))
+        split = self.events.replace(b'"Output":"fuzz: elapsed: 1s, execs: ', b'"Output":"fuzz: elapsed: 1s, "}\n{"Action":"output","Package":"example.com/tiny","Test":"FuzzThing","Output":"execs: ', 1)
+        self.assertNotEqual(split, self.events)
+        self.assertEqual(run_selected.verify(self.target, self.listing, split, b'', 0, None)['execs'], summary['execs'])
         controls = {
             'seed-only output': dict(events=drop_lines(self.events, 'execs:')),
             'zero execs': dict(events=self.events.replace(b'execs: ' + str(summary['execs']).encode(), b'execs: 0')),
             'no baseline': dict(events=drop_lines(self.events, 'gathering baseline coverage', 2)),
             'incomplete baseline': dict(events=self.events.replace(b'1/1 completed, now fuzzing', b'0/1 completed, now fuzzing')),
             'wrong workers': dict(events=self.events.replace(b'now fuzzing with 2 workers', b'now fuzzing with 1 workers')),
+            'short elapsed against the required budget': dict(target={**self.target, 'fuzztime': '60s'}),
+            'elapsed below budget': dict(events=self.events.replace(b'fuzz: elapsed: 1s, execs', b'fuzz: elapsed: 0s, execs')),
             'zero selector': dict(listing='ok  \texample.com/tiny\t0.002s\n'),
             'renamed selector': dict(listing='FuzzThin\nok  \texample.com/tiny\t0.002s\n'),
             'two targets': dict(listing='FuzzThing\nFuzzOther\nok  \texample.com/tiny\t0.002s\n'),
@@ -228,11 +328,20 @@ class GoFuzzTests(unittest.TestCase):
             'truncated output': dict(events=self.events[:-30]),
             'unexpected skip': dict(target={**self.target, 'skips': {}}),
             'json without progress': dict(events=b''.join(l for l in self.events.splitlines(keepends=True) if b'fuzz: elapsed' not in l)),
+            'progress attributed to another test': dict(events=self.events.replace(b'"Test":"FuzzThing","Output":"fuzz: elapsed: 1s, execs', b'"Test":"TestBeta","Output":"fuzz: elapsed: 1s, execs')),
         }
         for name, change in controls.items():
-            with self.subTest(control=name), self.assertRaises(EvidenceError):
-                run_selected.verify(change.get('target', self.target), change.get('listing', self.listing),
-                                    change.get('events', self.events), b'', change.get('exit_code', 0), None)
+            with self.subTest(control=name):
+                if 'events' in change: self.assertNotEqual(change['events'], self.events)
+                with self.assertRaises(EvidenceError):
+                    run_selected.verify(change.get('target', self.target), change.get('listing', self.listing),
+                                        change.get('events', self.events), b'', change.get('exit_code', 0), None)
+
+    def test_duration_parsing(self):
+        for text, seconds in (('1s', 1), ('60s', 60), ('1m0s', 60), ('1m30s', 90), ('2h0m0s', 7200), ('500ms', 0.5), ('1.5s', 1.5), ('0s', 0)):
+            self.assertEqual(run_selected.go_seconds(text), seconds, text)
+        for text in ('', 'soon', '60', 'm'):
+            with self.subTest(text=text), self.assertRaises(EvidenceError): run_selected.go_seconds(text)
 
 
 class GoBenchTests(unittest.TestCase):
@@ -244,19 +353,28 @@ class GoBenchTests(unittest.TestCase):
     def test_positive_and_controls(self):
         summary = run_selected.verify(self.target, self.listing, self.events, b'', 0, None)
         self.assertEqual(summary['operations'], 100)
-        self.assertGreater(summary['results']['BenchmarkThing']['ns_per_op'], 0)
+        self.assertEqual(sorted(summary['results']), ['BenchmarkThing/size-16', 'BenchmarkThing/size-4096'])
+        self.assertTrue(all(r['operations'] == 100 and r['ns_per_op'] > 0 for r in summary['results'].values()))
+        # test2json flushes a benchmark name as its own partial event before the result fragment.
+        split = self.events.replace(b'"Output":"BenchmarkThing/size-16-4         \\t     100', b'"Output":"BenchmarkThing/size-16-4         \\t"}\n{"Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-16","Output":"     100', 1)
+        self.assertNotEqual(split, self.events)
+        self.assertEqual(run_selected.verify(self.target, self.listing, split, b'', 0, None)['results'], summary['results'])
         controls = {
-            'reduced count': dict(events=self.events.replace(b'     100\\t', b'      50\\t')),
-            'missing result line': dict(events=drop_lines(self.events, 'ns/op')),
+            'reduced count': dict(events=self.events.replace(b'size-16-4         \\t     100\\t', b'size-16-4         \\t      50\\t')),
+            'missing leaf result': dict(events=drop_lines(self.events, 'size-4096-4 ')),
+            'duplicate leaf result': dict(events=duplicate_line(self.events, 'size-4096-4 ')),
             'renamed benchmark': dict(listing='BenchmarkOther\nok  \texample.com/tiny\t0.002s\n'),
             'zero selector': dict(listing='ok  \texample.com/tiny\t0.002s\n'),
-            'tests executed': dict(events=self.events + fixture('go-suite.jsonl', binary=True).replace(b'"Action":"pass","Package":"example.com/tiny","Elapsed":0.003', b'"Action":"output","Package":"example.com/tiny","Output":"x"')),
+            'tests executed': dict(events=self.events + b''.join(l for l in fixture('go-suite.jsonl', binary=True).splitlines(keepends=True) if b'"Test":"TestBeta"' in l)),
             'package failed': dict(events=self.events.replace(b'"Action":"pass","Package":"example.com/tiny","Elapsed"', b'"Action":"fail","Package":"example.com/tiny","Elapsed"')),
-            'missing allocation report': dict(events=self.events.replace(b'\\t       0 B/op\\t       0 allocs/op', b'')),
+            'missing allocation report': dict(events=self.events.replace(b'\\t      16 B/op\\t       1 allocs/op', b'')),
+            'foreign benchmark started': dict(events=self.events.replace(b'"Test":"BenchmarkThing/size-4096"', b'"Test":"BenchmarkOther"')),
         }
         for name, change in controls.items():
-            with self.subTest(control=name), self.assertRaises(EvidenceError):
-                run_selected.verify(self.target, change.get('listing', self.listing), change.get('events', self.events), b'', 0, None)
+            with self.subTest(control=name):
+                if 'events' in change: self.assertNotEqual(change['events'], self.events)
+                with self.assertRaises(EvidenceError):
+                    run_selected.verify(self.target, change.get('listing', self.listing), change.get('events', self.events), b'', 0, None)
 
     def test_sub_benchmarks_from_the_pinned_runner(self):
         target = dict(TARGETS['key-admission-bench'])
@@ -264,13 +382,18 @@ class GoBenchTests(unittest.TestCase):
         summary = run_selected.verify(target, listing, events, b'', 0, None)
         self.assertEqual(summary['operations'], 100)
         self.assertIn('BenchmarkValidate/mixed-order', summary['results'])
-        self.assertTrue(all(r['operations'] == 100 and r['ns_per_op'] > 0 for r in summary['results'].values()))
+        # Captured from the pinned runner: test2json flushed the small-order name and
+        # its result as two output events; the row must still verify.
+        split = fixture('go-bench-split.jsonl', binary=True)
+        self.assertIn(b'"Output":"BenchmarkValidate/small-order-4      \\t"}', split)
+        self.assertEqual(sorted(run_selected.verify(target, listing, split, b'', 0, None)['results']), sorted(summary['results']))
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(target, listing, drop_lines(split, '"Output":"     100\\t     12049 ns/op'), b'', 0, None)
         controls = {
             'missing leaf result': drop_lines(events, 'BenchmarkValidate/mixed-order-4 '),
             'duplicate leaf result': duplicate_line(events, 'BenchmarkValidate/mixed-order-4 '),
             'reduced leaf count': events.replace(b'mixed-order-4      \\t     100\\t', b'mixed-order-4      \\t      99\\t'),
             'unstarted leaf result': events.replace(b'BenchmarkValidate/mixed-order-4 ', b'BenchmarkValidate/other-4 '),
-            'foreign benchmark started': events.replace(b'"Test":"BenchmarkValidate/mixed-order"', b'"Test":"BenchmarkOther"'),
         }
         for name, mutated in controls.items():
             with self.subTest(control=name):
@@ -318,7 +441,8 @@ class RustTests(unittest.TestCase):
         target = {'id': 'suite', 'mode': 'rust-suite', 'cwd': '.', 'cargo': [], 'skips': {('tiny', 'props_extended'): {'test': 'props_extended', 'reason': 'extended', 'proof': 'props'}}}
         listing, stdout = fixture('rust-suite-list.txt'), fixture('rust-suite-run.txt', binary=True)
         summary = run_selected.verify(target, listing, stdout, b'', 0, None)
-        self.assertEqual((summary['tests'], summary['passed'], summary['ignored'], summary['binaries']), (2, 1, ['props_extended'], 3))
+        self.assertEqual((summary['tests'], summary['passed'], summary['binaries']), (2, 1, 3))
+        self.assertEqual(summary['ignored'], [{'test': 'props_extended', 'reason': 'extended', 'proof': 'props'}])
         controls = {
             'ignored without allowance': dict(target={**target, 'skips': {}}),
             'executed differ from discovery': dict(listing=listing.replace('ordinary: test\n', 'ordinary: test\nextra: test\n').replace('2 tests,', '3 tests,')),
@@ -346,14 +470,15 @@ class InteropTests(unittest.TestCase):
 
     def test_helper_proof_controls(self):
         events = self.events
+        body = 'github.com/ricevanta/ricevanta/server/internal/events/body'
         controls = {
             'missing precondition child proof': drop_lines(events, 'RUST_WRITER_CHILD {\\"Helper\\":\\"TestRustWriterPrecondition\\"'),
             'missing capture child proof': drop_lines(events, '\\"Pipe\\":\\"stderr\\"'),
             'wrong outcome': events.replace(b'\\"Outcome\\":\\"rejected\\"', b'\\"Outcome\\":\\"accepted\\"'),
             'misattributed proof': events.replace(b'"Test":"TestRustWriterMutations","Output":"    rust_writer_test.go', b'"Test":"TestRustWriterBoundaries","Output":"    rust_writer_test.go'),
-            'missing required subtest': drop_lines(events, '"Action":"pass","Package":"github.com/ricevanta/ricevanta/server/internal/events/body","Test":"TestRustWriterCaptureOverflow/stderr"'),
+            'missing required subtest': drop_lines(events, '"Action":"pass","Package":"%s","Test":"TestRustWriterCaptureOverflow/stderr"' % body),
             'helper removed from discovery': None,
-            'failed parent': events.replace(b'"Action":"pass","Package":"github.com/ricevanta/ricevanta/server/internal/events/body","Test":"TestRustWriterMutations"', b'"Action":"fail","Package":"github.com/ricevanta/ricevanta/server/internal/events/body","Test":"TestRustWriterMutations"'),
+            'failed parent': events.replace(('"Action":"pass","Package":"%s","Test":"TestRustWriterMutations"' % body).encode(), ('"Action":"fail","Package":"%s","Test":"TestRustWriterMutations"' % body).encode()),
         }
         for name, mutated in controls.items():
             with self.subTest(control=name), self.assertRaises(EvidenceError):
@@ -413,15 +538,7 @@ class ConsoleReportTests(unittest.TestCase):
                 run_selected.verify_playwright_report(data, expected)
 
 
-class RealToolTests(unittest.TestCase):
-    """The pinned runners' real output must satisfy the parsers, not only captured fixtures."""
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='run-selected-')
-        self.root = Path(self.tmp.name)
-        (self.root / 'scripts/ci').mkdir(parents=True)
-        shutil.copytree(FIXTURES / 'tiny-go', self.root / 'gotiny')
-        shutil.copytree(FIXTURES / 'tiny-rust', self.root / 'rusttiny')
-        (self.root / 'scripts/ci/targets.toml').write_text('''
+TINY_TARGETS = '''
 [loader]
 package = "./internal/extensions/loader"
 target = "FuzzParserQualification"
@@ -433,6 +550,7 @@ id = "tiny-suite"
 mode = "go-suite"
 cwd = "gotiny"
 packages = ["./..."]
+fuzz_inventory = [["tiny", "FuzzThing"]]
 
 [[selected]]
 id = "tiny-selected"
@@ -487,10 +605,22 @@ test = "props_extended"
 reason = "extended property budget"
 proof = "tiny-rust"
 modes = ["tiny-rust-suite"]
-''')
+'''
+
+
+class RealToolTests(unittest.TestCase):
+    """The pinned runners' real output must satisfy the parsers, not only captured fixtures."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='run-selected-')
+        self.root = Path(self.tmp.name)
+        (self.root / 'scripts/ci').mkdir(parents=True)
+        shutil.copytree(FIXTURES / 'tiny-go', self.root / 'gotiny')
+        shutil.copytree(FIXTURES / 'tiny-rust', self.root / 'rusttiny')
+        (self.root / 'scripts/ci/targets.toml').write_text(TINY_TARGETS)
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(('GO', 'CARGO'))}
         self.env.update(GOCACHE=str(self.root / 'gocache'), GOMODCACHE=str(self.root / 'gomod'), GOTOOLCHAIN='local',
-                        GOFLAGS='-mod=readonly', CARGO_TARGET_DIR=str(self.root / 'cargo-target'), GOPATH=str(self.root / 'gopath'))
+                        GOFLAGS='-mod=readonly', CARGO_TARGET_DIR=str(self.root / 'cargo-target'), GOPATH=str(self.root / 'gopath'),
+                        GITHUB_RUN_ID='77', GITHUB_RUN_ATTEMPT='2', GITHUB_SHA='f' * 40)
         for key in ('PATH', 'HOME', 'RUSTUP_HOME', 'CARGO_HOME', 'SYSTEMROOT', 'TEMP', 'TMP', 'USERPROFILE'):
             if key in os.environ: self.env[key] = os.environ[key]
 
@@ -503,25 +633,45 @@ modes = ["tiny-rust-suite"]
         directory = evidence / run_selected.evidence_name(target_id)
         self.assertTrue((directory / 'output.txt').stat().st_size > 0)
         self.assertEqual(run_selected.verified(evidence, target_id)['id'], target_id)
+        self.assertEqual(run_selected.verified(evidence, target_id, {'GITHUB_RUN_ID': '77', 'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_SHA': 'f' * 40})['id'], target_id)
+        with self.assertRaises(ValueError): run_selected.verified(evidence, target_id, {'GITHUB_RUN_ID': '78', 'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_SHA': 'f' * 40})
         with self.assertRaises(EvidenceError): run_selected.run(target_id, evidence, root=self.root, env=self.env)
         return record
 
     def test_real_go_runner(self):
         self.assertIsNotNone(shutil.which('go'), 'go is required; missing tools fail instead of skipping')
-        self.assertEqual(self.run_id('tiny-suite')['summary']['skipped'], ['example.com/tiny TestSkipped'])
+        summary = self.run_id('tiny-suite')['summary']
+        self.assertEqual(summary['skipped'], [{'package': TINY, 'test': 'TestSkipped', 'reason': 'helper entry point', 'proof': 'tiny-selected'}])
+        self.assertEqual((summary['tests'], summary['packages'], summary['no_test_files']), (6, [TINY, TINY + '/sub'], [TINY + '/notest']))
+        self.assertTrue((self.root / 'evidence' / run_selected.evidence_name('tiny-suite') / 'packages.txt').is_file())
         self.assertEqual(self.run_id('tiny-selected')['summary']['tests'], ['TestBeta'])
-        self.assertEqual(self.run_id('tiny-bench')['summary']['operations'], 100)
-        self.assertGreater(self.run_id('tiny-fuzz')['summary']['execs'], 0)
+        self.assertEqual(sorted(self.run_id('tiny-bench')['summary']['results']), ['BenchmarkThing/size-16', 'BenchmarkThing/size-4096'])
+        fuzz = self.run_id('tiny-fuzz')['summary']
+        self.assertGreater(fuzz['execs'], 0)
         with self.assertRaises(EvidenceError): run_selected.run('unknown-id', self.root / 'evidence', root=self.root, env=self.env)
         (self.root / 'gotiny/tiny_test.go').write_text((self.root / 'gotiny/tiny_test.go').read_text().replace('func TestBeta(', 'func TestBeta2('))
         with self.assertRaises(EvidenceError): run_selected.run('tiny-selected', self.root / 'evidence-renamed', root=self.root, env=self.env)
         self.assertFalse((self.root / 'evidence-renamed' / run_selected.evidence_name('tiny-selected') / 'verified.json').exists())
 
+    def test_real_go_runner_rejects_hidden_and_unlisted_packages(self):
+        self.assertIsNotNone(shutil.which('go'), 'go is required; missing tools fail instead of skipping')
+        hidden = self.root / 'gotiny/hidden'
+        hidden.mkdir()
+        (hidden / 'hidden_test.go').write_text('package hidden\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestMain(m *testing.M) { os.Exit(0) }\nfunc TestHidden(t *testing.T) {}\n')
+        with self.assertRaises(EvidenceError) as caught:
+            run_selected.run('tiny-suite', self.root / 'evidence-hidden', root=self.root, env=self.env)
+        self.assertIn('hidden', str(caught.exception))
+        shutil.rmtree(hidden)
+        (self.root / 'gotiny/sub/sub_test.go').write_text('package sub\n\nimport "testing"\n\nfunc TestGamma(t *testing.T) {}\nfunc FuzzNew(f *testing.F) { f.Fuzz(func(t *testing.T, b []byte) {}) }\n')
+        with self.assertRaises(EvidenceError) as caught:
+            run_selected.run('tiny-suite', self.root / 'evidence-fuzz', root=self.root, env=self.env)
+        self.assertIn('FuzzNew', str(caught.exception))
+
     def test_real_rust_harness(self):
         self.assertIsNotNone(shutil.which('cargo'), 'cargo is required; missing tools fail instead of skipping')
         record = self.run_id('tiny-rust')
         self.assertEqual((record['summary']['seed'], record['summary']['cases']), ('0x5249564241544348', 20000))
-        self.assertEqual(self.run_id('tiny-rust-suite')['summary']['ignored'], ['props_extended'])
+        self.assertEqual(self.run_id('tiny-rust-suite')['summary']['ignored'], [{'test': 'props_extended', 'reason': 'extended property budget', 'proof': 'tiny-rust'}])
         source = self.root / 'rusttiny/tests/props.rs'
         source.write_text(source.read_text().replace('cases = 20_000usize', 'cases = 19_999usize'))
         with self.assertRaises(EvidenceError): run_selected.run('tiny-rust', self.root / 'evidence-reduced', root=self.root, env=self.env)
@@ -533,14 +683,20 @@ class VerifiedRecordTests(unittest.TestCase):
             root = Path(tmp)
             directory = root / run_selected.evidence_name('server-unit')
             directory.mkdir()
-            record = {'kind': 'selected-run', 'version': 1, 'id': 'server-unit', 'result': 'success', 'exit': 0}
+            record = {'kind': 'selected-run', 'version': 1, 'id': 'server-unit', 'result': 'success', 'exit': 0,
+                      'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
             path = directory / 'verified.json'
             path.write_text(json.dumps(record))
+            binding = {'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
             self.assertEqual(run_selected.verified(root, 'server-unit')['id'], 'server-unit')
+            self.assertEqual(run_selected.verified(root, 'server-unit', binding)['id'], 'server-unit')
             with self.assertRaises(ValueError): run_selected.verified(root, 'server-race')
-            for key, value in (('id', 'server-race'), ('result', 'failure'), ('exit', 1), ('kind', 'receipt')):
+            for key, value in (('id', 'server-race'), ('result', 'failure'), ('exit', 1), ('kind', 'receipt'),
+                               ('GITHUB_RUN_ID', '6'), ('GITHUB_RUN_ATTEMPT', '2'), ('GITHUB_SHA', 'b' * 40)):
                 path.write_text(json.dumps({**record, key: value}))
-                with self.subTest(key=key), self.assertRaises(ValueError): run_selected.verified(root, 'server-unit')
+                with self.subTest(key=key), self.assertRaises(ValueError): run_selected.verified(root, 'server-unit', binding)
+            path.write_text(json.dumps({k: v for k, v in record.items() if not k.startswith('GITHUB_')}))
+            with self.assertRaises(ValueError): run_selected.verified(root, 'server-unit', binding)
 
 
 if __name__ == '__main__': unittest.main()

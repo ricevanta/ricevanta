@@ -50,7 +50,8 @@ def receipt(value, unit, checks, evidence=None):
     for check in checks:
         if check in selected:
             if evidence is None: raise ValueError('selected check needs verified evidence: ' + check)
-            run_selected.verified(evidence, check)
+            # The record must come from this workflow run and attempt, not a planted or earlier one.
+            run_selected.verified(evidence, check, {'GITHUB_RUN_ID': value['runId'], 'GITHUB_RUN_ATTEMPT': value['runAttempt']})
     return dict(kind='receipt', version=1, testedSha=value['testedSha'], runId=value['runId'],
                 runAttempt=value['runAttempt'], unit=unit, result='success', checks=checks)
 

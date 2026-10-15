@@ -3,4 +3,8 @@ TestBeta
 TestSkipped
 BenchmarkThing
 FuzzThing
-ok  	example.com/tiny	0.007s
+ExampleHello
+ok  	example.com/tiny	0.008s
+?   	example.com/tiny/notest	[no test files]
+TestGamma
+ok  	example.com/tiny/sub	0.008s

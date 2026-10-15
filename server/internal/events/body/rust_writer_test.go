@@ -463,11 +463,14 @@ func TestRustWriterCaptureOverflow(t *testing.T) {
 			}
 			// The overflow must come from the selected pipe alone; the helper
 			// suppresses the runner's own output, so the other pipe stays empty.
+			// os/exec copies the pipe in whatever chunks a read returns, so the
+			// selected capture may hold up to its limit before the overflowing
+			// chunk arrives; only the bound is fixed.
 			selected, other := out, stderr
 			if pipe == "stderr" {
 				selected, other = stderr, out
 			}
-			if selected.buffer.Len() != 0 || other.buffer.Len() != 0 {
+			if selected.buffer.Len() > selected.limit || other.buffer.Len() != 0 {
 				t.Fatalf("bounded capture retained bytes: stdout=%d stderr=%d", out.buffer.Len(), stderr.buffer.Len())
 			}
 			logWriterChild(t, "TestRustWriterCaptureChild", pipe, "overflow")

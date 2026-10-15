@@ -85,9 +85,49 @@ SELECTED_COMMANDS = {
     'interop-race': ("go test -race -tags rustinterop -list '^TestRustWriter' ./internal/events/body",
                      "go test -json -race -tags rustinterop -count=1 ./internal/events/body -run '^TestRustWriter'"),
 }
-SELECTED_BUDGETS = {'loader-repeat': {'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
+INTEROP_PROOF = {
+    'tests': ['TestRustWriterFixtures', 'TestRustWriterBoundaries', 'TestRustWriterMutations', 'TestRustWriterCaptureOverflow'],
+    'helpers': ['TestRustWriterPrecondition', 'TestRustWriterCaptureChild'],
+    'subtests': ['TestRustWriterCaptureOverflow/stdout', 'TestRustWriterCaptureOverflow/stderr'],
+    'subtest_prefixes': ['TestRustWriterFixtures/body/', 'TestRustWriterFixtures/header/', 'TestRustWriterFixtures/descriptor/'],
+    'children': [{'parent': 'TestRustWriterMutations', 'Helper': 'TestRustWriterPrecondition', 'Pipe': '', 'Outcome': 'rejected'},
+                 {'parent': 'TestRustWriterCaptureOverflow/stdout', 'Helper': 'TestRustWriterCaptureChild', 'Pipe': 'stdout', 'Outcome': 'overflow'},
+                 {'parent': 'TestRustWriterCaptureOverflow/stderr', 'Helper': 'TestRustWriterCaptureChild', 'Pipe': 'stderr', 'Outcome': 'overflow'}],
+}
+SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
+                    'loader-extended': {'marker': 'PARSER_MEASUREMENT'}, 'loader-gate-b-extended': {'marker': 'LOADER_MEASUREMENT'},
                     'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
-                    'batch-extended': {'seed': '0x5249564241544348', 'cases': 20000}}
+                    'batch-extended': {'seed': '0x5249564241544348', 'cases': 20000},
+                    'interop-unit': INTEROP_PROOF, 'interop-race': INTEROP_PROOF}
+# Ordinary suites whose discovered Fuzz* names must equal the fuzz inventory.
+FUZZ_INVENTORY_SUITES = ('server-unit', 'server-race', 'ocsf-native')
+LOADER_FUZZ = ('./internal/extensions/loader', 'FuzzParserQualification')
+# The closed skip allowance: each row names its separate proving unit or parent test.
+LOADER = 'github.com/ricevanta/ricevanta/server/internal/extensions/loader'
+YAMLTOKENS = LOADER + '/internal/yamltokens'
+GO_SKIP_MODES = ['server-unit', 'server-race', 'go-fuzz']
+SKIP_ALLOWANCES = [
+    {'package': LOADER, 'test': 'TestParserBudgetExtended', 'reason': 'native extended parser corpus',
+     'proof': 'loader-extended', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestLoaderBudgetExtended', 'reason': 'native extended complete-loader corpus',
+     'proof': 'loader-gate-b-extended', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestLoaderMeasurementChild', 'reason': 'fresh measurement child entry point',
+     'proof': 'loader-gate-b-extended', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestDecodeVerifiedYAMLInstrumented',
+     'reason': 'instrumented child entry point driven by TestDecodeVerifiedYAMLCallCounts',
+     'parent': 'TestDecodeVerifiedYAMLCallCounts', 'modes': GO_SKIP_MODES},
+    {'package': LOADER, 'test': 'TestAgreementOutcomeChild',
+     'reason': 'negative-control child entry point driven by TestAgreementRejectsOutcomeMismatch',
+     'parent': 'TestAgreementRejectsOutcomeMismatch', 'modes': GO_SKIP_MODES},
+    {'package': YAMLTOKENS, 'test': 'TestParserBudgetHarness', 'reason': 'nested harness entry point run by the loader root tests',
+     'proof': 'loader-extended', 'modes': ['server-unit', 'server-race']},
+    {'package': YAMLTOKENS, 'test': 'TestParserMeasurementChild', 'reason': 'fresh measurement child entry point',
+     'proof': 'loader-extended', 'modes': ['server-unit', 'server-race']},
+    {'package': 'ricevanta-spool', 'test': 'fuzz_recover_extended', 'reason': 'extended 100,000-case native property budget',
+     'proof': 'spool-extended', 'modes': ['agent-unit']},
+    {'package': 'ricevanta-batch', 'test': 'fuzz_seal_extended', 'reason': 'extended 20,000-case native property budget',
+     'proof': 'batch-extended', 'modes': ['agent-unit']},
+]
 
 
 def selected_errors(root):
@@ -97,6 +137,20 @@ def selected_errors(root):
     except (OSError, ValueError, KeyError, TypeError) as error:
         return ['scripts/ci/targets.toml: invalid selected inventory: ' + str(error)]
     errors = []
+    for target_id, target in targets.items():
+        # No other wrapper ID may exist; console IDs are pinned here when Task 8 adds them.
+        if target_id not in SELECTED_COMMANDS and not (target_id.startswith('go-fuzz:') and target['mode'] == 'go-fuzz'):
+            errors.append('scripts/ci/targets.toml: unreviewed selected target ' + target_id)
+    fuzz_pairs = sorted(map(list, inventory.FUZZ_PAIRS | {LOADER_FUZZ}))
+    for target_id, target in targets.items():
+        expected = fuzz_pairs if target_id in FUZZ_INVENTORY_SUITES else None
+        if sorted(target.get('fuzz_inventory') or []) != (expected or []) or (expected is None) == ('fuzz_inventory' in target):
+            errors.append('scripts/ci/targets.toml: fuzz inventory cross-check mismatch: ' + target_id)
+    try: skips = run_selected.load_targets(root).get('skips', [])
+    except (OSError, ValueError): skips = None
+    canonical = lambda rows: sorted(json.dumps(row, sort_keys=True) for row in rows)
+    if not isinstance(skips, list) or canonical(skips) != canonical(SKIP_ALLOWANCES):
+        errors.append('scripts/ci/targets.toml: skip allowances differ from the reviewed set')
     for target_id, (discovery, command) in SELECTED_COMMANDS.items():
         target = targets.get(target_id)
         if target is None:
@@ -111,8 +165,10 @@ def selected_errors(root):
             errors.append(f'scripts/ci/targets.toml: fuzz command mismatch: {package} {name}')
     for row in targets.values():
         for allowance in row['skips'].values():
-            if allowance['proof'] not in targets or '*' in allowance['test'] or not allowance['reason']:
-                errors.append('scripts/ci/targets.toml: skip allowance must name an exact test and a proving unit')
+            proof = allowance.get('proof')
+            if ('*' in allowance['test'] or not allowance['reason'] or (proof is None) == ('parent' not in allowance)
+                    or (proof is not None and (proof not in targets or proof in allowance['modes'] or targets[proof]['mode'] in allowance['modes']))):
+                errors.append('scripts/ci/targets.toml: skip allowance must name an exact test and a separate proving unit')
     return errors
 
 
@@ -246,18 +302,23 @@ CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fres
 CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
 
 
-def wrapper_toolchain(run):
-    """Classify a wrapper step by its selected ID's toolchain; unknown IDs count as both."""
+def wrapper_id(run):
+    """The selected ID a wrapper step passes with --id, or None for any other step."""
     match = re.search(r'run_selected\.py --id (?:"([^"]+)"|(\S+))', run)
-    if not match: return None
-    target_id = match[1] or match[2]
+    return (match[1] or match[2]) if match else None
+
+
+def wrapper_toolchain(run, root):
+    """Classify a wrapper step by its selected ID's toolchain in the checked tree; unknown IDs count as both."""
+    target_id = wrapper_id(run)
+    if target_id is None: return None
     if target_id.startswith('go-fuzz:'): return 'go'
-    try: mode = run_selected.inventory()[target_id]['mode']
-    except (KeyError, OSError, ValueError): return 'unknown'
+    try: mode = run_selected.inventory(root)[target_id]['mode']
+    except (KeyError, OSError, ValueError, TypeError): return 'unknown'
     return 'go' if mode.startswith('go') else 'cargo' if mode.startswith('rust') else 'other'
 
 
-def cache_errors(data):
+def cache_errors(data, root):
     """Require fresh compiler environments before every workflow consumer."""
     errors = []
     for jid, job in data.get('jobs', {}).items():
@@ -267,8 +328,8 @@ def cache_errors(data):
             if CACHE_ENV & set(scope.get('env', {})):
                 fail('compiler cache environment override forbidden')
         go_setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-go@')]
-        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', '')) in ('go', 'unknown')]
-        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', '')) in ('cargo', 'unknown')]
+        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('go', 'unknown')]
+        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('cargo', 'unknown')]
         for step in steps:
             action = step.get('uses', '')
             settings = step.get('with', {})
@@ -311,10 +372,15 @@ def cache_errors(data):
     return errors
 
 
-def fuzz_evidence_errors(job, native_parser=False):
+def fuzz_evidence_errors(job, root, native_parser=False):
     """Preserve exact fuzz selection, failure exit and minimized corpora."""
     command = COMMANDS[('server', 'loader-gate-a' if native_parser else 'fuzz')][-1]
-    selected = [step for step in job.get('steps', []) if '-fuzz=' in step.get('run', '') or 'fuzz' in step.get('run', '').split('--id')[-1]]
+    try: fuzz_ids = {i for i, t in run_selected.inventory(root).items() if t['mode'] == 'go-fuzz'}
+    except (KeyError, OSError, ValueError, TypeError): fuzz_ids = {'loader-fuzz'}
+    def fuzzing(run):
+        target_id = wrapper_id(run)
+        return '-fuzz=' in run or (target_id is not None and (target_id.startswith('go-fuzz:') or target_id in fuzz_ids))
+    selected = [step for step in job.get('steps', []) if fuzzing(step.get('run', ''))]
     expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'shell': 'bash', 'working-directory': '.', 'run': command} if native_parser else
                 {'name': 'Fuzz for 60 seconds', 'shell': 'bash', 'working-directory': '.',
                  'env': {'FUZZ_PACKAGE': '${{ matrix.package }}', 'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
@@ -404,7 +470,7 @@ def check(root: Path) -> list[str]:
             workflows[name] = data
         except (ValueError, yaml.YAMLError):
             fail(name, 'malformed workflow'); continue
-        for error in cache_errors(data): fail(name, error)
+        for error in cache_errors(data, root): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
         for error in secret_errors(data, name): fail(name, error)
@@ -567,7 +633,7 @@ def check(root: Path) -> list[str]:
         for error in loader_qualification_errors(server.get('loader-gate-' + gate, {}), gate):
             fail('server', error)
     for jid, native_parser in (('fuzz', False), ('loader-gate-a', True)):
-        for error in fuzz_evidence_errors(server.get(jid, {}), native_parser):
+        for error in fuzz_evidence_errors(server.get(jid, {}), root, native_parser):
             fail('server', jid + ': ' + error)
     matrix_job = server.get('fuzz-targets', {})
     if matrix_job.get('if') != group_condition(['server'], 'inputs.route') or 'scripts/ci/inventory.py --fuzz-matrix' not in str(matrix_job):

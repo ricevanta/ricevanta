@@ -1,7 +1,10 @@
 # Exact selected-execution inventory consumed by scripts/ci/run_selected.py.
 # Each [[fuzz]] row is the go-fuzz:<package>:<target> ID; [loader] is loader-fuzz.
-# [[selected]] rows name every other wrapper ID; [[skips]] is the closed
-# ordinary-suite allowance for helper entry points and separately proven tests.
+# [[selected]] rows name every other wrapper ID; fuzz_inventory = true makes an
+# ordinary suite cross-check discovered Fuzz* names against [[fuzz]] and [loader].
+# [[skips]] is the closed ordinary-suite allowance: each row names either a
+# separate proving ID outside its own modes (proof) or the parent test in the
+# same package that must pass in the same run (parent).
 
 [[fuzz]]
 package = "./internal/events/eventid"
@@ -152,6 +155,7 @@ id = "server-unit"
 mode = "go-suite"
 cwd = "server"
 packages = ["./..."]
+fuzz_inventory = true
 
 [[selected]]
 id = "server-race"
@@ -160,6 +164,7 @@ cwd = "server"
 packages = ["./..."]
 build_flags = ["-race"]
 test_flags = ["-timeout=15m"]
+fuzz_inventory = true
 
 [[selected]]
 id = "key-admission-bench"
@@ -203,6 +208,7 @@ id = "ocsf-native"
 mode = "go-suite"
 cwd = "server"
 packages = ["./internal/events/ocsf"]
+fuzz_inventory = true
 
 [[selected]]
 id = "agent-unit"
@@ -262,8 +268,9 @@ children = [
   { parent = "TestRustWriterCaptureOverflow/stderr", Helper = "TestRustWriterCaptureChild", Pipe = "stderr", Outcome = "overflow" },
 ]
 
-# Exact ordinary-suite skips: helper entry points that run only as children and
-# tests that a separate selected unit proves. No wildcard allowance exists.
+# Exact ordinary-suite skips: helper entry points that run only as children of a
+# named parent test and tests that a separate selected unit proves. No wildcard
+# allowance exists; check_policy.py pins every row.
 [[skips]]
 package = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"
 test = "TestParserBudgetExtended"
@@ -288,15 +295,15 @@ modes = ["server-unit", "server-race", "go-fuzz"]
 [[skips]]
 package = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"
 test = "TestDecodeVerifiedYAMLInstrumented"
-reason = "instrumented child entry point driven by TestDecodeVerifiedYAMLContainers"
-proof = "server-unit"
+reason = "instrumented child entry point driven by TestDecodeVerifiedYAMLCallCounts"
+parent = "TestDecodeVerifiedYAMLCallCounts"
 modes = ["server-unit", "server-race", "go-fuzz"]
 
 [[skips]]
 package = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"
 test = "TestAgreementOutcomeChild"
-reason = "negative-control child entry point driven by the agreement assertion test"
-proof = "server-unit"
+reason = "negative-control child entry point driven by TestAgreementRejectsOutcomeMismatch"
+parent = "TestAgreementRejectsOutcomeMismatch"
 modes = ["server-unit", "server-race", "go-fuzz"]
 
 [[skips]]

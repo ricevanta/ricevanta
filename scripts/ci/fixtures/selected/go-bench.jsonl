@@ -1,12 +1,19 @@
-{"Time":"2026-10-15T05:49:09.445980724Z","Action":"start","Package":"example.com/tiny"}
-{"Time":"2026-10-15T05:49:09.451477853Z","Action":"output","Package":"example.com/tiny","Output":"goos: linux\n"}
-{"Time":"2026-10-15T05:49:09.451581215Z","Action":"output","Package":"example.com/tiny","Output":"goarch: amd64\n"}
-{"Time":"2026-10-15T05:49:09.451594392Z","Action":"output","Package":"example.com/tiny","Output":"pkg: example.com/tiny\n"}
-{"Time":"2026-10-15T05:49:09.451661189Z","Action":"output","Package":"example.com/tiny","Output":"cpu: Intel(R) Xeon(R) Processor @ 2.10GHz\n"}
-{"Time":"2026-10-15T05:49:09.45167762Z","Action":"run","Package":"example.com/tiny","Test":"BenchmarkThing"}
-{"Time":"2026-10-15T05:49:09.451680928Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"=== RUN   BenchmarkThing\n"}
-{"Time":"2026-10-15T05:49:09.451691228Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"BenchmarkThing\n"}
-{"Time":"2026-10-15T05:49:09.453610729Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"BenchmarkThing-4   \t     100\t         4.820 ns/op\t       0 B/op\t       0 allocs/op\n"}
-{"Time":"2026-10-15T05:49:09.454010832Z","Action":"output","Package":"example.com/tiny","Output":"PASS\n"}
-{"Time":"2026-10-15T05:49:09.454045073Z","Action":"output","Package":"example.com/tiny","Output":"ok  \texample.com/tiny\t0.008s\n"}
-{"Time":"2026-10-15T05:49:09.454054855Z","Action":"pass","Package":"example.com/tiny","Elapsed":0.008}
+{"Time":"2026-10-15T06:42:37.852082118Z","Action":"start","Package":"example.com/tiny"}
+{"Time":"2026-10-15T06:42:37.855117061Z","Action":"output","Package":"example.com/tiny","Output":"goos: linux\n"}
+{"Time":"2026-10-15T06:42:37.855209176Z","Action":"output","Package":"example.com/tiny","Output":"goarch: amd64\n"}
+{"Time":"2026-10-15T06:42:37.855212709Z","Action":"output","Package":"example.com/tiny","Output":"pkg: example.com/tiny\n"}
+{"Time":"2026-10-15T06:42:37.855217149Z","Action":"output","Package":"example.com/tiny","Output":"cpu: Intel(R) Xeon(R) Processor @ 2.10GHz\n"}
+{"Time":"2026-10-15T06:42:37.855225531Z","Action":"run","Package":"example.com/tiny","Test":"BenchmarkThing"}
+{"Time":"2026-10-15T06:42:37.855228421Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"=== RUN   BenchmarkThing\n"}
+{"Time":"2026-10-15T06:42:37.855232214Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing","Output":"BenchmarkThing\n"}
+{"Time":"2026-10-15T06:42:37.855977209Z","Action":"run","Package":"example.com/tiny","Test":"BenchmarkThing/size-16"}
+{"Time":"2026-10-15T06:42:37.855997239Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-16","Output":"=== RUN   BenchmarkThing/size-16\n"}
+{"Time":"2026-10-15T06:42:37.856002652Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-16","Output":"BenchmarkThing/size-16\n"}
+{"Time":"2026-10-15T06:42:37.862967507Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-16","Output":"BenchmarkThing/size-16-4         \t     100\t        22.20 ns/op\t      16 B/op\t       1 allocs/op\n"}
+{"Time":"2026-10-15T06:42:37.862995671Z","Action":"run","Package":"example.com/tiny","Test":"BenchmarkThing/size-4096"}
+{"Time":"2026-10-15T06:42:37.86300117Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-4096","Output":"=== RUN   BenchmarkThing/size-4096\n"}
+{"Time":"2026-10-15T06:42:37.863004414Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-4096","Output":"BenchmarkThing/size-4096\n"}
+{"Time":"2026-10-15T06:42:37.864794388Z","Action":"output","Package":"example.com/tiny","Test":"BenchmarkThing/size-4096","Output":"BenchmarkThing/size-4096-4       \t     100\t      2793 ns/op\t    4096 B/op\t       1 allocs/op\n"}
+{"Time":"2026-10-15T06:42:37.864919599Z","Action":"output","Package":"example.com/tiny","Output":"PASS\n"}
+{"Time":"2026-10-15T06:42:37.865377408Z","Action":"output","Package":"example.com/tiny","Output":"ok  \texample.com/tiny\t0.013s\n"}
+{"Time":"2026-10-15T06:42:37.865397976Z","Action":"pass","Package":"example.com/tiny","Elapsed":0.013}
