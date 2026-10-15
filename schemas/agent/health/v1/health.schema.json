@@ -26,13 +26,14 @@
     "counters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["samples", "sample_failures", "log_errors", "health_write_failures", "stop_requests"],
+      "required": ["samples", "sample_failures", "log_errors", "health_write_failures", "stop_requests", "log_rotations"],
       "properties": {
         "samples": { "$ref": "#/$defs/u64" },
         "sample_failures": { "$ref": "#/$defs/u64" },
         "log_errors": { "$ref": "#/$defs/u64" },
         "health_write_failures": { "$ref": "#/$defs/u64" },
-        "stop_requests": { "$ref": "#/$defs/u64" }
+        "stop_requests": { "$ref": "#/$defs/u64" },
+        "log_rotations": { "$ref": "#/$defs/u64" }
       }
     },
     "errors": {
@@ -47,8 +48,10 @@
     "processSample": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["footprint_bytes", "footprint_metric", "cpu_user_ms", "cpu_system_ms", "threads"],
+      "required": ["footprint_bytes", "footprint_metric", "cpu_user_ms", "cpu_system_ms", "threads", "sampled_unix_ms", "sampled_uptime_ms"],
       "properties": {
+        "sampled_unix_ms": { "$ref": "#/$defs/u64" },
+        "sampled_uptime_ms": { "$ref": "#/$defs/u64" },
         "footprint_bytes": { "$ref": "#/$defs/u64" },
         "footprint_metric": { "enum": ["phys_footprint", "private_working_set", "pss"] },
         "cpu_user_ms": { "$ref": "#/$defs/u64" },

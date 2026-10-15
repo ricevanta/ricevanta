@@ -21,9 +21,18 @@
           "cpu_user_ms": 15,
           "cpu_system_ms": 31,
           "threads": 8,
-          "handle_count": 120
+          "handle_count": 120,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": 15000
         },
-        "counters": { "samples": 150, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "counters": {
+          "samples": 150,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
         "errors": []
       }
     },
@@ -42,8 +51,17 @@
         "uptime_ms": 60000,
         "interval_ms": 60000,
         "process": null,
-        "counters": { "samples": 1, "sample_failures": 1, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
-        "errors": ["sampler_failed"]
+        "counters": {
+          "samples": 1,
+          "sample_failures": 1,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": [
+          "sampler_failed"
+        ]
       }
     },
     {
@@ -60,9 +78,27 @@
         "written_unix_ms": 1760000000000,
         "uptime_ms": 240000,
         "interval_ms": 60000,
-        "process": { "footprint_bytes": 9437184, "footprint_metric": "pss", "cpu_user_ms": 120, "cpu_system_ms": 80, "threads": 6, "fd_count": 14 },
-        "counters": { "samples": 4, "sample_failures": 0, "log_errors": 0, "health_write_failures": 2, "stop_requests": 0 },
-        "errors": ["health_write_failed"]
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": 240000
+        },
+        "counters": {
+          "samples": 4,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 2,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": [
+          "health_write_failed"
+        ]
       }
     },
     {
@@ -80,8 +116,17 @@
         "uptime_ms": 60000,
         "interval_ms": 60000,
         "process": null,
-        "counters": { "samples": 1, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 2 },
-        "errors": ["shutdown_timeout"]
+        "counters": {
+          "samples": 1,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 2,
+          "log_rotations": 0
+        },
+        "errors": [
+          "shutdown_timeout"
+        ]
       }
     },
     {
@@ -104,9 +149,18 @@
           "cpu_user_ms": 15,
           "cpu_system_ms": 31,
           "threads": 8,
-          "fd_count": 120
+          "fd_count": 120,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": 15000
         },
-        "counters": { "samples": 150, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "counters": {
+          "samples": 150,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
         "errors": []
       }
     },
@@ -131,9 +185,18 @@
           "cpu_system_ms": 31,
           "threads": 8,
           "fd_count": 12,
-          "handle_count": 120
+          "handle_count": 120,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": 15000
         },
-        "counters": { "samples": 150, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "counters": {
+          "samples": 150,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
         "errors": []
       }
     },
@@ -152,7 +215,14 @@
         "uptime_ms": 0,
         "interval_ms": 60000,
         "process": null,
-        "counters": { "samples": 0, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
+        "counters": {
+          "samples": 0,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
         "errors": []
       }
     },
@@ -171,8 +241,17 @@
         "uptime_ms": 0,
         "interval_ms": 60000,
         "process": null,
-        "counters": { "samples": 0, "sample_failures": 0, "log_errors": 0, "health_write_failures": 0, "stop_requests": 0 },
-        "errors": ["failed to open /var/lib/ricevanta: permission denied"]
+        "counters": {
+          "samples": 0,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": [
+          "failed to open /var/lib/ricevanta: permission denied"
+        ]
       }
     },
     {
@@ -208,7 +287,220 @@
         "uptime_ms": 0,
         "interval_ms": 60000,
         "process": null,
-        "counters": { "samples": 0, "sample_failures": 0, "log_errors": 0, "stop_requests": 0 },
+        "counters": {
+          "samples": 0,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": []
+      }
+    },
+    {
+      "id": "missing-sampled-unix-ms",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 4242,
+        "state": "ready",
+        "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "master",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 3600000,
+        "interval_ms": 60000,
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_uptime_ms": 3600000
+        },
+        "counters": {
+          "samples": 60,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": []
+      }
+    },
+    {
+      "id": "negative-sampled-unix-ms",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 4242,
+        "state": "ready",
+        "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "master",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 3600000,
+        "interval_ms": 60000,
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_unix_ms": -1,
+          "sampled_uptime_ms": 3600000
+        },
+        "counters": {
+          "samples": 60,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": []
+      }
+    },
+    {
+      "id": "missing-sampled-uptime-ms",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 4242,
+        "state": "ready",
+        "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "master",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 3600000,
+        "interval_ms": 60000,
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_unix_ms": 1760000000000
+        },
+        "counters": {
+          "samples": 60,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": []
+      }
+    },
+    {
+      "id": "negative-sampled-uptime-ms",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 4242,
+        "state": "ready",
+        "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "master",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 3600000,
+        "interval_ms": 60000,
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": -1
+        },
+        "counters": {
+          "samples": 60,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
+        "errors": []
+      }
+    },
+    {
+      "id": "missing-log-rotations",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 4242,
+        "state": "ready",
+        "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "master",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 3600000,
+        "interval_ms": 60000,
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": 3600000
+        },
+        "counters": {
+          "samples": 60,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0
+        },
+        "errors": []
+      }
+    },
+    {
+      "id": "write-keeps-earlier-sample-time",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-agent-health-v1",
+        "pid": 4242,
+        "state": "ready",
+        "version": "0.1.0-dev.0+g0123456789abcdef0123456789abcdef01234567",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "channel": "master",
+        "mode": "service",
+        "written_unix_ms": 1760000000000,
+        "uptime_ms": 3600000,
+        "interval_ms": 60000,
+        "process": {
+          "footprint_bytes": 9437184,
+          "footprint_metric": "pss",
+          "cpu_user_ms": 120,
+          "cpu_system_ms": 80,
+          "threads": 6,
+          "fd_count": 14,
+          "sampled_unix_ms": 1759999995000,
+          "sampled_uptime_ms": 3595000
+        },
+        "counters": {
+          "samples": 60,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "stop_requests": 0,
+          "log_rotations": 0
+        },
         "errors": []
       }
     }

@@ -79,7 +79,62 @@
         "footprint_bytes": 9400000,
         "footprint_metric": "pss",
         "threads": 6,
-        "written_unix_ms": 1760000130000
+        "written_unix_ms": 1760000120000,
+        "sampled_unix_ms": 1760000120000,
+        "sampled_uptime_ms": 120000
+      },
+      "started_unix_ms": 1760000010000,
+      "finished_unix_ms": 1760000130000,
+      "health_progress": {
+        "pid": 4242,
+        "start": {
+          "observed_unix_ms": 1760000010000,
+          "observed_elapsed_ms": 0,
+          "pid": 4242,
+          "state": "ready",
+          "interval_ms": 60000,
+          "written_unix_ms": 1760000000000,
+          "uptime_ms": 0,
+          "sampled_unix_ms": 1760000000000,
+          "sampled_uptime_ms": 0,
+          "samples": 1,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "log_rotations": 0
+        },
+        "end": {
+          "observed_unix_ms": 1760000130000,
+          "observed_elapsed_ms": 120000,
+          "pid": 4242,
+          "state": "ready",
+          "interval_ms": 60000,
+          "written_unix_ms": 1760000120000,
+          "uptime_ms": 120000,
+          "sampled_unix_ms": 1760000120000,
+          "sampled_uptime_ms": 120000,
+          "samples": 3,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "log_rotations": 0
+        },
+        "observations": 122,
+        "invalid_observations": 0,
+        "counter_regressions": 0,
+        "max_write_age_ms": 59999,
+        "max_sample_age_ms": 59999,
+        "max_observation_gap_ms": 1000
+      },
+      "log_activity": {
+        "sample_events": 0,
+        "rotations_observed": 0,
+        "invalid_lines": 0
+      },
+      "self_sample_external": {
+        "unix_ms": 1760000120000,
+        "footprint_bytes": 9400000,
+        "footprint_metric": "pss"
       }
     },
     {
@@ -122,7 +177,62 @@
         "footprint_bytes": 9900000,
         "footprint_metric": "pss",
         "threads": 7,
-        "written_unix_ms": 1760000210000
+        "written_unix_ms": 1760000210000,
+        "sampled_unix_ms": 1760000210000,
+        "sampled_uptime_ms": 70000
+      },
+      "started_unix_ms": 1760000150000,
+      "finished_unix_ms": 1760000210000,
+      "health_progress": {
+        "pid": 4242,
+        "start": {
+          "observed_unix_ms": 1760000150000,
+          "observed_elapsed_ms": 0,
+          "pid": 4242,
+          "state": "ready",
+          "interval_ms": 100,
+          "written_unix_ms": 1760000150000,
+          "uptime_ms": 10000,
+          "sampled_unix_ms": 1760000150000,
+          "sampled_uptime_ms": 10000,
+          "samples": 101,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "log_rotations": 0
+        },
+        "end": {
+          "observed_unix_ms": 1760000210000,
+          "observed_elapsed_ms": 60000,
+          "pid": 4242,
+          "state": "ready",
+          "interval_ms": 100,
+          "written_unix_ms": 1760000210000,
+          "uptime_ms": 70000,
+          "sampled_unix_ms": 1760000210000,
+          "sampled_uptime_ms": 70000,
+          "samples": 701,
+          "sample_failures": 0,
+          "log_errors": 0,
+          "health_write_failures": 0,
+          "log_rotations": 2
+        },
+        "observations": 62,
+        "invalid_observations": 0,
+        "counter_regressions": 0,
+        "max_write_age_ms": 99,
+        "max_sample_age_ms": 99,
+        "max_observation_gap_ms": 1000
+      },
+      "log_activity": {
+        "sample_events": 600,
+        "rotations_observed": 2,
+        "invalid_lines": 0
+      },
+      "self_sample_external": {
+        "unix_ms": 1760000210000,
+        "footprint_bytes": 9900000,
+        "footprint_metric": "pss"
       }
     }
   ],
@@ -409,6 +519,46 @@
       "limit": null,
       "baseline": 40,
       "outcome": "recorded"
+    },
+    {
+      "check": "health_freshness",
+      "phase": "idle",
+      "observed": 0,
+      "limit": null,
+      "baseline": null,
+      "outcome": "pass"
+    },
+    {
+      "check": "health_freshness",
+      "phase": "load",
+      "observed": 0,
+      "limit": null,
+      "baseline": null,
+      "outcome": "pass"
+    },
+    {
+      "check": "sampler_progress",
+      "phase": "idle",
+      "observed": 0,
+      "limit": null,
+      "baseline": null,
+      "outcome": "pass"
+    },
+    {
+      "check": "sampler_progress",
+      "phase": "load",
+      "observed": 0,
+      "limit": null,
+      "baseline": null,
+      "outcome": "pass"
+    },
+    {
+      "check": "load_log_activity",
+      "phase": "load",
+      "observed": 0,
+      "limit": null,
+      "baseline": null,
+      "outcome": "pass"
     }
   ],
   "baseline": {
