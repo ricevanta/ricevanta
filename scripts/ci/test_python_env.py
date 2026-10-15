@@ -416,7 +416,7 @@ class RuntimeVerificationTests(unittest.TestCase):
             exe.write_bytes(b'')
             base = Path(tmp) / 'base'
             base.mkdir()
-            marker = {'python': '3.14.8', 'base_prefix': str(base.resolve()), 'pip': 'pip 26.2.1'}
+            marker = {'python': '3.14.8', 'base_prefix': str(base.resolve()), 'pip': 'pip 26.2.1', 'scripts': {}}
             (prefix / python_env.MARKER).write_text(json.dumps(marker))
             ok = dict(which=str(exe), executable=str(exe), prefix=prefix, base_prefix=base, python_version='3.14.8')
             self.assertEqual(python_env.interpreter_errors(**ok), [])
@@ -439,7 +439,17 @@ class RuntimeVerificationTests(unittest.TestCase):
             self.assertEqual(python_env.interpreter_errors(**winning), [])
             self.assertEqual(python_env.interpreter_errors(**{**ok, 'executable': str(win), 'which': str(win)}),
                              [f'python: running {win} is not the interpreter of venv {prefix}'])
-            (prefix / python_env.MARKER).unlink()
+            # R-15: an unreadable or incomplete marker is a one-line refusal, not a traceback.
+            marker_path = prefix / python_env.MARKER
+            for text, message in (('{not json', f'python: unreadable venv marker {marker_path} (JSONDecodeError)'),
+                                  ('[]', f'python: malformed venv marker {marker_path}'),
+                                  (json.dumps({k: v for k, v in marker.items() if k != 'base_prefix'}), f'python: malformed venv marker {marker_path}'),
+                                  (json.dumps({k: v for k, v in marker.items() if k != 'scripts'}), f'python: malformed venv marker {marker_path}'),
+                                  (json.dumps({**marker, 'python': 3}), f'python: malformed venv marker {marker_path}')):
+                with self.subTest(marker=text):
+                    write_lf(marker_path, text)
+                    self.assertEqual(python_env.interpreter_errors(**ok), [message])
+            marker_path.unlink()
             self.assertEqual(python_env.interpreter_errors(**ok), [f'python: {prefix} is not a venv created by python_env.py --venv'])
 
     def test_venvs_linked_to_one_base_are_told_apart(self):
@@ -452,7 +462,7 @@ class RuntimeVerificationTests(unittest.TestCase):
             for name in ('validator', 'other'):
                 prefix = Path(tmp) / name
                 (prefix / 'bin').mkdir(parents=True)
-                (prefix / python_env.MARKER).write_text(json.dumps({'python': '3.14.8', 'base_prefix': str((Path(tmp) / 'base').resolve()), 'pip': 'pip'}))
+                (prefix / python_env.MARKER).write_text(json.dumps({'python': '3.14.8', 'base_prefix': str((Path(tmp) / 'base').resolve()), 'pip': 'pip', 'scripts': {}}))
                 try:
                     (prefix / 'bin/python').symlink_to(base)
                 except OSError as error:
@@ -469,6 +479,62 @@ class RuntimeVerificationTests(unittest.TestCase):
             alias = Path(tmp) / 'alias'
             alias.symlink_to(Path(tmp) / 'validator', target_is_directory=True)
             self.assertEqual(python_env.interpreter_errors(which=str(alias / 'bin/python'), **ok), [])
+
+
+class StartupAndShadowTests(unittest.TestCase):
+    """A-13 and A-15: start-up hooks on the import path and repository names that shadow closure modules."""
+
+    def test_sitecustomize_and_usercustomize_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stdlib = Path(tmp) / 'lib/python3.14'
+            stdlib.mkdir(parents=True)
+            self.assertEqual(python_env.customize_errors([str(stdlib)]), [])
+            for name in ('sitecustomize', 'usercustomize'):
+                with self.subTest(name=name):
+                    write_lf(stdlib / f'{name}.py', 'import atexit, os\natexit.register(os._exit, 0)\n')
+                    self.assertEqual(python_env.customize_errors([str(stdlib)]), [f'python: {name} on the import path at {stdlib / name}.py'])
+                    (stdlib / f'{name}.py').unlink()
+            (stdlib / 'sitecustomize').mkdir()
+            write_lf(stdlib / 'sitecustomize/__init__.py', '')
+            self.assertEqual(len(python_env.customize_errors([str(stdlib)])), 1)
+
+    def test_closure_module_names_are_rejected_at_the_root_and_beside_scripts(self):
+        def tree(root):
+            for directory in ('schemas/policy', 'server/internal/loader', 'docs/yaml', 'node_modules/yaml'):
+                (root / directory).mkdir(parents=True)
+            write_lf(root / 'schemas/policy/validate.py', 'import jsonschema\n')
+            write_lf(root / 'server/internal/loader/yaml.go', 'package loader\n')
+            write_lf(root / 'docs/yaml/notes.md', 'notes\n')
+            write_lf(root / 'node_modules/yaml/index.js', '')
+        with tempfile.TemporaryDirectory() as tmp:
+            tree(Path(tmp))
+            self.assertEqual(python_env.shadow_errors(Path(tmp)), [])
+        cases = {'jsonschema/__init__.py': 'jsonschema: shadows the validator closure module jsonschema',
+                 'rpds/README': 'rpds: shadows the validator closure module rpds',
+                 'yaml.py': 'yaml.py: shadows the validator closure module yaml',
+                 'six.cpython-314.pyc': 'six.cpython-314.pyc: shadows the validator closure module six',
+                 'schemas/policy/referencing/__init__.py': 'schemas/policy/referencing: shadows the validator closure module referencing',
+                 'schemas/policy/typing_extensions.py': 'schemas/policy/typing_extensions.py: shadows the validator closure module typing_extensions',
+                 'schemas/policy/_yaml.so': 'schemas/policy/_yaml.so: shadows the validator closure module _yaml'}
+        for relative, message in cases.items():
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                tree(root)
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                write_lf(root / relative, '')
+                self.assertEqual(python_env.shadow_errors(root), [message])
+                self.assertIn(message, python_env.lock_errors(root))
+
+    def test_closure_module_list_follows_the_installed_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            site = Path(tmp)
+            info = make_dist(site, 'alpha', '1.0', {'License-Expression': 'MIT'}, {'top_level.txt': 'alpha\n'})
+            (site / 'alpha').mkdir()
+            write_lf(site / 'alpha/__init__.py', '')
+            write_record(site, info)
+            installed = python_env.read_installed([site])
+            self.assertEqual(python_env.module_errors(installed, {'alpha'}), ['python: installed top-level module alpha is missing from CLOSURE_MODULES'])
+            self.assertEqual(python_env.module_errors(installed, set()), [])
 
 
 class ContentVerificationTests(unittest.TestCase):
@@ -575,6 +641,33 @@ class ContentVerificationTests(unittest.TestCase):
         (self.pip / 'RECORD').unlink()
         self.assertTrue(any(e.startswith('pip 26.2.1: unreadable RECORD') for e in self.errors()))
 
+    def test_scripts_directory_must_match_its_manifest(self):
+        bin_dir = self.prefix / 'bin'
+        write_lf(bin_dir / 'activate', '# activate\n')
+        try:
+            (bin_dir / 'python').symlink_to('python3.14')
+            link = True
+        except OSError:
+            write_lf(bin_dir / 'python', 'interpreter\n')
+            link = False
+        manifest = python_env.scripts_manifest(bin_dir)
+        installed = python_env.read_installed([self.site])
+        def errors(): return python_env.content_errors([self.site], self.prefix, installed, {'alpha', 'pip'}, (str(bin_dir), manifest))
+        self.assertEqual(errors(), [])
+        write_lf(bin_dir / 'bash', '#!/bin/sh\nexit 0\n')
+        self.assertEqual(errors(), [f'python: bash in {bin_dir} was neither created by --venv nor recorded by an admitted wheel'])
+        (bin_dir / 'bash').unlink()
+        (bin_dir / 'python').unlink()
+        write_lf(bin_dir / 'python', '#!/bin/bash\nexport PYTHONPATH=/stub\nexec /base/python "$@"\n')
+        self.assertEqual(errors(), [f'python: python in {bin_dir} changed since --venv created it'])
+        (bin_dir / 'python').unlink()
+        if link:
+            (bin_dir / 'python').symlink_to('/elsewhere/python3.14')
+            self.assertEqual(errors(), [f'python: python in {bin_dir} changed since --venv created it'])
+        # A RECORD-owned script stays verified by its RECORD hash.
+        write_lf(bin_dir / 'alpha', '#!/other/python\n')
+        self.assertIn('alpha 1.0: ../../../bin/alpha differs from its RECORD hash and size', errors())
+
     def test_symbolic_links_fail(self):
         try:
             (self.site / 'linked').symlink_to(self.site / 'alpha', target_is_directory=True)
@@ -640,7 +733,7 @@ class VenvCommandTests(unittest.TestCase):
         # suite with its own validator venv first on PATH, so each case below sets PATH explicitly.
         env = {**self.env, 'PATH': str(bin_dir) + os.pathsep + self.env.get('PATH', '')}
         def check(environment):
-            return subprocess.run([str(venv_python), '-B', str(ROOT / 'scripts/ci/python_env.py'), '--check',
+            return subprocess.run([str(venv_python), '-I', '-S', '-B', str(ROOT / 'scripts/ci/python_env.py'), '--check',
                                    '--python-version-file', str(self.version_file)], capture_output=True, text=True,
                                   env=environment, cwd=self.base)
         clean = check(env)
@@ -650,7 +743,10 @@ class VenvCommandTests(unittest.TestCase):
         self.assertIn('bootstrap pip', clean.stdout)
         shadowed = check({**env, 'PYTHONPATH': str(self.base)})
         self.assertIn('environment variable PYTHONPATH must not be set', shadowed.stderr)
-        self.assertIn(f'import path outside the admitted venv and stdlib: {self.base}', shadowed.stderr)
+        # Without isolation the shadowing path itself is reported too.
+        unisolated = subprocess.run([str(venv_python), '-B', str(ROOT / 'scripts/ci/python_env.py'), '--check', '--python-version-file',
+                                     str(self.version_file)], capture_output=True, text=True, env={**env, 'PYTHONPATH': str(self.base)}, cwd=self.base)
+        self.assertIn(f'import path outside the admitted venv and stdlib: {self.base}', unisolated.stderr)
         # R-12: another python linked to the same base interpreter, first on PATH, is not this venv's interpreter.
         shim = self.base / 'shim'
         shim.mkdir()
@@ -676,6 +772,13 @@ class VenvCommandTests(unittest.TestCase):
                         'site-packages: path configuration file zz.pth executes code at start-up'):
             with self.subTest(message=message):
                 self.assertIn(message, tampered.stderr)
+        self.assertFalse(sentinel.exists(), 'the isolated check must not process .pth files')
+        # A-13: start-up code that forces exit status 0 cannot hide the check's failure, and an added bash is reported.
+        write_lf(site / 'zz.pth', 'import atexit, os; atexit.register(os._exit, 0)\n')
+        write_lf(bin_dir / ('bash.exe' if os.name == 'nt' else 'bash'), '#!/bin/sh\nexit 0\n')
+        forced = check(env)
+        self.assertEqual(forced.returncode, 1, forced.stderr)
+        self.assertIn('was neither created by --venv nor recorded by an admitted wheel', forced.stderr)
 
 
 def build_wheel(directory, name='ci6fixture', version='1.0', tag='py3-none-any', payload=b'VALUE = 1\n'):

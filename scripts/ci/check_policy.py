@@ -1,6 +1,7 @@
 """Check the reviewed workflow graph, routing inputs and receipt obligations."""
 import argparse
 import ast
+import fnmatch
 from pathlib import Path
 import re
 import json
@@ -84,23 +85,61 @@ COMMANDS = {
 
 SETUP_PYTHON = 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
 PYTHON_SETUP = {'python-version-file': python_env.PYTHON_VERSION_FILE}
-# Only these three exact steps may touch installers, environments or the helper; any step whose command or shell
-# merely names an installer, environment manager or the helper is rejected at token level, whatever its flag order.
-# Shell indirection and third-party actions stay outside this source-level rule. The terminal re-check then verifies
-# the interpreter, environment, import paths and every site-packages file against the admitted RECORDs; it cannot
-# detect a step that rewrites a RECORD together with its files, which remains a matter for review.
+# Closure consumers are checked at two levels.
+#
+# Source level (this file): only the three exact admission steps may touch installers, environments or the helper;
+# any command or shell that names an installer, environment manager or the helper is rejected at token level, whatever
+# its flag order. Environment that would redirect imports, packages, the interpreter or the shell is rejected in `env`
+# mappings, in run scripts (inline `NAME=value cmd`, `export`, `declare -x`, `env NAME=`, `set -a`) and in custom shells.
+# The runner's PATH and environment files, the validator venv, site-packages, the scripts directory and the base
+# interpreter may be named only by their admitted steps. These rules match spellings: they cover the forms listed in
+# the patterns below, including absolute, `..`-relative and glob spellings of the venv directory, not every way a
+# script can compute or obtain a path.
+#
+# Runtime level (the terminal `--check`, run isolated and without site): the interpreter, environment, import paths,
+# every site-packages file against the admitted RECORDs, the scripts directory against its --venv manifest, the venv
+# root on Windows, sitecustomize/usercustomize and repository names that shadow closure modules. It detects divergence,
+# not deliberate tampering by job steps. Uncatchable inside the job, and left to independent review of the workflow
+# and script diff: shell indirection that hides these spellings (`bash scripts/x.sh`, escaped tokens such as `pi\p`,
+# third-party actions); a step that rewrites a RECORD or the venv marker together with the files they describe; a
+# replaced interpreter or `bash` in any PATH directory, which runs instead of the admission shell or the checker; and
+# environment set only for one validator process by such indirection.
 ADMITTED_PYTHON_RUNS = frozenset({python_env.VENV_COMMAND, python_env.INSTALL_COMMAND, python_env.CHECK_COMMAND})
 BYPASS_TOKEN = re.compile(r'(?<![\w.-])(?:pip3?|venv|ensurepip|virtualenv|uvx?|pipx|pipenv|poetry|conda|mamba|micromamba|'
                           r'pdm|hatch|rye|pixi|python_env\.py)(?![\w-])')
-# The runner's PATH and environment files, by variable or by `github` context (`github.path`, `github['env']`, or the
-# whole context passed to a function), and the admitted venv itself may be named only by their admitted steps.
-PATH_FILE = re.compile(r'(?i)github_path|\bgithub\s*\.\s*path\b')
-ENV_FILE = re.compile(r'(?i)github_env|\bgithub\s*\.\s*env\b')
+# The runner's PATH and environment files: by variable, by `github` context (`github.path`, `github['env']`, or the
+# whole context passed to a function) or by the runner's file-command directory and file names.
+PATH_FILE = re.compile(r'(?i)github_path|\bgithub\s*\.\s*path\b|_runner_file_commands|add_path_')
+ENV_FILE = re.compile(r'(?i)github_env|\bgithub\s*\.\s*env\b|_runner_file_commands|set_env_')
 WHOLE_GITHUB = re.compile(r'(?i)\bgithub\s*(?:[\[,)]|\}\})')
-VENV_PATH = re.compile(r'(?i)(?:runner_temp|runner\s*\.\s*temp)\W{0,6}validator\b')
-# Environment names a closure consumer may set; shell start-up (BASH_ENV, ENV), exported functions, loader preloads
-# and interpreter or installer variables all fall outside it.
+# Ways to locate site-packages, the scripts directory, the base interpreter or start-up hooks without naming the venv.
+SITE_PROBE = re.compile(r'(?i)sysconfig|getsitepackages|getusersitepackages|site-packages|dist-packages|_base_executable|'
+                        r'\bsys\s*\.\s*(?:base_|exec_)*(?:prefix|executable)\b|\bcommand\s+-[vV]\b|\bwhich\b|'
+                        r'\btype\s+-[aPp]\b|\bwhereis\b|pythonlocation|python[23]?_root_dir|toolcache|\.pth\b|'
+                        r'sitecustomize|usercustomize')
+PATH_PART = re.compile(r'[^/\\\s"\'$(){};|&<>=:,`]+')
+# Environment names a closure consumer may set; shell start-up (BASH_ENV, ENV), exported functions, loader preloads,
+# PATH and interpreter or installer variables all fall outside it.
 CONSUMER_ENV = python_env.ALLOWED_PYTHON_ENV | {'ROUTE_JSON', 'NEEDS_JSON', 'UNIT', 'CHECKS', 'HOST_OS'}
+RISKY_NAME = r'(PYTHON\w*|PIP_\w*|BASH_ENV|ENV|BASH_FUNC_[^\s=]*|LD_\w*|DYLD_\w*|PATH|SHELLOPTS|BASHOPTS)'
+SHELL_ASSIGN = re.compile(rf'(?i)(?<![\w$.-]){RISKY_NAME}\+?=')
+SHELL_EXPORT = re.compile(rf'(?i)\b(?:export|declare|typeset|local|readonly)\b[^\n;|&]*?(?<![\w$.-]){RISKY_NAME}(?![\w=])')
+ALLEXPORT = re.compile(r'(?i)\bset\s+(?:[-+][a-z]*a[a-z]*\b|-o\s+allexport\b)')
+CONSUMER_SHELLS = frozenset({'bash', python_env.ADMISSION_SHELL})
+
+
+def names_venv(text):
+    """True when any path component is the validator venv directory, literally or as a glob that matches it."""
+    for part in PATH_PART.findall(text.lower()):
+        if part == 'validator' or (any(c in part for c in '*?[') and fnmatch.fnmatchcase('validator', part)):
+            return True
+    return False
+
+
+def shell_env_names(text):
+    """Risky names assigned, exported or env-prefixed by shell text, except the admitted interpreter toggles."""
+    names = [m[1] for pattern in (SHELL_ASSIGN, SHELL_EXPORT) for m in pattern.finditer(text)]
+    return sorted({n for n in names if n.upper() not in python_env.ALLOWED_PYTHON_ENV})
 # These commands import the closure, so the admitted install must precede them in the job.
 CLOSURE_CONSUMERS = tuple(inventory.DESIGN_COMMANDS) + (
     'scripts/ci/check_policy.py', 'unittest discover -s scripts/ci', 'unittest discover -s schemas', 'test_validate.py',
@@ -275,7 +314,8 @@ def consumer_env_errors(scope):
 
 
 def step_text(step):
-    return json.dumps(step, sort_keys=True)
+    """Everything a step or scope executes or passes on; display names are not executed."""
+    return json.dumps({key: value for key, value in step.items() if key != 'name'}, sort_keys=True)
 
 
 def python_errors(data):
@@ -294,8 +334,9 @@ def python_errors(data):
         checks = [i for i, s in enumerate(steps) if s.get('run') == python_env.CHECK_COMMAND]
         for step in steps:
             run, shell = step.get('run', ''), step.get('shell', '')
-            if not isinstance(shell, str) or BYPASS_TOKEN.search(shell):
+            if not isinstance(shell, str) or not isinstance(run, str) or BYPASS_TOKEN.search(shell):
                 fail('ad hoc Python environment or package installation forbidden')
+                continue
             if run in ADMITTED_PYTHON_RUNS: continue
             if BYPASS_TOKEN.search(run) or 'requirements-design.txt' in run:
                 fail('ad hoc Python environment or package installation forbidden')
@@ -322,25 +363,43 @@ def python_errors(data):
                 fail('closure admission steps must be unconditional at root with the privileged-mode admission shell')
         for scope in (job, *steps):
             for message in consumer_env_errors(scope): fail(message)
-        outside = step_text({key: value for key, value in job.items() if key != 'steps'})
-        if any(pattern.search(outside) for pattern in (PATH_FILE, ENV_FILE, WHOLE_GITHUB, VENV_PATH)):
-            fail('runner files, the whole github context or the validator venv named in job settings of closure consumer')
+        for message in scope_errors(step_text({key: value for key, value in job.items() if key != 'steps'})):
+            fail(f'job settings: {message}')
+        for scope in (data, job):
+            shell = (run_defaults(scope) or {}).get('shell', 'bash')
+            if shell != 'bash': fail('closure consumer default shell must be bash')
         for step in steps:
             run, text = step.get('run', ''), step_text(step)
+            if step.get('shell', 'bash') not in CONSUMER_SHELLS:
+                fail('closure consumer step shell must be bash or the admission shell')
             if WHOLE_GITHUB.search(text):
                 fail('whole github context forbidden in closure consumer')
             if PATH_FILE.search(text) and run != python_env.VENV_COMMAND:
                 fail('PATH changes outside the admitted venv step forbidden in closure consumer')
             if ENV_FILE.search(text) and run not in (GO_FRESH, CARGO_FRESH):
                 fail('environment writes outside the fresh cache helper forbidden in closure consumer')
-            if VENV_PATH.search(text) and run != python_env.VENV_COMMAND:
+            if names_venv(text) and run != python_env.VENV_COMMAND:
                 fail('validator venv named outside its admitted step in closure consumer')
+            if SITE_PROBE.search(text):
+                fail('site-packages, scripts directory, base interpreter or start-up hook located in closure consumer')
+            for script in (run, step.get('shell', '')):
+                for name in shell_env_names(script):
+                    fail(f'shell environment forbidden in closure consumer: {name}')
+                if ALLEXPORT.search(script):
+                    fail('shell allexport forbidden in closure consumer')
     if consuming_workflow:
         for message in consumer_env_errors(data): errors.append(f'workflow: {message}')
-        settings = step_text({key: value for key, value in data.items() if key != 'jobs'})
-        if any(pattern.search(settings) for pattern in (PATH_FILE, ENV_FILE, WHOLE_GITHUB, VENV_PATH)):
-            errors.append('workflow: runner files, the whole github context or the validator venv named in workflow settings')
+        for message in scope_errors(step_text({key: value for key, value in data.items() if key != 'jobs'})):
+            errors.append(f'workflow settings: {message}')
     return errors
+
+
+def scope_errors(text):
+    """Runner files, the whole github context, the venv or site probes named in job or workflow settings."""
+    found = [label for label, hit in (('runner PATH file', PATH_FILE.search(text)), ('runner environment file', ENV_FILE.search(text)),
+                                      ('whole github context', WHOLE_GITHUB.search(text)), ('validator venv', names_venv(text)),
+                                      ('site probe', SITE_PROBE.search(text))) if hit]
+    return [f'{label} named in closure consumer' for label in found]
 
 
 def fuzz_evidence_errors(job, native_parser=False):

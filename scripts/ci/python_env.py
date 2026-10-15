@@ -27,7 +27,9 @@ MARKER = 'ricevanta-validator.json'
 # The interpreter's bundled installer bootstraps the venv; it is part of the admitted Python, not the closure.
 BOOTSTRAP = ('pip',)
 VENV_COMMAND = 'python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"'
-CHECK_COMMAND = 'python -B scripts/ci/python_env.py --check'
+# Isolated (-I) and without site (-S): no PYTHON* variable, current or script directory, user site, .pth file or
+# sitecustomize runs inside the checker, so start-up code cannot change what it sees or the status it exits with.
+CHECK_COMMAND = 'python -I -S -B scripts/ci/python_env.py --check'
 # Admission steps run in privileged mode: Bash then reads no BASH_ENV or ENV start-up file and imports no exported
 # functions, so nothing defined by an earlier step can replace `python` or end the step before it runs.
 ADMISSION_SHELL = 'bash --noprofile --norc -p -e -o pipefail {0}'
@@ -47,6 +49,12 @@ FORBIDDEN_ENV = frozenset({'BASH_ENV', 'ENV', 'LD_PRELOAD', 'LD_AUDIT', 'DYLD_IN
 ADMITTED_PTH = frozenset()
 # A Windows venv root is on sys.path (CPython site.getsitepackages appends the prefix), so it may hold only the venv layout.
 WINDOWS_VENV_ROOT = frozenset({'include', 'lib', 'scripts', 'pyvenv.cfg', MARKER})
+# Top-level import names the closure and bootstrap pip install. A repository file or directory with one of these names
+# beside a script, or at the root that validators run from, would be imported instead of the locked wheel.
+CLOSURE_MODULES = frozenset({'jsonschema', 'jsonschema_specifications', 'referencing', 'rpds', 'attr', 'attrs', 'yaml',
+                             '_yaml', 'six', 'typing_extensions', 'rfc3339_validator', 'pip'})
+IMPORTABLE_SUFFIXES = ('.py', '.pyc', '.pyw', '.pyd', '.so')
+SHADOW_SKIP = frozenset({'.git', 'node_modules', 'target', '__pycache__'})
 
 # Each admitted SPDX identifier names the text that a shipped notice must contain.
 LICENSE_TEXTS = {
@@ -310,6 +318,30 @@ def path_key(path):
     return os.path.normcase(str(path.parent.resolve() / path.name))
 
 
+def read_marker(prefix):
+    """The marker --venv wrote: interpreter version, base prefix, bootstrap pip and the scripts directory manifest."""
+    path = Path(prefix) / MARKER
+    if not path.is_file(): raise ValueError(f'python: {prefix} is not a venv created by python_env.py --venv')
+    try:
+        marker = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        raise ValueError(f'python: unreadable venv marker {path} ({error.__class__.__name__})')
+    if (not isinstance(marker, dict) or not all(isinstance(marker.get(key), str) for key in ('python', 'base_prefix', 'pip'))
+            or not isinstance(marker.get('scripts'), dict)):
+        raise ValueError(f'python: malformed venv marker {path}')
+    return marker
+
+
+def scripts_manifest(directory):
+    """Each entry of the new venv's scripts directory: a link with its target, or a file with its SHA-256."""
+    result = {}
+    for path in sorted(Path(directory).iterdir()):
+        if path.is_symlink(): result[path.name] = {'link': os.readlink(path)}
+        elif path.is_file(): result[path.name] = {'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+        else: result[path.name] = {'directory': True}
+    return result
+
+
 def interpreter_errors(which, executable, prefix, base_prefix, python_version, windows=False):
     """`python` on PATH must be this interpreter, inside a venv this helper created from the admitted base."""
     errors = []
@@ -318,10 +350,10 @@ def interpreter_errors(which, executable, prefix, base_prefix, python_version, w
     scripts = Path(prefix) / ('Scripts' if windows else 'bin')
     if path_key(Path(executable).parent) != path_key(scripts):
         errors.append(f'python: running {executable} is not the interpreter of venv {prefix}')
-    marker_path = Path(prefix) / MARKER
-    if not marker_path.is_file():
-        return errors + [f'python: {prefix} is not a venv created by python_env.py --venv']
-    marker = json.loads(marker_path.read_text(encoding='utf-8'))
+    try:
+        marker = read_marker(prefix)
+    except ValueError as error:
+        return errors + [str(error)]
     if Path(marker['base_prefix']).resolve() != Path(base_prefix).resolve():
         errors.append(f'python: venv {prefix} was created from {marker["base_prefix"]}, not {base_prefix}')
     if marker['python'] != python_version:
@@ -358,12 +390,14 @@ def bytecode_errors(path, label):
     return [] if code == expected else [f'{label}: bytecode differs from its recorded source']
 
 
-def content_errors(site_dirs, prefix, installed, admitted):
+def content_errors(site_dirs, prefix, installed, admitted, scripts=None):
     """Every site-packages file must be recorded, with matching SHA-256 and size, by exactly one admitted distribution.
 
     RECORD entries without a hash are admitted only for RECORD itself and for this interpreter's cached bytecode,
     which must compile identically from its hashed source. Unowned files, symbolic links and every path
-    configuration file outside ADMITTED_PTH are rejected; a path configuration file that runs code is named as such."""
+    configuration file outside ADMITTED_PTH are rejected; a path configuration file that runs code is named as such.
+    With `scripts` = (directory, manifest), every scripts-directory entry must be RECORD-owned or unchanged since --venv,
+    so no wrapper, shim or added `bash` sits beside the interpreter."""
     errors, owned = [], {}
     root = normal(prefix)
     for dist in installed:
@@ -434,7 +468,55 @@ def content_errors(site_dirs, prefix, installed, admitted):
                 unowned[top] = unowned.get(top, 0) + 1
         for top, count in sorted(unowned.items()):
             errors.append(f'site-packages: {top} is not owned by an admitted distribution ({count} files)')
+    if scripts is not None:
+        directory, manifest = scripts
+        present = scripts_manifest(directory)
+        for name, current in present.items():
+            key = normal(Path(directory) / name)
+            if key in owned and owned[key][1] and 'sha256' in current: continue
+            if name not in manifest:
+                errors.append(f'python: {name} in {directory} was neither created by --venv nor recorded by an admitted wheel')
+            elif current != manifest[name]:
+                errors.append(f'python: {name} in {directory} changed since --venv created it')
     return errors
+
+
+def module_errors(installed, admitted):
+    """Keep CLOSURE_MODULES equal to the top-level names the admitted distributions actually install."""
+    names = set()
+    for dist in installed:
+        if normalize(dist.name) not in admitted: continue
+        try:
+            with open(dist.info / 'RECORD', newline='', encoding='utf-8') as handle:
+                entries = [row[0] for row in csv.reader(handle) if row]
+        except (OSError, UnicodeDecodeError, csv.Error):
+            continue
+        for entry in entries:
+            top = entry.split('/')[0]
+            if top in ('..', '__pycache__') or top.endswith('.dist-info'): continue
+            names.add(top.split('.')[0])
+    return [f'python: installed top-level module {name} is missing from CLOSURE_MODULES' for name in sorted(names - CLOSURE_MODULES)]
+
+
+def shadow_errors(root):
+    """No repository file or directory may carry a closure module name at the root or beside a Python script."""
+    errors = []
+    for directory, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in SHADOW_SKIP)
+        if Path(directory) != Path(root) and not any(name.endswith('.py') for name in filenames): continue
+        for name in sorted(dirnames + filenames):
+            stem = name.split('.')[0]
+            if stem in CLOSURE_MODULES and (name in dirnames or name.endswith(IMPORTABLE_SUFFIXES)):
+                relative = Path(os.path.relpath(os.path.join(directory, name), root)).as_posix()
+                errors.append(f'{relative}: shadows the validator closure module {stem}')
+    return errors
+
+
+def customize_errors(paths):
+    """No sitecustomize or usercustomize may be importable from the interpreter's or the venv's paths."""
+    from importlib.machinery import PathFinder
+    return [f'python: {name} on the import path at {spec.origin}' for name in ('sitecustomize', 'usercustomize')
+            for spec in [PathFinder.find_spec(name, list(paths))] if spec is not None]
 
 
 def venv_root_errors(prefix, windows):
@@ -445,6 +527,11 @@ def venv_root_errors(prefix, windows):
 
 
 def lock_errors(root):
+    """Static review: the lock files below, plus no repository name that shadows a closure module."""
+    return lock_file_errors(root) + shadow_errors(root)
+
+
+def lock_file_errors(root):
     """Static lock review: version file grammar, hashed pins with recorded wheels and a licensing row per entry."""
     errors = []
     try:
@@ -479,7 +566,8 @@ def create_venv(target, path_out, expected_python):
     context = builder.ensure_directories(target)
     pip = subprocess.run([context.env_exe, '-m', 'pip', '--version', '--disable-pip-version-check'],
                          check=True, capture_output=True, text=True).stdout.strip()
-    marker = {'python': actual, 'base_prefix': str(Path(sys.base_prefix).resolve()), 'pip': pip}
+    marker = {'python': actual, 'base_prefix': str(Path(sys.base_prefix).resolve()), 'pip': pip,
+              'scripts': scripts_manifest(context.bin_path)}
     (target / MARKER).write_text(json.dumps(marker, indent=1) + '\n', encoding='utf-8')
     print(f'python {actual} at {sys.executable}')
     print(f'venv {target}')
@@ -496,6 +584,7 @@ def runtime_errors():
     errors += interpreter_errors(shutil.which('python'), sys.executable, sys.prefix, sys.base_prefix, platform.python_version(), windows)
     errors += path_errors(sys.path, Path(__file__).resolve().parent, sys.base_prefix, sys.prefix, sites, windows)
     errors += venv_root_errors(sys.prefix, windows)
+    errors += customize_errors([*sys.path, *sites])
     return errors, sites
 
 
@@ -517,8 +606,9 @@ def main():
     if args.venv:
         create_venv(args.venv, args.path_out, expected)
         return
-    errors = lock_errors(args.root)
+    errors = lock_file_errors(args.root)
     live, sites = runtime_errors()
+    live += shadow_errors(args.root)
     if not errors:
         requirements = parse_requirements(read_exact(args.root / REQUIREMENTS))
         inventory = parse_inventory(read_exact(args.root / LICENSING))
@@ -526,7 +616,12 @@ def main():
         closure_errors, report = check_closure(requirements, inventory, installed,
                                                python_version=platform.python_version(), expected_python=expected,
                                                in_venv=sys.prefix != sys.base_prefix)
-        errors += closure_errors + content_errors(sites, sys.prefix, installed, set(requirements) | set(BOOTSTRAP))
+        admitted = set(requirements) | set(BOOTSTRAP)
+        try:
+            scripts = (sysconfig.get_path('scripts'), read_marker(sys.prefix)['scripts'])
+        except ValueError:
+            scripts = None  # reported by the interpreter check
+        errors += closure_errors + content_errors(sites, sys.prefix, installed, admitted, scripts) + module_errors(installed, admitted)
         for line in report: print(line)
     errors = live + errors
     print(f'interpreter {sys.executable}; site-packages {", ".join(sites)}')

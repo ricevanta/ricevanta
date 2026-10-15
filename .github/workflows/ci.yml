@@ -60,13 +60,13 @@ jobs:
       run: |
         python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
         python -m pip check
-        python -B scripts/ci/python_env.py --check
+        python -I -S -B scripts/ci/python_env.py --check
     - run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
     - run: python -B scripts/ci/check_policy.py --root .
     - name: Re-verify validator environment
       shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
-      run: python -B scripts/ci/python_env.py --check
+      run: python -I -S -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
       shell: bash
@@ -278,7 +278,7 @@ jobs:
       run: |
         python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
         python -m pip check
-        python -B scripts/ci/python_env.py --check
+        python -I -S -B scripts/ci/python_env.py --check
     - name: Download same-run receipts
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
@@ -300,7 +300,7 @@ jobs:
     - name: Re-verify validator environment
       shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
-      run: python -B scripts/ci/python_env.py --check
+      run: python -I -S -B scripts/ci/python_env.py --check
     - name: Require exact successful work
       shell: bash
       run: python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" --needs "$RUNNER_TEMP/needs.json" --receipts "$RUNNER_TEMP/ci-receipts"

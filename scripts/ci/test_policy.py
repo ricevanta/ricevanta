@@ -331,7 +331,7 @@ class PolicyTests(unittest.TestCase):
             ('design', 'pip cache', lambda d: setup(d)['with'].update(cache='pip'), 'Python setup must read .github/python-version'),
             ('design', 'unhashed install', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=unhashed), 'ad hoc Python environment or package installation forbidden'),
             ('design', 'source fallback', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace(' --only-binary=:all:', '')), 'ad hoc Python environment'),
-            ('design', 'skipped check', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace('python -B scripts/ci/python_env.py --check\n', '')), 'ad hoc Python environment'),
+            ('design', 'skipped check', lambda d: step(d, python_env.INSTALL_COMMAND).update(run=python_env.INSTALL_COMMAND.replace(python_env.CHECK_COMMAND + '\n', '')), 'ad hoc Python environment'),
             ('design', 'missing venv', lambda d: d['jobs']['validate']['steps'].remove(step(d, python_env.VENV_COMMAND)), 'one fresh venv and one hash-locked install in order'),
             ('design', 'conditional install', lambda d: step(d, python_env.INSTALL_COMMAND).update({'if': 'false'}), 'closure admission steps must be unconditional'),
             ('design', 'hidden install failure', lambda d: step(d, python_env.INSTALL_COMMAND).update({'continue-on-error': 'true'}), 'closure admission steps must be unconditional'),
@@ -508,6 +508,69 @@ class PolicyTests(unittest.TestCase):
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
 
+    def test_shell_environment_and_venv_spelling_probes_are_rejected(self):
+        """A-12 and A-14: per-command environment in run scripts and shells, and other spellings of the venv,
+        site-packages, base interpreter and runner file commands (review probes V01 to V19)."""
+        import python_env
+        self.assertEqual(check_policy.check(self.root), [])
+        def steps(data, jid='validate'): return data['jobs'][jid]['steps']
+        def validator(data): return next(s for s in steps(data) if 'schemas/policy/v1alpha1/validate.py' in s.get('run', ''))
+        def proof(data): return next(s for s in steps(data) if s.get('id') == 'proof')
+        def after_install(run):
+            def change(data):
+                index = next(i for i, s in enumerate(steps(data)) if s.get('run') == python_env.INSTALL_COMMAND)
+                steps(data).insert(index + 1, {'run': run})
+            return change
+        def prefix_validator(text):
+            return lambda d: validator(d).update(run=validator(d)['run'].replace(
+                'python schemas/policy/v1alpha1/validate.py\n', text + 'python schemas/policy/v1alpha1/validate.py\n'))
+        probes = [
+            ('V01 absolute venv path', after_install('cp -r vendor/jsonschema /home/runner/work/_temp/validator/lib/python3.14/site-packages/')),
+            ('V02 dot-dot venv path', after_install('cp -r vendor/jsonschema "$RUNNER_TEMP/../_temp/validator/lib/python3.14/site-packages/"')),
+            ('V03 glob venv path', after_install('cp -r vendor/jsonschema "$RUNNER_TEMP"/valid*/lib/python3.14/site-packages/')),
+            ('V03b other glob', after_install('cp -r vendor/jsonschema "$RUNNER_TEMP"/v?lidator/lib/')),
+            ('V04 computed site-packages', after_install('SP=$(python -c \'import sysconfig; print(sysconfig.get_path("purelib"))\')\ncp -r vendor/jsonschema "$SP/"')),
+            ('V05 runner PATH file glob', after_install('echo "$RUNNER_TEMP/v2/bin" >> "$RUNNER_TEMP"/_runner_file_commands/add_path_*')),
+            ('V06 runner env file glob', after_install('echo "LD_LIBRARY_PATH=$PWD/lib" >> "$RUNNER_TEMP"/_runner_file_commands/set_env_*')),
+            ('V07 sitecustomize via pythonLocation', after_install('printf \'import atexit\\n\' > "$pythonLocation/lib/python3.14/sitecustomize.py"')),
+            ('V08 inline PYTHONPATH', prefix_validator('PYTHONPATH=vendor ')),
+            ('V09 export PYTHONPATH', prefix_validator('export PYTHONPATH=vendor\n')),
+            ('V10 env prefix', prefix_validator('env PYTHONPATH=vendor ')),
+            ('V11 env custom shell', lambda d: validator(d).update(shell='env PYTHONPATH=vendor bash -e {0}')),
+            ('V12 inline PYTHONPATH in the proof step', lambda d: proof(d).update(run='PYTHONPATH=vendor python3 schemas/policy/v1alpha1/validate.py\n' + proof(d)['run'])),
+            ('V13 bash shim through a computed path', after_install('cp /bin/true "$(dirname "$(command -v python)")/bash"')),
+            ('V14 python wrapper through a computed path', after_install('B="$(dirname "$(which python)")"; cp wrapper.sh "$B/python"')),
+            ('V18 pth through a glob', after_install('printf \'import atexit\\n\' > "$(echo "$RUNNER_TEMP"/valid*)/lib/python3.14/site-packages/zz.pth"')),
+            ('V19 escaped installer then inline PYTHONPATH', prefix_validator('python -m pi\\p install --target vendor jsonschema\nPYTHONPATH=vendor ')),
+            ('declare -x', prefix_validator('declare -x PYTHONPATH=vendor\n')),
+            ('export of an earlier assignment', prefix_validator('export PYTHONSTARTUP\n')),
+            ('set -a before sourcing', prefix_validator('set -a\n. ./vars.sh\n')),
+            ('set -o allexport', prefix_validator('set -o allexport\n')),
+            ('inline BASH_ENV', prefix_validator('BASH_ENV=./x.sh bash -c true\n')),
+            ('inline LD_PRELOAD', prefix_validator('LD_PRELOAD=./x.so ')),
+            ('inline DYLD_INSERT_LIBRARIES', prefix_validator('DYLD_INSERT_LIBRARIES=./x.dylib ')),
+            ('inline PATH', prefix_validator('PATH="$PWD/shim:$PATH" ')),
+            ('lower-case pythonpath', prefix_validator('pythonpath=vendor ')),
+            ('PIP_ assignment', prefix_validator('PIP_INDEX_URL=https://example.invalid/simple ')),
+            ('python custom shell', lambda d: validator(d).update(shell='python {0}')),
+            ('job default shell', lambda d: d['jobs']['validate'].update(defaults={'run': {'shell': 'env PYTHONPATH=vendor bash -e {0}'}})),
+            ('workflow default shell', lambda d: d.update(defaults={'run': {'shell': 'sh -e {0}'}})),
+            ('toolcache path', after_install('cp sitecustomize.py /opt/hostedtoolcache/Python/3.14.8/x64/lib/python3.14/')),
+        ]
+        for label, change in probes:
+            with self.subTest(probe=label):
+                self.mutate('design', change)
+                self.assertTrue(check_policy.check(self.root), label)
+                shutil.copyfile(ROOT / '.github/workflows/design.yml', self.root / '.github/workflows/design.yml')
+        # Controls: the admitted interpreter toggles, display names and ordinary script names stay accepted.
+        for label, change in (('PYTHONDONTWRITEBYTECODE inline', prefix_validator('PYTHONDONTWRITEBYTECODE=1 ')),
+                              ('validator in a step name', lambda d: validator(d).update(name='Validate with the validator venv')),
+                              ('validate.py scripts', prefix_validator('python schemas/export/v1alpha1/validate.py\n'))):
+            with self.subTest(control=label):
+                self.mutate('design', change)
+                self.assertEqual(check_policy.check(self.root), [], label)
+                shutil.copyfile(ROOT / '.github/workflows/design.yml', self.root / '.github/workflows/design.yml')
+
     def test_windows_runner_selection(self):
         jobs = (
             {'runs-on': 'windows-2025'},
@@ -542,6 +605,7 @@ class PolicyTests(unittest.TestCase):
                                 self.root / '.github/workflows/bootstrap.yml')
 
     def test_windows_shell_defaults_and_overrides(self):
+        # The agent job has Windows rows and is not a closure consumer, whose shells are limited to bash.
         for scope in ('step', 'job'):
             for shell in ('bash', 'pwsh'):
                 with self.subTest(scope=scope, shell=shell):
@@ -554,10 +618,10 @@ class PolicyTests(unittest.TestCase):
                         if scope == 'step': step['shell'] = shell
                         else: job['defaults'] = {'run': {'shell': shell}}
                         job['steps'].insert(-1, step)
-                    self.mutate('bootstrap', change)
+                    self.mutate('agent', change)
                     self.assertEqual(check_policy.check(self.root), [])
-                    shutil.copyfile(ROOT / '.github/workflows/bootstrap.yml',
-                                    self.root / '.github/workflows/bootstrap.yml')
+                    shutil.copyfile(ROOT / '.github/workflows/agent.yml',
+                                    self.root / '.github/workflows/agent.yml')
         def workflow_default_only(data):
             job = data['jobs']['validate']
             job.get('defaults', {}).get('run', {}).pop('shell', None)
@@ -565,7 +629,7 @@ class PolicyTests(unittest.TestCase):
                 if 'run' in step and 'shell' not in step: step['shell'] = 'bash'
             data['defaults'] = {'run': {'shell': 'bash'}}
             job['steps'].insert(-1, {'run': 'python --version'})
-        self.mutate('bootstrap', workflow_default_only)
+        self.mutate('agent', workflow_default_only)
         self.assertTrue(any('Windows run step requires an explicit shell' in error
                             for error in check_policy.check(self.root)))
 
