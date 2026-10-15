@@ -766,4 +766,3 @@ fn umask_child_open() {
         .unwrap();
     assert_eq!(mode_of(&logs.join("agent.log")), 0o600);
 }
-
