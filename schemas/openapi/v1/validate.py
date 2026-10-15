@@ -29,6 +29,16 @@ CATALOGUE = Path('schemas/permissions/v1')
 SCHEMA_BASE = 'https://spec.openapis.org/oas/3.1/schema-base/2026-08-03'
 METHODS = ('get', 'put', 'post', 'delete', 'patch', 'head', 'options', 'trace')
 UNSAFE = {'put', 'post', 'delete', 'patch'}
+VERSIONED_WRITES = {
+    'updateIdentityProvider', 'deleteIdentityProvider', 'deletePrincipalLink',
+    'deleteBreakGlassAccount', 'resetBreakGlassAccount', 'replaceBreakGlassFactor',
+    'enableBreakGlassAccount', 'disableBreakGlassAccount',
+}
+IF_MATCH_SCHEMA = {'type': 'string', 'pattern': '^"r[1-9][0-9]{0,18}"$', 'maxLength': 22}
+DECISION_ROUTES = {
+    'approveApprovalRequest', 'rejectApprovalRequest',
+    'approveIdentityAuthorityRequest', 'rejectIdentityAuthorityRequest',
+}
 OPERATION_ID = re.compile(r'^[a-z][a-zA-Z0-9]{2,63}$')
 SEGMENT = re.compile(r'^([a-z][a-z0-9-]*(\.yaml)?|\{[a-z][a-z0-9_]*\})$')
 GATES = {'BE-12'}
@@ -337,6 +347,29 @@ def check_operation(document, path, method, op, catalogue, extension_validator, 
     if unsafe and op.get('x-ricevanta-idempotency') not in ('required', 'not_supported'):
         diagnostics.append(f'R13 {here}: unsafe operations declare x-ricevanta-idempotency')
 
+    # R24: explicit versioned-write classification, independent of header presence.
+    concurrency = op.get('x-ricevanta-concurrency')
+    conditional = concurrency == 'if_match'
+    if unsafe and concurrency not in ('if_match', 'not_versioned'):
+        diagnostics.append(f'R24 {here}: unsafe operation needs concurrency classification')
+    if not unsafe and concurrency is not None:
+        diagnostics.append(f'R24 {here}: safe operation cannot declare write concurrency')
+    if (method in ('put', 'patch', 'delete') or oid in VERSIONED_WRITES) and not conditional:
+        diagnostics.append(f'R24 {here}: versioned write must use if_match')
+    params = [deref(document, p) for p in op.get('parameters', [])]
+    matches = [p for p in params if p.get('name', '').lower() == 'if-match']
+    if conditional:
+        if len(matches) != 1:
+            diagnostics.append(f'R24 {here}: exactly one If-Match parameter required')
+        else:
+            param = matches[0]
+            if (param.get('name') != 'If-Match' or param.get('in') != 'header'
+                    or param.get('required') is not True or 'content' in param
+                    or deref(document, param.get('schema', {})) != IF_MATCH_SCHEMA):
+                diagnostics.append(f'R24 {here}: If-Match must be a required canonical strong header')
+    elif matches:
+        diagnostics.append(f'R24 {here}: If-Match requires if_match classification')
+
     # R14: gates.
     if op.get('x-ricevanta-gates') != ['BE-12']:
         diagnostics.append(f'R14 {here}: every identity-dependent operation requires exactly BE-12')
@@ -364,6 +397,12 @@ def check_operation(document, path, method, op, catalogue, extension_validator, 
         diagnostics.append(f'R22 {here}: identity approval requires bound evidence')
     if principal == 'protocol' and csrf not in ('origin', 'navigation_callback', 'cross_site_post'):
         diagnostics.append(f'R22 {here}: protocol proof requires its request guard')
+    replay = op.get('x-ricevanta-decision-replay')
+    if oid in DECISION_ROUTES:
+        if replay != 'exact_result':
+            diagnostics.append(f'R22 {here}: decision route requires exact_result replay')
+    elif replay is not None:
+        diagnostics.append(f'R22 {here}: result replay is only for decision routes')
     # R17: event streams declare their events.
     for code, response in responses.items():
         response = deref(document, response)
@@ -389,6 +428,8 @@ def check_document(root, document, catalogue):
     extension_validator = Draft202012Validator(extension_schema)
     seen = {}
     for path, item in document.get('paths', {}).items():
+        if 'parameters' in item:
+            diagnostics.append(f'R24 {path}: path-level parameters are outside this profile')
         segments = path.split('/')[1:]
         if not path.startswith('/api/v1/') or not all(SEGMENT.match(s) for s in segments[2:]):
             diagnostics.append(f'R03 {path}: path grammar')

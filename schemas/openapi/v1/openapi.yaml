@@ -1,7 +1,7 @@
 openapi: 3.1.2
 info:
   title: Ricevanta administration API
-  version: '1.2'
+  version: '1.3'
   summary: The /api/v1 contract used by the console, the ricevanta CLI and GitOps.
   description: >-
     Hand-written contract under BE-05 and BE-16. Rules that every operation follows
@@ -132,6 +132,7 @@ paths:
   /api/v1/auth/saml/{provider_uid}/acs:
     post:
       operationId: completeSamlLogin
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Assertion consumer service for the HTTP-POST binding.
@@ -183,6 +184,7 @@ paths:
   /api/v1/auth/local:
     post:
       operationId: loginLocal
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Break-glass login with user name, generated password and TOTP code.
@@ -212,6 +214,7 @@ paths:
   /api/v1/auth/local/enrollment:
     post:
       operationId: startBreakGlassEnrollment
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Exchange a one-time enrollment code for the generated password and TOTP seed.
@@ -241,6 +244,7 @@ paths:
   /api/v1/auth/local/enrollment/complete:
     post:
       operationId: completeBreakGlassEnrollment
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [auth]
       summary: Confirm the TOTP seed with a first code and activate the account.
@@ -267,6 +271,7 @@ paths:
   /api/v1/setup:
     post:
       operationId: completeFirstStartSetup
+      x-ricevanta-concurrency: not_versioned
       tags: [setup]
       summary: Consume the one-time setup token and create the first break-glass administrator.
       security: []
@@ -319,6 +324,7 @@ paths:
   /api/v1/session/logout:
     post:
       operationId: logout
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: End the current session.
@@ -381,6 +387,7 @@ paths:
   /api/v1/session/reauth/local:
     post:
       operationId: reauthenticateLocal
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [session]
       summary: Re-authenticate a break-glass session with password and a fresh TOTP code.
@@ -441,6 +448,7 @@ paths:
   /api/v1/sessions/{session_uid}/revoke:
     post:
       operationId: revokeSession
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [sessions]
       summary: Revoke one session immediately.
@@ -466,6 +474,7 @@ paths:
   /api/v1/users/{user_uid}/sessions/revoke:
     post:
       operationId: revokeUserSessions
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [sessions]
       summary: Revoke every session of one user immediately.
@@ -523,6 +532,7 @@ paths:
           $ref: '#/components/responses/Problem'
     post:
       operationId: createApiToken
+      x-ricevanta-concurrency: not_versioned
       tags: [api-tokens]
       summary: Create a scoped API token; the secret is returned once.
       security:
@@ -554,6 +564,7 @@ paths:
   /api/v1/api-tokens/{token_uid}/revoke:
     post:
       operationId: revokeApiToken
+      x-ricevanta-concurrency: not_versioned
       x-ricevanta-gates: [BE-12]
       tags: [api-tokens]
       summary: Revoke an API token immediately.
@@ -607,6 +618,7 @@ paths:
           $ref: '#/components/responses/Problem'
     post:
       operationId: createIdentityProvider
+      x-ricevanta-concurrency: not_versioned
       tags: [identity-providers]
       summary: Request a new OIDC or SAML provider; always an identity-authority approval.
       security:
@@ -637,6 +649,7 @@ paths:
   /api/v1/identity-providers/{provider_uid}:
     put:
       operationId: updateIdentityProvider
+      x-ricevanta-concurrency: if_match
       tags: [identity-providers]
       summary: Request a change to a provider; always an identity-authority approval.
       security:
@@ -668,6 +681,7 @@ paths:
           $ref: '#/components/responses/Problem'
     delete:
       operationId: deleteIdentityProvider
+      x-ricevanta-concurrency: if_match
       tags: [identity-providers]
       summary: Request deletion of a provider and its links; always an identity-authority approval.
       security:
@@ -729,6 +743,7 @@ paths:
           $ref: '#/components/responses/Problem'
     post:
       operationId: createPrincipalLink
+      x-ricevanta-concurrency: not_versioned
       tags: [principal-links]
       summary: Request a link from a pending link request to an internal user.
       security:
@@ -759,6 +774,7 @@ paths:
   /api/v1/principal-links/{link_uid}:
     delete:
       operationId: deletePrincipalLink
+      x-ricevanta-concurrency: if_match
       tags: [principal-links]
       summary: Request removal of a link.
       security:
@@ -847,6 +863,7 @@ paths:
           $ref: '#/components/responses/Problem'
     post:
       operationId: createBreakGlassAccount
+      x-ricevanta-concurrency: not_versioned
       tags: [break-glass]
       summary: Request a new break-glass account; always an identity-authority approval.
       security:
@@ -877,6 +894,7 @@ paths:
   /api/v1/break-glass-accounts/{account_uid}:
     delete:
       operationId: deleteBreakGlassAccount
+      x-ricevanta-concurrency: if_match
       tags: [break-glass]
       summary: Request deletion of a break-glass account.
       security:
@@ -909,6 +927,7 @@ paths:
   /api/v1/break-glass-accounts/{account_uid}/reset:
     post:
       operationId: resetBreakGlassAccount
+      x-ricevanta-concurrency: if_match
       tags: [break-glass]
       summary: Request new generated credentials; the holder re-enrolls with a new code.
       security:
@@ -941,6 +960,7 @@ paths:
   /api/v1/break-glass-accounts/{account_uid}/replace-factor:
     post:
       operationId: replaceBreakGlassFactor
+      x-ricevanta-concurrency: if_match
       tags: [break-glass]
       summary: Request a new TOTP seed while keeping the password.
       security:
@@ -973,6 +993,7 @@ paths:
   /api/v1/break-glass-accounts/{account_uid}/enable:
     post:
       operationId: enableBreakGlassAccount
+      x-ricevanta-concurrency: if_match
       tags: [break-glass]
       summary: Request enabling a disabled account.
       security:
@@ -1005,6 +1026,7 @@ paths:
   /api/v1/break-glass-accounts/{account_uid}/disable:
     post:
       operationId: disableBreakGlassAccount
+      x-ricevanta-concurrency: if_match
       tags: [break-glass]
       summary: Request disabling an account.
       security:
@@ -1123,6 +1145,14 @@ paths:
   /api/v1/approval-requests/{request_uid}/approve:
     post:
       operationId: approveApprovalRequest
+      x-ricevanta-concurrency: not_versioned
+      x-ricevanta-decision-replay: exact_result
+      description: >-
+        New decisions use the declared permission and freshness binding. After current
+        session, CSRF, strict decoding and read-visibility checks, an exact retry by the
+        original decider returns the authenticated recorded 200 response before new-decision
+        freshness or unconsumed-evidence checks. It never executes or queues application.
+        See identity-sessions section 6 for equality, state and application predicates.
       tags: [approvals]
       summary: Approve an access-policy request as a different, eligible, recently authenticated account.
       security:
@@ -1147,7 +1177,7 @@ paths:
             schema: {$ref: '#/components/schemas/ApprovalDecision'}
       responses:
         '200':
-          description: Decision recorded.
+          description: Decision recorded, or exact recorded result replayed without application.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApprovalRequest'}
@@ -1156,6 +1186,14 @@ paths:
   /api/v1/approval-requests/{request_uid}/reject:
     post:
       operationId: rejectApprovalRequest
+      x-ricevanta-concurrency: not_versioned
+      x-ricevanta-decision-replay: exact_result
+      description: >-
+        New decisions use the declared permission and freshness binding. After current
+        session, CSRF, strict decoding and read-visibility checks, an exact retry by the
+        original decider returns the authenticated recorded 200 response before new-decision
+        freshness or unconsumed-evidence checks. It never executes or queues application.
+        See identity-sessions section 6 for equality, state and application predicates.
       tags: [approvals]
       summary: Reject an access-policy request.
       security:
@@ -1180,7 +1218,7 @@ paths:
             schema: {$ref: '#/components/schemas/ApprovalDecision'}
       responses:
         '200':
-          description: Decision recorded.
+          description: Decision recorded, or exact recorded result replayed without application.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApprovalRequest'}
@@ -1189,6 +1227,14 @@ paths:
   /api/v1/approval-requests/{request_uid}/authority-approve:
     post:
       operationId: approveIdentityAuthorityRequest
+      x-ricevanta-concurrency: not_versioned
+      x-ricevanta-decision-replay: exact_result
+      description: >-
+        New decisions use the declared permission and freshness binding. After current
+        session, CSRF, strict decoding and read-visibility checks, an exact retry by the
+        original decider returns the authenticated recorded 200 response before new-decision
+        freshness or unconsumed-evidence checks. It never executes or queues application.
+        See identity-sessions section 6 for equality, state and application predicates.
       tags: [approvals]
       summary: Approve an identity-authority request with a re-authentication bound to this request.
       security:
@@ -1213,7 +1259,7 @@ paths:
             schema: {$ref: '#/components/schemas/ApprovalDecision'}
       responses:
         '200':
-          description: Decision recorded.
+          description: Decision recorded, or exact recorded result replayed without application.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApprovalRequest'}
@@ -1222,6 +1268,14 @@ paths:
   /api/v1/approval-requests/{request_uid}/authority-reject:
     post:
       operationId: rejectIdentityAuthorityRequest
+      x-ricevanta-concurrency: not_versioned
+      x-ricevanta-decision-replay: exact_result
+      description: >-
+        New decisions use the declared permission and freshness binding. After current
+        session, CSRF, strict decoding and read-visibility checks, an exact retry by the
+        original decider returns the authenticated recorded 200 response before new-decision
+        freshness or unconsumed-evidence checks. It never executes or queues application.
+        See identity-sessions section 6 for equality, state and application predicates.
       tags: [approvals]
       summary: Reject an identity-authority request.
       security:
@@ -1246,7 +1300,7 @@ paths:
             schema: {$ref: '#/components/schemas/ApprovalDecision'}
       responses:
         '200':
-          description: Decision recorded.
+          description: Decision recorded, or exact recorded result replayed without application.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApprovalRequest'}
@@ -1255,6 +1309,12 @@ paths:
   /api/v1/approval-requests/{request_uid}/break-glass-enrollment-code:
     post:
       operationId: claimBreakGlassEnrollmentCode
+      x-ricevanta-concurrency: not_versioned
+      description: >-
+        Requester-only subject exemption. Recheck enabled requester, original action
+        permission, recent authentication, applied request, current epoch and account
+        credential generation, deadline and unconsumed entitlement under the BE-12 fence.
+        Atomically consume the entitlement with issuance; never replay the code.
       tags: [break-glass]
       summary: The requester of an applied break-glass create, reset or factor request claims the one-time enrollment code.
       security:
@@ -1280,6 +1340,13 @@ paths:
   /api/v1/changes:
     get:
       operationId: streamChanges
+      description: >-
+        Authority expires no later than five seconds after observation starts. An
+        independent watchdog hard-aborts the raw TCP connection at the earliest stream
+        deadline, including pending writes and every shared HTTP/2 sibling. Write progress
+        cannot extend the lease. Pinned-runtime and deployment transport qualification
+        under change-stream section 6 is required; terminating proxies need a proved
+        downstream abort fence. Reconnect starts a full snapshot, never mutation replay.
       x-ricevanta-gates: [BE-12]
       tags: [changes]
       summary: Server-Sent Events stream of per-topic invalidation tokens; never row data.
@@ -1976,7 +2043,7 @@ components:
       properties:
         request_uid: {$ref: '#/components/schemas/Uid'}
         kind: {type: string, enum: [access_policy, identity_authority]}
-        status: {type: string, enum: [pending, approved, rejected, expired, stale, applied, failed]}
+        status: {type: string, enum: [pending, approved, rejected, expired, stale, applied, failed, recovery_pending]}
         action: {type: string, pattern: '^[a-z][A-Za-z0-9]{2,63}$', description: The operationId that created the request.}
         requester_user_uid: {$ref: '#/components/schemas/Uid'}
         binding_hash: {$ref: '#/components/schemas/Sha256'}

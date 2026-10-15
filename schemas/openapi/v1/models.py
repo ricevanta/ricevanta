@@ -386,10 +386,35 @@ def security(kind, c):
         return all(c[k] for k in ('mac_valid', 'epoch_current', 'generation_current',
                                   'dependencies_current', 'lease_live', 'published')) and not c['denied']
     if kind == 'decision':
-        return (c['route_kind'] == c['request_kind'] and c['pending'] and c['hash_match']
-                and c['eligible'] and c['different_user'] and not c['target_user']
-                and c['fresh'] and (c['request_kind'] != 'identity_authority'
-                    or c['decision'] == 'reject' or (c['bound'] and c['unaffected'])))
+        return (all(c[k] for k in ('session_valid', 'csrf_valid', 'visible', 'unexpired',
+                                  'epoch_current', 'dependencies_current', 'inspection_permitted'))
+                and c['route_kind'] == c['request_kind'] and c['pending'] and c['hash_match']
+                and c['eligible'] and c['different_user'] and c['fresh']
+                and (c['request_kind'] != 'identity_authority' or (
+                    not c['target_user'] and (c['decision'] == 'reject' or (
+                        c['bound'] and c['unaffected'] and not c['evidence_consumed'])))))
+    if kind == 'decision_replay':
+        # A read predicate: neither fresh evidence nor an executor is involved.
+        return all(c[k] for k in ('session_valid', 'csrf_valid', 'visible', 'record_current',
+                                  'epoch_current', 'same_decider', 'exact_input'))
+    if kind == 'application':
+        return (c['state'] == 'approved' and not c['application_consumed']
+                and all(c[k] for k in ('record_current', 'unexpired', 'epoch_current',
+                    'binding_current', 'dependencies_current', 'requester_authorized',
+                    'eligible', 'different_user', 'inspection_permitted',
+                    'decision_session_valid', 'fresh'))
+                and (c['request_kind'] != 'identity_authority' or (
+                    not c['target_user'] and c['unaffected'] and c['evidence_consumed_by_decision'])))
+    if kind == 'enrollment_claim':
+        return (not c['consumed'] and all(c[k] for k in ('session_valid', 'csrf_valid',
+            'requester_enabled', 'same_requester', 'original_permission', 'fresh',
+            'applied', 'epoch_current', 'generation_current', 'deadline_live')))
+    if kind == 'stream_abort':
+        # Deadline algebra only. Progress and blocked I/O cannot extend the lease.
+        deadline = min(c['observed_at'] + 5000, c['credential_deadline'])
+        if c['sibling_deadline'] is not None:
+            deadline = min(deadline, c['sibling_deadline'])
+        return c['already_closed'] or c['now'] >= deadline
     if kind == 'enrollment':
         return (c['epoch_current'] and c['generation_current'] and not c['consumed']
                 and c['now'] < c['expires_at'] and c['attempts'] < 5 and c['proof_valid'])

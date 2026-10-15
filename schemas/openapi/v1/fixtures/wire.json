@@ -372,6 +372,22 @@
       "schema": "ChangeToken",
       "value": "AAAAAAAAAAAAAAAAAAAAAB",
       "valid": false
+    },
+    {
+      "id": "approval-recovery-pending",
+      "schema": "ApprovalRequest",
+      "value": {
+        "request_uid": "0193a000-0000-7000-8000-000000000001",
+        "kind": "identity_authority",
+        "status": "recovery_pending",
+        "action": "updateIdentityProvider",
+        "requester_user_uid": "0193a000-0000-7000-8000-000000000001",
+        "binding_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "targets_count": 1,
+        "created_at": "2026-01-01T00:00:00Z",
+        "expires_at": "2026-01-04T00:00:00Z"
+      },
+      "valid": true
     }
   ]
 }

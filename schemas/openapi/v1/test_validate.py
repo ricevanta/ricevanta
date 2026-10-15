@@ -107,6 +107,59 @@ class ContractTests(unittest.TestCase):
         diagnostics, _ = validate.validate(Path(__file__).resolve().parents[3])
         self.assertEqual(diagnostics, [])
 
+    def test_each_versioned_write_requires_canonical_if_match(self):
+        root = Path(__file__).resolve().parents[3]
+        original = validate.load_yaml((root / validate.HERE / 'openapi.yaml').read_text())
+        catalogue = validate.merged_catalogue(root)
+        checked = set()
+        for path, item in original['paths'].items():
+            for method, op in item.items():
+                if method not in validate.METHODS or op['operationId'] not in validate.VERSIONED_WRITES:
+                    continue
+                checked.add(op['operationId'])
+                for defect in ('missing', 'optional', 'weak', 'list', 'wrong-location'):
+                    document = copy.deepcopy(original)
+                    params = document['paths'][path][method]['parameters']
+                    index = next(i for i, p in enumerate(params)
+                                 if validate.deref(document, p).get('name') == 'If-Match')
+                    header = copy.deepcopy(validate.deref(document, params[index]))
+                    if defect == 'missing':
+                        del params[index]
+                    else:
+                        params[index] = header
+                        if defect == 'optional':
+                            header['required'] = False
+                        elif defect == 'wrong-location':
+                            header['in'] = 'query'
+                        else:
+                            header['schema'] = {'type': 'string', 'maxLength': 100,
+                                'pattern': '.*' if defect == 'weak' else '^.+(,.+)*$'}
+                    with self.subTest(operation=op['operationId'], defect=defect):
+                        diagnostics, _ = validate.check_document(root, document, catalogue)
+                        self.assertTrue(any(line.startswith('R24') for line in diagnostics))
+        self.assertEqual(checked, validate.VERSIONED_WRITES)
+
+    def test_approval_predicates_after_consumption(self):
+        root = Path(__file__).resolve().parents[3]
+        cases = validate.load_json((root / validate.HERE / 'fixtures/security.json').read_text())['cases']
+        by_id = {case['id']: case['input'] for case in cases}
+        decision = copy.deepcopy(by_id['authority-approval'])
+        replay = copy.deepcopy(by_id['exact-result-replay'])
+        application = copy.deepcopy(by_id['approved-application-consumed-evidence'])
+        self.assertTrue(validate.models.security('decision', decision))
+        decision.update(pending=False, evidence_consumed=True)
+        self.assertFalse(validate.models.security('decision', decision))
+        self.assertTrue(validate.models.security('decision_replay', replay))
+        self.assertTrue(validate.models.security('application', application))
+        application['application_consumed'] = True
+        self.assertFalse(validate.models.security('application', application))
+        self.assertTrue(validate.models.security('decision_replay', replay))
+        application.update(application_consumed=False, fresh=False)
+        self.assertFalse(validate.models.security('application', application))
+        self.assertTrue(validate.models.security('decision_replay', replay))
+        replay['visible'] = False
+        self.assertFalse(validate.models.security('decision_replay', replay))
+
     def test_duplicate_json_and_nonfinite_rejected(self):
         for data in ('{"x":1,"x":2}', '{"x":NaN}', '{"x":Infinity}'):
             with self.subTest(data=data), self.assertRaises(validate.Failure):

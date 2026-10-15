@@ -1,5 +1,5 @@
 {
-  "description": "Acceptance predicates for verified freshness, current authority, approval and one-use enrollment. Not a journal/fencing implementation or qualification proof.",
+  "description": "Acceptance predicates for decision, exact-result replay, one-use application, authority, stream abort deadlines and enrollment. Not a journal, transport implementation or qualification proof.",
   "cases": [
     {
       "id": "verified-recent",
@@ -303,7 +303,15 @@
         "target_user": false,
         "fresh": true,
         "bound": true,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": true
     },
@@ -321,7 +329,15 @@
         "target_user": false,
         "fresh": true,
         "bound": true,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -339,7 +355,15 @@
         "target_user": false,
         "fresh": true,
         "bound": true,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -357,7 +381,15 @@
         "target_user": true,
         "fresh": true,
         "bound": true,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -375,7 +407,15 @@
         "target_user": false,
         "fresh": true,
         "bound": false,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -393,7 +433,15 @@
         "target_user": false,
         "fresh": true,
         "bound": true,
-        "unaffected": false
+        "unaffected": false,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -411,7 +459,15 @@
         "target_user": false,
         "fresh": true,
         "bound": true,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -429,7 +485,15 @@
         "target_user": false,
         "fresh": true,
         "bound": true,
-        "unaffected": true
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": false
     },
@@ -447,7 +511,15 @@
         "target_user": false,
         "fresh": true,
         "bound": false,
-        "unaffected": false
+        "unaffected": false,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
       },
       "expect": true
     },
@@ -534,6 +606,1177 @@
         "proof_valid": true
       },
       "expect": false
+    },
+    {
+      "id": "decision-refuses-pending",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": false,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-session-valid",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": false,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-csrf-valid",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": false,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-visible",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": false,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-unexpired",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": false,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-epoch-current",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": false,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-dependencies-current",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": false,
+        "inspection_permitted": true,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-inspection-permitted",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": false,
+        "evidence_consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "decision-refuses-evidence-consumed",
+      "kind": "decision",
+      "input": {
+        "route_kind": "identity_authority",
+        "request_kind": "identity_authority",
+        "decision": "approve",
+        "pending": true,
+        "hash_match": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "fresh": true,
+        "bound": true,
+        "unaffected": true,
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "dependencies_current": true,
+        "inspection_permitted": true,
+        "evidence_consumed": true
+      },
+      "expect": false
+    },
+    {
+      "id": "exact-result-replay",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "record_current": true,
+        "epoch_current": true,
+        "same_decider": true,
+        "exact_input": true
+      },
+      "expect": true
+    },
+    {
+      "id": "replay-refuses-session-valid",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": false,
+        "csrf_valid": true,
+        "visible": true,
+        "record_current": true,
+        "epoch_current": true,
+        "same_decider": true,
+        "exact_input": true
+      },
+      "expect": false
+    },
+    {
+      "id": "replay-refuses-csrf-valid",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": false,
+        "visible": true,
+        "record_current": true,
+        "epoch_current": true,
+        "same_decider": true,
+        "exact_input": true
+      },
+      "expect": false
+    },
+    {
+      "id": "replay-refuses-visible",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": false,
+        "record_current": true,
+        "epoch_current": true,
+        "same_decider": true,
+        "exact_input": true
+      },
+      "expect": false
+    },
+    {
+      "id": "replay-refuses-record-current",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "record_current": false,
+        "epoch_current": true,
+        "same_decider": true,
+        "exact_input": true
+      },
+      "expect": false
+    },
+    {
+      "id": "replay-refuses-epoch-current",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "record_current": true,
+        "epoch_current": false,
+        "same_decider": true,
+        "exact_input": true
+      },
+      "expect": false
+    },
+    {
+      "id": "replay-refuses-same-decider",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "record_current": true,
+        "epoch_current": true,
+        "same_decider": false,
+        "exact_input": true
+      },
+      "expect": false
+    },
+    {
+      "id": "replay-refuses-exact-input",
+      "kind": "decision_replay",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "visible": true,
+        "record_current": true,
+        "epoch_current": true,
+        "same_decider": true,
+        "exact_input": false
+      },
+      "expect": false
+    },
+    {
+      "id": "approved-application-consumed-evidence",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": true
+    },
+    {
+      "id": "application-refuses-record-current",
+      "kind": "application",
+      "input": {
+        "record_current": false,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-unexpired",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": false,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-epoch-current",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": false,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-binding-current",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": false,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-dependencies-current",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": false,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-requester-authorized",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": false,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-eligible",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": false,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-different-user",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": false,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-target-user",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": true,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-inspection-permitted",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": false,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-decision-session-valid",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": false,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-fresh",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": false,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-evidence-consumed-by-decision",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": false,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-unaffected",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": false,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-application-consumed",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": true,
+        "state": "approved",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-pending",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "pending",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-rejected",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "rejected",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-applied",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "applied",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "application-refuses-recovery-pending",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": true,
+        "unaffected": true,
+        "application_consumed": false,
+        "state": "recovery_pending",
+        "request_kind": "identity_authority"
+      },
+      "expect": false
+    },
+    {
+      "id": "ordinary-application",
+      "kind": "application",
+      "input": {
+        "record_current": true,
+        "unexpired": true,
+        "epoch_current": true,
+        "binding_current": true,
+        "dependencies_current": true,
+        "requester_authorized": true,
+        "eligible": true,
+        "different_user": true,
+        "target_user": false,
+        "inspection_permitted": true,
+        "decision_session_valid": true,
+        "fresh": true,
+        "evidence_consumed_by_decision": false,
+        "unaffected": false,
+        "application_consumed": false,
+        "state": "approved",
+        "request_kind": "access_policy"
+      },
+      "expect": true
+    },
+    {
+      "id": "requester-code-claim",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": true
+    },
+    {
+      "id": "claim-refuses-session-valid",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": false,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-csrf-valid",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": false,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-requester-enabled",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": false,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-same-requester",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": false,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-original-permission",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": false,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-fresh",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": false,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-applied",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": false,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-epoch-current",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": false,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-generation-current",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": false,
+        "deadline_live": true,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-deadline-live",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": false,
+        "consumed": false
+      },
+      "expect": false
+    },
+    {
+      "id": "claim-refuses-consumed",
+      "kind": "enrollment_claim",
+      "input": {
+        "session_valid": true,
+        "csrf_valid": true,
+        "requester_enabled": true,
+        "same_requester": true,
+        "original_permission": true,
+        "fresh": true,
+        "applied": true,
+        "epoch_current": true,
+        "generation_current": true,
+        "deadline_live": true,
+        "consumed": true
+      },
+      "expect": false
+    },
+    {
+      "id": "stream-live",
+      "kind": "stream_abort",
+      "input": {
+        "now": 4999,
+        "observed_at": 0,
+        "credential_deadline": 60000,
+        "last_progress_at": 4998,
+        "sibling_deadline": null,
+        "already_closed": false,
+        "read_blocked": false,
+        "write_blocked": false
+      },
+      "expect": false
+    },
+    {
+      "id": "stream-at-authority-deadline",
+      "kind": "stream_abort",
+      "input": {
+        "now": 5000,
+        "observed_at": 0,
+        "credential_deadline": 60000,
+        "last_progress_at": 4998,
+        "sibling_deadline": null,
+        "already_closed": false,
+        "read_blocked": false,
+        "write_blocked": false
+      },
+      "expect": true
+    },
+    {
+      "id": "stream-stalled-read-and-write",
+      "kind": "stream_abort",
+      "input": {
+        "now": 5000,
+        "observed_at": 0,
+        "credential_deadline": 60000,
+        "last_progress_at": 4998,
+        "sibling_deadline": null,
+        "already_closed": false,
+        "read_blocked": true,
+        "write_blocked": true
+      },
+      "expect": true
+    },
+    {
+      "id": "stream-trickling-write",
+      "kind": "stream_abort",
+      "input": {
+        "now": 5000,
+        "observed_at": 0,
+        "credential_deadline": 60000,
+        "last_progress_at": 5000,
+        "sibling_deadline": null,
+        "already_closed": false,
+        "read_blocked": false,
+        "write_blocked": true
+      },
+      "expect": true
+    },
+    {
+      "id": "stream-earlier-credential-expiry",
+      "kind": "stream_abort",
+      "input": {
+        "now": 3000,
+        "observed_at": 0,
+        "credential_deadline": 3000,
+        "last_progress_at": 4998,
+        "sibling_deadline": null,
+        "already_closed": false,
+        "read_blocked": false,
+        "write_blocked": false
+      },
+      "expect": true
+    },
+    {
+      "id": "stream-sibling-expiry",
+      "kind": "stream_abort",
+      "input": {
+        "now": 3000,
+        "observed_at": 0,
+        "credential_deadline": 60000,
+        "last_progress_at": 3000,
+        "sibling_deadline": 3000,
+        "already_closed": false,
+        "read_blocked": false,
+        "write_blocked": false
+      },
+      "expect": true
+    },
+    {
+      "id": "stream-closed-cannot-renew",
+      "kind": "stream_abort",
+      "input": {
+        "now": 100,
+        "observed_at": 0,
+        "credential_deadline": 60000,
+        "last_progress_at": 4998,
+        "sibling_deadline": null,
+        "already_closed": true,
+        "read_blocked": false,
+        "write_blocked": false
+      },
+      "expect": true
     }
   ]
 }
