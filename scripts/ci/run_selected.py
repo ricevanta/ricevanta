@@ -77,7 +77,8 @@ def inventory(root=ROOT):
         targets[target['id']] = target
     for row in data.get('fuzz', []):
         add({'id': f"go-fuzz:{row['package']}:{row['target']}", 'mode': 'go-fuzz', 'cwd': 'server',
-             'packages': [row['package']], 'target': row['target'], 'fuzztime': row['fuzztime'], 'parallel': row['parallel']})
+             'packages': [row['package']], 'target': row['target'], 'fuzztime': row['fuzztime'], 'parallel': row['parallel'],
+             **({'fuzzminimizetime': row['fuzzminimizetime']} if 'fuzzminimizetime' in row else {})})
     loader = data['loader']
     add({'id': 'loader-fuzz', 'mode': 'go-fuzz', 'cwd': 'server', 'packages': [loader['package']],
          'target': loader['target'], 'fuzztime': loader['fuzztime'], 'parallel': loader['parallel']})
@@ -133,7 +134,7 @@ def package_command(target):
 
 def discovery_command(target):
     mode = target['mode']
-    if mode in ('go-suite', 'go-selected', 'go-interop'):
+    if mode in ('go-suite', 'go-selected', 'go-interop', 'go-cost-model'):
         pattern = '.*' if mode == 'go-suite' else target.get('run') or '^(' + '|'.join(map(re.escape, target['tests'])) + ')$'
         return ['go', 'test', *go_build_flags(target), '-list', pattern, *target['packages']]
     if mode == 'go-bench':
@@ -151,9 +152,9 @@ def run_command(target):
     mode = target['mode']
     if mode == 'go-suite':
         return ['go', 'test', '-json', *go_build_flags(target), '-count=1', *target.get('test_flags', []), *target['packages']]
-    if mode in ('go-selected', 'go-interop'):
+    if mode in ('go-selected', 'go-interop', 'go-cost-model'):
         pattern = target.get('run') or '^(' + '|'.join(map(re.escape, target['tests'])) + ')$'
-        command = ['go', 'test', '-json', *go_build_flags(target), '-count=1', *target['packages'], '-run', pattern]
+        command = ['go', 'test', '-json', *go_build_flags(target), '-count=1', *target.get('test_flags', []), *target['packages'], '-run', pattern]
         if target.get('args'): command += ['-args', *target['args']]
         return command
     if mode == 'go-bench':
@@ -161,7 +162,8 @@ def run_command(target):
                 *target.get('test_flags', []), *target['packages']]
     if mode == 'go-fuzz':
         return ['go', 'test', '-json', '-count=1', *target['packages'], '-fuzz=^' + re.escape(target['target']) + '$',
-                '-fuzztime=' + target['fuzztime'], '-parallel=' + str(target['parallel'])]
+                '-fuzztime=' + target['fuzztime'], '-parallel=' + str(target['parallel']),
+                *(['-fuzzminimizetime=' + target['fuzzminimizetime']] if 'fuzzminimizetime' in target else [])]
     if mode == 'rust-suite':
         return ['cargo', 'test', *target['cargo']]
     if mode == 'rust-selected':
@@ -503,6 +505,29 @@ def verify_go_bench(target, discovery, events, exit_code):
     return summary
 
 
+def verify_go_cost_model(target, discovery, events, exit_code):
+    summary = verify_go_selected(target, discovery, events, exit_code)
+    lines = go_outputs(events, 'TestDecodeCostModel', subtests=True)
+    measurements = sum('COST_MEASUREMENT ' in line for line in lines)
+    totals = [line.strip().split('COST_MODEL_CASES ', 1)[1] for line in lines if 'COST_MODEL_CASES ' in line]
+    if measurements != target['cases'] or totals != ['n=' + str(target['cases'])]:
+        raise EvidenceError('incomplete ingest cost-model measurements or case total')
+    return {**summary, 'measurements': measurements}
+
+
+def cost_model_benchmark(target):
+    return {**target, 'mode': 'go-bench', 'test_flags': target['benchmark_flags']}
+
+
+def retain_go_log(data, stderr, path, append=False):
+    """Retain readable combined test/benchmark output outside receipt directories."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('a' if append else 'w', encoding='utf-8') as log:
+        for _, _, line in go_lines(parse_go_events(data)):
+            log.write(line + '\n')
+        log.write(stderr.decode('utf-8', 'replace'))
+
+
 def verify_go_fuzz(target, discovery, events, exit_code):
     listed = parse_go_list(discovery)
     if len(listed) != 1 or next(iter(listed.values())) != [target['target']]:
@@ -689,7 +714,7 @@ def verify_console(target, evidence_dir, exit_code):
     return verify_playwright_report(report, target['specs'])
 
 
-MODES = {'go-suite', 'go-selected', 'go-interop', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'console-vitest', 'console-playwright'}
+MODES = {'go-suite', 'go-selected', 'go-interop', 'go-cost-model', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'console-vitest', 'console-playwright'}
 
 
 def evidence_name(target_id):
@@ -718,6 +743,7 @@ def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=
     mode = target['mode']
     if mode == 'go-suite': return verify_go_suite(target, discovery, parse_go_events(stdout), exit_code, packages, declarations)
     if mode in ('go-selected', 'go-interop'): return verify_go_selected(target, discovery, parse_go_events(stdout), exit_code)
+    if mode == 'go-cost-model': return verify_go_cost_model(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-bench': return verify_go_bench(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'go-fuzz': return verify_go_fuzz(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'rust-suite': return verify_rust_suite(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
@@ -766,7 +792,9 @@ def cargo_guard(target, env, root):
 
 def child_environment(target, env):
     """Go children ignore the per-user configuration file, so `go env -w` cannot supply CC, flags or a toolchain."""
-    return {**env, 'GOENV': 'off'} if target['mode'].startswith('go') else env
+    result = {**env, 'GOENV': 'off'} if target['mode'].startswith('go') else env
+    if target['mode'] == 'go-cost-model': result.update(RICEVANTA_COST_MODEL='full', GOGC='100')
+    return result
 
 
 def preconditions(target, env, root=ROOT):
@@ -815,11 +843,30 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     cargo_guard(target, env, root)
     print('command:', shlex.join(command), flush=True)
     exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
+    cost_log = None
+    if target['mode'] == 'go-cost-model':
+        cost_log = Path(env['RUNNER_TEMP']) / 'ingest-measurements/cost-model.log'
+        retain_go_log((evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(), cost_log)
     summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(),
                      exit_code, evidence_dir, packages_text, declarations_text)
+    benchmark_commands = None
+    if cost_log is not None:
+        bench = cost_model_benchmark(target)
+        bench_discovery = discovery_command(bench)
+        code = execute(bench_discovery, cwd, env, evidence_dir / 'benchmark-discovery.txt', evidence_dir / 'benchmark-discovery.stderr.txt')
+        if code != 0: raise EvidenceError('benchmark discovery exited %d' % code)
+        bench_command = run_command(bench)
+        print('command:', shlex.join(bench_command), flush=True)
+        code = execute(bench_command, cwd, env, evidence_dir / 'benchmark-output.txt', evidence_dir / 'benchmark-stderr.txt')
+        stdout = (evidence_dir / 'benchmark-output.txt').read_bytes()
+        retain_go_log(stdout, (evidence_dir / 'benchmark-stderr.txt').read_bytes(), cost_log, append=True)
+        summary['benchmark'] = verify_go_bench(bench, (evidence_dir / 'benchmark-discovery.txt').read_text(encoding='utf-8'), parse_go_events(stdout), code)
+        if not cost_log.stat().st_size: raise EvidenceError('empty ingest measurement log')
+        benchmark_commands = {'discovery': bench_discovery, 'command': bench_command}
     record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'mode': target['mode'], 'cwd': target['cwd'],
               'packages': packages_command, 'discovery': discovery, 'command': command, 'exit': exit_code, 'result': 'success',
               'summary': summary}
+    if benchmark_commands is not None: record['benchmark'] = benchmark_commands
     for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA'):
         if env.get(key): record[key] = env[key]
     (evidence_dir / 'verified.json').write_text(json.dumps(record, sort_keys=True) + '\n', encoding='utf-8')

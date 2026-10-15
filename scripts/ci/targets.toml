@@ -145,6 +145,38 @@ target = "FuzzTar"
 fuzztime = "60s"
 parallel = 2
 
+[[fuzz]]
+package = "./internal/extensions/admission"
+target = "FuzzDecide"
+fuzztime = "60s"
+parallel = 2
+fuzzminimizetime = "3s"
+
+[[fuzz]]
+package = "./internal/extensions/admission"
+target = "FuzzParse"
+fuzztime = "60s"
+parallel = 2
+fuzzminimizetime = "3s"
+
+[[fuzz]]
+package = "./internal/platform/config"
+target = "FuzzLoad"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/transport/console"
+target = "FuzzPath"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/transport/console"
+target = "FuzzAcceptEncoding"
+fuzztime = "60s"
+parallel = 2
+
 [loader]
 package = "./internal/extensions/loader"
 target = "FuzzParserQualification"
@@ -175,6 +207,18 @@ packages = ["./internal/signing/ed25519key"]
 benchmark = "BenchmarkValidate"
 test_flags = ["-benchmem", "-benchtime=100x"]
 operations = 100
+
+[[selected]]
+id = "ingest-cost-model"
+mode = "go-cost-model"
+cwd = "server"
+packages = ["./internal/events/body"]
+tests = ["TestDecodeCostModel"]
+test_flags = ["-timeout=15m"]
+cases = 34
+benchmark = "BenchmarkDecodeCost"
+benchmark_flags = ["-benchmem", "-benchtime=3x", "-timeout=15m"]
+operations = 3
 
 [[selected]]
 id = "loader-extended"
@@ -320,6 +364,13 @@ test = "TestParserMeasurementChild"
 reason = "fresh measurement child entry point"
 proof = "loader-extended"
 modes = ["server-unit", "server-race"]
+
+[[skips]]
+package = "github.com/ricevanta/ricevanta/server/internal/events/body"
+test = "TestDecodeCostModel"
+reason = "full ingest cost model runs separately without race instrumentation"
+proof = "ingest-cost-model"
+modes = ["server-unit", "server-race", "go-fuzz"]
 
 [[skips]]
 package = "ricevanta-spool"

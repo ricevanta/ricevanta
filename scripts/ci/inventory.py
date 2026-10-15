@@ -1,7 +1,7 @@
 """Reviewed consumer inputs, leaf units and required step checks."""
 import argparse
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +38,11 @@ CHECKS = {
 
 
 FUZZ_PAIRS = {
+    ('./internal/extensions/admission', 'FuzzDecide'),
+    ('./internal/extensions/admission', 'FuzzParse'),
+    ('./internal/platform/config', 'FuzzLoad'),
+    ('./internal/transport/console', 'FuzzPath'),
+    ('./internal/transport/console', 'FuzzAcceptEncoding'),
     ('./internal/events/eventid', 'FuzzParse'),
     ('./internal/events/batch', 'FuzzDescriptor'),
     ('./internal/signing/dsse', 'FuzzVerify'),
@@ -66,14 +71,16 @@ FUZZ_PAIRS = {
 def fuzz_targets(root=ROOT):
     targets = tomllib.loads((root / 'scripts/ci/targets.toml').read_text())
     data = targets['fuzz']
-    if len(data) != 23 or {(r['package'], r['target']) for r in data} != FUZZ_PAIRS:
-        raise ValueError('expected exact 23 unique fuzz targets')
+    if len(data) != 28 or {(r['package'], r['target']) for r in data} != FUZZ_PAIRS:
+        raise ValueError('expected exact 28 unique fuzz targets')
     if targets['loader'] != {'package': './internal/extensions/loader',
                              'target': 'FuzzParserQualification', 'fuzztime': '60s', 'parallel': 2}:
         raise ValueError('changed Gate A fuzz selector or budget')
     for row in data:
         if row['fuzztime'] != '60s' or row['parallel'] != 2:
             raise ValueError('changed fuzz budget')
+        if row.get('fuzzminimizetime') != ('3s' if row['package'] == './internal/extensions/admission' else None):
+            raise ValueError('changed fuzz minimization budget')
     return data
 
 
@@ -91,6 +98,12 @@ def units(groups):
                 result += [f'loader-gate-b:{host}' for host in HOSTS.values()]
         else: result.append(group)
     return sorted(result)
+
+
+def fuzz_matrix(root=ROOT):
+    """Package selectors retain ./; artifact globs use normalized paths."""
+    return [{**row, 'corpus': (PurePosixPath('server') / row['package'] / 'testdata/fuzz' / row['target']).as_posix() + '/**'}
+            for row in fuzz_targets(root)]
 
 
 def checks(unit):
@@ -141,4 +154,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fuzz-matrix', action='store_true', required=True)
     parser.parse_args()
-    print(json.dumps(fuzz_targets(), separators=(',', ':')))
+    print(json.dumps(fuzz_matrix(), separators=(',', ':')))

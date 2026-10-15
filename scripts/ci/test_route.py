@@ -218,6 +218,11 @@ class RouteTests(unittest.TestCase):
             ('./internal/extensions/loader', 'FuzzTar'),
             ('./internal/extensions/loader', 'FuzzVerifiedYAML'),
             ('./internal/extensions/manifest', 'FuzzValidate'),
+            ('./internal/extensions/admission', 'FuzzDecide'),
+            ('./internal/extensions/admission', 'FuzzParse'),
+            ('./internal/platform/config', 'FuzzLoad'),
+            ('./internal/transport/console', 'FuzzPath'),
+            ('./internal/transport/console', 'FuzzAcceptEncoding'),
             ('./internal/mdm/resourcevalidate', 'FuzzBudget'),
             ('./internal/mdm/resourcevalidate', 'FuzzValidate'),
             ('./internal/policy/celdecl', 'FuzzLoad'),
@@ -243,10 +248,21 @@ class RouteTests(unittest.TestCase):
     def test_inventory_checks_and_fuzz(self):
         expected = json.loads((Path(__file__).parent / 'fixtures/fuzz-targets.json').read_text())
         self.assertEqual(inventory.fuzz_targets(), expected)
-        self.assertEqual(len(inventory.fuzz_targets()), 23)
-        self.assertEqual(len(inventory.units(inventory.GROUPS)), 46)
+        self.assertEqual(len(inventory.fuzz_targets()), 28)
+        self.assertEqual(len(inventory.units(inventory.GROUPS)), 51)
         for unit in inventory.units(inventory.GROUPS): self.assertTrue(inventory.checks(unit))
         self.assertEqual(inventory.checks('server-validate'),
                          ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'])
+
+    def test_every_fuzz_corpus_path_is_artifact_safe(self):
+        rows = inventory.fuzz_matrix()
+        self.assertEqual(len(rows), 28)
+        output = subprocess.check_output([sys.executable, '-B', str(Path(inventory.__file__)), '--fuzz-matrix'])
+        self.assertEqual(json.loads(output), rows)
+        for row in rows:
+            with self.subTest(target=row['target'], package=row['package']):
+                self.assertNotIn('.', row['corpus'].split('/'))
+                self.assertNotIn('..', row['corpus'].split('/'))
+                self.assertEqual(row['corpus'], 'server/' + row['package'][2:] + '/testdata/fuzz/' + row['target'] + '/**')
 
 if __name__ == '__main__': unittest.main()

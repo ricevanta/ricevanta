@@ -33,6 +33,33 @@ class PolicyTests(unittest.TestCase):
 
     def test_current_policy(self): self.assertEqual(check_policy.check(ROOT), [])
 
+    def test_ingest_and_admission_catalogue_budgets_are_closed(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        self.assertEqual(check_policy.selected_errors(self.root), [])
+        for old, new in (
+            ('cases = 34', 'cases = 33'),
+            ('benchmark = "BenchmarkDecodeCost"', 'benchmark = "BenchmarkOtherCost"'),
+            ('"-benchtime=3x"', '"-benchtime=1x"'),
+            ('fuzzminimizetime = "3s"', 'fuzzminimizetime = "30s"'),
+            ('proof = "ingest-cost-model"', 'proof = "key-admission-bench"'),
+        ):
+            with self.subTest(old=old):
+                self.assertIn(old, baseline)
+                path.write_text(baseline.replace(old, new))
+                self.assertTrue(check_policy.selected_errors(self.root))
+        path.write_text(baseline)
+
+    def test_fuzz_artifact_uses_normalized_matrix_path(self):
+        data = yaml.load((ROOT / '.github/workflows/server.yml').read_text(), Loader=yaml.BaseLoader)
+        job = data['jobs']['fuzz']
+        self.assertEqual(check_policy.fuzz_evidence_errors(job, ROOT), [])
+        corpus = next(s for s in job['steps'] if s.get('name') == 'Upload failing corpus')
+        for path in ('server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**', 'missing/**'):
+            with self.subTest(path=path):
+                corpus['with']['path'] = path
+                self.assertTrue(check_policy.fuzz_evidence_errors(job, ROOT))
+
     def race_fixture(self):
         path = self.root / '.github/workflows/server.yml'
         data = yaml.load(path.read_text(), Loader=yaml.BaseLoader)

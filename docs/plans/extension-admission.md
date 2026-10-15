@@ -38,7 +38,7 @@ Tech stack: Go 1.27.1 standard library. Python `jsonschema` 4.25.1 in the existi
 | `server/internal/extensions/admission/digest.go` | JCS emitter for the closed digest types, `ClosureDigest`, `RequestDigest` |
 | `server/internal/extensions/admission/*_test.go` | Vector runner, schema-cases runner, stage, digest, bounds, aliasing and fuzz tests |
 | `scripts/ci/validate_contracts.py` | Task 0 registration of the four schema and fixture pairs (implementer-owned; the design task did not edit it) |
-| `.github/workflows/server.yml`, `scripts/ci/targets.toml`, `scripts/ci/fixtures/fuzz-targets.json`, `scripts/ci/inventory.py`, `scripts/ci/test_route.py`, `scripts/ci/test_required.py` | Task 5 fuzz-target registration, following the loader plan's CI integration pattern |
+| `.github/workflows/server.yml`, `scripts/ci/targets.toml`, `scripts/ci/fixtures/fuzz-targets.json`, `scripts/ci/inventory.py`, `scripts/ci/run_selected.py`, `scripts/ci/check_policy.py`, and their focused tests | Task 5 fuzz-target registration, following the loader plan's CI integration pattern |
 
 ### Task 0: Register the admission schemas in design CI
 
@@ -88,7 +88,7 @@ Files: create `fuzz_test.go`.
 
 Owner: one `implementer` after Task 4, following the [loader plan's CI integration](extension-loader.md#task-5-ci-integration) pattern and owning only the CI paths in the table above.
 
-- [ ] Add the two admission fuzz pairs to `scripts/ci/targets.toml` and `scripts/ci/fixtures/fuzz-targets.json`, raise the required unique main fuzz pair count in `scripts/ci/inventory.py` by two, and extend `test_route.py` and `test_required.py` so a missing admission fuzz receipt fails `required.verify`. Keep every existing pair and budget.
+- [x] Register `FuzzDecide` and `FuzzParse` in `scripts/ci/targets.toml`, its fixture and the required main fuzz inventory. Each admission leaf uses an anchored selector, `-fuzztime=60s`, `-parallel=2` and `-fuzzminimizetime=3s`; `run_selected.py` prints the verified execution count in its final summary. Route and receipt tests require both leaves and reject either missing receipt. Preserve every existing pair and budget. Matrix corpus globs use normalized repository paths without `.` or `..` components.
 - [ ] Local, repository root: `python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v`, `python -B scripts/ci/inventory.py --fuzz-matrix`, `python -B scripts/ci/check_policy.py --root .`, `actionlint .github/workflows/*.yml`; require PASS.
 - [ ] The primary agent obtains green PR CI for the final head, including both new fuzz leaves and `server-race`, then independent `code_reviewer` confirmation. This task authorizes no production consumer.
 
