@@ -69,12 +69,22 @@ go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./inter
 
 The first consumer owns performance qualification and its request and candidate bounds.
 
-CI, `server/`: the `validate` job proves the ingest admission cost model ([ingest admission section 9](../docs/specs/ingest-admission.md#9-ci-evidence)), fails unless the log holds `COST_MODEL_CASES n=34` and 34 `COST_MEASUREMENT` lines, and uploads the combined output as `ingest-measurements-<runId>-<runAttempt>`. Without `RICEVANTA_COST_MODEL=full`, `TestDecodeCostModel` skips.
+CI: `server-validate` requires the 50-case composite ingest proof from [ingest admission section 9.1](../docs/specs/ingest-admission.md#91-selected-test-proof-composition). From the repository root, the dedicated wrapper verifies the test phase before running and verifying the three-iteration benchmark phase:
+
+```sh
+python -B scripts/ci/run_selected.py --id ingest-cost-model --evidence "$RUNNER_TEMP/evidence"
+```
+
+The wrapper sets `GOENV=off`, `RICEVANTA_COST_MODEL=full` and `GOGC=100`. It retains both payloads and their diagnostics outside receipt directories in `ingest-measurements/cost-model.log`, uploaded for 30 days. A receipt requires both successful phases, all 50 exact case keys and the same tested commit, run and attempt. Ordinary suites allow only the exact observed `TestDecodeCostModel` skip; they never replace the dedicated proof. Without `RICEVANTA_COST_MODEL=full`, the cost-model parent starts no child.
+
+CI qualification commands, from `server/`:
 
 ```sh
 RICEVANTA_COST_MODEL=full GOGC=100 go test -count=1 -timeout=15m ./internal/events/body -run '^TestDecodeCostModel$' -v
 go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body
 ```
+
+Run full cost, memory, race and fuzz qualification in CI. Local body/admission checks use the focused ordinary suites; the small `TestAdversarialCostCorpus` representatives exercise structural and rejection stages without running memory-limit children. Handler integration still requires the separate CPU contention, ARM64, transport and storage qualification gates.
 
 Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in PR/master CI. Console browser checks run in `.github/workflows/console.yml`.
 

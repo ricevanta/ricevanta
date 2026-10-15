@@ -8,6 +8,8 @@ verified.json record that the leaf receipt step requires for its check ID.
 import argparse
 from collections import Counter
 import json
+import math
+import shutil
 import os
 from pathlib import Path
 import re
@@ -23,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GO_LIST_NAME = re.compile(r'^(Test|Benchmark|Fuzz|Example)\w*$')
 GO_LIST_OK = re.compile(r'^ok\s+(\S+)\s+\S+$')
 GO_LIST_NONE = re.compile(r'^\?\s+(\S+)\s+\[no test files\]$')
-GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op\s+(\d+) B/op\s+(\d+) allocs/op\s*$')
+GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op(?:\s+[0-9.]+ MB/s)?\s+(\d+) B/op\s+(\d+) allocs/op\s*$')
 GO_BASELINE = re.compile(r'^fuzz: elapsed: \S+, gathering baseline coverage: (\d+)/(\d+) completed(, now fuzzing with (\d+) workers)?$')
 GO_EXECS = re.compile(r'^fuzz: elapsed: (\S+), execs: (\d+) \(\d+/sec\), new interesting: \d+ \(total: \d+\)$')
 GO_PACKAGE_FIELDS = '-json=ImportPath,Dir,TestGoFiles,XTestGoFiles'
@@ -489,30 +491,70 @@ def verify_go_bench(target, discovery, events, exit_code):
     # Results belong to leaf benchmarks; each leaf reports once with the exact iteration count.
     leaves = {n for n in names if not any(other.startswith(n + '/') for other in names)}
     rows = {}
-    for _, test, line in go_lines(events):
+    for pkg, test, line in go_lines(events):
         match = GO_BENCH.match(line)
         if not match: continue
         if match[1] in rows: raise EvidenceError('duplicate benchmark result: ' + match[1])
-        if test != match[1]: raise EvidenceError('benchmark result %s attributed to %s' % (match[1], test))
+        if pkg != package or test != match[1]: raise EvidenceError('benchmark result %s attributed to %s' % (match[1], test))
         rows[match[1]] = match
     if set(rows) != leaves: raise EvidenceError('benchmark results %s differ from the started leaves %s' % (sorted(rows), sorted(leaves)))
     summary = {'package': package, 'results': {}}
     for name, match in rows.items():
         ops, ns = int(match[2]), float(match[3])
-        if ops != target['operations'] or ns <= 0: raise EvidenceError('%s ran %d operations in %s ns/op' % (name, ops, ns))
+        if ops != target['operations'] or not math.isfinite(ns) or ns <= 0: raise EvidenceError('%s ran %d operations in %s ns/op' % (name, ops, ns))
         summary['results'][name] = {'operations': ops, 'ns_per_op': ns, 'bytes_per_op': int(match[4]), 'allocs_per_op': int(match[5])}
     summary['operations'] = target['operations']
     return summary
 
 
+COST_PACKAGE = 'github.com/ricevanta/ricevanta/server/internal/events/body'
+COST_FIELDS = frozenset(('case mode shape n window size weight baseline limit lines allocs cpu_ms wall_ms peak peak_ratio vmhwm gc_cycles limiter_cycle preflight_cpu_ns decode_cpu_ns cpu_ns blocks codecs paid repeats').split())
+
+
+def cost_fields(text):
+    fields = {}
+    for token in text.split():
+        key, equal, value = token.partition('=')
+        if not equal or not key or not value or key in fields:
+            raise EvidenceError('malformed or duplicate cost-model field')
+        fields[key] = value
+    if fields.keys() != COST_FIELDS: raise EvidenceError('unexpected cost-model fields')
+    if fields['mode'] != 'limited': raise EvidenceError('cost-model measurement is not limited')
+    for key, value in fields.items():
+        if key in ('case', 'mode', 'shape'): continue
+        if key == 'peak_ratio':
+            try: number = float(value)
+            except ValueError: raise EvidenceError('malformed cost-model number')
+            if not math.isfinite(number) or number < 0: raise EvidenceError('invalid cost-model ratio')
+        elif not re.fullmatch(r'[0-9]+', value): raise EvidenceError('malformed cost-model integer')
+    return fields
+
+
 def verify_go_cost_model(target, discovery, events, exit_code):
     summary = verify_go_selected(target, discovery, events, exit_code)
-    lines = go_outputs(events, 'TestDecodeCostModel', subtests=True)
-    measurements = sum('COST_MEASUREMENT ' in line for line in lines)
-    totals = [line.strip().split('COST_MODEL_CASES ', 1)[1] for line in lines if 'COST_MODEL_CASES ' in line]
-    if measurements != target['cases'] or totals != ['n=' + str(target['cases'])]:
-        raise EvidenceError('incomplete ingest cost-model measurements or case total')
-    return {**summary, 'measurements': measurements}
+    if summary['package'] != COST_PACKAGE: raise EvidenceError('wrong cost-model package')
+    results, _, _ = go_results(events)
+    if any(pkg != COST_PACKAGE or not (name == 'TestDecodeCostModel' or name.startswith('TestDecodeCostModel/')) for pkg,name in results):
+        raise EvidenceError('unselected cost-model test')
+    keys, totals = [], []
+    expected = target['case_keys']
+    if len(expected) != 50 or len(set(expected)) != 50 or target['cases'] != 50:
+        raise EvidenceError('invalid cost-model case catalogue')
+    for package, test, line in go_lines(events):
+        measurement = 'COST_MEASUREMENT ' in line
+        total = 'COST_MODEL_CASES ' in line
+        if not (measurement or total): continue
+        if (package != COST_PACKAGE or test is None or
+            not (test == 'TestDecodeCostModel' or test.startswith('TestDecodeCostModel/')) or
+            results.get((package, test)) != 'pass'):
+            raise EvidenceError('cost-model marker outside a passing selected test')
+        if measurement:
+            fields = cost_fields(line.split('COST_MEASUREMENT ', 1)[1])
+            keys.append(fields['case'])
+        if total: totals.append(line.split('COST_MODEL_CASES ', 1)[1].strip())
+    if len(keys) != 50 or set(keys) != set(expected) or totals != ['n=50']:
+        raise EvidenceError('incomplete, duplicate or substituted cost-model measurements')
+    return {**summary, 'measurements': len(keys), 'case_keys': sorted(keys)}
 
 
 def cost_model_benchmark(target):
@@ -523,9 +565,13 @@ def retain_go_log(data, stderr, path, append=False):
     """Retain readable combined test/benchmark output outside receipt directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a' if append else 'w', encoding='utf-8') as log:
-        for _, _, line in go_lines(parse_go_events(data)):
-            log.write(line + '\n')
-        log.write(stderr.decode('utf-8', 'replace'))
+        try:
+            for _, _, line in go_lines(parse_go_events(data)): log.write(line + '\n')
+        except EvidenceError:
+            log.write(data.decode('utf-8', 'replace'))
+        finally:
+            log.write(stderr.decode('utf-8', 'replace'))
+
 
 
 def verify_go_fuzz(target, discovery, events, exit_code):
@@ -811,12 +857,24 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     targets = inventory(root)
     if target_id not in targets: raise EvidenceError('unknown selected target: ' + target_id)
     target = targets[target_id]
+    evidence_dir = Path(evidence_root) / evidence_name(target_id)
+    cost_log = None
+    if target['mode'] == 'go-cost-model':
+        if evidence_dir.is_symlink(): raise EvidenceError('symlink cost-model evidence directory')
+        if evidence_dir.exists(): shutil.rmtree(evidence_dir)
+        cost_log = Path(env['RUNNER_TEMP']) / 'ingest-measurements/cost-model.log'
+        cost_log.parent.mkdir(parents=True, exist_ok=True)
+        cost_log.write_text('Starting ingest cost-model proof\n', encoding='utf-8')
     preconditions(target, env, root)
     env = child_environment(target, env)
-    evidence_dir = Path(evidence_root) / evidence_name(target_id)
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
     cwd = root / target['cwd']
+    def cost_execute(command, stdout_name, stderr_name):
+        code = execute(command,cwd,env,evidence_dir/stdout_name,evidence_dir/stderr_name)
+        if cost_log is not None:
+            (evidence_dir/(stdout_name+'.status.json')).write_text(json.dumps({'command':command,'exit':code})+'\n',encoding='utf-8')
+        return code
     packages_command, packages_text = package_command(target), None
     if packages_command:
         print('packages:', shlex.join(packages_command), flush=True)
@@ -836,28 +894,36 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     discovery_text = ''
     if discovery:
         print('discovery:', shlex.join(discovery), flush=True)
-        code = execute(discovery, cwd, env, evidence_dir / 'discovery.txt', evidence_dir / 'discovery.stderr.txt')
+        code = cost_execute(discovery, 'discovery.txt', 'discovery.stderr.txt')
         discovery_text = (evidence_dir / 'discovery.txt').read_bytes().decode('utf-8', 'replace')
+        if cost_log is not None:
+            with cost_log.open('a') as log:
+                log.write(discovery_text)
+                log.write((evidence_dir / 'discovery.stderr.txt').read_text(encoding='utf-8', errors='replace'))
         if code != 0: raise EvidenceError('discovery exited %d' % code)
     command = [part.replace('{report}', str(evidence_dir / 'report.json')) for part in run_command(target)]
     cargo_guard(target, env, root)
     print('command:', shlex.join(command), flush=True)
-    exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
-    cost_log = None
-    if target['mode'] == 'go-cost-model':
-        cost_log = Path(env['RUNNER_TEMP']) / 'ingest-measurements/cost-model.log'
-        retain_go_log((evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(), cost_log)
+    exit_code = cost_execute(command, 'output.txt', 'stderr.txt')
+    if cost_log is not None:
+        retain_go_log((evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(), cost_log, append=True)
     summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(),
                      exit_code, evidence_dir, packages_text, declarations_text)
     benchmark_commands = None
     if cost_log is not None:
         bench = cost_model_benchmark(target)
         bench_discovery = discovery_command(bench)
-        code = execute(bench_discovery, cwd, env, evidence_dir / 'benchmark-discovery.txt', evidence_dir / 'benchmark-discovery.stderr.txt')
+        code = cost_execute(bench_discovery, 'benchmark-discovery.txt', 'benchmark-discovery.stderr.txt')
+        bench_text = (evidence_dir / 'benchmark-discovery.txt').read_text(encoding='utf-8', errors='replace')
+        with cost_log.open('a') as log:
+            log.write(bench_text)
+            log.write((evidence_dir / 'benchmark-discovery.stderr.txt').read_text(encoding='utf-8', errors='replace'))
         if code != 0: raise EvidenceError('benchmark discovery exited %d' % code)
+        if parse_go_list(bench_text) != {COST_PACKAGE: [target['benchmark']]}:
+            raise EvidenceError('wrong cost-model benchmark discovery')
         bench_command = run_command(bench)
         print('command:', shlex.join(bench_command), flush=True)
-        code = execute(bench_command, cwd, env, evidence_dir / 'benchmark-output.txt', evidence_dir / 'benchmark-stderr.txt')
+        code = cost_execute(bench_command, 'benchmark-output.txt', 'benchmark-stderr.txt')
         stdout = (evidence_dir / 'benchmark-output.txt').read_bytes()
         retain_go_log(stdout, (evidence_dir / 'benchmark-stderr.txt').read_bytes(), cost_log, append=True)
         summary['benchmark'] = verify_go_bench(bench, (evidence_dir / 'benchmark-discovery.txt').read_text(encoding='utf-8'), parse_go_events(stdout), code)
@@ -891,7 +957,39 @@ def verified(evidence_root, target_id, binding=None):
     for key, value in (binding or {}).items():
         if key not in RUN_BINDING: raise ValueError('unknown run binding: ' + key)
         if not value or record.get(key) != value: raise ValueError('verified record of %s comes from another invocation (%s)' % (target_id, key))
+    if target_id == 'ingest-cost-model': validate_cost_record(record)
     return record
+
+
+def validate_cost_record(record):
+    """A receipt needs both successful phases, exact commands and the fixed key set."""
+    target = inventory()['ingest-cost-model']
+    bench = cost_model_benchmark(target)
+    summary = record.get('summary', {})
+    expected = {
+        'version': 1, 'mode': 'go-cost-model', 'cwd': 'server',
+        'discovery': discovery_command(target), 'command': run_command(target),
+        'benchmark': {'discovery': discovery_command(bench), 'command': run_command(bench)},
+    }
+    if any(record.get(key) != value for key, value in expected.items()):
+        raise ValueError('incomplete cost-model command proof')
+    if (not isinstance(summary, dict) or summary.get('package') != COST_PACKAGE or
+        summary.get('tests') != ['TestDecodeCostModel'] or summary.get('measurements') != 50 or
+        summary.get('case_keys') != sorted(target['case_keys'])):
+        raise ValueError('incomplete cost-model test proof')
+    benchmark = summary.get('benchmark', {})
+    if (not isinstance(benchmark, dict) or benchmark.get('package') != COST_PACKAGE or
+        benchmark.get('operations') != 3 or not isinstance(benchmark.get('results'), dict) or not benchmark['results']):
+        raise ValueError('incomplete cost-model benchmark proof')
+    for name, row in benchmark['results'].items():
+        if (not (name == 'BenchmarkDecodeCost' or name.startswith('BenchmarkDecodeCost/')) or
+            not isinstance(row, dict) or row.get('operations') != 3):
+            raise ValueError('invalid cost-model benchmark result')
+        ns = row.get('ns_per_op')
+        if isinstance(ns, bool) or not isinstance(ns, (float, int)) or not math.isfinite(ns) or ns <= 0:
+            raise ValueError('invalid cost-model benchmark time')
+        for key in ('bytes_per_op', 'allocs_per_op'):
+            if type(row.get(key)) is not int or row[key] < 0: raise ValueError('invalid cost-model benchmark allocation')
 
 
 def listing(root=ROOT):

@@ -110,8 +110,61 @@ SELECTED_PLACES = {
     'spool-extended': ('agent', 'rust-selected'), 'batch-extended': ('agent', 'rust-selected'),
     'interop-unit': ('server', 'go-interop'), 'interop-race': ('server', 'go-interop'),
 }
+INGEST_CASE_KEYS = [
+    'arrayobjs-64x1MiB-single/1',
+    'arrayobjs-64x1MiB-single/4',
+    'badid-10000-single/1',
+    'badid-10000-single/8',
+    'blocks-4m-at',
+    'blocks-4m-over',
+    'blocks-64m-at',
+    'blocks-64m-over',
+    'blocks-min-at',
+    'blocks-min-ceiling',
+    'blocks-min-over',
+    'concurrent-blocks64',
+    'concurrent-small-window64',
+    'dense-4x1MiB-win4/1',
+    'dense-4x1MiB-win4/16',
+    'dense-64x1MiB-single/1',
+    'densenested-64x1MiB-single/1',
+    'flat-10000x6710-single/1',
+    'flat-16x1MiB-single/1',
+    'flat-16x1MiB-win4/1',
+    'flat-1x1MiB-single/1',
+    'flat-1x1MiB-win4/1',
+    'flat-4x1MiB-single/1',
+    'flat-4x1MiB-win4/1',
+    'flat-64x1MiB-single/1',
+    'flat-64x1MiB-single/4',
+    'flat-64x1MiB-win4/1',
+    'late-checksum64',
+    'malformed-entropy',
+    'minok-10000-single/1',
+    'nested-64x1MiB-single/1',
+    'numbers-64x1MiB-single/1',
+    'prefix-64x1MiB-single/1',
+    'preflight-ceiling',
+    'preflight-rate-deficit',
+    'random3-64x1MiB-single/1',
+    'random3-64x1MiB-single/4',
+    'realistic-10000-win4/1',
+    'realistic-2000-win4/1',
+    'realistic-5000-win4/1',
+    'realistic-5000-win4/8',
+    'round-10000x5377-single/1',
+    'round-2047x32769-single/1',
+    'round-2047x32769-single/4',
+    'singlechar-64x1MiB-single/1',
+    'singlechar-64x1MiB-single/4',
+    'size-lie-small',
+    'small-window64',
+    'small-window64-checksum',
+    'strings-64x1MiB-single/1',
+]
 SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
-                    'ingest-cost-model': {'cases': 34, 'benchmark': 'BenchmarkDecodeCost', 'operations': 3,
+                    'ingest-cost-model': {'packages': ['./internal/events/body'], 'tests': ['TestDecodeCostModel'],
+                                          'test_flags': ['-timeout=15m'], 'cases': 50, 'case_keys': INGEST_CASE_KEYS, 'benchmark': 'BenchmarkDecodeCost', 'operations': 3,
                                           'benchmark_flags': ['-benchmem', '-benchtime=3x', '-timeout=15m']},
                     'loader-extended': {'marker': 'PARSER_MEASUREMENT'}, 'loader-gate-b-extended': {'marker': 'LOADER_MEASUREMENT'},
                     'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
@@ -244,6 +297,12 @@ def selected_errors(root):
             errors.append('scripts/ci/targets.toml: selected directory or mode mismatch: ' + target_id)
         for key, value in SELECTED_BUDGETS.get(target_id, {}).items():
             if target.get(key) != value: errors.append('scripts/ci/targets.toml: selected budget mismatch: ' + target_id)
+    cost=targets.get('ingest-cost-model')
+    if cost:
+        bench=run_selected.cost_model_benchmark(cost)
+        if (shlex.join(run_selected.discovery_command(bench)) != "go test -list '^BenchmarkDecodeCost$' ./internal/events/body" or
+            shlex.join(run_selected.run_command(bench)) != "go test -json -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body"):
+            errors.append('scripts/ci/targets.toml: ingest benchmark commands mismatch')
     for package, name in inventory.FUZZ_PAIRS:
         target = targets.get(f'go-fuzz:{package}:{name}')
         minimize = ' -fuzzminimizetime=3s' if package == './internal/extensions/admission' else ''
@@ -955,6 +1014,36 @@ def loader_qualification_errors(job, gate):
     return errors
 
 
+def ingest_evidence_errors(job, root):
+    """Pin the composite proof, both required inventories and retained diagnostics."""
+    errors = []
+    expected = [
+        {'name': 'Ingest cost model', 'shell': 'bash', 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
+        {'name': 'Verify ingest measurement log', 'if': 'always()',
+         'run': 'set -euo pipefail\ntest -s "$RUNNER_TEMP/ingest-measurements/cost-model.log"\n'},
+        {'name': 'Upload ingest measurements', 'if': 'always()', 'uses': UPLOAD,
+         'with': {'name': 'ingest-measurements-${{ github.run_id }}-${{ github.run_attempt }}',
+                  'path': '${{ runner.temp }}/ingest-measurements/cost-model.log', 'retention-days': '30', 'if-no-files-found': 'error'}},
+    ]
+    steps = job.get('steps', [])
+    for row in expected:
+        if [s for s in steps if s.get('name') == row['name']] != [row]: errors.append('exact ingest proof step required: ' + row['name'])
+    positions = [next((i for i,s in enumerate(steps) if s.get('name')==row['name']), -1) for row in expected]
+    if positions != sorted(set(positions)) or -1 in positions: errors.append('ingest evidence order changed')
+    proof = [s for s in steps if s.get('id')=='proof']
+    try: checks = json.loads(proof[0]['env']['CHECKS']) if len(proof)==1 else []
+    except (KeyError, ValueError): checks = []
+    if checks.count('ingest-cost-model') != 1: errors.append('server-validate must require ingest-cost-model')
+    # Parse only the literal CHECKS assignment; do not execute a candidate file.
+    import ast
+    try:
+        tree=ast.parse((root/'scripts/ci/inventory.py').read_text())
+        rows=[ast.literal_eval(node.value) for node in tree.body if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='CHECKS' for t in node.targets)]
+        if len(rows)!=1 or rows[0].get('server-validate',[]).count('ingest-cost-model')!=1: errors.append('inventory omits ingest-cost-model')
+    except (OSError,SyntaxError,ValueError,TypeError): errors.append('invalid ingest check inventory')
+    return errors
+
+
 def check(root: Path) -> list[str]:
     errors = []
     LOCK_TOOLS.clear(); LOCK_TOOLS.update(lock_tools(root))
@@ -1018,6 +1107,7 @@ def check(root: Path) -> list[str]:
     if not required_names <= set(workflows): return errors
     if not observer_command_valid(root):
         errors.append('scripts/ci/semgrep_observer.py: exact Code/Supply Chain Pro command required')
+    errors += ['server: ' + e for e in ingest_evidence_errors(workflows['server'].get('jobs',{}).get('validate',{}),root)]
     ci = workflows['ci']
     events = ci.get('on', {})
     if events != {'push': {'branches': ['master']}, 'pull_request': {'branches': ['master'], 'types': ['opened', 'synchronize', 'reopened', 'ready_for_review', 'edited']}}:

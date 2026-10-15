@@ -1,6 +1,7 @@
 package admission
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -93,12 +94,12 @@ func TestInflightRetryAfter(t *testing.T) {
 	h := newHarness(t)
 	held := make([]*Ticket, 10)
 	for i := range held {
-		held[i] = h.receive(fmt.Sprintf("held%d", i), batch.ClassRaw)
+		held[i] = h.receive(fmt.Sprintf("held%d", i), batch.ClassAudit)
 	}
 	refuse := func(random float64) int {
 		t.Helper()
 		h.random = random
-		ticket, d, err := h.l.Receive("late", batch.ClassRaw)
+		ticket, d, err := h.l.Receive("late", batch.ClassAudit)
 		if err != nil || ticket != nil || d.Status != 503 || d.Reason != ReasonInflight {
 			t.Fatalf("expected an in-flight refusal: %+v %v", d, err)
 		}
@@ -114,7 +115,7 @@ func TestInflightRetryAfter(t *testing.T) {
 	for i := range 10 {
 		h.clock.Advance(time.Second)
 		held[i].Release()
-		held[i] = h.receive(fmt.Sprintf("next%d", i), batch.ClassRaw)
+		held[i] = h.receive(fmt.Sprintf("next%d", i), batch.ClassAudit)
 	}
 	h.clock.Advance(500 * time.Millisecond)
 	for random, want := range map[float64]int{0.5: 10, 0: 8, 1: 12} {
@@ -127,10 +128,100 @@ func TestInflightRetryAfter(t *testing.T) {
 		h.clock.Advance(time.Second)
 		for i := range 100 {
 			held[0].Release()
-			held[0] = h.receive(fmt.Sprintf("churn%d-%d", second, i), batch.ClassRaw)
+			held[0] = h.receive(fmt.Sprintf("churn%d-%d", second, i), batch.ClassAudit)
 		}
 	}
 	if got := refuse(0.5); got != 5 {
 		t.Fatalf("100 releases per second: %d", got)
+	}
+}
+
+func TestEvery429Jitter(t *testing.T) {
+	for _, r := range []float64{0, .5, 1} {
+		h := newHarness(t)
+		h.random = r
+		h.receive("a", batch.ClassRaw)
+		h.receive("a", batch.ClassRaw)
+		_, d, _ := h.l.Receive("a", batch.ClassRaw)
+		want := 5
+		if r == 1 {
+			want = 6
+		}
+		if d.RetryAfter != want {
+			t.Fatalf("concurrency random=%g: %+v", r, d)
+		}
+		h.l.devices["a"].tokens = 0
+		_, d, _ = h.l.Receive("a", batch.ClassRaw)
+		if d.RetryAfter != want {
+			t.Fatalf("concurrency deficit random=%g: %+v", r, d)
+		}
+		first := h.receive("b", batch.ClassRaw)
+		h.admit(first, 64<<20, 64<<20)
+		first.Release()
+		h.clock.Advance(time.Duration(MinCharge)*time.Second/time.Duration(ServerRefill) + time.Nanosecond)
+		next := h.receive("b", batch.ClassRaw)
+		d, err := next.Decode(context.Background(), 64<<20, 64<<20)
+		wants := map[float64]int{0: 13, .5: 16, 1: 19}
+		if err != nil || d.RetryAfter != wants[r] {
+			t.Fatalf("rate random=%g: %+v %v", r, d, err)
+		}
+	}
+}
+
+func TestSlotReleaseRetryThreeAndChurn(t *testing.T) {
+	for _, n := range []int{3, 20} {
+		h := newHarness(t)
+		held := make([]*Ticket, 10)
+		for i := range held {
+			held[i] = h.receive(fmt.Sprint(i), batch.ClassAudit)
+		}
+		for i := range n {
+			held[0].Release()
+			held[0] = h.receive(fmt.Sprintf("churn%d", i), batch.ClassAudit)
+		}
+		want := []int{27, 34, 41}
+		if n == 20 {
+			want = []int{5, 5, 6}
+		}
+		for i, r := range []float64{0, .5, 1} {
+			h.random = r
+			_, d, err := h.l.Receive(fmt.Sprintf("late%d", i), batch.ClassAudit)
+			if err != nil || d.Reason != ReasonInflight || d.RetryAfter != want[i] {
+				t.Fatalf("n=%d random=%g: %+v %v", n, r, d, err)
+			}
+		}
+	}
+}
+
+func TestReserveRetryUsesUsableBytesAndSlots(t *testing.T) {
+	for _, r := range []float64{0, .5, 1} {
+		h := newHarness(t)
+		h.random = r
+		ticket := h.receive("held", batch.ClassAudit)
+		// Priority work has left only one usable byte above the nonpriority floor.
+		ticket.charge = testBudget - h.l.reserve - 1 - C
+		h.l.inUse = C + ticket.charge
+		h.l.drain.add(0, 1_000_000) // 100,000 bytes per second.
+		_, d, err := h.l.Receive("bytes", batch.ClassRaw)
+		if err != nil || d.Reason != ReasonReserve || d.RetryAfter != map[float64]int{0: 40, .5: 50, 1: 60}[r] {
+			t.Fatalf("byte reserve: %+v %v", d, err)
+		}
+		if h.tokens("bytes") != BucketCapacity-MinCharge {
+			t.Fatal("receive refusal refunded minimum")
+		}
+		ticket.Release()
+		h = newHarness(t)
+		h.random = r
+		for i := range 7 {
+			h.receive(fmt.Sprint(i), batch.ClassRaw)
+		}
+		h.l.slotReleases.add(0, 3)
+		_, d, err = h.l.Receive("slots", batch.ClassRaw)
+		if err != nil || d.Reason != ReasonReserve || d.RetryAfter != map[float64]int{0: 27, .5: 34, 1: 41}[r] {
+			t.Fatalf("slot reserve: %+v %v", d, err)
+		}
+		if h.tokens("slots") != BucketCapacity-MinCharge {
+			t.Fatal("slot refusal refunded minimum")
+		}
 	}
 }

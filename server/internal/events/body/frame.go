@@ -84,6 +84,11 @@ func readCompressed(r *io.LimitedReader) ([]byte, error) {
 
 // inspectFrame returns the declared content size and the effective window.
 func inspectFrame(b []byte) (uint64, uint64, error) {
+	return inspectFrameCount(b, nil)
+}
+
+// inspectFrameCount exposes header visits to package qualification tests.
+func inspectFrameCount(b []byte, visits *uint64) (uint64, uint64, error) {
 	if len(b) < 5 || binary.LittleEndian.Uint32(b[:4]) != 0xfd2fb528 {
 		return 0, 0, ErrFrame
 	}
@@ -135,8 +140,15 @@ func inspectFrame(b []byte) (uint64, uint64, error) {
 	if window > MaxWindowBytes {
 		return 0, 0, ErrWindowLimit
 	}
-	for {
+	blockLimit := 1 + (max(size, uint64(128<<10))+(128<<10)-1)/(128<<10)
+	for blocks := uint64(1); ; blocks++ {
 		if len(b)-pos < 3 {
+			return 0, 0, ErrFrame
+		}
+		if visits != nil {
+			*visits = blocks
+		}
+		if blocks > blockLimit {
 			return 0, 0, ErrFrame
 		}
 		h := uint32(b[pos]) | uint32(b[pos+1])<<8 | uint32(b[pos+2])<<16
