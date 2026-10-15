@@ -140,7 +140,8 @@ class InventoryTests(unittest.TestCase):
             skips = TARGETS[target_id]['skips']
             self.assertEqual({t for _, t in skips}, {'TestParserBudgetExtended', 'TestLoaderBudgetExtended', 'TestLoaderMeasurementChild',
                                                     'TestDecodeVerifiedYAMLInstrumented', 'TestAgreementOutcomeChild',
-                                                    'TestParserBudgetHarness', 'TestParserMeasurementChild', 'TestDecodeCostModel'})
+                                                    'TestParserBudgetHarness', 'TestParserMeasurementChild', 'TestDecodeCostModel',
+                                                    'TestReadKeyFileGroupRules'})
             parents = {}
             for (package, test), row in skips.items():
                 self.assertTrue(row['reason'], row)
@@ -340,6 +341,24 @@ class GoSuiteTests(unittest.TestCase):
 
 
 class GoSelectedTests(unittest.TestCase):
+    def test_keyfile_root_proof_rejects_skips_and_missing_execution(self):
+        package = 'github.com/ricevanta/ricevanta/server/internal/platform/config'
+        name = 'TestReadKeyFileGroupRules'
+        target = TARGETS['server-keyfile-root']
+        listing = name + '\nok  \t' + package + '\t0.002s\n'
+        passing = event('run', package, name) + event('pass', package, name) + event('pass', package)
+        self.assertEqual(run_selected.verify(target, listing, passing, b'', 0, None),
+                         {'package': package, 'tests': [name]})
+        for data in (event('run', package, name) + event('skip', package, name) + event('pass', package),
+                     event('pass', package), passing.replace(name.encode(), b'TestRenamed')):
+            with self.subTest(data=data), self.assertRaises(EvidenceError):
+                run_selected.verify(target, listing, data, b'', 0, None)
+        for target_id in ('server-unit', 'server-race', 'go-fuzz:./internal/platform/config:FuzzLoad'):
+            allowance = run_selected.check_skip(TARGETS[target_id], {}, package, name)
+            self.assertEqual(allowance['proof'], 'server-keyfile-root')
+            with self.assertRaises(EvidenceError):
+                run_selected.check_skip(TARGETS[target_id], {}, package, name + 'Other')
+
     def setUp(self):
         self.target = {'id': 'beta', 'mode': 'go-selected', 'cwd': '.', 'packages': ['.'], 'tests': ['TestBeta'], 'skips': {}}
         self.listing = 'TestBeta\nok  \texample.com/tiny\t0.002s\n'
@@ -1029,6 +1048,26 @@ class RealToolTests(unittest.TestCase):
 
 
 class VerifiedRecordTests(unittest.TestCase):
+    def test_server_unit_receipt_requires_same_run_root_proof(self):
+        binding = {'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence = Path(tmp)
+            def write(target_id, **changes):
+                directory = evidence / run_selected.evidence_name(target_id)
+                directory.mkdir(exist_ok=True)
+                record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'result': 'success', 'exit': 0,
+                          **binding, **changes}
+                (directory / 'verified.json').write_text(json.dumps(record))
+            write('server-unit')
+            with self.assertRaises(ValueError): run_selected.verified(evidence, 'server-unit', binding)
+            write('server-keyfile-root')
+            self.assertEqual(run_selected.verified(evidence, 'server-unit', binding)['id'], 'server-unit')
+            for key, value in (('GITHUB_RUN_ID', '6'), ('GITHUB_RUN_ATTEMPT', '2'), ('GITHUB_SHA', 'b' * 40),
+                               ('result', 'failure'), ('exit', 1)):
+                write('server-keyfile-root', **{key: value})
+                with self.subTest(key=key), self.assertRaises(ValueError):
+                    run_selected.verified(evidence, 'server-unit', binding)
+
     def test_verified_record_controls(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1039,6 +1078,9 @@ class VerifiedRecordTests(unittest.TestCase):
             path = directory / 'verified.json'
             path.write_text(json.dumps(record))
             binding = {'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
+            proof = root / run_selected.evidence_name('server-keyfile-root')
+            proof.mkdir()
+            (proof / 'verified.json').write_text(json.dumps({**record, 'id': 'server-keyfile-root'}))
             self.assertEqual(run_selected.verified(root, 'server-unit')['id'], 'server-unit')
             self.assertEqual(run_selected.verified(root, 'server-unit', binding)['id'], 'server-unit')
             with self.assertRaises(ValueError): run_selected.verified(root, 'server-race')

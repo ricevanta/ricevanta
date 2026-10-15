@@ -33,6 +33,29 @@ class PolicyTests(unittest.TestCase):
 
     def test_current_policy(self): self.assertEqual(check_policy.check(ROOT), [])
 
+    def test_keyfile_root_proof_cannot_be_detached_or_deprivileged(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        self.assertEqual(check_policy.selected_errors(self.root), [])
+        for old, new in (
+            ('requires = ["server-keyfile-root"]', 'requires = []'),
+            ('test_flags = ["-exec", "sudo -n --"]', 'test_flags = []'),
+            ('tests = ["TestReadKeyFileGroupRules"]', 'tests = ["TestKeyOwnershipRule"]'),
+            ('proof = "server-keyfile-root"', 'proof = "ingest-cost-model"'),
+        ):
+            with self.subTest(old=old):
+                self.assertIn(old, baseline)
+                path.write_text(baseline.replace(old, new))
+                self.assertTrue(check_policy.selected_errors(self.root))
+
+    def test_keyfile_root_step_is_unconditional(self):
+        command = check_policy.wrapper('server-keyfile-root')
+        message = 'validate: missing unconditional command: ' + command
+        self.assertFalse(any(message in error for error in check_policy.check(self.root)))
+        self.mutate('server', lambda data: next(step for step in data['jobs']['validate']['steps']
+                                               if step.get('run') == command).update({'if': 'false'}))
+        self.assertTrue(any(message in error for error in check_policy.check(self.root)))
+
     def test_ingest_and_admission_catalogue_budgets_are_closed(self):
         path = self.root / 'scripts/ci/targets.toml'
         baseline = path.read_text()

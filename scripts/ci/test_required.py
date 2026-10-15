@@ -16,6 +16,7 @@ def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
     selected = run_selected.inventory()
     for check in checks:
         if check in selected:
+            verified_evidence(root, selected[check].get('requires', []), run_id, attempt, sha)
             directory = root / run_selected.evidence_name(check)
             directory.mkdir(exist_ok=True)
             (directory / 'verified.json').write_text(json.dumps(
@@ -39,6 +40,19 @@ class RequiredTests(unittest.TestCase):
         return required.receipt(self.route, unit, inventory.checks(unit), Path(self.evidence.name))
 
     def verify(self): required.verify(self.route, self.needs, self.receipts)
+
+    def test_server_receipt_requires_root_test_proof(self):
+        import run_selected
+        self.route['groups'] = sorted([*self.route['groups'], 'server'])
+        self.route['units'] = inventory.units(self.route['groups'])
+        self.receipt('server-validate')
+        proof = Path(self.evidence.name) / run_selected.evidence_name('server-keyfile-root') / 'verified.json'
+        record = json.loads(proof.read_text())
+        proof.unlink()
+        with self.assertRaises(ValueError): self.receipt('server-validate')
+        for changes in ({'exit': 1}, {'GITHUB_RUN_ID': '124'}, {'GITHUB_RUN_ATTEMPT': '2'}, {'GITHUB_SHA': 'c' * 40}):
+            proof.write_text(json.dumps({**record, **changes}))
+            with self.subTest(changes=changes), self.assertRaises(ValueError): self.receipt('server-validate')
 
     def test_design_receipt_requires_release_contracts(self):
         self.assertIn('release-contracts', inventory.checks('design'))

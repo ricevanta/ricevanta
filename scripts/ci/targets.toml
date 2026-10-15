@@ -189,6 +189,15 @@ mode = "go-suite"
 cwd = "server"
 packages = ["./..."]
 fuzz_inventory = true
+requires = ["server-keyfile-root"]
+
+[[selected]]
+id = "server-keyfile-root"
+mode = "go-selected"
+cwd = "server"
+packages = ["./internal/platform/config"]
+tests = ["TestReadKeyFileGroupRules"]
+test_flags = ["-exec", "sudo -n --"]
 
 [[selected]]
 id = "server-race"
@@ -316,6 +325,13 @@ children = [
 # Exact ordinary-suite skips: helper entry points that run only as children of a
 # named parent test and tests that a separate selected unit proves. No wildcard
 # allowance exists; check_policy.py pins every row.
+[[skips]]
+package = "github.com/ricevanta/ricevanta/server/internal/platform/config"
+test = "TestReadKeyFileGroupRules"
+reason = "foreign file group requires root; selected root binary proves the live check"
+proof = "server-keyfile-root"
+modes = ["server-unit", "server-race", "go-fuzz"]
+
 [[skips]]
 package = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"
 test = "TestParserBudgetExtended"

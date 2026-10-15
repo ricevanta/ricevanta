@@ -66,6 +66,8 @@ def wrapper(target_id):
 FUZZ_WRAPPER = 'python -B scripts/ci/run_selected.py --id "go-fuzz:${FUZZ_PACKAGE}:${FUZZ_TARGET}" --evidence "$RUNNER_TEMP/evidence"'
 RECEIPT_WITH_EVIDENCE = "required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')"
 SELECTED_COMMANDS = {
+    'server-keyfile-root': ("go test -list '^(TestReadKeyFileGroupRules)$' ./internal/platform/config",
+                            "go test -json -count=1 -exec 'sudo -n --' ./internal/platform/config -run '^(TestReadKeyFileGroupRules)$'"),
     'server-unit': ("go test -list '.*' ./...", 'go test -json -count=1 ./...'),
     'server-race': ("go test -race -list '.*' ./...", 'go test -json -race -count=1 -timeout=15m ./...'),
     'key-admission-bench': ("go test -list '^BenchmarkValidate$' ./internal/signing/ed25519key",
@@ -103,6 +105,7 @@ INTEROP_PROOF = {
 }
 # Where and how each selected ID executes; a row may not move its command elsewhere.
 SELECTED_PLACES = {
+    'server-keyfile-root': ('server', 'go-selected'),
     'server-unit': ('server', 'go-suite'), 'server-race': ('server', 'go-suite'), 'key-admission-bench': ('server', 'go-bench'),
     'ingest-cost-model': ('server', 'go-cost-model'),
     'loader-extended': ('server', 'go-selected'), 'loader-repeat': ('server', 'go-selected'), 'loader-fuzz': ('server', 'go-fuzz'),
@@ -125,6 +128,9 @@ LOADER = 'github.com/ricevanta/ricevanta/server/internal/extensions/loader'
 YAMLTOKENS = LOADER + '/internal/yamltokens'
 GO_SKIP_MODES = ['server-unit', 'server-race', 'go-fuzz']
 SKIP_ALLOWANCES = [
+    {'package': 'github.com/ricevanta/ricevanta/server/internal/platform/config', 'test': 'TestReadKeyFileGroupRules',
+     'reason': 'foreign file group requires root; selected root binary proves the live check',
+     'proof': 'server-keyfile-root', 'modes': GO_SKIP_MODES},
     {'package': 'github.com/ricevanta/ricevanta/server/internal/events/body', 'test': 'TestDecodeCostModel',
      'reason': 'full ingest cost model runs separately without race instrumentation', 'proof': 'ingest-cost-model', 'modes': GO_SKIP_MODES},
     {'package': LOADER, 'test': 'TestParserBudgetExtended', 'reason': 'native extended parser corpus',
@@ -221,6 +227,8 @@ def selected_errors(root):
         return ['scripts/ci/targets.toml: invalid selected inventory: ' + str(error)]
     errors = []
     for target_id, target in targets.items():
+        if target.get('requires', []) != (['server-keyfile-root'] if target_id == 'server-unit' else []):
+            errors.append('scripts/ci/targets.toml: required selected proof mismatch: ' + target_id)
         # No other wrapper ID may exist; console IDs are pinned here when Task 8 adds them.
         if target_id not in SELECTED_COMMANDS and not (target_id.startswith('go-fuzz:') and target['mode'] == 'go-fuzz'):
             errors.append('scripts/ci/targets.toml: unreviewed selected target ' + target_id)
@@ -259,7 +267,7 @@ def selected_errors(root):
 
 
 COMMANDS = {
-    ('server', 'validate'): ('gofmt -l .', wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench'), wrapper('ingest-cost-model')),
+    ('server', 'validate'): ('gofmt -l .', wrapper('server-keyfile-root'), wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench'), wrapper('ingest-cost-model')),
     ('server', 'race'): (wrapper('server-race'),),
     ('server', 'fuzz'): (FUZZ_WRAPPER,),
     ('server', 'loader-gate-a'): (wrapper('loader-extended'), wrapper('loader-repeat'), wrapper('loader-fuzz')),

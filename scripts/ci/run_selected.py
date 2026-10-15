@@ -877,12 +877,13 @@ def run(target_id, evidence_root, root=ROOT, env=None):
 RUN_BINDING = ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA')
 
 
-def verified(evidence_root, target_id, binding=None):
+def verified(evidence_root, target_id, binding=None, root=ROOT, ancestors=()):
     """Read the verified record one leaf receipt requires for a check ID.
 
     binding maps GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT or GITHUB_SHA to the value of
     the invocation that must have produced the record; each named key must match.
     """
+    if target_id in ancestors: raise ValueError('cyclic selected-run proof: ' + target_id)
     path = Path(evidence_root) / evidence_name(target_id) / 'verified.json'
     if not path.is_file() or path.is_symlink(): raise ValueError('missing verified selected run: ' + target_id)
     record = json.loads(path.read_text(encoding='utf-8'))
@@ -891,6 +892,11 @@ def verified(evidence_root, target_id, binding=None):
     for key, value in (binding or {}).items():
         if key not in RUN_BINDING: raise ValueError('unknown run binding: ' + key)
         if not value or record.get(key) != value: raise ValueError('verified record of %s comes from another invocation (%s)' % (target_id, key))
+    # A leaf may include a separate selected root run without adding a routing
+    # leaf. Its receipt still requires that run, bound to this exact invocation.
+    for proof in inventory(root).get(target_id, {}).get('requires', []):
+        proof_binding = {key: record.get(key) for key in RUN_BINDING}
+        verified(evidence_root, proof, proof_binding, root, (*ancestors, target_id))
     return record
 
 
