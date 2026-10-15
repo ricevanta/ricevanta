@@ -54,7 +54,12 @@ func (r *recorder) Write(p []byte) (int, error) {
 
 func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
-const maxLoggedPath = 1024
+// Bounds on logged request fields. net/http accepts a method token of any
+// length that fits max_header_bytes.
+const (
+	maxLoggedPath   = 1024
+	maxLoggedMethod = 32
+)
 
 // logRequests records method, escaped path without query, status, bytes,
 // duration and the TCP peer. No header, cookie, body or query is logged; at
@@ -68,12 +73,16 @@ func logRequests(log *slog.Logger, next http.Handler) http.Handler {
 		if len(path) > maxLoggedPath {
 			path = path[:maxLoggedPath]
 		}
+		method := r.Method
+		if len(method) > maxLoggedMethod {
+			method = method[:maxLoggedMethod]
+		}
 		status := rec.status
 		if status == 0 {
 			status = http.StatusOK
 		}
 		attrs := []any{
-			"method", r.Method, "path", path, "status", status, "bytes", rec.bytes,
+			"method", method, "path", path, "status", status, "bytes", rec.bytes,
 			"duration_ms", time.Since(start).Milliseconds(), "remote", r.RemoteAddr,
 		}
 		if log.Enabled(r.Context(), slog.LevelDebug) {

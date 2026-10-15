@@ -8,12 +8,15 @@ import (
 	"time"
 )
 
-// Write-progress bound of spec section 4: a write deadline 10 s ahead,
-// moved forward after each 16 KiB written.
+// WriteProgress is the write-progress bound of spec section 4: a write
+// deadline 10 s ahead, moved forward after each 16 KiB written. The runtime
+// also uses it as HTTP/2's WriteByteTimeout, because on HTTP/2 a stream's
+// write deadline only queues a reset behind the connection's frame writer.
+const WriteProgress = 10 * time.Second
+
 const (
-	writeProgress = 10 * time.Second
-	writeChunk    = 16 << 10
-	maxPathBytes  = 1024
+	writeChunk   = 16 << 10
+	maxPathBytes = 1024
 )
 
 // reserved lists the prefixes of console design section 10 that never fall
@@ -212,7 +215,7 @@ func Problem(w http.ResponseWriter, r *http.Request, status int) {
 // 304 responses send no body.
 func Write(w http.ResponseWriter, r *http.Request, status int, body []byte) {
 	rc := http.NewResponseController(w)
-	extend := func() { _ = rc.SetWriteDeadline(time.Now().Add(writeProgress)) }
+	extend := func() { _ = rc.SetWriteDeadline(time.Now().Add(WriteProgress)) }
 	extend()
 	w.WriteHeader(status)
 	if r.Method == http.MethodHead || status == http.StatusNotModified {

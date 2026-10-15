@@ -335,3 +335,49 @@ func TestCSPMatchesRepositoryFile(t *testing.T) {
 		t.Fatalf("CSP constant differs from console/security/csp.txt:\n%q\n%q", console.CSP, want)
 	}
 }
+
+// TestStrictJSONKeysAndEscapes covers release builds section 5.1 rules that
+// encoding/json alone does not enforce: field names match byte for byte, keys
+// equal under case or Unicode folding are duplicates, and an unpaired
+// surrogate escape is invalid Unicode.
+func TestStrictJSONKeysAndEscapes(t *testing.T) {
+	type edit struct {
+		file, data string
+		code       string
+	}
+	buildInfo := func(s string) edit { return edit{"build-info.json", s, console.CodeIdentityMismatch} }
+	vite := func(s string) edit { return edit{".vite/manifest.json", s, console.CodeViteManifestInvalid} }
+	for name, e := range map[string]edit{
+		"case variant field":     buildInfo(`{"Channel":"local","commit":"unknown","sourceEpoch":0,"version":"0.0.0-local"}`),
+		"case-only duplicate":    buildInfo(`{"channel":"master","Channel":"local","commit":"unknown","sourceEpoch":0,"version":"0.0.0-local"}`),
+		"unicode fold field":     buildInfo(`{"channel":"local","commit":"unknown","ſourceEpoch":0,"version":"0.0.0-local"}`),
+		"lone high surrogate":    vite(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","name":"\ud800"}}`),
+		"lone low surrogate":     vite(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","name":"\udc00x"}}`),
+		"high then non-low":      vite(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","name":"\ud800A"}}`),
+		"surrogate in key":       vite(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","\ud800":1}}`),
+		"vite case variant file": vite(`{"index.html":{"File":"assets/index-Bx1a2b3c.js"}}`),
+		"vite fold duplicate":    vite(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","FILE":"assets/unlisted.svg"}}`),
+		"vite case variant css":  vite(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","CSS":["assets/absent.css"]}}`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, _ := fixture(t)
+			m[e.file].Data = []byte(strings.ReplaceAll(e.data, `ſ`, "ſ"))
+			_, err := console.Verify(m, manifestFor(t, m), devIdentity)
+			wantCode(t, err, e.code)
+		})
+	}
+	// A valid surrogate pair stays accepted.
+	m, _ := fixture(t)
+	m[".vite/manifest.json"].Data = []byte(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","css":["assets/index-Cx9y8z7w.css"],"name":"😀"}}`)
+	if _, err := console.Verify(m, manifestFor(t, m), devIdentity); err != nil {
+		t.Fatalf("valid surrogate pair: %v", err)
+	}
+	// manifest.json itself: a case variant duplicate of files.
+	m, mf := fixture(t)
+	bad := strings.Replace(string(mf), `{"files":`, `{"Files":[],"files":`, 1)
+	_, err := console.Verify(m, []byte(bad), devIdentity)
+	wantCode(t, err, console.CodeManifestInvalid)
+	bad = strings.Replace(string(mf), `"path":"index.html"`, `"Path":"index.html"`, 1)
+	_, err = console.Verify(m, []byte(bad), devIdentity)
+	wantCode(t, err, console.CodeManifestInvalid)
+}

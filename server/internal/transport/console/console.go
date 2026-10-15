@@ -136,56 +136,59 @@ func validMemberPath(p string) bool {
 	return true
 }
 
-type manifestDoc struct {
-	Schema *string         `json:"schema"`
-	Files  *[]manifestFile `json:"files"`
-}
-
-type manifestFile struct {
-	Path   *string         `json:"path"`
-	Size   json.RawMessage `json:"size"`
-	SHA256 *string         `json:"sha256"`
-}
-
 type entry struct {
 	size   int64
 	digest string
 }
 
 func parseManifest(data []byte) (map[string]entry, []string, error) {
-	var doc manifestDoc
-	if err := decodeStrict(data, &doc, true); err != nil {
-		return nil, nil, fail(CodeManifestInvalid, "manifest.json: %v", err)
+	bad := func(format string, args ...any) error {
+		return fail(CodeManifestInvalid, "manifest.json: "+format, args...)
 	}
-	if doc.Schema == nil || *doc.Schema != ManifestSchema {
-		return nil, nil, fail(CodeManifestInvalid, "manifest.json: schema must be %s", ManifestSchema)
+	if err := checkStrictJSON(data); err != nil {
+		return nil, nil, bad("%v", err)
 	}
-	if doc.Files == nil || len(*doc.Files) < 1 || len(*doc.Files) > maxManifestFiles {
-		return nil, nil, fail(CodeManifestInvalid, "manifest.json: files must list 1 to %d entries", maxManifestFiles)
+	doc, err := fields(data, "schema", "files")
+	if err != nil {
+		return nil, nil, bad("%v", err)
 	}
-	entries := make(map[string]entry, len(*doc.Files))
-	order := make([]string, 0, len(*doc.Files))
+	if schema, err := stringField(doc, "schema"); err != nil || schema != ManifestSchema {
+		return nil, nil, bad("schema must be %s", ManifestSchema)
+	}
+	var files []json.RawMessage
+	if raw, ok := doc["files"]; !ok || len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &files) != nil ||
+		len(files) < 1 || len(files) > maxManifestFiles {
+		return nil, nil, bad("files must list 1 to %d entries", maxManifestFiles)
+	}
+	entries := make(map[string]entry, len(files))
+	order := make([]string, 0, len(files))
 	prev := ""
-	for i, f := range *doc.Files {
-		if f.Path == nil || f.SHA256 == nil || f.Size == nil {
-			return nil, nil, fail(CodeManifestInvalid, "manifest.json: entry %d lacks path, size or sha256", i)
+	for i, raw := range files {
+		f, err := fields(raw, "path", "size", "sha256")
+		if err != nil {
+			return nil, nil, bad("entry %d: %v", i, err)
 		}
-		p := *f.Path
+		p, err := stringField(f, "path")
+		if err != nil {
+			return nil, nil, bad("entry %d: %v", i, err)
+		}
 		if !validMemberPath(p) {
-			return nil, nil, fail(CodeManifestInvalid, "manifest.json: entry %d has an invalid path", i)
+			return nil, nil, bad("entry %d has an invalid path", i)
 		}
 		if i > 0 && p <= prev {
-			return nil, nil, fail(CodeManifestInvalid, "manifest.json: entry %d is not sorted by path or repeats a path", i)
+			return nil, nil, bad("entry %d is not sorted by path or repeats a path", i)
 		}
 		prev = p
-		size, err := strconv.ParseInt(string(f.Size), 10, 64)
-		if !reUint.Match(f.Size) || err != nil || size > maxFileSize {
-			return nil, nil, fail(CodeManifestInvalid, "manifest.json: entry %d size must be an integer from 0 to %d", i, int64(maxFileSize))
+		rawSize := f["size"]
+		size, err := strconv.ParseInt(string(rawSize), 10, 64)
+		if !reUint.Match(rawSize) || err != nil || size > maxFileSize {
+			return nil, nil, bad("entry %d size must be an integer from 0 to %d", i, int64(maxFileSize))
 		}
-		if !reDigest.MatchString(*f.SHA256) {
-			return nil, nil, fail(CodeManifestInvalid, "manifest.json: entry %d sha256 must be 64 lowercase hex digits", i)
+		digest, err := stringField(f, "sha256")
+		if err != nil || !reDigest.MatchString(digest) {
+			return nil, nil, bad("entry %d sha256 must be 64 lowercase hex digits", i)
 		}
-		entries[p] = entry{size: size, digest: *f.SHA256}
+		entries[p] = entry{size: size, digest: digest}
 		order = append(order, p)
 	}
 	return entries, order, nil
@@ -314,38 +317,32 @@ func sidecarBase(p string) (string, bool) {
 	return "", false
 }
 
-type buildInfo struct {
-	Version     *string         `json:"version"`
-	Commit      *string         `json:"commit"`
-	Channel     *string         `json:"channel"`
-	SourceEpoch json.RawMessage `json:"sourceEpoch"`
-}
-
 func checkIdentity(data []byte, id buildinfo.Identity) error {
 	if data == nil {
 		return fail(CodeIdentityMismatch, "build-info.json is missing")
 	}
-	var b buildInfo
-	if err := decodeStrict(data, &b, true); err != nil {
+	if err := checkStrictJSON(data); err != nil {
 		return fail(CodeIdentityMismatch, "build-info.json: %v", err)
 	}
-	if b.Version == nil || b.Commit == nil || b.Channel == nil || b.SourceEpoch == nil || !reInt.Match(b.SourceEpoch) {
+	b, err := fields(data, "version", "commit", "channel", "sourceEpoch")
+	if err != nil {
+		return fail(CodeIdentityMismatch, "build-info.json: %v", err)
+	}
+	version, e1 := stringField(b, "version")
+	commit, e2 := stringField(b, "commit")
+	channel, e3 := stringField(b, "channel")
+	rawEpoch, ok := b["sourceEpoch"]
+	if e1 != nil || e2 != nil || e3 != nil || !ok || !reInt.Match(rawEpoch) {
 		return fail(CodeIdentityMismatch, "build-info.json must hold version, commit, channel and an integer sourceEpoch")
 	}
-	epoch, err := strconv.ParseInt(string(b.SourceEpoch), 10, 64)
+	epoch, err := strconv.ParseInt(string(rawEpoch), 10, 64)
 	if err != nil {
 		return fail(CodeIdentityMismatch, "build-info.json sourceEpoch is out of range")
 	}
-	if *b.Version != id.Version || *b.Commit != id.Commit || *b.Channel != id.Channel || epoch != id.SourceEpoch {
+	if version != id.Version || commit != id.Commit || channel != id.Channel || epoch != id.SourceEpoch {
 		return fail(CodeIdentityMismatch, "build-info.json differs from the server build identity")
 	}
 	return nil
-}
-
-type viteChunk struct {
-	File   *string  `json:"file"`
-	CSS    []string `json:"css"`
-	Assets []string `json:"assets"`
 }
 
 // viteOutputs parses .vite/manifest.json and returns the set of emitted
@@ -355,21 +352,46 @@ func viteOutputs(data map[string][]byte) (map[string]bool, error) {
 	if !ok {
 		return nil, fail(CodeViteManifestInvalid, ".vite/manifest.json is missing")
 	}
-	var chunks map[string]viteChunk
-	if err := decodeStrict(raw, &chunks, false); err != nil {
-		return nil, fail(CodeViteManifestInvalid, ".vite/manifest.json: %v", err)
+	bad := func(format string, args ...any) error {
+		return fail(CodeViteManifestInvalid, ".vite/manifest.json: "+format, args...)
 	}
-	if chunks == nil {
-		return nil, fail(CodeViteManifestInvalid, ".vite/manifest.json must be an object")
+	if err := checkStrictJSON(raw); err != nil {
+		return nil, bad("%v", err)
+	}
+	// Chunk keys are source paths and stay open; only exact duplicates
+	// are refused there, as release builds section 5.1 requires.
+	var chunks map[string]json.RawMessage
+	if len(raw) == 0 || raw[0] != '{' || json.Unmarshal(raw, &chunks) != nil {
+		return nil, bad("must be an object")
 	}
 	out := map[string]bool{}
-	for _, c := range chunks {
-		if c.File == nil {
-			return nil, fail(CodeViteManifestInvalid, ".vite/manifest.json: a chunk lacks file")
+	for _, rawChunk := range chunks {
+		var c map[string]json.RawMessage
+		if len(rawChunk) == 0 || rawChunk[0] != '{' || json.Unmarshal(rawChunk, &c) != nil {
+			return nil, bad("a chunk is not an object")
 		}
-		for _, f := range append(append([]string{*c.File}, c.CSS...), c.Assets...) {
+		// Chunk fields are Vite's open set, but a case or folding variant
+		// of a field this verifier reads is refused rather than ignored.
+		if err := noFoldAlias(c, "file", "css", "assets"); err != nil {
+			return nil, bad("%v", err)
+		}
+		file, err := stringField(c, "file")
+		if err != nil {
+			return nil, bad("a chunk lacks a string file")
+		}
+		listed := []string{file}
+		for _, name := range []string{"css", "assets"} {
+			if v, ok := c[name]; ok {
+				var list []string
+				if len(v) == 0 || v[0] != '[' || json.Unmarshal(v, &list) != nil {
+					return nil, bad("%s must be a list of strings", name)
+				}
+				listed = append(listed, list...)
+			}
+		}
+		for _, f := range listed {
 			if _, ok := data[f]; !ok {
-				return nil, fail(CodeViteManifestInvalid, ".vite/manifest.json lists a file the tree does not hold")
+				return nil, bad("lists a file the tree does not hold")
 			}
 			out[f] = true
 		}

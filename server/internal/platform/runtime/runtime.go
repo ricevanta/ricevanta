@@ -110,11 +110,11 @@ func ConsoleManifest(o Options) int {
 // loadTLS reads the certificate chain and the private key, the key under
 // the key-file rule of spec section 3.
 func loadTLS(t config.TLS) (*tls.Config, error) {
-	certPEM, err := config.ReadCertificateFile(t.CertificateFile)
+	keyPEM, err := config.ReadKeyFile(t.KeyFile)
 	if err != nil {
 		return nil, err
 	}
-	keyPEM, err := config.ReadKeyFile(t.KeyFile)
+	certPEM, err := config.ReadCertificateFile(t.CertificateFile)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +194,11 @@ func Serve(parent context.Context, o Options) (code int) {
 		MaxHeaderBytes:               cfg.HTTP.MaxHeaderBytes,
 		DisableGeneralOptionsHandler: true,
 		TLSConfig:                    tlsConfig,
+		// On HTTP/2 a stream's write deadline only queues RST_STREAM behind
+		// the connection's frame writer, which blocks with no deadline on a
+		// client that stopped reading. WriteByteTimeout closes such a
+		// connection once no byte could be written for the same 10 s bound.
+		HTTP2: &http.HTTP2Config{WriteByteTimeout: console.WriteProgress},
 		// net/http's own messages are free text outside the closed
 		// event catalogue, so they are not written to the JSON log.
 		ErrorLog: log.New(io.Discard, "", 0),

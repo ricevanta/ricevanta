@@ -1,11 +1,12 @@
-// Package buildinfo holds the product identity compiled into ricevanta-server.
+// Package buildinfo holds the product identity compiled into ricevanta-server
+// (docs/specs/server-runtime.md section 2).
 //
-// This tracked file carries the development default. A release build copies
-// the gitignored generated.go from scripts/release/version.py into this
-// package; that file declares the constants Version, Commit, Channel and
-// SourceEpoch and an init function that assigns them to the package default
-// (docs/specs/server-runtime.md section 2), so no tracked file changes during a
-// release build.
+// The constants Version, Commit, Channel and SourceEpoch come from
+// development.go in an ordinary build and from the gitignored generated.go
+// that scripts/release/version.py writes in a build with the
+// ricevanta_release tag. Either wrong combination fails to compile: the tag
+// without generated.go leaves the constants undefined, and generated.go
+// without the tag declares them twice.
 package buildinfo
 
 import (
@@ -21,11 +22,10 @@ type Identity struct {
 	SourceEpoch int64
 }
 
-// current is the development default; generated.go replaces it in init.
-var current = Identity{Version: "0.0.0-local", Commit: "unknown", Channel: "local", SourceEpoch: 0}
-
 // Current returns the identity this binary was built with.
-func Current() Identity { return current }
+func Current() Identity {
+	return Identity{Version: Version, Commit: Commit, Channel: Channel, SourceEpoch: SourceEpoch}
+}
 
 // Line is the --version output without its final newline.
 func (i Identity) Line() string {

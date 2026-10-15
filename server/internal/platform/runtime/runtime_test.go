@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -362,25 +361,6 @@ func TestRequestLogFields(t *testing.T) {
 	}
 }
 
-func TestTLSServesHTTP2WithHSTS(t *testing.T) {
-	dir := t.TempDir()
-	certFile, keyFile := writeCertificate(t, dir)
-	port := freePort(t)
-	doc := "schema: ricevanta-server-config-v1\nroles: [api]\nlisten:\n  api:\n    address: \"127.0.0.1:" + strconv.Itoa(port) +
-		"\"\n    tls:\n      mode: file\n      certificate_file: " + certFile + "\n      key_file: " + keyFile + "\n"
-	r := start(t, Options{ConfigFlag: writeConfig(t, doc), ConfigFlagSet: true, consoleSource: fixtureSource(t)})
-	defer func() { r.cancel(); r.wait(t, 10*time.Second) }()
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certPool(t, certFile)}, ForceAttemptHTTP2: true}}
-	resp, err := client.Get("https://" + r.addr + "/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.ProtoMajor != 2 || resp.Header.Get("Strict-Transport-Security") != "max-age=31536000" || resp.StatusCode != 200 {
-		t.Fatalf("%s %d %v", resp.Proto, resp.StatusCode, resp.Header)
-	}
-}
-
 func TestOptionsStarReachesRootHandler(t *testing.T) {
 	port := freePort(t)
 	r := start(t, Options{ConfigFlag: writeConfig(t, plaintextConfig(port, "console: {enabled: false}\n")), ConfigFlagSet: true})
@@ -432,5 +412,41 @@ func TestConsoleManifestCommand(t *testing.T) {
 		if code := ConsoleManifest(Options{Stdout: &out, Stderr: &errOut}); code != ExitStartup || out.Len() != 0 {
 			t.Fatalf("untagged: exit %d", code)
 		}
+	}
+}
+
+func TestRequestLogBoundsMethod(t *testing.T) {
+	port := freePort(t)
+	r := start(t, Options{ConfigFlag: writeConfig(t, plaintextConfig(port, "console: {enabled: false}\nhttp: {max_header_bytes: 1048576}\n")), ConfigFlagSet: true})
+	c, err := net.Dial("tcp", r.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	method := strings.Repeat("M", 60000)
+	io.WriteString(c, method+" /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	c.Close()
+	r.cancel()
+	r.wait(t, 10*time.Second)
+	var found bool
+	for _, line := range strings.Split(r.log.String(), "\n") {
+		if len(line) > 4096 {
+			t.Fatalf("log line of %d bytes", len(line))
+		}
+	}
+	for _, m := range logMessages(t, r.log.String()) {
+		if m["msg"] == "request" {
+			found = true
+			if got, _ := m["method"].(string); len(got) > maxLoggedMethod || !strings.HasPrefix(method, got) {
+				t.Fatalf("logged method of %d bytes", len(got))
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no request record:\n%s", r.log.String())
 	}
 }

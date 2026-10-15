@@ -783,3 +783,106 @@ func TestStalledReaderDoesNotHoldShutdown(t *testing.T) {
 	}
 	checkLogs(t, s.logs(), "shutdown_complete")
 }
+
+// smallReceiveBuffer dials with a 4 KiB receive buffer set before connect,
+// so a client that stops reading stalls the server's writes quickly.
+var smallReceiveBuffer = &net.Dialer{Control: func(network, address string, c syscall.RawConn) error {
+	var serr error
+	err := c.Control(func(fd uintptr) {
+		serr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, 4096)
+	})
+	if err != nil {
+		return err
+	}
+	return serr
+}}
+
+// TestHTTP2StalledReaderDoesNotHoldShutdown opens an HTTP/2 connection that
+// grants the largest flow-control windows, requests the large asset on four
+// streams and never reads. The write-progress bound must still free the
+// streams and the connection, so SIGTERM ends in shutdown_complete and exit
+// 0 well before the 20 s shutdown deadline.
+func TestHTTP2StalledReaderDoesNotHoldShutdown(t *testing.T) {
+	bin := tagged(t)
+	cert, key, pool := writeCertificate(t)
+	s := startServer(t, bin, writeConfig(t, withTLS(freePort(t), cert, key, "")))
+	raw, err := smallReceiveBuffer.Dial("tcp", s.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	c := tls.Client(raw, &tls.Config{RootCAs: pool, ServerName: "127.0.0.1", NextProtos: []string{"h2"}})
+	if err := c.Handshake(); err != nil {
+		t.Fatal(err)
+	}
+	if c.ConnectionState().NegotiatedProtocol != "h2" {
+		t.Fatalf("ALPN %q", c.ConnectionState().NegotiatedProtocol)
+	}
+	io.WriteString(c, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+	h2frame(c, 0x4, 0, 0, []byte{0, 4, 0x7f, 0xff, 0xff, 0xff}) // SETTINGS_INITIAL_WINDOW_SIZE = 2^31-1
+	inc := uint32(0x7fffffff - 65535)
+	h2frame(c, 0x8, 0, 0, []byte{byte(inc >> 24), byte(inc >> 16), byte(inc >> 8), byte(inc)}) // connection WINDOW_UPDATE
+	for _, id := range []uint32{1, 3, 5, 7} {
+		var block []byte
+		for _, f := range [][2]string{{":method", "GET"}, {":scheme", "https"}, {":path", "/assets/large.txt"}, {":authority", "x"}} {
+			block = append(block, hpackLiteral(f[0], f[1])...)
+		}
+		h2frame(c, 0x1, 0x5, id, block) // HEADERS, END_STREAM | END_HEADERS
+	}
+	time.Sleep(2 * time.Second)
+	began := time.Now()
+	s.stop(t)
+	code := s.wait(t, 25*time.Second)
+	if code != 0 {
+		t.Fatalf("exit %d after %v:\n%s", code, time.Since(began), s.logText())
+	}
+	if d := time.Since(began); d > 15*time.Second {
+		t.Fatalf("stalled HTTP/2 reader held shutdown for %v", d)
+	}
+	checkLogs(t, s.logs(), "shutdown_complete")
+}
+
+// TestSlowSteadyReaderReceivesWholeBody reads the 64 MiB asset at a steady
+// pace that takes about 13 s in total. The write deadline moves forward
+// after each 16 KiB, so a client that keeps making progress is never cut
+// off by the 10 s bound.
+func TestSlowSteadyReaderReceivesWholeBody(t *testing.T) {
+	bin := tagged(t)
+	s := startServer(t, bin, writeConfig(t, plaintext(freePort(t), "")))
+	c, err := net.Dial("tcp", s.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	io.WriteString(c, "GET /assets/large.txt HTTP/1.1\r\nHost: x\r\n\r\n")
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("%v %v", resp, err)
+	}
+	const total = 13 * time.Second
+	rate := float64(largeSize) / total.Seconds()
+	start := time.Now()
+	var n int64
+	buf := make([]byte, 64<<10)
+	for {
+		k, err := resp.Body.Read(buf)
+		n += int64(k)
+		if err != nil {
+			break
+		}
+		if ahead := time.Duration(float64(n)/rate*float64(time.Second)) - time.Since(start); ahead > 0 {
+			time.Sleep(ahead)
+		}
+	}
+	elapsed := time.Since(start)
+	if n != int64(largeSize) {
+		t.Fatalf("received %d of %d bytes in %v", n, largeSize, elapsed)
+	}
+	if elapsed < 11*time.Second {
+		t.Fatalf("transfer took %v; the test needs more than 10 s to prove the deadline moves", elapsed)
+	}
+	s.stop(t)
+	if code := s.wait(t, 10*time.Second); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+}
