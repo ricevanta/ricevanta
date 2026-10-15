@@ -35,3 +35,38 @@ impl EventKind {
 pub fn escape_percent(line: &str) -> String {
     line.replace('%', "\\u0025")
 }
+
+/// ReportEventW: "Each string is limited to 31,839 characters", counted in
+/// UTF-16 units.
+pub const MAX_EVENT_UNITS: usize = 31_839;
+/// Appended when a line had to be cut to fit [`MAX_EVENT_UNITS`].
+pub const TRUNCATED_MARKER: &str = " [truncated]";
+
+/// The insertion string for a log line: [`escape_percent`] applied, and,
+/// when the result would exceed [`MAX_EVENT_UNITS`], cut at a character
+/// boundary that never splits an escape and followed by
+/// [`TRUNCATED_MARKER`], so `ReportEventW` never refuses the event. A cut
+/// line is a diagnostic, no longer JSON.
+pub fn event_text(line: &str) -> String {
+    let escaped = escape_percent(line);
+    if escaped.encode_utf16().count() <= MAX_EVENT_UNITS {
+        return escaped;
+    }
+    let budget = MAX_EVENT_UNITS - TRUNCATED_MARKER.len();
+    let mut out = String::new();
+    let mut units = 0;
+    for c in line.chars() {
+        let piece = if c == '%' { 6 } else { c.len_utf16() };
+        if units + piece > budget {
+            break;
+        }
+        if c == '%' {
+            out.push_str("\\u0025");
+        } else {
+            out.push(c);
+        }
+        units += piece;
+    }
+    out.push_str(TRUNCATED_MARKER);
+    out
+}

@@ -11,12 +11,15 @@
 //! - `SERVICE_STOP_PENDING` is reported only for a stop the SCM requested,
 //!   with the effective deadline plus 5,000 ms as wait hint and an
 //!   incremented checkpoint on each [`ServiceSession::check_point`].
-//! - `SERVICE_STOPPED` is reported once and last, only for a requested stop:
-//!   `NO_ERROR` when the deadline was met, `ERROR_SERVICE_SPECIFIC_ERROR`
-//!   with service-specific code 1 when it passed.
+//! - `SERVICE_STOPPED` is reported once and last, only for a requested stop,
+//!   and for every end once `SERVICE_STOP_PENDING` was reported: `NO_ERROR`
+//!   when the stop completed within its deadline, otherwise (late, a panic
+//!   or any other end during the stop) `ERROR_SERVICE_SPECIFIC_ERROR` with
+//!   service-specific code 1 and exit code 1. The process never ends from
+//!   `SERVICE_STOP_PENDING`.
 //! - Every other end (a panic, a configuration error, a startup failure, or
-//!   any end without a recorded requested stop) reports nothing more, so the
-//!   SCM sees the process end from `SERVICE_START_PENDING` or
+//!   any end before a requested stop was reported) reports nothing more, so
+//!   the SCM sees the process end from `SERVICE_START_PENDING` or
 //!   `SERVICE_RUNNING`, the same transition as a crash, and restarts it.
 
 use std::io;
@@ -230,24 +233,25 @@ pub fn run_service_main(
         wait_hint_ms: 0,
     };
     let end = catch_unwind(AssertUnwindSafe(|| body(&mut session)));
-    let deadline_met = match end {
-        Ok(ServiceEnd::RequestedStop { deadline_met }) if session.phase == Phase::StopPending => {
-            deadline_met
-        }
-        // A requested end without a reported stop is a programming error:
-        // end like a task panic, unreported.
-        Ok(ServiceEnd::RequestedStop { .. }) | Err(_) => {
-            return ServiceExit {
-                exit_code: 1,
-                reported_stopped: false,
-            };
-        }
-        Ok(ServiceEnd::Other { exit_code }) => {
-            return ServiceExit {
-                exit_code,
-                reported_stopped: false,
-            };
-        }
+    let deadline_met = if session.phase == Phase::StopPending {
+        // The SCM requested this stop and SERVICE_STOP_PENDING was reported:
+        // every end now reports SERVICE_STOPPED, so the SCM never restarts a
+        // requested stop. Only a completed stop within its deadline is
+        // clean; a late stop, a panic or any other end during the stop is
+        // ERROR_SERVICE_SPECIFIC_ERROR with code 1.
+        matches!(end, Ok(ServiceEnd::RequestedStop { deadline_met: true }))
+    } else {
+        // No requested stop was reported: end unreported, like a crash, so
+        // the SCM runs the restart action. A requested end without a
+        // reported stop is a programming error and ends like a task panic.
+        let exit_code = match end {
+            Ok(ServiceEnd::Other { exit_code }) => exit_code,
+            Ok(ServiceEnd::RequestedStop { .. }) | Err(_) => 1,
+        };
+        return ServiceExit {
+            exit_code,
+            reported_stopped: false,
+        };
     };
     let (win32_exit_code, service_specific_exit_code, exit_code) = if deadline_met {
         (NO_ERROR, 0, 0)

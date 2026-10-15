@@ -1,6 +1,8 @@
 //! Event log line escaping and types; pure, so it runs on every host.
 
-use ricevanta_os_windows::eventlog::{EventKind, SOURCE, escape_percent};
+use ricevanta_os_windows::eventlog::{
+    EventKind, MAX_EVENT_UNITS, SOURCE, TRUNCATED_MARKER, escape_percent, event_text,
+};
 
 #[test]
 fn percent_signs_become_json_escapes() {
@@ -26,4 +28,34 @@ fn startup_failed_is_an_error_event() {
         EventKind::Information
     );
     assert_eq!(SOURCE, "RicevantaAgent");
+}
+
+#[test]
+fn event_text_fits_report_event_w() {
+    let escape = format!("{}u0025", '\\');
+    // A short line is only escaped.
+    let short = r#"{"detail":"5%"}"#;
+    assert_eq!(event_text(short), escape_percent(short));
+    // A line whose escapes push it past the limit is cut with a marker.
+    let line = format!(r#"{{"detail":"{}"}}"#, "%".repeat(8_000));
+    assert!(escape_percent(&line).encode_utf16().count() > MAX_EVENT_UNITS);
+    let text = event_text(&line);
+    let units = text.encode_utf16().count();
+    assert!(units <= MAX_EVENT_UNITS, "{units}");
+    assert!(units > MAX_EVENT_UNITS - 6 - TRUNCATED_MARKER.len());
+    assert!(text.ends_with(TRUNCATED_MARKER));
+    assert!(!text.contains('%'));
+    // Every escape is whole: the body is the prefix and then escapes only.
+    let body = text.strip_suffix(TRUNCATED_MARKER).unwrap();
+    let after_prefix = body.strip_prefix(r#"{"detail":""#).unwrap();
+    assert!(after_prefix.len().is_multiple_of(escape.len()));
+    assert_eq!(
+        after_prefix,
+        escape.repeat(after_prefix.len() / escape.len())
+    );
+    // Characters outside the BMP count as two units and are never split.
+    let wide = "\u{1f600}".repeat(20_000);
+    let text = event_text(&wide);
+    assert!(text.encode_utf16().count() <= MAX_EVENT_UNITS);
+    assert!(text.ends_with(TRUNCATED_MARKER));
 }

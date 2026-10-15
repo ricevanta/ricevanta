@@ -234,6 +234,9 @@ fn functions(tokens: &[(usize, Tok)]) -> Vec<(usize, String)> {
                     attributes.push(' ');
                 }
             }
+            // One `|`-separated group per attribute, so a rule can require
+            // two words inside the same attribute.
+            attributes.push('|');
             k = m - 1;
         }
         // The body: the first `{` outside parentheses and brackets, unless a
@@ -299,12 +302,27 @@ fn violations(name: &str, crate_name: &str, text: &str) -> Vec<String> {
                     found.push(format!("{at}: allow(unsafe_code)"));
                 }
             }
-            Tok::Ident(w) if w == "CheckedDir" => {
-                let path_new = matches!(next, Some(Tok::Punct(':')))
-                    && matches!(tok_at(tokens, index + 2), Some(Tok::Punct(':')))
-                    && tok_at(tokens, index + 3).is_some_and(|t| ident(t, "new"));
-                if path_new && !crate_name.starts_with("os-") {
-                    found.push(format!("{at}: CheckedDir::new outside agent/crates/os-*"));
+            Tok::Ident(w) if w == "CheckedDir" && !crate_name.starts_with("os-") => {
+                let new_after = |from: usize| {
+                    matches!(tok_at(tokens, from), Some(Tok::Punct(':')))
+                        && matches!(tok_at(tokens, from + 1), Some(Tok::Punct(':')))
+                        && tok_at(tokens, from + 2).is_some_and(|t| ident(t, "new"))
+                };
+                // `CheckedDir::new` and `<CheckedDir>::new`.
+                let direct = new_after(index + 1)
+                    || (matches!(next, Some(Tok::Punct('>'))) && new_after(index + 2));
+                // `use ...::CheckedDir as X` and `type X = ...CheckedDir...`
+                // would let `X::new` slip past a name match.
+                let renamed = next.is_some_and(|t| ident(t, "as"));
+                let type_alias = tokens[..index]
+                    .iter()
+                    .rev()
+                    .take_while(|(_, t)| !matches!(t, Tok::Punct(';' | '{' | '}')))
+                    .any(|(_, t)| ident(t, "type"));
+                if direct || renamed || type_alias {
+                    found.push(format!(
+                        "{at}: CheckedDir constructed or aliased outside agent/crates/os-*"
+                    ));
                 }
             }
             Tok::Ident(w) if w == "unsafe" => {
@@ -326,7 +344,10 @@ fn violations(name: &str, crate_name: &str, text: &str) -> Vec<String> {
                     found.push(format!("{at}: unsafe block without a // SAFETY: comment"));
                 }
                 let expected = scopes.last().is_some_and(|(_, attrs)| {
-                    attrs.contains("expect unsafe_code") && attrs.contains("reason")
+                    attrs.split('|').any(|group| {
+                        group.trim_start().starts_with("expect unsafe_code")
+                            && group.contains(" reason ")
+                    })
                 });
                 if !expected {
                     found.push(format!(
@@ -439,6 +460,25 @@ fn each_rule_fires_on_a_violating_fixture() {
         "extern block"
     ));
     let checked = "let d = CheckedDir::new(file, object, path);\n";
+    // Aliased forms (review R-04, Info).
+    for aliased in [
+        "use ricevanta_os::CheckedDir as C;\nlet d = C::new(f, o, p);\n",
+        "use ricevanta_os::{CheckedDir as C, Mode};\n",
+        "type C = ricevanta_os::CheckedDir;\n",
+        "let d = <CheckedDir>::new(f, o, p);\n",
+    ] {
+        assert!(fires("core", aliased, "CheckedDir"), "{aliased}");
+        assert!(!fires("os-linux", aliased, "CheckedDir"), "{aliased}");
+    }
+    // Using the type, not constructing it, is fine anywhere.
+    assert!(!fires(
+        "core",
+        "fn f(d: &CheckedDir) -> &CheckedDir { d }\n",
+        "CheckedDir"
+    ));
+    // `reason` must be inside the same `expect` attribute.
+    let reason_elsewhere = "#[expect(unsafe_code)]\n#[doc = \"x\"]\n#[cfg_attr(reason, inline)]\nfn f() {\n    // SAFETY: fine.\n    unsafe { g() };\n}\n";
+    assert!(fires("os-macos", reason_elsewhere, "expect"));
     assert!(fires("core", checked, "CheckedDir"));
     assert!(!fires("os-linux", checked, "CheckedDir"));
     assert!(fires(

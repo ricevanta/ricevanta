@@ -268,3 +268,62 @@ fn status_failures_never_claim_a_reported_stop() {
     );
     assert_eq!(scm.stopped_count(), 0);
 }
+
+/// A body that receives an SCM stop, reports it pending, then ends with
+/// `end` instead of completing the stop.
+fn stop_then(
+    end: impl FnOnce() -> ServiceEnd,
+) -> impl FnOnce(&mut ServiceSession<'_>, &Sender<StopRequest>) -> ServiceEnd {
+    move |session, handler| {
+        session.running().unwrap();
+        handler.send(StopRequest::Stop).unwrap();
+        let request = session.stop_requests().recv().unwrap();
+        session.stop_pending(request, 10_000).unwrap();
+        end()
+    }
+}
+
+fn assert_stopped_with_code_1(scm: &FakeScm, exit: ServiceExit) {
+    assert_eq!(
+        exit,
+        ServiceExit {
+            exit_code: 1,
+            reported_stopped: true
+        }
+    );
+    assert_eq!(scm.stopped_count(), 1);
+    let stopped = *scm.reports.last().unwrap();
+    assert_eq!(stopped.current_state, SERVICE_STOPPED);
+    assert_eq!(
+        (stopped.win32_exit_code, stopped.service_specific_exit_code),
+        (ERROR_SERVICE_SPECIFIC_ERROR, 1)
+    );
+}
+
+#[test]
+fn panic_after_a_stop_request_still_reports_stopped() {
+    let mut scm = FakeScm::default();
+    let exit = dispatch(&mut scm, stop_then(|| panic!("injected panic during stop")));
+    assert_stopped_with_code_1(&scm, exit);
+    assert_eq!(
+        scm.states(),
+        [
+            SERVICE_START_PENDING,
+            SERVICE_RUNNING,
+            SERVICE_STOP_PENDING,
+            SERVICE_STOPPED
+        ]
+    );
+}
+
+#[test]
+fn other_end_after_a_stop_request_still_reports_stopped() {
+    for code in [1, 2, 3] {
+        let mut scm = FakeScm::default();
+        let exit = dispatch(
+            &mut scm,
+            stop_then(move || ServiceEnd::Other { exit_code: code }),
+        );
+        assert_stopped_with_code_1(&scm, exit);
+    }
+}

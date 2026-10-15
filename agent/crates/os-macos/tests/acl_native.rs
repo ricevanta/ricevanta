@@ -190,3 +190,46 @@ fn objects_created_under_an_inheritable_deny_pass_the_recheck() {
     let listing = String::from_utf8_lossy(&listing.stdout);
     assert!(listing.contains("deny"), "{listing}");
 }
+
+/// `everyone deny readsecurity` makes `fgetattrlist(ATTR_CMN_EXTENDED_SECURITY)`
+/// fail with `EACCES` for a non-root caller (xnu authorizes
+/// `KAUTH_VNODE_READ_SECURITY` for that attribute and a deny entry is
+/// evaluated first). The entry itself is a deny entry, so the refusal
+/// proves that a failed call fails closed (startup failure, exit 3). As
+/// root the call would succeed, so the test refuses to run as root rather
+/// than pass vacuously.
+fn require_unprivileged(p: &MacPlatform) {
+    assert_ne!(
+        p.euid(),
+        0,
+        "the failed-call test needs the unprivileged runner user"
+    );
+}
+
+const DENY_READ_SECURITY: &str = "everyone deny readsecurity";
+
+#[test]
+fn unreadable_acl_on_the_configuration_file_fails_closed() {
+    let p = platform();
+    require_unprivileged(&p);
+    let dir = Scratch::new();
+    let config = dir.join("agent.json");
+    write_file(&config, 0o600);
+    chmod_acl(&config, DENY_READ_SECURITY);
+    insecure(p.open_config(&config, Mode::Run), Object::ConfigFile);
+}
+
+#[test]
+fn unreadable_acl_on_the_configuration_parent_fails_closed() {
+    let p = platform();
+    require_unprivileged(&p);
+    let dir = Scratch::new();
+    let etc = dir.join("etc");
+    make_dir(&etc, 0o755);
+    write_file(&etc.join("agent.json"), 0o600);
+    chmod_acl(&etc, DENY_READ_SECURITY);
+    insecure(
+        p.open_config(&etc.join("agent.json"), Mode::Run),
+        Object::ConfigParent,
+    );
+}

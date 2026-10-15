@@ -221,13 +221,13 @@ impl EventLog {
     }
 
     /// Writes one JSON log line as the single insertion string, with every
-    /// `%` escaped (see [`eventlog::escape_percent`]).
+    /// `%` escaped and the length bounded (see [`eventlog::event_text`]).
     #[expect(
         unsafe_code,
         reason = "ReportEventW: one NUL-terminated insertion string that lives for the call, no SID and no raw data"
     )]
     pub fn write(&self, line: &str, kind: EventKind) -> io::Result<()> {
-        let text = wide(&eventlog::escape_percent(line));
+        let text = wide(&eventlog::event_text(line));
         let strings = [text.as_ptr()];
         let event_type = match kind {
             EventKind::Error => EVENTLOG_ERROR_TYPE,
