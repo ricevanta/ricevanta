@@ -113,7 +113,7 @@ pub fn status_euid<R: Read>(reader: R) -> Result<u32, SampleError> {
 /// between reads, so the document may be any length.
 ///
 /// A line longer than `buffer` is skipped, unless it is the requested line,
-/// which is then a format error rather than a silently cut value. A missing
+/// which is then unsupported rather than a silently cut value. A missing
 /// line is a format error.
 pub fn find_line<'b, R: Read>(
     mut reader: R,
@@ -146,7 +146,7 @@ pub fn find_line<'b, R: Read>(
         if len == buffer.len() {
             // One line fills the buffer.
             if !skipping && buffer.starts_with(name) {
-                return Err(format(source));
+                return Err(SampleError::Unsupported);
             }
             skipping = true;
             len = 0;
@@ -161,11 +161,11 @@ pub fn find_line<'b, R: Read>(
 }
 
 /// Reads all of `reader` into `buffer`. A source that does not reach end of
-/// file within `buffer.len()` bytes is a format error, never a cut document.
+/// file within `buffer.len()` bytes is unsupported, never a cut document.
 pub fn read_bounded<'a, R: Read>(
     mut reader: R,
     buffer: &'a mut [u8],
-    source: &'static str,
+    _source: &'static str,
 ) -> Result<&'a [u8], SampleError> {
     let mut filled = 0;
     loop {
@@ -173,7 +173,7 @@ pub fn read_bounded<'a, R: Read>(
             let mut probe = [0u8; 1];
             match reader.read(&mut probe) {
                 Ok(0) => return Ok(&buffer[..filled]),
-                Ok(_) => return Err(format(source)),
+                Ok(_) => return Err(SampleError::Unsupported),
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(e) => return Err(SampleError::io(e)),
             }

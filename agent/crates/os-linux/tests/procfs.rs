@@ -148,13 +148,13 @@ fn status_larger_than_the_buffer() {
 }
 
 #[test]
-fn requested_line_longer_than_the_buffer_is_a_format_error() {
+fn requested_line_longer_than_the_buffer_is_unsupported() {
     let mut document = b"Name:\tx\nThreads:\t".to_vec();
     document.extend(std::iter::repeat_n(b'1', BUFFER_BYTES));
     document.extend_from_slice(b"\nUid:\t0\t0\t0\t0\n");
     assert!(matches!(
         status_threads(&document[..]),
-        Err(SampleError::Format { .. })
+        Err(SampleError::Unsupported)
     ));
     // Other overlong lines are skipped.
     assert_eq!(status_euid(&document[..]), Ok(0));
@@ -186,7 +186,7 @@ fn whole_sources_must_fit_the_buffer() {
     let over = vec![b'x'; BUFFER_BYTES + 1];
     assert!(matches!(
         read_bounded(&over[..], &mut buffer, "src"),
-        Err(SampleError::Format { source: "src" })
+        Err(SampleError::Unsupported)
     ));
     let chunked = Chunked {
         rest: &over,
@@ -194,7 +194,7 @@ fn whole_sources_must_fit_the_buffer() {
     };
     assert!(matches!(
         read_bounded(chunked, &mut buffer, "src"),
-        Err(SampleError::Format { .. })
+        Err(SampleError::Unsupported)
     ));
 }
 
@@ -235,4 +235,32 @@ fn live_sample_of_own_process() {
     drop(extra);
     assert_eq!(after, fds + 1);
     eprintln!("live sample {sample:?} in {elapsed:?}");
+}
+
+#[test]
+fn bounded_sources_preserve_io_errors_and_empty_boundaries() {
+    let mut empty = [];
+    assert_eq!(read_bounded(&b""[..], &mut empty, "src"), Ok(&b""[..]));
+    assert_eq!(
+        read_bounded(&b"x"[..], &mut empty, "src"),
+        Err(SampleError::Unsupported)
+    );
+    let mut buffer = [0; 4];
+    for bytes in [&b"abc"[..], &b"abcd"[..]] {
+        assert_eq!(read_bounded(bytes, &mut buffer, "src"), Ok(bytes));
+    }
+    assert_eq!(
+        read_bounded(&b"abcde"[..], &mut buffer, "src"),
+        Err(SampleError::Unsupported)
+    );
+    struct Failed;
+    impl Read for Failed {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+        }
+    }
+    assert!(matches!(
+        read_bounded(Failed, &mut buffer, "src"),
+        Err(SampleError::Io(_))
+    ));
 }

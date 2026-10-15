@@ -125,7 +125,8 @@ pub enum SampleError {
         code: i32,
     },
     /// The OS does not provide the metric (for example a zero
-    /// `PrivateWorkingSetSize` on an old Windows build).
+    /// `PrivateWorkingSetSize` on an old Windows build), or a fixed buffer
+    /// cannot hold the complete source or descriptor list.
     Unsupported,
 }
 

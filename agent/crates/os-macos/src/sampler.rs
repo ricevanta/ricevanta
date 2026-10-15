@@ -43,7 +43,7 @@ impl MacSampler {
     }
 }
 
-fn os_error(error: std::io::Error) -> SampleError {
+pub(crate) fn os_error(error: std::io::Error) -> SampleError {
     match error.raw_os_error() {
         Some(code) => SampleError::Os { code },
         None => SampleError::io(error),
@@ -54,7 +54,7 @@ impl ProcessSampler for MacSampler {
     fn sample(&self) -> Result<ProcessSample, SampleError> {
         let usage = sys::rusage_v4(self.pid).map_err(os_error)?;
         let task = sys::task_info(self.pid).map_err(os_error)?;
-        let fd_bytes = sys::listed_fd_bytes(self.pid).map_err(os_error)?;
+        let fd_bytes = sys::listed_fd_bytes(self.pid)?;
         let entry = std::mem::size_of::<libc::proc_fdinfo>();
         let overflow = || SampleError::Format {
             source: "rusage_info_v4",

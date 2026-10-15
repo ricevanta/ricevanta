@@ -12,6 +12,8 @@
 //! targets it is empty, so the workspace builds everywhere.
 
 #[cfg(target_os = "linux")]
+mod fd_count;
+#[cfg(target_os = "linux")]
 mod notify;
 #[cfg(target_os = "linux")]
 mod platform;
