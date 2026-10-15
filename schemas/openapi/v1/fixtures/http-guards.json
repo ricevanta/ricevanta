@@ -1,0 +1,941 @@
+{
+ "description": "Credential, resource-isolation and request-forgery decisions of docs/specs/identity-sessions.md section 4; the console origin is https://console.example.test.",
+ "cases": [
+  {
+   "id": "sync-allow",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "sync-header-absent",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-header-mismatch",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "mismatch"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-cross-site",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "cross-site",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-same-site",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-site",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-site-none",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "none",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-no-fetch-metadata",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": null,
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "sync-origin-absent",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-origin-null",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "null",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-origin-other",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://evil.example",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-origin-port",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test:8443",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-origin-http",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "http://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-form-body",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/x-www-form-urlencoded",
+    "csrf_header": "match"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "sync-text-plain",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "text/plain",
+    "csrf_header": "match"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "sync-content-type-absent",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "match"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "sync-json-charset",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json; charset=utf-8",
+    "csrf_header": "match"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "sync-json-case",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "Application/JSON",
+    "csrf_header": "match"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "sync-json-other-param",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json; boundary=x",
+    "csrf_header": "match"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "sync-no-session",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "unauthenticated"
+  },
+  {
+   "id": "sync-invalid-session",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "invalid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "unauthenticated"
+  },
+  {
+   "id": "sync-cookie-and-bearer",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "valid",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "credentials_ambiguous"
+  },
+  {
+   "id": "sync-invalid-cookie-and-bearer",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "invalid",
+    "bearer": "valid",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "match"
+   },
+   "expect": "credentials_ambiguous"
+  },
+  {
+   "id": "token-allow",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "valid",
+    "origin": null,
+    "sec_fetch_site": null,
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "token-invalid",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "invalid",
+    "origin": null,
+    "sec_fetch_site": null,
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "unauthenticated"
+  },
+  {
+   "id": "token-session-only-operation",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "valid",
+    "origin": null,
+    "sec_fetch_site": null,
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "unauthenticated"
+  },
+  {
+   "id": "token-cross-site",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "valid",
+    "origin": null,
+    "sec_fetch_site": "cross-site",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "sync-no-body",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": false,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "match"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "origin-login-allow",
+   "request": {
+    "csrf": "origin",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "origin-login-cross-site",
+   "request": {
+    "csrf": "origin",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "cross-site",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "origin-login-site-none",
+   "request": {
+    "csrf": "origin",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "none",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "origin-login-origin-absent",
+   "request": {
+    "csrf": "origin",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "origin-login-stray-session",
+   "request": {
+    "csrf": "origin",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "origin-login-form-body",
+   "request": {
+    "csrf": "origin",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/x-www-form-urlencoded",
+    "csrf_header": "absent"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "nav-start-allow",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "nav-start-typed",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "none",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "nav-start-no-metadata",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": null,
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "nav-start-cross-site",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "cross-site",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "redirect:cross_site_start"
+  },
+  {
+   "id": "nav-start-same-site",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-site",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "redirect:cross_site_start"
+  },
+  {
+   "id": "nav-reauth-no-session",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [
+     "session"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "redirect:session_required"
+  },
+  {
+   "id": "nav-reauth-allow",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [
+     "session"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "nav-reauth-cross-site",
+   "request": {
+    "csrf": "navigation",
+    "credentials": [
+     "session"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "cross-site",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "redirect:cross_site_start"
+  },
+  {
+   "id": "callback-cross-site",
+   "request": {
+    "csrf": "navigation_callback",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "cross-site",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "acs-cross-site-form",
+   "request": {
+    "csrf": "cross_site_post",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://idp.example",
+    "sec_fetch_site": "cross-site",
+    "content_type": "application/x-www-form-urlencoded",
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "acs-origin-null",
+   "request": {
+    "csrf": "cross_site_post",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "null",
+    "sec_fetch_site": "cross-site",
+    "content_type": "application/x-www-form-urlencoded",
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "acs-json-body",
+   "request": {
+    "csrf": "cross_site_post",
+    "credentials": [],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": "https://idp.example",
+    "sec_fetch_site": "cross-site",
+    "content_type": "application/json",
+    "csrf_header": "absent"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "read-allow",
+   "request": {
+    "csrf": "none",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "read-cross-site",
+   "request": {
+    "csrf": "none",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "cross-site",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "read-same-site",
+   "request": {
+    "csrf": "none",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-site",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "csrf_rejected"
+  },
+  {
+   "id": "read-typed-url",
+   "request": {
+    "csrf": "none",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "none",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  },
+  {
+   "id": "read-no-session",
+   "request": {
+    "csrf": "none",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "unauthenticated"
+  },
+  {
+   "id": "read-both-credentials",
+   "request": {
+    "csrf": "none",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "valid",
+    "bearer": "valid",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "credentials_ambiguous"
+  },
+  {
+   "id": "read-public",
+   "request": {
+    "csrf": "none",
+    "credentials": [],
+    "method": "GET",
+    "body": false,
+    "session_cookie": "absent",
+    "bearer": "absent",
+    "origin": null,
+    "sec_fetch_site": "same-origin",
+    "content_type": null,
+    "csrf_header": "absent"
+   },
+   "expect": "allow"
+  }
+ ]
+}

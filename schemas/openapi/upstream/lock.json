@@ -1,0 +1,30 @@
+{
+  "license": {
+    "file": "LICENSE",
+    "spdx": "Apache-2.0",
+    "url": "https://raw.githubusercontent.com/OAI/OpenAPI-Specification/ffb3e579dfb4ef5ae1a68d11af125e2a593505fc/LICENSE",
+    "sha256": "4948367c65e1ce06690e2cadc6e86fce1a6a6db55ef874ce4b78c0f472ce5f13"
+  },
+  "schemas": [
+    {
+      "file": "oas-3.1-dialect-2024-11-10.json",
+      "id": "https://spec.openapis.org/oas/3.1/dialect/2024-11-10",
+      "sha256": "647f32dfff64949d5020a28ecd1af4ffeffb1e9c695f861a52255a8004e07460"
+    },
+    {
+      "file": "oas-3.1-meta-2024-11-10.json",
+      "id": "https://spec.openapis.org/oas/3.1/meta/2024-11-10",
+      "sha256": "80706a9a404affedbf84ac4dc1328c9ce0d2a00804cdfc4d95c0ddd0053121dd"
+    },
+    {
+      "file": "oas-3.1-schema-2026-08-03.json",
+      "id": "https://spec.openapis.org/oas/3.1/schema/2026-08-03",
+      "sha256": "59f106413cb48c31299f96f024c938d3628aed6cd02cd14bcfb2fcaae7a130b6"
+    },
+    {
+      "file": "oas-3.1-schema-base-2026-08-03.json",
+      "id": "https://spec.openapis.org/oas/3.1/schema-base/2026-08-03",
+      "sha256": "ffdd07e28417bfa89de635d23a7476f7625497b8edd279f18c1424e613966d9a"
+    }
+  ]
+}

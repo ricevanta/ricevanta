@@ -1,0 +1,303 @@
+{
+ "description": "Session expiry precedence, idle-activity throttling, timeout configuration ranges and exact Set-Cookie strings in net/http Cookie.String attribute order (docs/specs/identity-sessions.md sections 2 and 3). Times are seconds.",
+ "cases": [
+  {
+   "id": "timeout-fresh",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 0,
+    "now": 1,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": false
+   },
+   "expect": "valid"
+  },
+  {
+   "id": "timeout-idle-boundary-minus-one",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 0,
+    "now": 899,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": false
+   },
+   "expect": "valid"
+  },
+  {
+   "id": "timeout-idle-boundary",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 0,
+    "now": 900,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": false
+   },
+   "expect": "idle_expired"
+  },
+  {
+   "id": "timeout-activity-extends",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 28000,
+    "now": 28799,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": false
+   },
+   "expect": "valid"
+  },
+  {
+   "id": "timeout-absolute-boundary",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 28700,
+    "now": 28800,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": false
+   },
+   "expect": "absolute_expired"
+  },
+  {
+   "id": "timeout-absolute-before-idle",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 0,
+    "now": 30000,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": false
+   },
+   "expect": "absolute_expired"
+  },
+  {
+   "id": "timeout-revoked-wins",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "sso",
+    "created_at": 0,
+    "last_activity_at": 0,
+    "now": 30000,
+    "idle_timeout": 900,
+    "absolute_timeout": 28800,
+    "revoked": true
+   },
+   "expect": "revoked"
+  },
+  {
+   "id": "timeout-break-glass-idle",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "break_glass",
+    "created_at": 0,
+    "last_activity_at": 0,
+    "now": 300,
+    "idle_timeout": 300,
+    "absolute_timeout": 3600,
+    "revoked": false
+   },
+   "expect": "idle_expired"
+  },
+  {
+   "id": "timeout-break-glass-absolute",
+   "kind": "timeout",
+   "input": {
+    "session_kind": "break_glass",
+    "created_at": 0,
+    "last_activity_at": 3500,
+    "now": 3600,
+    "idle_timeout": 300,
+    "absolute_timeout": 3600,
+    "revoked": false
+   },
+   "expect": "absolute_expired"
+  },
+  {
+   "id": "activity-updates",
+   "kind": "activity",
+   "input": {
+    "stored_last_activity": 100,
+    "now": 130,
+    "background": false
+   },
+   "expect": 130
+  },
+  {
+   "id": "activity-throttled",
+   "kind": "activity",
+   "input": {
+    "stored_last_activity": 100,
+    "now": 129,
+    "background": false
+   },
+   "expect": 100
+  },
+  {
+   "id": "activity-background-ignored",
+   "kind": "activity",
+   "input": {
+    "stored_last_activity": 100,
+    "now": 500,
+    "background": true
+   },
+   "expect": 100
+  },
+  {
+   "id": "config-sso-default",
+   "kind": "config",
+   "input": {
+    "session_kind": "sso",
+    "idle": 900,
+    "absolute": 28800
+   },
+   "expect": true
+  },
+  {
+   "id": "config-sso-idle-low",
+   "kind": "config",
+   "input": {
+    "session_kind": "sso",
+    "idle": 299,
+    "absolute": 28800
+   },
+   "expect": false
+  },
+  {
+   "id": "config-sso-absolute-high",
+   "kind": "config",
+   "input": {
+    "session_kind": "sso",
+    "idle": 900,
+    "absolute": 43201
+   },
+   "expect": false
+  },
+  {
+   "id": "config-sso-extremes",
+   "kind": "config",
+   "input": {
+    "session_kind": "sso",
+    "idle": 3600,
+    "absolute": 3600
+   },
+   "expect": false
+  },
+  {
+   "id": "config-break-glass-default",
+   "kind": "config",
+   "input": {
+    "session_kind": "break_glass",
+    "idle": 300,
+    "absolute": 3600
+   },
+   "expect": true
+  },
+  {
+   "id": "config-break-glass-idle-high",
+   "kind": "config",
+   "input": {
+    "session_kind": "break_glass",
+    "idle": 901,
+    "absolute": 3600
+   },
+   "expect": false
+  },
+  {
+   "id": "config-break-glass-min",
+   "kind": "config",
+   "input": {
+    "session_kind": "break_glass",
+    "idle": 120,
+    "absolute": 900
+   },
+   "expect": true
+  },
+  {
+   "id": "cookie-session",
+   "kind": "cookie",
+   "input": {
+    "cookie": "session",
+    "value": "Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE"
+   },
+   "expect": "__Host-rv_session=Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE; Path=/; HttpOnly; Secure; SameSite=Strict"
+  },
+  {
+   "id": "cookie-session-clear",
+   "kind": "cookie",
+   "input": {
+    "cookie": "session_clear",
+    "value": ""
+   },
+   "expect": "__Host-rv_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+  },
+  {
+   "id": "cookie-login",
+   "kind": "cookie",
+   "input": {
+    "cookie": "login",
+    "value": "Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE"
+   },
+   "expect": "__Host-rv_login=Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax"
+  },
+  {
+   "id": "cookie-login-clear",
+   "kind": "cookie",
+   "input": {
+    "cookie": "login_clear",
+    "value": ""
+   },
+   "expect": "__Host-rv_login=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
+  },
+  {
+   "id": "cookie-saml",
+   "kind": "cookie",
+   "input": {
+    "cookie": "saml",
+    "value": "Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE"
+   },
+   "expect": "__Host-rv_saml=Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=None"
+  },
+  {
+   "id": "cookie-saml-clear",
+   "kind": "cookie",
+   "input": {
+    "cookie": "saml_clear",
+    "value": ""
+   },
+   "expect": "__Host-rv_saml=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None"
+  },
+  {
+   "id": "cookie-enroll",
+   "kind": "cookie",
+   "input": {
+    "cookie": "enroll",
+    "value": "Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE"
+   },
+   "expect": "__Host-rv_enroll=Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Strict"
+  },
+  {
+   "id": "cookie-enroll-clear",
+   "kind": "cookie",
+   "input": {
+    "cookie": "enroll_clear",
+    "value": ""
+   },
+   "expect": "__Host-rv_enroll=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+  }
+ ]
+}

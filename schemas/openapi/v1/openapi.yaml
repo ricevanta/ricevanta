@@ -1,0 +1,1898 @@
+openapi: 3.1.2
+info:
+  title: Ricevanta administration API
+  version: '1.1'
+  summary: The /api/v1 contract used by the console, the ricevanta CLI and GitOps.
+  description: >-
+    Hand-written contract under BE-05 and BE-16. Rules that every operation follows
+    (strict JSON, problem details, pagination, concurrency, idempotency, credentials and
+    the x-ricevanta-authorization binding) are defined in docs/specs/api-foundation.md.
+    Identity and session operations follow docs/specs/identity-login.md and
+    docs/specs/identity-sessions.md; the change stream follows docs/specs/change-stream.md.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: /
+tags:
+  - name: platform
+  - name: auth
+  - name: session
+  - name: sessions
+  - name: api-tokens
+  - name: identity-providers
+  - name: principal-links
+  - name: break-glass
+  - name: approvals
+  - name: setup
+  - name: changes
+security:
+  - session: []
+  - token: []
+paths:
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenApiDocument
+      tags: [platform]
+      summary: Return this document.
+      security:
+        - session: []
+        - token: []
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: platform.api.read, uses: getOpenApiDocument}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: The embedded document bytes.
+          content:
+            application/yaml:
+              schema: {type: string, maxLength: 1048576}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/auth/options:
+    get:
+      operationId: listLoginOptions
+      tags: [auth]
+      summary: List the enabled login methods for the login page.
+      security: []
+      x-ricevanta-authorization:
+        principal: public
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: Enabled providers and whether break-glass login is enabled.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginOptions'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/auth/oidc/{provider_uid}/start:
+    get:
+      operationId: startOidcLogin
+      tags: [auth]
+      summary: Start an OIDC authorization code flow with PKCE as a top-level navigation.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - $ref: '#/components/parameters/ReturnTo'
+      x-ricevanta-authorization:
+        principal: public
+        reauth: none
+        csrf: navigation
+      responses:
+        '303':
+          $ref: '#/components/responses/NavigationRedirect'
+  /api/v1/auth/oidc/{provider_uid}/callback:
+    get:
+      operationId: completeOidcLogin
+      tags: [auth]
+      summary: Receive the authorization response and create or re-authenticate a session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - {name: code, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 2048}}
+        - {name: state, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: iss, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 2048}}
+        - {name: error, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: error_description, in: query, required: false, schema: {type: string, maxLength: 1024}}
+      x-ricevanta-authorization:
+        principal: protocol
+        protocol: oidc_callback
+        reauth: none
+        csrf: navigation_callback
+      responses:
+        '303':
+          $ref: '#/components/responses/NavigationRedirect'
+  /api/v1/auth/saml/{provider_uid}/start:
+    get:
+      operationId: startSamlLogin
+      tags: [auth]
+      summary: Start an SP-initiated SAML login with the HTTP-Redirect binding.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - $ref: '#/components/parameters/ReturnTo'
+      x-ricevanta-authorization:
+        principal: public
+        reauth: none
+        csrf: navigation
+      responses:
+        '303':
+          $ref: '#/components/responses/NavigationRedirect'
+  /api/v1/auth/saml/{provider_uid}/acs:
+    post:
+      operationId: completeSamlLogin
+      tags: [auth]
+      summary: Assertion consumer service for the HTTP-POST binding.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+      x-ricevanta-authorization:
+        principal: protocol
+        protocol: saml_acs
+        reauth: none
+        csrf: cross_site_post
+      x-ricevanta-max-body-bytes: 262144
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [SAMLResponse]
+              properties:
+                SAMLResponse: {type: string, minLength: 1, maxLength: 262000}
+                RelayState: {type: string, maxLength: 80}
+      responses:
+        '303':
+          $ref: '#/components/responses/NavigationRedirect'
+  /api/v1/auth/saml/{provider_uid}/metadata:
+    get:
+      operationId: getSamlServiceProviderMetadata
+      tags: [auth]
+      summary: Service-provider metadata for configuring the identity provider.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+      x-ricevanta-authorization:
+        principal: public
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: SAML 2.0 metadata with the entity ID, ACS URL and SP certificate.
+          content:
+            application/samlmetadata+xml:
+              schema: {type: string, maxLength: 65536}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/auth/local:
+    post:
+      operationId: loginLocal
+      tags: [auth]
+      summary: Break-glass login with user name, generated password and TOTP code.
+      security: []
+      x-ricevanta-authorization:
+        principal: protocol
+        protocol: local_login
+        reauth: none
+        csrf: origin
+      x-ricevanta-max-body-bytes: 4096
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LocalLoginRequest'}
+      responses:
+        '200':
+          description: Session created; the response sets the session cookie.
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/SetSessionCookie'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/auth/local/enrollment:
+    post:
+      operationId: startBreakGlassEnrollment
+      tags: [auth]
+      summary: Exchange a one-time enrollment code for the generated password and TOTP seed.
+      security: []
+      x-ricevanta-authorization:
+        principal: protocol
+        protocol: enrollment_code
+        reauth: none
+        csrf: origin
+      x-ricevanta-max-body-bytes: 4096
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BreakGlassEnrollmentStart'}
+      responses:
+        '200':
+          description: Credentials shown once; the response sets the enrollment cookie.
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/SetEnrollmentCookie'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BreakGlassEnrollmentChallenge'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/auth/local/enrollment/complete:
+    post:
+      operationId: completeBreakGlassEnrollment
+      tags: [auth]
+      summary: Confirm the TOTP seed with a first code and activate the account.
+      security: []
+      x-ricevanta-authorization:
+        principal: protocol
+        protocol: enrollment_code
+        reauth: none
+        csrf: origin
+      x-ricevanta-max-body-bytes: 1024
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BreakGlassEnrollmentComplete'}
+      responses:
+        '204':
+          description: Account active; the enrollment cookie is cleared. No session is created.
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/ClearEnrollmentCookie'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/setup:
+    post:
+      operationId: completeFirstStartSetup
+      tags: [setup]
+      summary: Consume the one-time setup token and create the first break-glass administrator.
+      security: []
+      x-ricevanta-authorization:
+        principal: protocol
+        protocol: setup_token
+        reauth: none
+        csrf: origin
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 4096
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetupRequest'}
+      responses:
+        '200':
+          description: First administrator created; credentials shown once.
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/SetEnrollmentCookie'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BreakGlassEnrollmentChallenge'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/session:
+    get:
+      operationId: getSession
+      tags: [session]
+      summary: Return the current session, effective permissions and CSRF token.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session]
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: Current session.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/session/logout:
+    post:
+      operationId: logout
+      tags: [session]
+      summary: End the current session.
+      security:
+        - session: []
+          csrf: []
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session]
+        reauth: none
+        csrf: synchronizer
+      x-ricevanta-idempotency: not_supported
+      responses:
+        '204':
+          description: Session ended; the cookie is cleared.
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/ClearSessionCookie'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/session/reauth/oidc/{provider_uid}/start:
+    get:
+      operationId: startOidcReauthentication
+      tags: [session]
+      summary: Start a forced OIDC re-authentication for the current session.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - $ref: '#/components/parameters/ReturnTo'
+        - $ref: '#/components/parameters/ReauthPurpose'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session]
+        reauth: none
+        csrf: navigation
+      responses:
+        '303':
+          $ref: '#/components/responses/NavigationRedirect'
+  /api/v1/session/reauth/saml/{provider_uid}/start:
+    get:
+      operationId: startSamlReauthentication
+      tags: [session]
+      summary: Start a SAML re-authentication with ForceAuthn for the current session.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - $ref: '#/components/parameters/ReturnTo'
+        - $ref: '#/components/parameters/ReauthPurpose'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session]
+        reauth: none
+        csrf: navigation
+      responses:
+        '303':
+          $ref: '#/components/responses/NavigationRedirect'
+  /api/v1/session/reauth/local:
+    post:
+      operationId: reauthenticateLocal
+      tags: [session]
+      summary: Re-authenticate a break-glass session with password and a fresh TOTP code.
+      security:
+        - session: []
+          csrf: []
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session]
+        reauth: none
+        csrf: synchronizer
+      x-ricevanta-max-body-bytes: 4096
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LocalReauthRequest'}
+      responses:
+        '200':
+          description: Session re-authenticated and rotated; the response sets the new cookie.
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/SetSessionCookie'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List active sessions.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - {name: user_uid, in: query, required: false, schema: {$ref: '#/components/schemas/Uid'}}
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.sessions.read, uses: listSessions}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of sessions.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/sessions/{session_uid}/revoke:
+    post:
+      operationId: revokeSession
+      tags: [sessions]
+      summary: Revoke one session immediately.
+      security:
+        - session: []
+          csrf: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/SessionUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.sessions.revoke, uses: revokeSession}
+        reauth: none
+        csrf: synchronizer
+      x-ricevanta-idempotency: not_supported
+      responses:
+        '204':
+          description: Revoked, or already ended.
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/users/{user_uid}/sessions/revoke:
+    post:
+      operationId: revokeUserSessions
+      tags: [sessions]
+      summary: Revoke every session of one user immediately.
+      security:
+        - session: []
+          csrf: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/UserUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.sessions.revoke, uses: revokeUserSessions}
+        reauth: none
+        csrf: synchronizer
+      x-ricevanta-idempotency: not_supported
+      responses:
+        '200':
+          description: Number of sessions revoked.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RevokedCount'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/api-tokens:
+    get:
+      operationId: listApiTokens
+      tags: [api-tokens]
+      summary: List the caller's API tokens, or every token with owner=all.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - {name: owner, in: query, required: false, schema: {type: string, enum: [me, all], default: me}}
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.tokens.read, uses: 'listApiTokens#own', selector: own}
+          - {name: identity.tokens.manage, uses: 'listApiTokens#all', selector: all}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of token metadata; secrets are never returned.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApiTokenPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createApiToken
+      tags: [api-tokens]
+      summary: Create a scoped API token; the secret is returned once.
+      security:
+        - session: []
+          csrf: []
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.tokens.create, uses: createApiToken}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 65536
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApiTokenCreate'}
+      responses:
+        '201':
+          description: Token created.
+          headers:
+            Location: {$ref: '#/components/headers/Location'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApiTokenCreated'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/api-tokens/{token_uid}/revoke:
+    post:
+      operationId: revokeApiToken
+      tags: [api-tokens]
+      summary: Revoke an API token immediately.
+      security:
+        - session: []
+          csrf: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/TokenUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.tokens.revoke, uses: 'revokeApiToken#own', selector: own}
+          - {name: identity.tokens.manage, uses: 'revokeApiToken#other', selector: other}
+        reauth: none
+        csrf: synchronizer
+      x-ricevanta-idempotency: not_supported
+      responses:
+        '204':
+          description: Revoked, or already revoked.
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/identity-providers:
+    get:
+      operationId: listIdentityProviders
+      tags: [identity-providers]
+      summary: List configured identity providers; client secrets read back as has_client_secret.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.providers.read, uses: listIdentityProviders}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of providers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IdentityProviderPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createIdentityProvider
+      tags: [identity-providers]
+      summary: Request a new OIDC or SAML provider; always an identity-authority approval.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.providers.create, uses: createIdentityProvider}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 327680
+      x-ricevanta-idempotency: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IdentityProviderInput'}
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/identity-providers/{provider_uid}:
+    put:
+      operationId: updateIdentityProvider
+      tags: [identity-providers]
+      summary: Request a change to a provider; always an identity-authority approval.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.providers.update, uses: updateIdentityProvider}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 327680
+      x-ricevanta-idempotency: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IdentityProviderInput'}
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteIdentityProvider
+      tags: [identity-providers]
+      summary: Request deletion of a provider and its links; always an identity-authority approval.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.providers.delete, uses: deleteIdentityProvider}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/principal-links:
+    get:
+      operationId: listPrincipalLinks
+      tags: [principal-links]
+      summary: List links between external principals and internal users.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - {name: user_uid, in: query, required: false, schema: {$ref: '#/components/schemas/Uid'}}
+        - {name: provider_uid, in: query, required: false, schema: {$ref: '#/components/schemas/Uid'}}
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.principal_links.read, uses: listPrincipalLinks}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of links.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PrincipalLinkPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createPrincipalLink
+      tags: [principal-links]
+      summary: Request a link from a pending link request to an internal user.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.principal_links.update, uses: createPrincipalLink}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 4096
+      x-ricevanta-idempotency: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PrincipalLinkCreate'}
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/principal-links/{link_uid}:
+    delete:
+      operationId: deletePrincipalLink
+      tags: [principal-links]
+      summary: Request removal of a link.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/LinkUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.principal_links.update, uses: deletePrincipalLink}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/principal-link-requests:
+    get:
+      operationId: listPrincipalLinkRequests
+      tags: [principal-links]
+      summary: List authenticated external principals that have no link yet.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - {name: provider_uid, in: query, required: false, schema: {$ref: '#/components/schemas/Uid'}}
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.principal_links.read, uses: listPrincipalLinkRequests}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of pending link requests.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PrincipalLinkRequestPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/break-glass-accounts:
+    get:
+      operationId: listBreakGlassAccounts
+      tags: [break-glass]
+      summary: List break-glass accounts without any credential material.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session, token]
+        permissions:
+          - {name: identity.break_glass.read, uses: listBreakGlassAccounts}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of accounts.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BreakGlassAccountPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createBreakGlassAccount
+      tags: [break-glass]
+      summary: Request a new break-glass account; always an identity-authority approval.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.break_glass.create, uses: createBreakGlassAccount}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 4096
+      x-ricevanta-idempotency: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BreakGlassAccountCreate'}
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/break-glass-accounts/{account_uid}:
+    delete:
+      operationId: deleteBreakGlassAccount
+      tags: [break-glass]
+      summary: Request deletion of a break-glass account.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/AccountUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.break_glass.delete, uses: deleteBreakGlassAccount}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/break-glass-accounts/{account_uid}/reset:
+    post:
+      operationId: resetBreakGlassAccount
+      tags: [break-glass]
+      summary: Request new generated credentials; the holder re-enrolls with a new code.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/AccountUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.break_glass.reset, uses: resetBreakGlassAccount}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/break-glass-accounts/{account_uid}/replace-factor:
+    post:
+      operationId: replaceBreakGlassFactor
+      tags: [break-glass]
+      summary: Request a new TOTP seed while keeping the password.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/AccountUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.break_glass.replace_factor, uses: replaceBreakGlassFactor}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/break-glass-accounts/{account_uid}/enable:
+    post:
+      operationId: enableBreakGlassAccount
+      tags: [break-glass]
+      summary: Request enabling a disabled account.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/AccountUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.break_glass.enable, uses: enableBreakGlassAccount}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/break-glass-accounts/{account_uid}/disable:
+    post:
+      operationId: disableBreakGlassAccount
+      tags: [break-glass]
+      summary: Request disabling an account.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/AccountUid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.break_glass.disable, uses: disableBreakGlassAccount}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: required
+      responses:
+        '202':
+          $ref: '#/components/responses/ApprovalAccepted'
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests:
+    get:
+      operationId: listApprovalRequests
+      tags: [approvals]
+      summary: List my requests and requests awaiting my decision, or every request with view=all.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - {name: view, in: query, required: false, schema: {type: string, enum: [mine, awaiting, all], default: awaiting}}
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session, token]
+        permissions:
+          - {name: authz.approvals.read, uses: 'listApprovalRequests#all', selector: all}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: One page of approval requests.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalRequestPage'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}:
+    get:
+      operationId: getApprovalRequest
+      tags: [approvals]
+      summary: Read one approval request as its requester, an eligible decider or a queue reader.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session, token]
+        permissions:
+          - {name: authz.approvals.read, uses: 'getApprovalRequest#any', selector: any}
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: The request with its binding hash and state.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalRequest'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}/approve:
+    post:
+      operationId: approveApprovalRequest
+      tags: [approvals]
+      summary: Approve an access-policy request as a different, eligible, recently authenticated account.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: authz.approvals.approve, uses: approveApprovalRequest}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 8192
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApprovalDecision'}
+      responses:
+        '200':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalRequest'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}/reject:
+    post:
+      operationId: rejectApprovalRequest
+      tags: [approvals]
+      summary: Reject an access-policy request.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: authz.approvals.reject, uses: rejectApprovalRequest}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 8192
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApprovalDecision'}
+      responses:
+        '200':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalRequest'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}/authority-approve:
+    post:
+      operationId: approveIdentityAuthorityRequest
+      tags: [approvals]
+      summary: Approve an identity-authority request with a re-authentication bound to this request.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.authority.approve, uses: approveIdentityAuthorityRequest}
+        reauth: bound
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 8192
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApprovalDecision'}
+      responses:
+        '200':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalRequest'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}/authority-reject:
+    post:
+      operationId: rejectIdentityAuthorityRequest
+      tags: [approvals]
+      summary: Reject an identity-authority request.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+      x-ricevanta-authorization:
+        principal: permission
+        credentials: [session]
+        permissions:
+          - {name: identity.authority.approve, uses: rejectIdentityAuthorityRequest}
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-max-body-bytes: 8192
+      x-ricevanta-idempotency: not_supported
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApprovalDecision'}
+      responses:
+        '200':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalRequest'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/approval-requests/{request_uid}/break-glass-enrollment-code:
+    post:
+      operationId: claimBreakGlassEnrollmentCode
+      tags: [break-glass]
+      summary: The requester of an applied break-glass create, reset or factor request claims the one-time enrollment code.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/RequestUid'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session]
+        reauth: recent
+        csrf: synchronizer
+      x-ricevanta-gates: [BE-12]
+      x-ricevanta-idempotency: not_supported
+      responses:
+        '200':
+          description: Enrollment code shown once.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EnrollmentCodeClaim'}
+        default:
+          $ref: '#/components/responses/Problem'
+  /api/v1/changes:
+    get:
+      operationId: streamChanges
+      tags: [changes]
+      summary: Server-Sent Events stream of per-topic invalidation tokens; never row data.
+      security:
+        - session: []
+        - token: []
+      parameters:
+        - $ref: '#/components/parameters/Topic'
+        - $ref: '#/components/parameters/Background'
+      x-ricevanta-authorization:
+        principal: subject
+        credentials: [session, token]
+        reauth: none
+        csrf: none
+      responses:
+        '200':
+          description: An event stream; see docs/specs/change-stream.md for the framing.
+          content:
+            text/event-stream:
+              schema: {type: string}
+              x-ricevanta-events:
+                - {event: snapshot, data: {$ref: '#/components/schemas/ChangeSnapshot'}}
+                - {event: change, data: {$ref: '#/components/schemas/ChangeEvent'}}
+                - {event: session, data: {$ref: '#/components/schemas/SessionEvent'}}
+                - {event: reconnect, data: {$ref: '#/components/schemas/ReconnectEvent'}}
+        default:
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-rv_session
+      description: Server-side session from OIDC, SAML or break-glass login.
+    csrf:
+      type: apiKey
+      in: header
+      name: X-Ricevanta-CSRF
+      description: Synchronizer token from getSession; required with the session on unsafe methods.
+    token:
+      type: http
+      scheme: bearer
+      bearerFormat: rvt_
+      description: Scoped API token; never combined with a session cookie.
+  parameters:
+    ProviderUid:
+      {name: provider_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    SessionUid:
+      {name: session_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    UserUid:
+      {name: user_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    TokenUid:
+      {name: token_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    LinkUid:
+      {name: link_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    AccountUid:
+      {name: account_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    RequestUid:
+      {name: request_uid, in: path, required: true, schema: {$ref: '#/components/schemas/Uid'}}
+    PageSize:
+      {name: page_size, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 50}}
+    PageToken:
+      {name: page_token, in: query, required: false, schema: {$ref: '#/components/schemas/PageToken'}}
+    ReturnTo:
+      {name: return_to, in: query, required: false, schema: {$ref: '#/components/schemas/ReturnPath'}}
+    ReauthPurpose:
+      name: purpose
+      in: query
+      required: false
+      schema: {$ref: '#/components/schemas/ReauthPurpose'}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: {type: string, pattern: '^"r[1-9][0-9]{0,18}"$', maxLength: 22}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, pattern: '^[A-Za-z0-9_-]{16,64}$', minLength: 16, maxLength: 64}
+    Background:
+      name: X-Ricevanta-Background
+      in: header
+      required: false
+      description: Marks a request that must not extend the idle timeout.
+      schema: {type: string, enum: ['1']}
+    Topic:
+      name: topic
+      in: query
+      required: true
+      style: form
+      explode: true
+      schema:
+        type: array
+        minItems: 1
+        maxItems: 16
+        uniqueItems: true
+        items: {$ref: '#/components/schemas/Topic'}
+  headers:
+    Location:
+      required: true
+      schema: {type: string, maxLength: 2048}
+    SetSessionCookie:
+      description: __Host-rv_session; Secure; HttpOnly; Path=/; SameSite=Strict, no Domain and no Max-Age.
+      schema: {type: string, maxLength: 256}
+    ClearSessionCookie:
+      description: __Host-rv_session with an empty value and Max-Age=0 and the same attributes.
+      schema: {type: string, maxLength: 256}
+    SetEnrollmentCookie:
+      description: __Host-rv_enroll; Secure; HttpOnly; Path=/; SameSite=Strict; Max-Age=600.
+      schema: {type: string, maxLength: 256}
+    ClearEnrollmentCookie:
+      description: __Host-rv_enroll with an empty value and Max-Age=0.
+      schema: {type: string, maxLength: 256}
+    RetryAfter:
+      schema: {type: integer, minimum: 1, maximum: 86400}
+  responses:
+    Problem:
+      description: RFC 9457 problem details.
+      headers:
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+        WWW-Authenticate:
+          description: Present on 401 responses.
+          schema: {type: string, maxLength: 512}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    ApprovalAccepted:
+      description: The protected action became a pending approval request.
+      headers:
+        Location: {$ref: '#/components/headers/Location'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ApprovalRequest'}
+    NavigationRedirect:
+      description: >-
+        303 See Other to the provider, to a validated same-origin return path, or to
+        /login?error=<code> with a code from LoginErrorCode. May set or clear the pre-login
+        and session cookies.
+      headers:
+        Location: {$ref: '#/components/headers/Location'}
+        Set-Cookie:
+          description: Pre-login, session or clearing cookies as defined in docs/specs/identity-login.md.
+          schema: {type: string, maxLength: 1024}
+  schemas:
+    Uid:
+      type: string
+      description: Lowercase UUIDv7 (docs/specs/core-primitives.md).
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      minLength: 36
+      maxLength: 36
+    Timestamp:
+      type: string
+      format: date-time
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
+      maxLength: 30
+    Sha256:
+      type: string
+      pattern: '^sha256:[0-9a-f]{64}$'
+      maxLength: 71
+    PageToken:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{1,512}$'
+      maxLength: 512
+    ReturnPath:
+      type: string
+      description: Same-origin console path; validation rules in docs/specs/identity-login.md section 2.
+      pattern: '^/[A-Za-z0-9._~/-]{0,511}$'
+      maxLength: 512
+    ReauthPurpose:
+      type: string
+      pattern: '^(general|approval:[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$'
+      maxLength: 45
+    Topic:
+      type: string
+      pattern: '^(devices|alerts|dlp\.findings|approvals|enrollments|certificates|certificates\.infrastructure|rollouts|extensions|exports|(device|alert|commands)/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$'
+      maxLength: 45
+    PermissionName:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{0,31}\.[a-z][a-z0-9_]{0,31}\.[a-z][a-z0-9_]{0,31}$'
+      minLength: 5
+      maxLength: 98
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 128
+    Username:
+      type: string
+      pattern: '^[a-z][a-z0-9._-]{2,63}$'
+      minLength: 3
+      maxLength: 64
+    Problem:
+      type: object
+      required: [type, title, status, request_id]
+      properties:
+        type:
+          type: string
+          enum:
+            - https://ricevanta.io/problems/validation_failed
+            - https://ricevanta.io/problems/unauthenticated
+            - https://ricevanta.io/problems/reauth_required
+            - https://ricevanta.io/problems/invalid_credentials
+            - https://ricevanta.io/problems/permission_denied
+            - https://ricevanta.io/problems/csrf_rejected
+            - https://ricevanta.io/problems/credentials_ambiguous
+            - https://ricevanta.io/problems/not_found
+            - https://ricevanta.io/problems/method_not_allowed
+            - https://ricevanta.io/problems/conflict
+            - https://ricevanta.io/problems/approval_stale
+            - https://ricevanta.io/problems/idempotency_in_progress
+            - https://ricevanta.io/problems/precondition_failed
+            - https://ricevanta.io/problems/payload_too_large
+            - https://ricevanta.io/problems/unsupported_media_type
+            - https://ricevanta.io/problems/idempotency_key_reused
+            - https://ricevanta.io/problems/precondition_required
+            - https://ricevanta.io/problems/rate_limited
+            - https://ricevanta.io/problems/internal_error
+            - https://ricevanta.io/problems/not_implemented
+            - https://ricevanta.io/problems/unavailable
+            - https://ricevanta.io/problems/recovery_sealed
+        title: {type: string, minLength: 1, maxLength: 128}
+        status: {type: integer, minimum: 400, maximum: 599}
+        detail: {type: string, maxLength: 512}
+        instance:
+          type: string
+          pattern: '^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        request_id: {$ref: '#/components/schemas/Uid'}
+        errors:
+          type: array
+          maxItems: 64
+          items: {$ref: '#/components/schemas/FieldError'}
+        permission: {$ref: '#/components/schemas/PermissionName'}
+        retry_after_seconds: {type: integer, minimum: 1, maximum: 86400}
+        reauth: {$ref: '#/components/schemas/ReauthChallenge'}
+    FieldError:
+      type: object
+      required: [pointer, code]
+      properties:
+        pointer: {type: string, maxLength: 256, description: RFC 6901 JSON Pointer into the request body, or a parameter name prefixed with '#'.}
+        code:
+          type: string
+          enum: [required, type, format, range, length, pattern, enum, unknown_field, duplicate_key, too_many_items, too_deep, invalid]
+    ReauthChallenge:
+      type: object
+      required: [max_age_seconds, binding, allowed_methods]
+      properties:
+        max_age_seconds: {type: integer, const: 600}
+        binding: {type: string, enum: [none, approval]}
+        request_uid: {$ref: '#/components/schemas/Uid'}
+        allowed_methods:
+          type: array
+          maxItems: 33
+          items: {$ref: '#/components/schemas/AuthMethodRef'}
+    AuthMethodRef:
+      type: object
+      required: [method]
+      properties:
+        method: {type: string, enum: [oidc, saml, local]}
+        provider_uid: {$ref: '#/components/schemas/Uid'}
+        display_name: {$ref: '#/components/schemas/DisplayName'}
+    LoginErrorCode:
+      type: string
+      description: Value of the error query parameter on /login after a failed navigation.
+      enum: [provider_error, state_mismatch, expired, invalid_response, no_link, link_pending, user_disabled, provider_disabled, cross_site_start, rate_limited, unavailable, reauth_user_mismatch, reauth_stale, session_required]
+    LoginOptions:
+      type: object
+      required: [providers, local_login]
+      properties:
+        providers:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            required: [uid, display_name, protocol]
+            properties:
+              uid: {$ref: '#/components/schemas/Uid'}
+              display_name: {$ref: '#/components/schemas/DisplayName'}
+              protocol: {type: string, enum: [oidc, saml]}
+        local_login: {type: boolean}
+    PermissionGrant:
+      type: object
+      required: [name, scope]
+      properties:
+        name: {$ref: '#/components/schemas/PermissionName'}
+        scope:
+          type: object
+          required: [kind]
+          properties:
+            kind: {type: string, enum: [all, device_groups]}
+            device_groups:
+              type: array
+              maxItems: 1024
+              items: {$ref: '#/components/schemas/Uid'}
+    Session:
+      type: object
+      required: [session_uid, user, kind, authentication, csrf_token, permissions, idle_timeout_seconds, idle_expires_at, absolute_expires_at, server_version, approval_policies_disabled, recovery_quorum]
+      properties:
+        session_uid: {$ref: '#/components/schemas/Uid'}
+        user:
+          type: object
+          required: [uid, display_name]
+          properties:
+            uid: {$ref: '#/components/schemas/Uid'}
+            display_name: {$ref: '#/components/schemas/DisplayName'}
+        kind: {type: string, enum: [sso, break_glass]}
+        authentication:
+          type: object
+          required: [method, authenticated_at]
+          properties:
+            method: {type: string, enum: [oidc, saml, local]}
+            provider_uid: {$ref: '#/components/schemas/Uid'}
+            authenticated_at: {$ref: '#/components/schemas/Timestamp'}
+            reauthenticated_at: {$ref: '#/components/schemas/Timestamp'}
+            reauth_method: {$ref: '#/components/schemas/AuthMethodRef'}
+            reauth_binding: {$ref: '#/components/schemas/ReauthPurpose'}
+        csrf_token: {type: string, pattern: '^[A-Za-z0-9_-]{43}$'}
+        permissions:
+          type: array
+          maxItems: 2048
+          items: {$ref: '#/components/schemas/PermissionGrant'}
+        locale: {type: string, enum: [en, vi]}
+        idle_timeout_seconds: {type: integer, minimum: 120, maximum: 3600}
+        idle_expires_at: {$ref: '#/components/schemas/Timestamp'}
+        absolute_expires_at: {$ref: '#/components/schemas/Timestamp'}
+        server_version: {type: string, maxLength: 64}
+        approval_policies_disabled: {type: boolean}
+        recovery_quorum:
+          type: object
+          required: [threshold, custodians]
+          properties:
+            threshold: {type: integer, minimum: 1, maximum: 16}
+            custodians: {type: integer, minimum: 1, maximum: 16}
+    LocalLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, totp_code]
+      properties:
+        username: {$ref: '#/components/schemas/Username'}
+        password: {type: string, minLength: 1, maxLength: 64}
+        totp_code: {type: string, pattern: '^[0-9]{6}$', maxLength: 6}
+    LocalReauthRequest:
+      type: object
+      additionalProperties: false
+      required: [password, totp_code, purpose]
+      properties:
+        password: {type: string, minLength: 1, maxLength: 64}
+        totp_code: {type: string, pattern: '^[0-9]{6}$', maxLength: 6}
+        purpose: {$ref: '#/components/schemas/ReauthPurpose'}
+    BreakGlassEnrollmentStart:
+      type: object
+      additionalProperties: false
+      required: [enrollment_code]
+      properties:
+        enrollment_code: {type: string, pattern: '^[A-Z2-7]{26}$', maxLength: 26}
+    BreakGlassEnrollmentChallenge:
+      type: object
+      required: [enrollment_uid, username, password, totp, expires_at]
+      properties:
+        enrollment_uid: {$ref: '#/components/schemas/Uid'}
+        username: {$ref: '#/components/schemas/Username'}
+        password: {type: string, pattern: '^[A-Z2-7]{24}$', description: Generated, 120 bits, shown once.}
+        totp:
+          type: object
+          required: [algorithm, digits, period, secret_base32, otpauth_uri, qr]
+          properties:
+            algorithm: {type: string, const: SHA1}
+            digits: {type: integer, const: 6}
+            period: {type: integer, const: 30}
+            secret_base32: {type: string, pattern: '^[A-Z2-7]{32}$'}
+            otpauth_uri: {type: string, maxLength: 512}
+            qr:
+              type: object
+              required: [size, rows]
+              properties:
+                size: {type: integer, minimum: 21, maximum: 177}
+                rows:
+                  type: array
+                  minItems: 21
+                  maxItems: 177
+                  items: {type: string, pattern: '^[01]{21,177}$'}
+        expires_at: {$ref: '#/components/schemas/Timestamp'}
+    BreakGlassEnrollmentComplete:
+      type: object
+      additionalProperties: false
+      required: [totp_code]
+      properties:
+        totp_code: {type: string, pattern: '^[0-9]{6}$', maxLength: 6}
+    SetupRequest:
+      type: object
+      additionalProperties: false
+      required: [setup_token, username, display_name]
+      properties:
+        setup_token: {type: string, pattern: '^[A-Za-z0-9_-]{43}$', maxLength: 43}
+        username: {$ref: '#/components/schemas/Username'}
+        display_name: {$ref: '#/components/schemas/DisplayName'}
+    SessionSummary:
+      type: object
+      required: [session_uid, user_uid, kind, method, created_at, last_activity_at, idle_expires_at, absolute_expires_at]
+      properties:
+        session_uid: {$ref: '#/components/schemas/Uid'}
+        user_uid: {$ref: '#/components/schemas/Uid'}
+        kind: {type: string, enum: [sso, break_glass]}
+        method: {type: string, enum: [oidc, saml, local]}
+        provider_uid: {$ref: '#/components/schemas/Uid'}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        last_activity_at: {$ref: '#/components/schemas/Timestamp'}
+        idle_expires_at: {$ref: '#/components/schemas/Timestamp'}
+        absolute_expires_at: {$ref: '#/components/schemas/Timestamp'}
+        source_address: {type: string, maxLength: 45}
+        user_agent: {type: string, maxLength: 256}
+    Total:
+      type: object
+      required: [count, exact]
+      properties:
+        count: {type: integer, minimum: 0, maximum: 10000}
+        exact: {type: boolean}
+    SessionPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/SessionSummary'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    RevokedCount:
+      type: object
+      required: [revoked]
+      properties:
+        revoked: {type: integer, minimum: 0, maximum: 1000}
+    ApiToken:
+      type: object
+      required: [token_uid, name, prefix, owner_user_uid, permissions, created_at, expires_at]
+      properties:
+        token_uid: {$ref: '#/components/schemas/Uid'}
+        name: {$ref: '#/components/schemas/DisplayName'}
+        prefix: {type: string, pattern: '^rvt_[A-Za-z0-9_-]{6}$'}
+        owner_user_uid: {$ref: '#/components/schemas/Uid'}
+        permissions: {type: array, maxItems: 256, items: {$ref: '#/components/schemas/PermissionGrant'}}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        expires_at: {$ref: '#/components/schemas/Timestamp'}
+        last_used_at: {$ref: '#/components/schemas/Timestamp'}
+        revoked_at: {$ref: '#/components/schemas/Timestamp'}
+    ApiTokenCreate:
+      type: object
+      additionalProperties: false
+      required: [name, permissions, expires_at]
+      properties:
+        name: {$ref: '#/components/schemas/DisplayName'}
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 256
+          uniqueItems: true
+          items:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name: {$ref: '#/components/schemas/PermissionName'}
+              device_groups:
+                type: array
+                minItems: 1
+                maxItems: 1024
+                uniqueItems: true
+                items: {$ref: '#/components/schemas/Uid'}
+        expires_at: {$ref: '#/components/schemas/Timestamp'}
+    ApiTokenCreated:
+      type: object
+      required: [token, secret]
+      properties:
+        token: {$ref: '#/components/schemas/ApiToken'}
+        secret: {type: string, pattern: '^rvt_[A-Za-z0-9_-]{43}$'}
+    ApiTokenPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/ApiToken'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    IdentityProvider:
+      type: object
+      required: [uid, revision, display_name, protocol, enabled, created_at, updated_at]
+      properties:
+        uid: {$ref: '#/components/schemas/Uid'}
+        revision: {type: integer, minimum: 1}
+        display_name: {$ref: '#/components/schemas/DisplayName'}
+        protocol: {type: string, enum: [oidc, saml]}
+        enabled: {type: boolean}
+        oidc:
+          type: object
+          required: [issuer, client_id, client_auth_method, has_client_secret, redirect_uri, scopes, allowed_signing_algs]
+          properties:
+            issuer: {type: string, maxLength: 2048}
+            client_id: {type: string, maxLength: 512}
+            client_auth_method: {type: string, enum: [client_secret_basic, client_secret_post]}
+            has_client_secret: {type: boolean}
+            client_secret_set_at: {$ref: '#/components/schemas/Timestamp'}
+            redirect_uri: {type: string, maxLength: 2048}
+            scopes: {type: array, maxItems: 16, items: {type: string, maxLength: 64}}
+            allowed_signing_algs: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/JwsAlgorithm'}}
+            iss_parameter_supported: {type: boolean}
+        saml:
+          type: object
+          required: [idp_entity_id, sso_url, idp_certificates, sp_entity_id, acs_url, sp_certificate_sha256, sign_authn_requests, clock_skew_seconds]
+          properties:
+            idp_entity_id: {type: string, maxLength: 1024}
+            sso_url: {type: string, maxLength: 2048}
+            idp_certificates:
+              type: array
+              maxItems: 4
+              items:
+                type: object
+                required: [sha256, not_after]
+                properties:
+                  sha256: {$ref: '#/components/schemas/Sha256'}
+                  not_after: {$ref: '#/components/schemas/Timestamp'}
+            sp_entity_id: {type: string, maxLength: 2048}
+            acs_url: {type: string, maxLength: 2048}
+            sp_certificate_sha256: {$ref: '#/components/schemas/Sha256'}
+            sign_authn_requests: {type: boolean}
+            clock_skew_seconds: {type: integer, minimum: 0, maximum: 180}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        updated_at: {$ref: '#/components/schemas/Timestamp'}
+    JwsAlgorithm:
+      type: string
+      enum: [RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512, EdDSA]
+    IdentityProviderInput:
+      oneOf:
+        - {$ref: '#/components/schemas/OidcProviderInput'}
+        - {$ref: '#/components/schemas/SamlProviderInput'}
+    OidcProviderInput:
+      type: object
+      additionalProperties: false
+      required: [protocol, display_name, enabled, issuer, client_id, client_auth_method]
+      properties:
+        protocol: {type: string, const: oidc}
+        display_name: {$ref: '#/components/schemas/DisplayName'}
+        enabled: {type: boolean}
+        issuer: {type: string, pattern: '^https://[^?#\s]{1,2040}$', maxLength: 2048}
+        client_id: {type: string, minLength: 1, maxLength: 512}
+        client_auth_method: {type: string, enum: [client_secret_basic, client_secret_post]}
+        client_secret: {type: string, minLength: 1, maxLength: 1024, writeOnly: true, description: Omit on update to keep the stored secret.}
+        extra_scopes:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items: {type: string, enum: [profile, email]}
+        allowed_signing_algs:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/JwsAlgorithm'}
+    SamlProviderInput:
+      type: object
+      additionalProperties: false
+      required: [protocol, display_name, enabled, idp_metadata_xml]
+      properties:
+        protocol: {type: string, const: saml}
+        display_name: {$ref: '#/components/schemas/DisplayName'}
+        enabled: {type: boolean}
+        idp_metadata_xml: {type: string, minLength: 1, maxLength: 262144}
+        clock_skew_seconds: {type: integer, minimum: 0, maximum: 180, default: 60}
+    IdentityProviderPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/IdentityProvider'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    PrincipalKey:
+      type: object
+      required: [protocol, issuer]
+      properties:
+        protocol: {type: string, enum: [oidc, saml]}
+        issuer: {type: string, maxLength: 2048}
+        subject: {type: string, maxLength: 255, description: OIDC sub.}
+        name_id_format: {type: string, const: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'}
+        name_id: {type: string, maxLength: 256}
+    PrincipalLink:
+      type: object
+      required: [link_uid, revision, user_uid, provider_uid, principal_key, created_at]
+      properties:
+        link_uid: {$ref: '#/components/schemas/Uid'}
+        revision: {type: integer, minimum: 1}
+        user_uid: {$ref: '#/components/schemas/Uid'}
+        provider_uid: {$ref: '#/components/schemas/Uid'}
+        principal_key: {$ref: '#/components/schemas/PrincipalKey'}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+    PrincipalLinkPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/PrincipalLink'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    PrincipalLinkRequest:
+      type: object
+      required: [request_uid, provider_uid, principal_key, first_seen_at, last_seen_at, expires_at]
+      properties:
+        request_uid: {$ref: '#/components/schemas/Uid'}
+        provider_uid: {$ref: '#/components/schemas/Uid'}
+        principal_key: {$ref: '#/components/schemas/PrincipalKey'}
+        claimed_display_name: {type: string, maxLength: 128}
+        claimed_email: {type: string, maxLength: 320}
+        first_seen_at: {$ref: '#/components/schemas/Timestamp'}
+        last_seen_at: {$ref: '#/components/schemas/Timestamp'}
+        expires_at: {$ref: '#/components/schemas/Timestamp'}
+    PrincipalLinkRequestPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/PrincipalLinkRequest'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    PrincipalLinkCreate:
+      type: object
+      additionalProperties: false
+      required: [link_request_uid, user_uid]
+      properties:
+        link_request_uid: {$ref: '#/components/schemas/Uid'}
+        user_uid: {$ref: '#/components/schemas/Uid'}
+    BreakGlassAccount:
+      type: object
+      required: [account_uid, revision, user_uid, username, state, created_at]
+      properties:
+        account_uid: {$ref: '#/components/schemas/Uid'}
+        revision: {type: integer, minimum: 1}
+        user_uid: {$ref: '#/components/schemas/Uid'}
+        username: {$ref: '#/components/schemas/Username'}
+        state: {type: string, enum: [pending_enrollment, active, disabled]}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        enrolled_at: {$ref: '#/components/schemas/Timestamp'}
+        last_login_at: {$ref: '#/components/schemas/Timestamp'}
+    BreakGlassAccountPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/BreakGlassAccount'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    BreakGlassAccountCreate:
+      type: object
+      additionalProperties: false
+      required: [username, display_name]
+      properties:
+        username: {$ref: '#/components/schemas/Username'}
+        display_name: {$ref: '#/components/schemas/DisplayName'}
+    EnrollmentCodeClaim:
+      type: object
+      required: [account_uid, enrollment_code, expires_at]
+      properties:
+        account_uid: {$ref: '#/components/schemas/Uid'}
+        enrollment_code: {type: string, pattern: '^[A-Z2-7]{26}$'}
+        expires_at: {$ref: '#/components/schemas/Timestamp'}
+    ApprovalRequest:
+      type: object
+      required: [request_uid, kind, status, action, requester_user_uid, binding_hash, targets_count, created_at, expires_at]
+      properties:
+        request_uid: {$ref: '#/components/schemas/Uid'}
+        kind: {type: string, enum: [access_policy, identity_authority]}
+        status: {type: string, enum: [pending, approved, rejected, expired, stale, applied, failed]}
+        action: {type: string, pattern: '^[a-z][A-Za-z0-9]{2,63}$', description: The operationId that created the request.}
+        requester_user_uid: {$ref: '#/components/schemas/Uid'}
+        binding_hash: {$ref: '#/components/schemas/Sha256'}
+        targets_count: {type: integer, minimum: 0}
+        justification: {type: string, maxLength: 2000}
+        decided_by_user_uid: {$ref: '#/components/schemas/Uid'}
+        decided_at: {$ref: '#/components/schemas/Timestamp'}
+        decision_method: {$ref: '#/components/schemas/AuthMethodRef'}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        expires_at: {$ref: '#/components/schemas/Timestamp'}
+    ApprovalRequestPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/ApprovalRequest'}}
+        next_page_token: {$ref: '#/components/schemas/PageToken'}
+        total: {$ref: '#/components/schemas/Total'}
+    ApprovalDecision:
+      type: object
+      additionalProperties: false
+      required: [comment, binding_hash]
+      properties:
+        comment: {type: string, minLength: 1, maxLength: 2000}
+        binding_hash: {$ref: '#/components/schemas/Sha256'}
+    ChangeToken:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{22}$'
+    ChangeSnapshot:
+      type: object
+      required: [stream_uid, topics]
+      properties:
+        stream_uid: {$ref: '#/components/schemas/Uid'}
+        topics:
+          type: array
+          maxItems: 16
+          items: {$ref: '#/components/schemas/ChangeEvent'}
+    ChangeEvent:
+      type: object
+      required: [topic, token]
+      properties:
+        topic: {$ref: '#/components/schemas/Topic'}
+        token: {$ref: '#/components/schemas/ChangeToken'}
+    SessionEvent:
+      type: object
+      required: [state]
+      properties:
+        state: {type: string, enum: [changed, ended]}
+    ReconnectEvent:
+      type: object
+      required: [reason]
+      properties:
+        reason: {type: string, enum: [shutdown, lifetime, database]}
