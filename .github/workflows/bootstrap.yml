@@ -42,7 +42,7 @@ jobs:
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: ${{ matrix.tools }}
-      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
       shell: bash
       working-directory: .
@@ -76,10 +76,11 @@ jobs:
           macOS) cc --version; xcodebuild -version; sw_vers;;
           Windows) pwsh -File agent/tools/check-msvc.ps1;;
         esac
+        # bootstrap.py executed every admitted tool once and logged its version; this records the PATH resolution.
         command -v python; python --version
         command -v go; go version
         command -v rustc; rustc -vV; cargo -V; rustfmt --version; cargo-clippy --version
-        if [ "$RUNNER_OS" = Linux ]; then command -v node; node --version; command -v pnpm; pnpm --version; ls "$PLAYWRIGHT_BROWSERS_PATH"; fi
+        if [ "$RUNNER_OS" = Linux ]; then ls "$PLAYWRIGHT_BROWSERS_PATH"; fi
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -122,6 +123,10 @@ jobs:
         path: ${{ runner.temp }}/admitted/bootstrap-evidence.json
         retention-days: 30
         if-no-files-found: error
+    - name: Re-verify validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
       shell: bash

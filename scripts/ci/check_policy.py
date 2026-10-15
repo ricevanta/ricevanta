@@ -86,7 +86,7 @@ CACHE = 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
 # Every toolchain comes from the reviewed lock through one exact bootstrap step; setup actions and
 # ad hoc installers fetch unchecked payloads and are forbidden everywhere.
 BOOTSTRAP_COMMAND = ('python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
-                     '--tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"')
+                     '--tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"')
 EVIDENCE_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
                     '--tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"')
 CONTROLS_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" '
@@ -99,18 +99,25 @@ UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b
 TOOL_CONSUMERS = (('python', re.compile(r'\bpython3?\b')), ('go', re.compile(r'\bgo(?:fmt)?\s')),
                   ('rust', re.compile(r'\bcargo\b|\brustc\b|\brustfmt\b')), ('node', re.compile(r'\bnode\b|\bpnpm\b')),
                   ('pnpm', re.compile(r'\bpnpm\b')), ('playwright', re.compile(r'pnpm test:(?:component|csp)|\bplaywright\b')))
+# Variables bootstrap.py writes through --env-out; no other step or env mapping may set them.
+ADMITTED_ENV = frozenset({'PATH', 'Path', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'RUSTC', 'RUSTDOC', 'CI_ADMITTED_ROOT',
+                          'PLAYWRIGHT_BROWSERS_PATH', 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', 'PLAYWRIGHT_DOWNLOAD_HOST',
+                          'npm_config_manage_package_manager_versions', 'npm_config_update_notifier', 'GOROOT', 'RUSTUP_TOOLCHAIN'})
+ADMITTED_ENV_WRITE = re.compile(r'(?<![A-Za-z0-9_])(?:' + '|'.join(sorted(ADMITTED_ENV)) + r')\s*=')
 BOOTSTRAP_NAME = 'Bootstrap admitted toolchains'
 EVIDENCE_NAME = 'Verify admitted toolchain evidence'
 CONTROLS_NAME = 'Reject corrupted payloads before any extraction or execution'
-# Any other installer or environment manager would bypass the hash-locked closure.
-AD_HOC_PYTHON = re.compile(r'\bpip3?\s+(?:install|download|wheel)\b|\bpython[0-9.]*\s+-m\s+(?:venv|ensurepip)\b|'
-                           r'\bvirtualenv\b|\buv\s+(?:pip|venv|sync|tool)\b|\bpipx\b|\bconda\b|\bpoetry\b')
+# Only these three exact steps may touch installers, environments or the helper; any step that merely names an
+# installer, environment manager or the helper is rejected at token level, whatever its flag order. Shell indirection
+# and third-party actions stay outside this source-level rule; the terminal re-check covers what lands in the venv.
+ADMITTED_PYTHON_RUNS = frozenset({python_env.VENV_COMMAND, python_env.INSTALL_COMMAND, python_env.CHECK_COMMAND})
+BYPASS_TOKEN = re.compile(r'(?<![\w.-])(?:pip3?|venv|ensurepip|virtualenv|uvx?|pipx|pipenv|poetry|conda|mamba|micromamba|'
+                          r'pdm|hatch|rye|pixi|python_env\.py)(?![\w-])')
 # These commands import the closure, so the admitted install must precede them in the job.
-CLOSURE_CONSUMERS = ('scripts/ci/check_policy.py', "unittest discover -s scripts/ci -p 'test_*.py'",
-                     'required.py --route "$RUNNER_TEMP/route.json" --needs', 'from jsonschema import',
-                     'scripts/ci/validate_contracts.py', 'schemas/ocsf/validate.py',
-                     'schemas/policy/v1alpha1/validate.py', 'schemas/export/v1alpha1/validate.py',
-                     'schemas/report/v1alpha1/validate.py', 'server/internal/authz/catalogue/schema_test.py')
+CLOSURE_CONSUMERS = tuple(inventory.DESIGN_COMMANDS) + (
+    'scripts/ci/check_policy.py', 'unittest discover -s scripts/ci', 'unittest discover -s schemas', 'test_validate.py',
+    'test_key_admission_contract.py', 'required.py --route "$RUNNER_TEMP/route.json" --needs',
+    'from jsonschema import', 'import jsonschema', 'import yaml')
 TOKEN = '${{ secrets.SEMGREP_APP_TOKEN }}'
 ROUTE_ENV = {'ROUTE_JSON': '${{ needs.route.outputs.route }}'}
 PREPARE_ROUTE = ("python -B - <<'PY'\n"
@@ -206,6 +213,15 @@ def bootstrap_errors(data, name):
         for scope in (data, job):
             env = scope.get('env', {})
             if isinstance(env, dict) and {'CI_PLATFORM', 'CI_TOOLS'} & set(env): fail('bootstrap inputs must be literal step env')
+        # Only the admitted bootstrap sets PATH and tool variables; only the admitted venv step prepends to PATH.
+        for scope in (data, job, *steps):
+            env = scope.get('env', {})
+            if isinstance(env, dict) and ADMITTED_ENV & set(env): fail('admitted tool environment override forbidden')
+        for step in steps:
+            run = step.get('run', '')
+            if 'GITHUB_PATH' in run and run != python_env.VENV_COMMAND: fail('PATH changes outside the admitted bootstrap forbidden')
+            if 'GITHUB_ENV' in run and run != BOOTSTRAP_COMMAND and ADMITTED_ENV_WRITE.search(run):
+                fail('admitted tool environment override forbidden')
         bootstraps = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
         if any('scripts/ci/bootstrap.py' in s.get('run', '') for i, s in enumerate(steps) if i not in bootstraps):
             fail('missing exact bootstrap command')
@@ -229,14 +245,14 @@ def bootstrap_errors(data, name):
             fail('CI_TOOLS must be a literal tool list from the workflow'); selected = set()
         expanded = set(bootstrap.expand_tools(','.join(sorted(selected)))) if selected else set()
         for tool in sorted(required):
-            if {'rust': 'rustc', 'playwright': 'chromium'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
+            if {'rust': 'rustc', 'playwright': 'chromium-headless-shell'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
         if not (index + 1 < len(steps) and steps[index + 1] == {**step, 'name': EVIDENCE_NAME, 'run': EVIDENCE_COMMAND}):
             fail('admitted toolchain evidence step must follow the bootstrap step')
         controls = {**step, 'name': CONTROLS_NAME, 'run': CONTROLS_COMMAND}
         for s in steps[:index]:
             if s.get('uses', '').startswith('actions/checkout@') or (name == 'bootstrap' and s == controls): continue
             fail('bootstrap must precede every step except checkout')
-        if name == 'bootstrap' and sum(s == controls for s in steps) != 1:
+        if name == 'bootstrap' and (sum(s == controls for s in steps) != 1 or index == 0 or steps[index - 1] != controls):
             fail('exact corruption controls must precede the cold install')
     return errors
 
@@ -352,30 +368,60 @@ def cache_errors(data):
     return errors
 
 
+def python_env_keys(mapping):
+    if not isinstance(mapping, dict): return []
+    return [k for k in mapping if (str(k).startswith('PYTHON') and k not in python_env.ALLOWED_PYTHON_ENV) or str(k).startswith('PIP_')]
+
+
 def python_errors(data):
-    """One admitted Python, one fresh venv and one hash-locked install per closure consumer; nothing ad hoc."""
+    """One admitted Python, one fresh venv, one hash-locked install and one terminal re-check per closure consumer."""
     errors = []
+    consuming_workflow = False
     for jid, job in data.get('jobs', {}).items():
         steps = job.get('steps', [])
         def fail(message): errors.append(f'{jid}: {message}')
         setups = [i for i, s in enumerate(steps) if s.get('run') == BOOTSTRAP_COMMAND]
         venvs = [i for i, s in enumerate(steps) if s.get('run') == python_env.VENV_COMMAND]
         installs = [i for i, s in enumerate(steps) if s.get('run') == python_env.INSTALL_COMMAND]
-        for i, step in enumerate(steps):
+        checks = [i for i, s in enumerate(steps) if s.get('run') == python_env.CHECK_COMMAND]
+        for step in steps:
             run = step.get('run', '')
-            if i in venvs or i in installs: continue
-            if AD_HOC_PYTHON.search(run) or 'requirements-design.txt' in run or 'python_env.py --venv' in run:
+            if run in ADMITTED_PYTHON_RUNS: continue
+            if BYPASS_TOKEN.search(run) or 'requirements-design.txt' in run:
                 fail('ad hoc Python environment or package installation forbidden')
         consumers = [i for i, s in enumerate(steps) if any(c in s.get('run', '') for c in CLOSURE_CONSUMERS)]
-        if venvs or installs or consumers:
-            if len(venvs) != 1 or len(installs) != 1 or not setups or not setups[0] < venvs[0] < installs[0]:
-                fail('closure consumer requires the admitted bootstrap, one fresh venv and one hash-locked install in order')
-            elif any(i < installs[0] for i in consumers):
+        if not (venvs or installs or checks or consumers): continue
+        consuming_workflow = True
+        if len(venvs) != 1 or len(installs) != 1 or not setups or not setups[0] < venvs[0] < installs[0]:
+            fail('closure consumer requires the admitted bootstrap, one fresh venv and one hash-locked install in order')
+        else:
+            if any(i < installs[0] for i in consumers):
                 fail('validator runs before the hash-locked closure is admitted')
-            for i in venvs + installs:
-                step = steps[i]
-                if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != 'bash' or step.get('working-directory') != '.':
-                    fail('closure admission steps must be unconditional at root with bash')
+            if any(i > venvs[0] for i in setups):
+                fail('Python setup after the validator venv forbidden')
+            proofs = [i for i, s in enumerate(steps) if s.get('id') == 'proof']
+            boundary = proofs[0] if proofs else len(steps) - 1 if jid == 'ci-required' else len(steps)
+            python_steps = [i for i, s in enumerate(steps) if i < boundary and re.search(r'\bpython\b', s.get('run', ''))]
+            if len(checks) != 1 or checks[0] <= installs[0] or not python_steps or python_steps[-1] != checks[0]:
+                fail('terminal re-check must be the last Python step before the receipt')
+        for i in venvs + installs + checks:
+            step = steps[i]
+            if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != 'bash' or step.get('working-directory') != '.':
+                fail('closure admission steps must be unconditional at root with bash')
+        for scope in (job, *steps):
+            for key in python_env_keys(scope.get('env', {})):
+                fail(f'interpreter or installer environment forbidden in closure consumer: {key}')
+        for step in steps:
+            run = step.get('run', '')
+            if 'GITHUB_PATH' in run and run != python_env.VENV_COMMAND:
+                fail('PATH changes outside the admitted venv step forbidden in closure consumer')
+            # The admitted bootstrap step writes PATH and tool variables once, before the venv; bootstrap_errors
+            # closes its name, keys, inputs and position.
+            if 'GITHUB_ENV' in run and run not in (GO_FRESH, CARGO_FRESH, BOOTSTRAP_COMMAND):
+                fail('environment writes outside the fresh cache helper and admitted bootstrap forbidden in closure consumer')
+    if consuming_workflow:
+        for key in python_env_keys(data.get('env', {})):
+            errors.append(f'workflow: interpreter or installer environment forbidden in closure consumer: {key}')
     return errors
 
 
@@ -593,7 +639,10 @@ def check(root: Path) -> list[str]:
                 if len(hosts) != 3 or set(hosts) != set(inventory.HOSTS): fail(name, f'{jid}: native matrix mismatch')
                 host_steps = [i for i, step in enumerate(steps) if step.get('name') == 'Assert native receipt host' and 'platform.machine()' in step.get('run', '')]
                 commands = COMMANDS.get((name, jid), ())
-                first_check = next((i for i, step in enumerate(steps) if any(command in step.get('run', '') for command in commands)), len(steps))
+                # The admitted bootstrap and its controls refuse a foreign host before any download, so they may precede the assertion.
+                helpers = (BOOTSTRAP_COMMAND, EVIDENCE_COMMAND, CONTROLS_COMMAND)
+                first_check = next((i for i, step in enumerate(steps) if step.get('run') not in helpers
+                                    and any(command in step.get('run', '') for command in commands)), len(steps))
                 if len(host_steps) != 1 or host_steps[0] >= first_check:
                     fail(name, f'{jid}: native host admission must precede checks')
             if name in ('server', 'agent'):

@@ -28,7 +28,7 @@ jobs:
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,node,pnpm,playwright
-      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
       shell: bash
       working-directory: .

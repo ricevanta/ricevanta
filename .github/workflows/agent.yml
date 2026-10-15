@@ -34,9 +34,20 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version-file: .github/python-version
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,rust
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,rust
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
       shell: bash
       working-directory: .
@@ -52,8 +63,6 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - name: Install Rust
-      run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
     - name: Check native host and toolchain
       env:
         ACTUAL_ARCH: ${{ runner.arch }}
@@ -176,13 +185,20 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version-file: .github/python-version
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
+    - name: Bootstrap admitted toolchains
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
       shell: bash
       working-directory: .
@@ -199,11 +215,10 @@ jobs:
           ~/.cargo/registry/index
           ~/.cargo/registry/cache
         key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
-    - name: Install Rust and check native host
+    - name: Check admitted Rust and native host
       run: |
-        rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
-        test "$(rustc +1.99.0 -vV | sed -n 's/^release: //p')" = '1.99.0'
-        host="$(rustc +1.99.0 -vV | sed -n 's/^host: //p')"
+        test "$(rustc -vV | sed -n 's/^release: //p')" = '1.99.0'
+        host="$(rustc -vV | sed -n 's/^host: //p')"
         test "$host" = 'x86_64-unknown-linux-gnu'
         test "$RUNNER_ARCH" = 'X64'
         cc --version

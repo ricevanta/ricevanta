@@ -19,8 +19,9 @@ import bootstrap
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = ROOT / 'scripts/ci/toolchains.lock.json'
 HOST = bootstrap.host_platform()
-RUSTC_VV = ('rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7a8fa3f7fd2fd3c6a3d1e2f1a9b8c7d6\n'
-            'commit-date: 2026-09-28\nhost: {triple}\nrelease: 1.99.0\nLLVM version: 23.1.0\n')
+# Captured from the admitted linux-x64 payloads; rustfmt and clippy print a ten-digit short hash, rustc nine.
+RUSTC_VV = ('rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\n'
+            'commit-date: 2026-09-28\nhost: {triple}\nrelease: 1.99.0\nLLVM version: 23.1.1\n')
 
 
 def sha(data):
@@ -74,9 +75,11 @@ class FakeExecute:
         self.responses = responses or {}
         self.side_effect = side_effect
         self.calls = []
+        self.envs = []
 
     def __call__(self, argv, env=None, cwd=None, timeout=None, check=True):
         self.calls.append(list(argv))
+        self.envs.append(dict(env or {}))
         if self.side_effect: self.side_effect(argv)
         name = Path(argv[0]).name.lower()
         for suffix in ('.exe', '.cmd'):
@@ -84,6 +87,8 @@ class FakeExecute:
         handler = self.responses.get(name)
         if handler is None:
             if name in ('sudo', 'ldd', 'python-3.14.8-amd64'): return (0, '')
+            if name == 'ldconfig': return (0, '\tlibGLESv2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so.2\n'
+                                              '\tlibx264.so.164 (libc6,x86-64) => /lib/x86_64-linux-gnu/libx264.so.164\n')
             raise AssertionError('unexpected tool execution: ' + ' '.join(map(str, argv)))
         return (0, handler(argv) if callable(handler) else handler)
 
@@ -93,9 +98,10 @@ def python_prefix(argv):
     return executable.parent.parent if executable.parent.name == 'bin' else executable.parent
 
 
-def python_check(platform):
+def python_check(platform, libpython=None):
     def check(argv):
         if '-m' in argv: return 'pip 26.2.1 from fixture (python 3.14)'
+        if '/proc/self/maps' in argv[-1]: return (libpython or str(python_prefix(argv) / 'lib' / 'libpython3.14.so.1.0')) + '\n'
         return f'3.14.8\n{python_prefix(argv)}\n{bootstrap.PLATFORMS[platform]["machine"][0]}\nok\n'
     return check
 
@@ -107,8 +113,8 @@ def responses(platform=HOST):
         'python3.14': python_check(platform), 'python': python_check(platform),
         'rustc': RUSTC_VV.format(triple=spec['rust']),
         'cargo': 'cargo 1.99.0 (5f94df478 2026-08-27)\n',
-        'rustfmt': 'rustfmt 1.10.0-stable (b940084d7 2026-09-28)\n',
-        'cargo-clippy': 'clippy 0.1.99 (b940084d7 2026-09-28)\n',
+        'rustfmt': 'rustfmt 1.10.0-stable (b940084d7e 2026-09-28)\n',
+        'cargo-clippy': 'clippy 0.1.99 (b940084d7e 2026-09-28)\n',
         'node': 'v24.21.0 linux-x64\n', 'pnpm': '11.18.0\n',
         'chrome': 'Google Chrome for Testing 147.0.7727.15 \n',
         'chrome-headless-shell': 'Chrome Headless Shell 147.0.7727.15 \n',
@@ -146,11 +152,13 @@ class Fixtures:
             data = zip_bytes([('python-3.14.8-amd64.exe', b'MZ installer', 0o644, False), ('setup.ps1', b'# fixture', 0o644, False)])
             return self.add('python', '3.14.8', data, 'python.zip')
         if self.platform == 'macos-arm64':
-            data = tar_bytes([regular('./setup.sh', b'set -e\n', 0o755), regular('./python-3.14.8-macos11.pkg', b'xar!'), regular('./build_output.txt', b'')])
+            # Same shape as the real payload: a './' root member, then './'-prefixed files.
+            data = tar_bytes([directory('./'), regular('./setup.sh', b'set -e\n', 0o755), regular('./python-3.14.8-macos11.pkg', b'xar!'), regular('./build_output.txt', b'')])
             return self.add('python', '3.14.8', data, 'python.tar.gz')
-        members = [directory('bin'), regular('bin/python3.14', b'#!/bin/sh\n', 0o755), symlink('bin/python3', 'python3.14'),
-                   directory('lib'), regular('lib/libpython3.14.so.1.0', b'\x7fELF'), regular('setup.sh', b'set -e\n', 0o755),
-                   directory('lib/python3.14'), regular('lib/python3.14/LICENSE.txt', b'PSF')]
+        # Same shape as python-3.14.8-linux-24.04-x64.tar.gz: a '.' root member, then './'-prefixed entries.
+        members = [directory('.'), directory('./bin'), regular('./bin/python3.14', b'#!/bin/sh\n', 0o755), symlink('./bin/python3', 'python3.14'),
+                   directory('./lib'), regular('./lib/libpython3.14.so.1.0', b'\x7fELF'), regular('./setup.sh', b'set -e\n', 0o755),
+                   directory('./lib/python3.14'), regular('./lib/python3.14/LICENSE.txt', b'PSF')]
         return self.add('python', '3.14.8', tar_bytes(members))
 
     def rust(self):
@@ -186,10 +194,11 @@ class Fixtures:
         return self.add('pnpm', '11.18.0', tar_bytes(members), 'pnpm.tgz')
 
     def playwright(self, webkit_link='libwebkitgtk-6.0.so.4.17.0'):
-        self.add('chromium', '1217', zip_bytes([('chrome-linux64/chrome', b'ELF', 0o755, False), ('chrome-linux64/ABOUT', b'about', 0o644, False)]), 'chrome-linux64.zip')
         self.add('chromium-headless-shell', '1217', zip_bytes([('chrome-headless-shell-linux64/chrome-headless-shell', b'ELF', 0o755, False),
                                                               ('chrome-headless-shell-linux64/LICENSE.headless_shell', b'credits', 0o644, False)]), 'chrome-headless-shell-linux64.zip')
-        self.add('firefox', '1511', zip_bytes([('firefox/firefox', b'ELF', 0o755, False), ('firefox/omni.ja', b'PK', 0o644, False)]), 'firefox-ubuntu-24.04.zip')
+        self.add('firefox', '1511', zip_bytes([('firefox/firefox', b'ELF', 0o755, False), ('firefox/omni.ja', b'PK', 0o644, False),
+                                               ('firefox/libmozgtk.so', b'ELF', 0o755, False),
+                                               ('firefox/gmp-clearkey/0.1/libclearkey.so', b'ELF', 0o755, False)]), 'firefox-ubuntu-24.04.zip')
         self.add('webkit', '2272', zip_bytes([('pw_run.sh', b'#!/bin/sh\n', 0o755, False), ('minibrowser-gtk/MiniBrowser', b'#!/bin/sh\n', 0o755, False),
                                               ('minibrowser-gtk/lib/libwebkitgtk-6.0.so.4.17.0', b'ELF', 0o755, False),
                                               ('minibrowser-gtk/lib/libwebkitgtk-6.0.so.4', webkit_link.encode(), 0o777, True)]), 'webkit-ubuntu-24.04.zip')
@@ -216,7 +225,7 @@ class BootstrapTests(unittest.TestCase):
         execute = execute or FakeExecute(responses(platform))
         dest = dest or self.base / 'dest'
         argv = ['--lock', str(lock or self.fixtures.lock()), '--platform', platform, '--tools', tools, '--dest', str(dest),
-                '--cache-mode', cache_mode, '--env-out', str(self.base / 'env'), '--path-out', str(self.base / 'path')]
+                '--cache-mode', cache_mode, '--env-out', str(self.base / 'env')]
         out = io.StringIO()
         environ = {k: v for k, v in os.environ.items() if k not in ('CI_TOOLCHAIN_SOURCES', 'RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY')}
         environ.update(env or {})
@@ -248,6 +257,10 @@ class BootstrapTests(unittest.TestCase):
         entries = lock['entries']
         self.assertEqual(len({e['id'] for e in entries}), len(entries))
         self.assertEqual(len({(e['tool'], e['platform']) for e in entries}), len(entries))
+        # Headless Playwright 1.59.1 runs chromium-headless-shell; the full Chrome for Testing bundle (with its proprietary
+        # Widevine CDM) is never consumed, so it is not admitted.
+        self.assertEqual(bootstrap.TOOL_GROUPS['playwright'], ('chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg'))
+        self.assertNotIn('chromium', {e['tool'] for e in entries})
         for entry in entries:
             self.assertIn(entry['sha256'], licensing, entry['id'] + ' needs exact payload license evidence')
             self.assertNotEqual(entry['sha256'], '0' * 64)
@@ -255,7 +268,7 @@ class BootstrapTests(unittest.TestCase):
             tools = {e['tool'] for e in entries if e['platform'] == platform}
             self.assertTrue({'go', 'python', 'rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy'} <= tools, platform)
         linux = {e['tool'] for e in entries if e['platform'] == 'linux-x64'}
-        self.assertTrue({'node', 'pnpm', 'chromium', 'chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg'} <= linux)
+        self.assertTrue({'node', 'pnpm', 'chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg'} <= linux)
 
     def test_lock_review_rejects_defects(self):
         good = dict(id='go-1.27.1-linux-x64', tool='go', version='1.27.1', platform='linux-x64',
@@ -321,7 +334,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual((code, error), (0, None), journal)
         env = self.env_lines()
         self.assertEqual(env['CI_ADMITTED_ROOT'], str(dest))
-        paths = (self.base / 'path').read_text().splitlines()
+        paths = env['PATH'].split(os.pathsep)
         self.assertTrue((dest / 'go' / 'bin').is_dir())
         self.assertIn(str(dest / 'go' / 'bin'), paths)
         self.assertTrue((dest / 'rust' / 'bin').is_dir())
@@ -335,13 +348,13 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse((dest / '.downloads').exists(), 'payloads are deleted after admission in none mode')
         self.assertFalse((dest / '.staging').exists())
         executed = [Path(c[0]) for c in execute.calls]
-        self.assertTrue(all(dest in p.parents or p.name in ('sudo', 'ldd') for p in executed), executed)
+        self.assertTrue(all(dest in p.parents or p.name in ('sudo', 'ldd', 'ldconfig') for p in executed), executed)
         if HOST == 'linux-x64':
             self.assertEqual(env['LD_LIBRARY_PATH'].split(os.pathsep)[0], str(dest / 'python' / 'lib'))
             self.assertEqual(env['PLAYWRIGHT_BROWSERS_PATH'], str(dest / 'ms-playwright'))
             self.assertEqual(env['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'], '1')
             self.assertEqual(env['npm_config_manage_package_manager_versions'], 'false')
-            for name in ('chromium-1217', 'chromium_headless_shell-1217', 'firefox-1511', 'webkit-2272', 'ffmpeg-1011'):
+            for name in ('chromium_headless_shell-1217', 'firefox-1511', 'webkit-2272', 'ffmpeg-1011'):
                 self.assertTrue((dest / 'ms-playwright' / name / 'INSTALLATION_COMPLETE').is_file(), name)
             link = dest / 'ms-playwright' / 'webkit-2272' / 'minibrowser-gtk' / 'lib' / 'libwebkitgtk-6.0.so.4'
             self.assertTrue(link.is_symlink() and os.readlink(link) == 'libwebkitgtk-6.0.so.4.17.0')
@@ -381,18 +394,24 @@ class BootstrapTests(unittest.TestCase):
         else: self.fail('redirect chains must be bounded')
 
     def test_unsafe_archives_are_refused_before_extraction(self):
+        version = regular('go/VERSION', b'go1.27.1\n')
         archives = {
-            'traversal': tar_bytes([directory('go'), regular('go/../evil', b'x')]),
-            'absolute': tar_bytes([directory('go'), regular('/go/bin/go', b'x', 0o755)]),
-            'case collision': tar_bytes([directory('go'), regular('go/bin/go', b'x', 0o755), regular('go/bin/GO', b'y', 0o755)]),
-            'escaping symlink': tar_bytes([directory('go'), symlink('go/lib', '../../outside'), regular('go/bin/go', b'x', 0o755)]),
-            'escaping zip symlink': zip_bytes([('go/bin/go', b'x', 0o755, False), ('go/lib', b'/etc', 0o777, True)]),
-            'escaping hardlink': tar_bytes([directory('go'), ('go/bin/go', None, 0o755, tarfile.LNKTYPE, '/etc/passwd')]),
-            'device': tar_bytes([directory('go'), ('go/dev', None, 0o644, tarfile.CHRTYPE, None), regular('go/bin/go', b'x', 0o755)]),
-            'wrong layout': tar_bytes([directory('other'), regular('other/bin/go', b'x', 0o755)]),
-            'two roots': tar_bytes([directory('go'), regular('go/bin/go', b'x', 0o755), regular('stray', b'x')]),
+            'traversal': (tar_bytes([directory('go'), regular('go/../evil', b'x')]), 'traverses outside'),
+            'absolute': (tar_bytes([directory('go'), regular('/go/bin/go', b'x', 0o755)]), 'absolute archive member'),
+            'case collision': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), regular('go/bin/GO', b'y', 0o755)]), 'case-insensitive name collision'),
+            'escaping symlink': (tar_bytes([directory('go'), version, symlink('go/lib', '../../outside'), regular('go/bin/go', b'x', 0o755)]), 'escaping link'),
+            'escaping zip symlink': (zip_bytes([('go/VERSION', b'go1.27.1\n', 0o644, False), ('go/bin/go', b'x', 0o755, False), ('go/lib', b'/etc', 0o777, True)]), 'escaping link'),
+            'escaping hardlink': (tar_bytes([directory('go'), version, ('go/bin/go', None, 0o755, tarfile.LNKTYPE, '/etc/passwd')]), 'escaping link'),
+            'device': (tar_bytes([directory('go'), version, ('go/dev', None, 0o644, tarfile.CHRTYPE, None), regular('go/bin/go', b'x', 0o755)]), 'unsupported archive member kind'),
+            'wrong layout': (tar_bytes([directory('other'), regular('other/bin/go', b'x', 0o755)]), "exactly the 'go' directory"),
+            'two roots': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), regular('stray', b'x')]), "exactly the 'go' directory"),
+            # Each link stays inside lexically, but go/t resolves through go/s to the parent of the staging root.
+            'write through link chain': (tar_bytes([directory('go'), version, regular('go/bin/go', b'x', 0o755), symlink('go/s', '..'),
+                                                    symlink('go/t', 's/..'), regular('go/t/escaped', b'x')]), 'beneath the symbolic link'),
+            'member beneath link': (tar_bytes([directory('go'), version, directory('go/bin'), symlink('go/lib', 'bin'), regular('go/lib/go', b'x', 0o755),
+                                               regular('go/bin/go', b'x', 0o755)]), 'beneath the symbolic link'),
         }
-        for label, data in archives.items():
+        for label, (data, reason) in archives.items():
             with self.subTest(archive=label):
                 fixtures = Fixtures(self.base / label.replace(' ', '-'))
                 fixtures.base.mkdir()
@@ -400,9 +419,12 @@ class BootstrapTests(unittest.TestCase):
                 fixtures.add('go', '1.27.1', data, 'go.zip' if 'zip' in label else 'go.tar.gz')
                 code, error, journal, execute, dest = self.run_bootstrap('go', dest=fixtures.base / 'dest', host=bootstrap.Host('linux-x64'), platform='linux-x64')
                 self.assertEqual(code, 1, label)
+                self.assertIn(reason, error or '', label)
                 self.assertNotIn('bootstrap: install ', journal)
+                self.assertNotIn('bootstrap: extract ', journal, 'unsafe layouts are refused during inspection, before any member is written')
                 self.assertEqual(execute.calls, [])
                 self.assertFalse((dest / 'go').exists())
+                self.assertFalse((fixtures.base / 'escaped').exists() or (fixtures.base / 'dest' / 'escaped').exists())
 
     @unittest.skipIf(os.name == 'nt', 'POSIX symlink semantics')
     def test_legitimate_internal_symlink_is_preserved(self):
@@ -544,16 +566,60 @@ class BootstrapTests(unittest.TestCase):
         code, error, *_ = self.run_bootstrap('go', execute=bootstrap.execute, dest=self.base / 'dest-wrong')
         self.assertEqual(code, 1); self.assertIn('version', error)
 
+    def test_browser_libraries_follow_playwright_host_validation(self):
+        """Bundled libraries resolve through the browser's own directories; WebKit's dlopen libraries must be in the loader cache."""
+        if HOST != 'linux-x64': self.skipTest('browser payloads are consumed on Linux x64 only')
+        self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
+        execute = FakeExecute(responses())
+        def ldd(argv):
+            library_path = execute.envs[-1].get('LD_LIBRARY_PATH', '').split(':')
+            if argv[-1].endswith('/libclearkey.so'): return '\tlibstdc++.so.7 => not found\n'
+            if argv[-1].endswith('/firefox/firefox') and not any(p.endswith('/firefox-1511/firefox') for p in library_path):
+                return '\tlibmozgtk.so => not found\n'
+            return '\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n'
+        execute.responses['ldd'] = ldd
+        code, error, journal, execute, dest = self.run_bootstrap('node,pnpm,playwright', execute=execute)
+        self.assertEqual((code, error), (0, None), journal)
+        lddcalls = [c[-1] for c in execute.calls if c[0] == 'ldd']
+        self.assertIn(str(dest / 'ms-playwright' / 'firefox-1511' / 'firefox' / 'firefox'), lddcalls)
+        self.assertFalse(any('gmp-clearkey' in c for c in lddcalls), 'only the directories Playwright validates are inspected')
+        canned = responses()
+        canned['ldconfig'] = '\tlibGLESv2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so.2\n'
+        code, error, *_ = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned), dest=self.base / 'dest-dlopen')
+        self.assertEqual(code, 1); self.assertIn('webkit', error); self.assertIn('libx264.so', error)
+
+    def test_linux_python_loads_only_the_admitted_libpython(self):
+        """The payload's RUNPATH names the runner tool cache; the interpreter must map the admitted libpython instead."""
+        if HOST != 'linux-x64': self.skipTest('Linux shared-library layout')
+        self.fixtures.python()
+        canned = responses()
+        canned['python3.14'] = python_check('linux-x64', '/opt/hostedtoolcache/Python/3.14.8/x64/lib/libpython3.14.so.1.0')
+        code, error, *_ = self.run_bootstrap('python', execute=FakeExecute(canned))
+        self.assertEqual(code, 1); self.assertIn('libpython', error); self.assertIn('hostedtoolcache', error)
+        execute = FakeExecute(responses())
+        code, error, journal, execute, dest = self.run_bootstrap('python', execute=execute, dest=self.base / 'dest-ok')
+        self.assertEqual((code, error), (0, None), journal)
+        self.assertTrue(all(env.get('LD_LIBRARY_PATH', '').split(os.pathsep)[0] == str(dest / 'python' / 'lib') for env in execute.envs))
+
+    def test_rust_components_must_come_from_the_admitted_rustc_build(self):
+        self.fixtures.rust()
+        for tool, output in (('rustfmt', 'rustfmt 1.10.0-stable (0123456789 2026-09-28)\n'), ('cargo-clippy', 'clippy 0.1.99 (b940084d7f 2026-09-28)\n'),
+                             ('rustfmt', 'rustfmt 1.10.0-stable (b9 2026-09-28)\n')):
+            with self.subTest(tool=tool, output=output):
+                canned = responses(); canned[tool] = output
+                code, error, *_ = self.run_bootstrap('rust', execute=FakeExecute(canned), dest=self.base / ('dest-' + output[-20:-12]))
+                self.assertEqual(code, 1); self.assertIn('admitted rustc commit', error)
+
     def test_browser_dependency_and_version_checks_name_missing_libraries(self):
         if HOST != 'linux-x64': self.skipTest('browser payloads are consumed on Linux x64 only')
         self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
         canned = responses()
         canned['ldd'] = lambda argv: ('\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n'
-                                     if argv[-1].endswith('/chrome') else '\tlibc.so.6 => /lib/libc.so.6\n')
+                                     if argv[-1].endswith('/chrome-headless-shell') else '\tlibc.so.6 => /lib/libc.so.6\n')
         code, error, journal, execute, dest = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned))
         self.assertEqual(code, 1)
-        self.assertIn('libnss3.so', error); self.assertIn('libgbm.so.1', error); self.assertIn('chromium', error)
-        self.assertNotIn('bootstrap: admitted chromium', journal)
+        self.assertIn('libnss3.so', error); self.assertIn('libgbm.so.1', error); self.assertIn('chromium-headless-shell', error)
+        self.assertNotIn('bootstrap: admitted chromium-headless-shell', journal)
         canned = responses()
         canned['firefox'] = 'Mozilla Firefox 147.0\n'
         code, error, *_ = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned), dest=self.base / 'dest2')
@@ -571,7 +637,17 @@ class BootstrapTests(unittest.TestCase):
         code, error, *_ = self.run_bootstrap('go')
         self.assertEqual((code, error), (0, None))
         env = self.env_lines()
-        self.assertEqual(set(env), {'CI_ADMITTED_ROOT'})
+        self.assertEqual(set(env), {'CI_ADMITTED_ROOT', 'PATH'})
+        dest = self.base / 'dest'
+        self.assertEqual(env['PATH'].split(os.pathsep)[0], str(dest / 'go' / 'bin'), 'admitted directories come first')
+        self.assertEqual(env['PATH'].split(os.pathsep, 1)[1], os.environ['PATH'], 'the inherited PATH follows unchanged')
+
+    def test_env_out_is_the_only_output_interface(self):
+        """The spec fixes the CLI; admitted directories reach later steps only through --env-out."""
+        self.fixtures.go()
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            bootstrap.parse_args(['--lock', 'l', '--platform', HOST, '--tools', 'go', '--dest', '/d', '--cache-mode', 'none',
+                                  '--env-out', 'e', '--path-out', 'p'])
 
     @unittest.skipIf(os.name == 'nt', 'shell script fixtures')
     def test_command_line_end_to_end_in_sources_mode(self):
@@ -582,11 +658,11 @@ class BootstrapTests(unittest.TestCase):
         env = {k: v for k, v in os.environ.items() if k not in ('RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY')}
         env['CI_TOOLCHAIN_SOURCES'] = str(sources)
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/bootstrap.py'), '--lock', str(self.fixtures.lock()), '--platform', HOST,
-                                 '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'sources', '--env-out', str(self.base / 'env'),
-                                 '--path-out', str(self.base / 'path')], env=env, capture_output=True, text=True)
+                                 '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'sources', '--env-out', str(self.base / 'env')],
+                                env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('bootstrap: admitted go', result.stdout)
-        self.assertEqual((self.base / 'path').read_text().splitlines(), [str(self.base / 'dest' / 'go' / 'bin')])
+        self.assertEqual(self.env_lines()['PATH'].split(os.pathsep)[0], str(self.base / 'dest' / 'go' / 'bin'))
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/bootstrap.py'), '--lock', str(self.fixtures.lock()), '--platform', HOST,
                                  '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'none', '--env-out', str(self.base / 'env')],
                                 env=env, capture_output=True, text=True)
@@ -635,7 +711,7 @@ class ControlsTests(unittest.TestCase):
         env = {k: v for k, v in os.environ.items() if k not in ('RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY', 'CI_TOOLCHAIN_SOURCES')}
         with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(io.StringIO()):
             bootstrap.run(['--lock', str(lock), '--platform', HOST, '--tools', 'go', '--dest', str(dest), '--cache-mode', 'none',
-                           '--env-out', str(self.base / 'env'), '--path-out', str(self.base / 'path')],
+                           '--env-out', str(self.base / 'env')],
                           fetch=fixtures.fetch, execute=FakeExecute(responses()), host=bootstrap.Host(HOST))
         evidence = dest / 'bootstrap-evidence.json'
         argv = ['evidence', '--lock', str(lock), '--platform', HOST, '--tools', 'go', '--evidence', str(evidence)]

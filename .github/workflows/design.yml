@@ -22,7 +22,7 @@ jobs:
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python
-      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV" --path-out "$GITHUB_PATH"
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
       shell: bash
       working-directory: .
@@ -120,6 +120,10 @@ jobs:
             Draft202012Validator(schema).validate(example)
         Draft202012Validator(schema).validate(json.load(open('scripts/ci/toolchains.lock.json')))
         PY
+    - name: Re-verify validator environment
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
       shell: bash

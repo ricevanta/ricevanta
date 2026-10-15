@@ -1,10 +1,12 @@
 """Admit the one hash-locked Python validator closure: version file, lock grammar, venv and installed set."""
 import argparse
 from importlib.metadata import PathDistribution
+import json
 import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -15,13 +17,19 @@ ROOT = Path(__file__).resolve().parents[2]
 PYTHON_VERSION_FILE = '.github/python-version'
 REQUIREMENTS = '.github/requirements-design.txt'
 LICENSING = 'docs/licensing.md'
+# Written into the venv root by --venv; --check requires it so only this helper's venv is ever admitted.
+MARKER = 'ricevanta-validator.json'
 # The interpreter's bundled installer bootstraps the venv; it is part of the admitted Python, not the closure.
 BOOTSTRAP = ('pip',)
 VENV_COMMAND = 'python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"'
+CHECK_COMMAND = 'python -B scripts/ci/python_env.py --check'
 INSTALL_COMMAND = ('python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes '
                    '--only-binary=:all: -r .github/requirements-design.txt\n'
                    'python -m pip check\n'
-                   'python -B scripts/ci/python_env.py --check\n')
+                   + CHECK_COMMAND + '\n')
+# Interpreter and installer environment that could redirect imports or downloads; everything else PYTHON*/PIP_* is rejected.
+ALLOWED_PYTHON_ENV = frozenset({'PYTHONDONTWRITEBYTECODE', 'PYTHONUNBUFFERED', 'PYTHONUTF8', 'PYTHONIOENCODING',
+                                'PYTHONHASHSEED', 'PYTHONWARNINGS'})
 
 # Each admitted SPDX identifier names the text that a shipped notice must contain.
 LICENSE_TEXTS = {
@@ -42,6 +50,9 @@ NOTICE_NAMES = ('LICENSE', 'LICENCE', 'COPYING', 'NOTICE', 'AUTHORS')
 NAME = r'[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?'
 VERSION = r'[0-9][A-Za-z0-9.!+]*'
 PIN = re.compile(rf'^({NAME})==({VERSION})((?: --hash=sha256:[0-9a-f]{{64}})+)$')
+# One recorded wheel per hash, immediately before its pin: `# wheel <filename>.whl sha256:<digest>`.
+WHEEL_LINE = re.compile(r'^# wheel (\S+) sha256:([0-9a-f]{64})$')
+WHEEL_NAME = re.compile(rf'^([A-Za-z0-9_.]+)-({VERSION})(?:-[0-9][^-]*)?-([^-]+)-([^-]+)-([^-]+)\.whl$')
 INVENTORY_ITEM = re.compile(rf'\[?`({NAME})`(?:\]\([^)\s]*\))?\s+({VERSION})')
 
 
@@ -49,6 +60,7 @@ class Requirement(NamedTuple):
     name: str
     version: str
     hashes: tuple
+    wheels: tuple
 
 
 class Installed(NamedTuple):
@@ -63,6 +75,11 @@ def normalize(name):
     return re.sub(r'[-_.]+', '-', name).lower()
 
 
+def read_exact(path):
+    """Read bytes as text without newline translation, so CR and missing final LF stay visible."""
+    return Path(path).read_text(encoding='utf-8', newline='')
+
+
 def read_python_version(text):
     match = re.fullmatch(r'([0-9]+\.[0-9]+\.[0-9]+)\n', text)
     if not match: raise ValueError(f'{PYTHON_VERSION_FILE} must hold exactly MAJOR.MINOR.PATCH plus LF')
@@ -70,7 +87,7 @@ def read_python_version(text):
 
 
 def parse_requirements(text):
-    """Accept only `name==version` pins with lowercase SHA-256 hashes; reject every other requirement form."""
+    """Accept only `name==version` pins whose SHA-256 hashes each name a recorded wheel; reject every other form."""
     if not text.endswith('\n') or '\r' in text: raise ValueError(f'{REQUIREMENTS}: LF line endings and final newline required')
     logical, pending = [], ''
     for line in text.split('\n')[:-1]:
@@ -80,15 +97,33 @@ def parse_requirements(text):
         logical.append(pending + line)
         pending = ''
     if pending: raise ValueError(f'{REQUIREMENTS}: dangling continuation line')
-    result = {}
+    result, wheels = {}, {}
     for line in logical:
-        if not line.strip() or line.lstrip().startswith('#'): continue
+        stripped = line.strip()
+        if not stripped: continue
+        if stripped.startswith('#'):
+            recorded = WHEEL_LINE.fullmatch(stripped)
+            if recorded:
+                filename, digest = recorded.groups()
+                if digest in wheels or filename in wheels.values():
+                    raise ValueError(f'{REQUIREMENTS}: duplicate recorded wheel {filename}')
+                wheels[digest] = filename
+            continue
         match = PIN.fullmatch(' '.join(line.split()))
-        if not match: raise ValueError(f'{REQUIREMENTS}: not an exact hashed wheel pin: {line.strip()!r}')
+        if not match: raise ValueError(f'{REQUIREMENTS}: not an exact hashed wheel pin: {stripped!r}')
         name, version, hashes = match[1], match[2], tuple(h.removeprefix('--hash=sha256:') for h in match[3].split())
         if len(set(hashes)) != len(hashes): raise ValueError(f'{REQUIREMENTS}: duplicate hash for {name}')
         if normalize(name) in result: raise ValueError(f'{REQUIREMENTS}: duplicate requirement {name}')
-        result[normalize(name)] = Requirement(name, version, hashes)
+        for digest in hashes:
+            if digest not in wheels: raise ValueError(f'{REQUIREMENTS}: {name}: hash {digest} has no recorded wheel')
+        for digest, filename in wheels.items():
+            if digest not in hashes: raise ValueError(f'{REQUIREMENTS}: {name}: recorded wheel {filename} has no matching hash')
+            parsed = WHEEL_NAME.fullmatch(filename)
+            if not parsed or normalize(parsed[1]) != normalize(name) or parsed[2] != version:
+                raise ValueError(f'{REQUIREMENTS}: {name}: recorded wheel {filename} is not a wheel of {name} {version}')
+        result[normalize(name)] = Requirement(name, version, hashes, tuple(wheels[digest] for digest in hashes))
+        wheels = {}
+    if wheels: raise ValueError(f'{REQUIREMENTS}: recorded wheel without a following pin: {", ".join(wheels.values())}')
     return result
 
 
@@ -222,13 +257,46 @@ def check_closure(requirements, inventory, installed, *, python_version, expecte
     return errors, report
 
 
-def read_exact(path):
-    """Read bytes as text without newline translation, so CR and missing final LF stay visible."""
-    return Path(path).read_text(encoding='utf-8', newline='')
+def environment_errors(environ):
+    """No interpreter or installer environment may redirect imports, user sites or package sources."""
+    return [f'python: environment variable {key} must not be set' for key in sorted(environ)
+            if (key.startswith('PYTHON') and key not in ALLOWED_PYTHON_ENV) or key.startswith('PIP_')]
+
+
+def path_errors(entries, script_dir, base_prefix, prefix, site_dirs):
+    """Every import path must be this script's directory, the venv's site-packages or the base interpreter's stdlib."""
+    script, base = Path(script_dir).resolve(), Path(base_prefix).resolve()
+    sites = {Path(site).resolve() for site in site_dirs}
+    errors = []
+    for entry in entries:
+        if entry == '':
+            errors.append('python: import path outside the admitted venv and stdlib: current directory')
+            continue
+        resolved = Path(entry).resolve()
+        if resolved == script or resolved in sites: continue
+        if resolved.is_relative_to(base) and not {'site-packages', 'dist-packages'} & set(resolved.parts): continue
+        errors.append(f'python: import path outside the admitted venv and stdlib: {entry}')
+    return errors
+
+
+def interpreter_errors(which, executable, prefix, base_prefix, python_version):
+    """`python` on PATH must be this interpreter, inside a venv this helper created from the admitted base."""
+    errors = []
+    if which is None or Path(which).resolve() != Path(executable).resolve():
+        errors.append(f'python: PATH resolves python to {which}, not the running {executable}')
+    marker_path = Path(prefix) / MARKER
+    if not marker_path.is_file():
+        return errors + [f'python: {prefix} is not a venv created by python_env.py --venv']
+    marker = json.loads(marker_path.read_text(encoding='utf-8'))
+    if Path(marker['base_prefix']).resolve() != Path(base_prefix).resolve():
+        errors.append(f'python: venv {prefix} was created from {marker["base_prefix"]}, not {base_prefix}')
+    if marker['python'] != python_version:
+        errors.append(f'python: venv {prefix} was created for {marker["python"]}, not the running {python_version}')
+    return errors
 
 
 def lock_errors(root):
-    """Static lock review: version file grammar, hashed pins and a licensing row for every closure entry."""
+    """Static lock review: version file grammar, hashed pins with recorded wheels and a licensing row per entry."""
     errors = []
     try:
         read_python_version(read_exact(root / PYTHON_VERSION_FILE))
@@ -255,18 +323,29 @@ def create_venv(target, path_out, expected_python):
     if actual != expected_python:
         raise SystemExit(f'python: bootstrap interpreter {actual} is not the admitted {expected_python}')
     target = Path(target)
-    if target.exists() or target.is_symlink(): raise SystemExit(f'python: venv target already exists: {target}')
     if not target.is_absolute(): raise SystemExit('python: venv target must be absolute')
+    if target.exists() or target.is_symlink(): raise SystemExit(f'python: venv target already exists: {target}')
     builder = venv.EnvBuilder(with_pip=True, symlinks=os.name != 'nt')
     builder.create(target)
     context = builder.ensure_directories(target)
     pip = subprocess.run([context.env_exe, '-m', 'pip', '--version', '--disable-pip-version-check'],
                          check=True, capture_output=True, text=True).stdout.strip()
+    marker = {'python': actual, 'base_prefix': str(Path(sys.base_prefix).resolve()), 'pip': pip}
+    (target / MARKER).write_text(json.dumps(marker, indent=1) + '\n', encoding='utf-8')
     print(f'python {actual} at {sys.executable}')
     print(f'venv {target}')
     print(f'bootstrap {pip} (Python-bundled installer, recorded separately)')
     with open(path_out, 'a', encoding='utf-8') as handle:
         handle.write(context.bin_path + '\n')
+
+
+def runtime_errors():
+    """Re-verify the live interpreter: environment, PATH resolution, venv provenance and import paths."""
+    sites = sorted({sysconfig.get_path('purelib'), sysconfig.get_path('platlib')})
+    errors = environment_errors(os.environ)
+    errors += interpreter_errors(shutil.which('python'), sys.executable, sys.prefix, sys.base_prefix, platform.python_version())
+    errors += path_errors(sys.path, Path(__file__).resolve().parent, sys.base_prefix, sys.prefix, sites)
+    return errors, sites
 
 
 def main():
@@ -278,23 +357,28 @@ def main():
     mode.add_argument('--venv', help='create a fresh venv at this absolute path')
     parser.add_argument('--path-out', type=Path, help='file receiving the venv scripts directory (GITHUB_PATH)')
     args = parser.parse_args()
+    if args.venv and not args.path_out: parser.error('--venv requires --path-out')
     version_file = args.python_version_file or args.root / PYTHON_VERSION_FILE
-    expected = read_python_version(read_exact(version_file))
+    try:
+        expected = read_python_version(read_exact(version_file))
+    except (OSError, ValueError) as error:
+        raise SystemExit(f'{PYTHON_VERSION_FILE}: {error}')
     if args.venv:
-        if not args.path_out: parser.error('--venv requires --path-out')
         create_venv(args.venv, args.path_out, expected)
         return
     errors = lock_errors(args.root)
-    if not errors:
-        requirements = parse_requirements(read_exact(args.root / REQUIREMENTS))
-        inventory = parse_inventory(read_exact(args.root / LICENSING))
-        sites = {sysconfig.get_path('purelib'), sysconfig.get_path('platlib')}
-        installed = read_installed(sorted(sites))
-        closure_errors, report = check_closure(requirements, inventory, installed, python_version=platform.python_version(),
-                                               expected_python=expected, in_venv=sys.prefix != sys.base_prefix)
-        errors += closure_errors
-        for line in report: print(line)
-        print(f'interpreter {sys.executable}; site-packages {", ".join(sorted(sites))}')
+    live, sites = runtime_errors()
+    errors += live
+    if not errors or live:
+        requirements = parse_requirements(read_exact(args.root / REQUIREMENTS)) if not lock_errors(args.root) else {}
+        inventory = parse_inventory(read_exact(args.root / LICENSING)) if requirements else {}
+        if requirements:
+            closure_errors, report = check_closure(requirements, inventory, read_installed(sites),
+                                                   python_version=platform.python_version(), expected_python=expected,
+                                                   in_venv=sys.prefix != sys.base_prefix)
+            errors += closure_errors
+            for line in report: print(line)
+        print(f'interpreter {sys.executable}; site-packages {", ".join(sites)}')
     if errors: raise SystemExit('\n'.join(errors))
     print('Python validator closure admitted')
 

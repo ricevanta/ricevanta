@@ -210,15 +210,6 @@
       "sha256": "29c35ca8d2a287988fdee3e0f36e07d9b93783f567b579b7fd5b798a4563dd81"
     },
     {
-      "id": "chromium-1217-linux-x64",
-      "tool": "chromium",
-      "version": "1217",
-      "platform": "linux-x64",
-      "url": "https://cdn.playwright.dev/builds/cft/147.0.7727.15/linux64/chrome-linux64.zip",
-      "size": 178629879,
-      "sha256": "04883e331b31448d6255fa058f0e1c7e8657c004da1f8a1c04eb28855a37ec6c"
-    },
-    {
       "id": "chromium-headless-shell-1217-linux-x64",
       "tool": "chromium-headless-shell",
       "version": "1217",

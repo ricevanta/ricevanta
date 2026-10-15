@@ -43,18 +43,17 @@ PLATFORMS = {
     'macos-arm64': dict(system='Darwin', machine=('arm64',), go='darwin/arm64', rust='aarch64-apple-darwin', node='darwin-arm64', process='darwin-arm64', exe=''),
 }
 TOOL_GROUPS = {'rust': ('rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy'),
-               'playwright': ('chromium', 'chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg')}
+               'playwright': ('chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg')}
 # Reviewed Playwright 1.59.1 browser builds: install directory prefix, Linux x64 executable, ldd directories and version evidence.
+# Headless launches use chromium-headless-shell; the full Chrome for Testing bundle is never consumed and is not admitted.
 PLAYWRIGHT_BUILDS = {
-    'chromium': dict(revision='1217', directory='chromium', executable=('chrome-linux64', 'chrome'), ldd=('chrome-linux64',),
-                     version_argv=('--version',), version='147.0.7727.15'),
     'chromium-headless-shell': dict(revision='1217', directory='chromium_headless_shell', executable=('chrome-headless-shell-linux64', 'chrome-headless-shell'),
                                     ldd=('chrome-headless-shell-linux64',), version_argv=('--version',), version='147.0.7727.15'),
     'firefox': dict(revision='1511', directory='firefox', executable=('firefox', 'firefox'), ldd=('firefox',), version_argv=('--version',), version='148.0.2'),
     'webkit': dict(revision='2272', directory='webkit', executable=('pw_run.sh',),
                    ldd=('minibrowser-gtk', 'minibrowser-gtk/bin', 'minibrowser-gtk/lib', 'minibrowser-gtk/sys/lib',
                         'minibrowser-wpe', 'minibrowser-wpe/bin', 'minibrowser-wpe/lib', 'minibrowser-wpe/sys/lib'),
-                   version_argv=None, version='26.4'),
+                   dlopen=('libGLESv2.so.2', 'libx264.so'), version_argv=None, version='26.4'),
     'ffmpeg': dict(revision='1011', directory='ffmpeg', executable=('ffmpeg-linux',), ldd=(), version_argv=('-version',), version='playwright-build-1011'),
 }
 INSTALL_ORDER = ('python', 'go', 'rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy', 'node', 'pnpm', *TOOL_GROUPS['playwright'])
@@ -64,6 +63,7 @@ URL_PATTERN = re.compile(r'^https://[^ /?#]+/[^ ]+$')
 DIGEST_PATTERN = re.compile(r'^[0-9a-f]{64}$')
 PYTHON_CHECK = ('import platform, sys, ssl, lzma, zlib, hashlib, venv, ensurepip\n'
                 'print(platform.python_version()); print(sys.prefix); print(platform.machine()); print("ok")')
+LIBPYTHON_CHECK = "print(next(line.split()[-1] for line in open('/proc/self/maps') if '/libpython' in line))"
 WINDOWS_INSTALLER_ARGS = ('/quiet', 'InstallAllUsers=0', 'Include_launcher=0', 'Include_test=0', 'Include_doc=0', 'Include_tcltk=0',
                           'Shortcuts=0', 'AssociateFiles=0', 'PrependPath=0', 'CompileAll=0', 'Include_pip=1')
 
@@ -330,6 +330,9 @@ def inspect_archive(path, entry, host):
         except (tarfile.TarError, EOFError, OSError, ValueError) as exc:
             raise BootstrapError(f'{entry["id"]}: unreadable archive: {exc}') from exc
     if len(members) > MAX_MEMBERS: raise BootstrapError(f'{entry["id"]}: archive has too many members')
+    # Archives built with `tar -C dir .` (the actions/python-versions payloads) carry a '.' directory member for the
+    # archive root itself; it names the staging root and is dropped. Any other kind of member with that name is refused.
+    members = [m for m in members if not (m.kind == 'dir' and m.name in ('.', './'))]
     seen, lowered, total = {}, set(), 0
     for member in members:
         member.name = normalize_name(member.name, entry)
@@ -353,6 +356,12 @@ def inspect_archive(path, entry, host):
             target = normalize_name(member.link, entry) if member.link and not member.link.startswith('/') else None
             if target is None or seen.get(target) != 'file': raise BootstrapError(f'{entry["id"]}: escaping link {member.name!r} -> {member.link!r}')
             member.link = target
+    links = {m.name for m in members if m.kind == 'symlink'}
+    for member in members:
+        parts = member.name.split('/')
+        for depth in range(1, len(parts)):
+            if '/'.join(parts[:depth]) in links:
+                raise BootstrapError(f'{entry["id"]}: archive member {member.name!r} lies beneath the symbolic link {"/".join(parts[:depth])!r}')
     if total > MAX_EXTRACTED: raise BootstrapError(f'{entry["id"]}: archive expands beyond the admitted size limit')
     return members
 
@@ -509,6 +518,11 @@ def check_python(ctx, entry):
     if lines[2] not in ctx.host.spec['machine']: raise BootstrapError(f'{entry["id"]}: interpreter machine {lines[2]!r} is not {ctx.host.platform}')
     pip = ctx.run(entry, [python, '-I', '-m', 'pip', '--version'], env=env).strip()
     if not pip.startswith('pip '): raise BootstrapError(f'{entry["id"]}: bundled pip missing: {pip!r}')
+    if env is not None:
+        # The payload's RUNPATH names the runner tool cache; LD_LIBRARY_PATH must win, so prove which libpython is mapped.
+        mapped = ctx.run(entry, [python, '-I', '-c', LIBPYTHON_CHECK], env=env).strip()
+        library = ctx.dest / 'python' / 'lib' / f'libpython{".".join(entry["version"].split(".")[:2])}.so.1.0'
+        if Path(mapped) != library: raise BootstrapError(f'{entry["id"]}: interpreter maps libpython from {mapped!r}, not the admitted {library}')
 
 
 def rust_root(members, entry, host):
@@ -557,7 +571,7 @@ def check_rust(ctx, entry):
         if fields.get('release') != entry['version'] or fields.get('host') != ctx.host.spec['rust']:
             raise BootstrapError(f'{entry["id"]}: version check failed: release {fields.get("release")!r} host {fields.get("host")!r}')
         if not re.fullmatch(r'[0-9a-f]{40}', fields.get('commit-hash', '')): raise BootstrapError(f'{entry["id"]}: rustc reports no commit hash')
-        ctx.installed['rustc-commit'] = fields['commit-hash'][:9]
+        ctx.installed['rustc-commit'] = fields['commit-hash']
     elif entry['tool'] == 'cargo':
         output = ctx.run(entry, [bin_dir / ('cargo' + exe), '-V']).strip()
         if not output.startswith(f'cargo {entry["version"]} ('): raise BootstrapError(f'{entry["id"]}: version check failed: {output!r}')
@@ -565,7 +579,10 @@ def check_rust(ctx, entry):
         executable = bin_dir / (('rustfmt' if entry['tool'] == 'rustfmt' else 'cargo-clippy') + exe)
         output = ctx.run(entry, [executable, '--version']).strip()
         commit = ctx.installed.get('rustc-commit')
-        if not commit or f'({commit} ' not in output: raise BootstrapError(f'{entry["id"]}: {output!r} does not report the admitted rustc commit')
+        # rustfmt and clippy print an abbreviated hash (ten digits in 1.99.0); require at least nine and a prefix of rustc's full hash.
+        match = re.search(r'\(([0-9a-f]{9,40}) ', output)
+        if not commit or not match or not commit.startswith(match[1]):
+            raise BootstrapError(f'{entry["id"]}: {output!r} does not report the admitted rustc commit')
     else:
         triple = ctx.host.spec['rust']
         if not (bin_dir.parent / 'lib' / 'rustlib' / triple / 'lib').is_dir(): raise BootstrapError(f'{entry["id"]}: standard library for {triple} missing')
@@ -649,18 +666,19 @@ def install_browser(ctx, entry, members, staging):
     ctx.env['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'] = '1'
 
 
-def missing_libraries(ctx, entry, directory):
+def missing_libraries(ctx, directory, library_path):
+    """Playwright 1.59.1's Linux host validation: ldd every shared library or executable directly in the directory."""
     missing = set()
-    for current, _, files in os.walk(directory):
-        for name in files:
-            path = Path(current) / name
-            if path.is_symlink() or not path.is_file(): continue
-            if not (os.access(path, os.X_OK) or '.so' in path.name): continue
-            if path.suffix in ('.sh', '.txt', '.json', '.pak', '.dat', '.bin', '.png', '.html', '.ini', '.js', '.py'): continue
-            code, output = ctx.execute(['ldd', str(path)], check=False)
-            if code: continue
-            for line in output.splitlines():
-                if '=> not found' in line: missing.add(line.split('=>')[0].strip())
+    for path in sorted(directory.iterdir()):
+        if not path.is_file(): continue
+        name = path.name.lower()
+        if not (name.endswith('.so') or '.so.' in name or os.access(path, os.X_OK)): continue
+        inherited = os.environ.get('LD_LIBRARY_PATH')
+        code, output = ctx.execute(['ldd', str(path)], env={'LD_LIBRARY_PATH': f'{inherited}:{library_path}' if inherited else library_path}, check=False)
+        if code: continue
+        for line in output.splitlines():
+            line = line.strip()
+            if line.endswith('not found') and '=>' in line: missing.add(line.split('=>')[0].strip())
     return missing
 
 
@@ -668,10 +686,15 @@ def check_browser(ctx, entry):
     build = PLAYWRIGHT_BUILDS[entry['tool']]
     target = ctx.installed[entry['tool']]
     browser_dir = ctx.dest / 'ms-playwright' / f'{build["directory"]}-{build["revision"]}'
+    directories = [browser_dir / relative for relative in build['ldd']]
+    library_path = ':'.join(str(d) for d in directories)
     missing = set()
-    for relative in build['ldd']:
-        directory = browser_dir / relative
-        if directory.is_dir(): missing |= missing_libraries(ctx, entry, directory)
+    for directory in directories:
+        if directory.is_dir(): missing |= missing_libraries(ctx, directory, library_path)
+    if build.get('dlopen'):
+        code, cache = ctx.execute(['/sbin/ldconfig', '-p'], check=False)
+        if code: raise BootstrapError(f'{entry["id"]}: cannot read the loader cache to find {", ".join(build["dlopen"])}')
+        missing |= {name for name in build['dlopen'] if name.lower() not in cache.lower()}
     if missing:
         raise BootstrapError(f'{entry["id"]}: {entry["tool"]} is missing system libraries on the runner image: {", ".join(sorted(missing))}')
     if build['version_argv'] is not None:
@@ -718,8 +741,8 @@ def parse_args(argv):
     parser.add_argument('--tools', required=True, help='comma-separated tools or groups (rust, playwright)')
     parser.add_argument('--dest', required=True)
     parser.add_argument('--cache-mode', required=True, choices=('sources', 'none'))
-    parser.add_argument('--env-out', required=True, type=Path, help='file receiving KEY=value lines (GITHUB_ENV)')
-    parser.add_argument('--path-out', type=Path, help='file receiving one PATH directory per line (GITHUB_PATH)')
+    parser.add_argument('--env-out', required=True, type=Path,
+                        help='file receiving KEY=value lines (GITHUB_ENV), including PATH with the admitted directories first')
     return parser.parse_args(argv)
 
 
@@ -733,8 +756,7 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
     lock = load_lock(args.lock)
     entries = select(lock, host.platform, args.tools)
     log('select', *[e['id'] for e in entries])
-    for path in (args.env_out, args.path_out):
-        if path is not None: safe_text(path, 'output path')
+    safe_text(args.env_out, 'output path')
     sources = None
     if args.cache_mode == 'sources':
         value = os.environ.get(SOURCES_ENV, '')
@@ -792,15 +814,14 @@ def run(argv, *, fetch=fetch_url, execute=execute, host=None):
         for transient in (downloads, staging_root):
             if transient.exists(): shutil.rmtree(transient, ignore_errors=True)
     ctx.env['CI_ADMITTED_ROOT'] = str(dest)
+    inherited = os.environ.get('PATH', '')
+    if ctx.paths: ctx.env['PATH'] = os.pathsep.join([*ctx.paths, *([inherited] if inherited else [])])
     for key, value in ctx.env.items():
         safe_text(key, 'environment name'); safe_text(value, 'environment value ' + key)
     for path in ctx.paths: safe_text(path, 'PATH entry')
     (dest / 'bootstrap-evidence.json').write_text(json.dumps(evidence, indent=1, sort_keys=True) + '\n', encoding='utf-8')
     with open(args.env_out, 'a', encoding='utf-8', newline='\n') as output:
         for key, value in ctx.env.items(): output.write(f'{key}={value}\n')
-    if args.path_out is not None:
-        with open(args.path_out, 'a', encoding='utf-8', newline='\n') as output:
-            for path in ctx.paths: output.write(path + '\n')
     log('evidence', dest / 'bootstrap-evidence.json', 'env', ','.join(ctx.env), 'path', os.pathsep.join(ctx.paths))
     return 0
 
