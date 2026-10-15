@@ -84,12 +84,23 @@ COMMANDS = {
 
 SETUP_PYTHON = 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
 PYTHON_SETUP = {'python-version-file': python_env.PYTHON_VERSION_FILE}
-# Only these three exact steps may touch installers, environments or the helper; any step that merely names an
-# installer, environment manager or the helper is rejected at token level, whatever its flag order. Shell indirection
-# and third-party actions stay outside this source-level rule; the terminal re-check covers what lands in the venv.
+# Only these three exact steps may touch installers, environments or the helper; any step whose command or shell
+# merely names an installer, environment manager or the helper is rejected at token level, whatever its flag order.
+# Shell indirection and third-party actions stay outside this source-level rule. The terminal re-check then verifies
+# the interpreter, environment, import paths and every site-packages file against the admitted RECORDs; it cannot
+# detect a step that rewrites a RECORD together with its files, which remains a matter for review.
 ADMITTED_PYTHON_RUNS = frozenset({python_env.VENV_COMMAND, python_env.INSTALL_COMMAND, python_env.CHECK_COMMAND})
 BYPASS_TOKEN = re.compile(r'(?<![\w.-])(?:pip3?|venv|ensurepip|virtualenv|uvx?|pipx|pipenv|poetry|conda|mamba|micromamba|'
                           r'pdm|hatch|rye|pixi|python_env\.py)(?![\w-])')
+# The runner's PATH and environment files, by variable or by `github` context (`github.path`, `github['env']`, or the
+# whole context passed to a function), and the admitted venv itself may be named only by their admitted steps.
+PATH_FILE = re.compile(r'(?i)github_path|\bgithub\s*\.\s*path\b')
+ENV_FILE = re.compile(r'(?i)github_env|\bgithub\s*\.\s*env\b')
+WHOLE_GITHUB = re.compile(r'(?i)\bgithub\s*(?:[\[,)]|\}\})')
+VENV_PATH = re.compile(r'(?i)(?:runner_temp|runner\s*\.\s*temp)\W{0,6}validator\b')
+# Environment names a closure consumer may set; shell start-up (BASH_ENV, ENV), exported functions, loader preloads
+# and interpreter or installer variables all fall outside it.
+CONSUMER_ENV = python_env.ALLOWED_PYTHON_ENV | {'ROUTE_JSON', 'NEEDS_JSON', 'UNIT', 'CHECKS', 'HOST_OS'}
 # These commands import the closure, so the admitted install must precede them in the job.
 CLOSURE_CONSUMERS = tuple(inventory.DESIGN_COMMANDS) + (
     'scripts/ci/check_policy.py', 'unittest discover -s scripts/ci', 'unittest discover -s schemas', 'test_validate.py',
@@ -255,9 +266,16 @@ def cache_errors(data):
     return errors
 
 
-def python_env_keys(mapping):
-    if not isinstance(mapping, dict): return []
-    return [k for k in mapping if (str(k).startswith('PYTHON') and k not in python_env.ALLOWED_PYTHON_ENV) or str(k).startswith('PIP_')]
+def consumer_env_errors(scope):
+    """A closure consumer's `env` must be a literal mapping whose names are all in CONSUMER_ENV."""
+    if 'env' not in scope: return []
+    env = scope['env']
+    if not isinstance(env, dict): return ['environment must be a literal mapping in closure consumer']
+    return [f'environment variable outside the closure consumer allowlist: {key}' for key in env if key not in CONSUMER_ENV]
+
+
+def step_text(step):
+    return json.dumps(step, sort_keys=True)
 
 
 def python_errors(data):
@@ -275,7 +293,9 @@ def python_errors(data):
         installs = [i for i, s in enumerate(steps) if s.get('run') == python_env.INSTALL_COMMAND]
         checks = [i for i, s in enumerate(steps) if s.get('run') == python_env.CHECK_COMMAND]
         for step in steps:
-            run = step.get('run', '')
+            run, shell = step.get('run', ''), step.get('shell', '')
+            if not isinstance(shell, str) or BYPASS_TOKEN.search(shell):
+                fail('ad hoc Python environment or package installation forbidden')
             if run in ADMITTED_PYTHON_RUNS: continue
             if BYPASS_TOKEN.search(run) or 'requirements-design.txt' in run:
                 fail('ad hoc Python environment or package installation forbidden')
@@ -289,27 +309,37 @@ def python_errors(data):
                 fail('validator runs before the hash-locked closure is admitted')
             if any(i > venvs[0] for i in setups):
                 fail('Python setup after the validator venv forbidden')
+            # The receipt step (the aggregate's final verifier, or the end of the Copilot job) follows the re-check
+            # directly, so no interpreter, shell or action runs between the verified state and the receipt.
             proofs = [i for i, s in enumerate(steps) if s.get('id') == 'proof']
-            boundary = proofs[0] if proofs else len(steps) - 1 if jid == 'ci-required' else len(steps)
-            python_steps = [i for i, s in enumerate(steps) if i < boundary and re.search(r'\bpython\b', s.get('run', ''))]
-            if len(checks) != 1 or checks[0] <= installs[0] or not python_steps or python_steps[-1] != checks[0]:
-                fail('terminal re-check must be the last Python step before the receipt')
+            receipt = proofs[0] if proofs else len(steps) - 1 if jid == 'ci-required' else len(steps)
+            if len(checks) != 1 or checks[0] <= installs[0] or checks[0] + 1 != receipt:
+                fail('terminal re-check must immediately precede the receipt')
         for i in venvs + installs + checks:
             step = steps[i]
-            if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != 'bash' or step.get('working-directory') != '.':
-                fail('closure admission steps must be unconditional at root with bash')
+            if (any(k in step for k in ('if', 'continue-on-error', 'env')) or step.get('shell') != python_env.ADMISSION_SHELL
+                    or step.get('working-directory') != '.'):
+                fail('closure admission steps must be unconditional at root with the privileged-mode admission shell')
         for scope in (job, *steps):
-            for key in python_env_keys(scope.get('env', {})):
-                fail(f'interpreter or installer environment forbidden in closure consumer: {key}')
+            for message in consumer_env_errors(scope): fail(message)
+        outside = step_text({key: value for key, value in job.items() if key != 'steps'})
+        if any(pattern.search(outside) for pattern in (PATH_FILE, ENV_FILE, WHOLE_GITHUB, VENV_PATH)):
+            fail('runner files, the whole github context or the validator venv named in job settings of closure consumer')
         for step in steps:
-            run = step.get('run', '')
-            if 'GITHUB_PATH' in run and run != python_env.VENV_COMMAND:
+            run, text = step.get('run', ''), step_text(step)
+            if WHOLE_GITHUB.search(text):
+                fail('whole github context forbidden in closure consumer')
+            if PATH_FILE.search(text) and run != python_env.VENV_COMMAND:
                 fail('PATH changes outside the admitted venv step forbidden in closure consumer')
-            if 'GITHUB_ENV' in run and run not in (GO_FRESH, CARGO_FRESH):
+            if ENV_FILE.search(text) and run not in (GO_FRESH, CARGO_FRESH):
                 fail('environment writes outside the fresh cache helper forbidden in closure consumer')
+            if VENV_PATH.search(text) and run != python_env.VENV_COMMAND:
+                fail('validator venv named outside its admitted step in closure consumer')
     if consuming_workflow:
-        for key in python_env_keys(data.get('env', {})):
-            errors.append(f'workflow: interpreter or installer environment forbidden in closure consumer: {key}')
+        for message in consumer_env_errors(data): errors.append(f'workflow: {message}')
+        settings = step_text({key: value for key, value in data.items() if key != 'jobs'})
+        if any(pattern.search(settings) for pattern in (PATH_FILE, ENV_FILE, WHOLE_GITHUB, VENV_PATH)):
+            errors.append('workflow: runner files, the whole github context or the validator venv named in workflow settings')
     return errors
 
 

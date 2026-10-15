@@ -1,7 +1,12 @@
 """Admit the one hash-locked Python validator closure: version file, lock grammar, venv and installed set."""
 import argparse
+import base64
+import csv
+import hashlib
 from importlib.metadata import PathDistribution
+import importlib.util
 import json
+import marshal
 import os
 from pathlib import Path
 import platform
@@ -23,6 +28,9 @@ MARKER = 'ricevanta-validator.json'
 BOOTSTRAP = ('pip',)
 VENV_COMMAND = 'python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"'
 CHECK_COMMAND = 'python -B scripts/ci/python_env.py --check'
+# Admission steps run in privileged mode: Bash then reads no BASH_ENV or ENV start-up file and imports no exported
+# functions, so nothing defined by an earlier step can replace `python` or end the step before it runs.
+ADMISSION_SHELL = 'bash --noprofile --norc -p -e -o pipefail {0}'
 INSTALL_COMMAND = ('python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes '
                    '--only-binary=:all: -r .github/requirements-design.txt\n'
                    'python -m pip check\n'
@@ -30,6 +38,15 @@ INSTALL_COMMAND = ('python -m pip install --disable-pip-version-check --no-cache
 # Interpreter and installer environment that could redirect imports or downloads; everything else PYTHON*/PIP_* is rejected.
 ALLOWED_PYTHON_ENV = frozenset({'PYTHONDONTWRITEBYTECODE', 'PYTHONUNBUFFERED', 'PYTHONUTF8', 'PYTHONIOENCODING',
                                 'PYTHONHASHSEED', 'PYTHONWARNINGS'})
+# The pinned actions/setup-python exports exactly these (src/find-python.ts:152-161 at 5fda3b9). CPython stores
+# environment names in upper case on Windows, so each is admitted in its exported and its upper-case spelling.
+SETUP_PYTHON_ENV = frozenset({'pythonLocation', 'Python_ROOT_DIR', 'Python2_ROOT_DIR', 'Python3_ROOT_DIR'})
+# Shell start-up files, exported shell functions and loader preloads act before or instead of the interpreter.
+FORBIDDEN_ENV = frozenset({'BASH_ENV', 'ENV', 'LD_PRELOAD', 'LD_AUDIT', 'DYLD_INSERT_LIBRARIES'})
+# Path configuration files that admitted wheels install in site-packages. The closure and bootstrap pip ship none.
+ADMITTED_PTH = frozenset()
+# A Windows venv root is on sys.path (CPython site.getsitepackages appends the prefix), so it may hold only the venv layout.
+WINDOWS_VENV_ROOT = frozenset({'include', 'lib', 'scripts', 'pyvenv.cfg', MARKER})
 
 # Each admitted SPDX identifier names the text that a shipped notice must contain.
 LICENSE_TEXTS = {
@@ -69,6 +86,7 @@ class Installed(NamedTuple):
     metadata: object
     license_files: dict
     direct_url: bool
+    info: Path
 
 
 def normalize(name):
@@ -195,7 +213,7 @@ def read_installed(site_dirs):
                 relative = path.relative_to(info).as_posix()
                 if relative.startswith('licenses/') or path.name.upper().startswith(NOTICE_NAMES):
                     files[relative.removeprefix('licenses/')] = path.read_bytes()
-            result.append(Installed(metadata['Name'], metadata['Version'], metadata, files, (info / 'direct_url.json').exists()))
+            result.append(Installed(metadata['Name'], metadata['Version'], metadata, files, (info / 'direct_url.json').exists(), info))
     return result
 
 
@@ -258,32 +276,48 @@ def check_closure(requirements, inventory, installed, *, python_version, expecte
 
 
 def environment_errors(environ):
-    """No interpreter or installer environment may redirect imports, user sites or package sources."""
+    """No interpreter, installer, shell start-up or loader environment may redirect imports, packages or the interpreter."""
+    setup = SETUP_PYTHON_ENV | {key.upper() for key in SETUP_PYTHON_ENV}
     return [f'python: environment variable {key} must not be set' for key in sorted(environ)
-            if (key.startswith('PYTHON') and key not in ALLOWED_PYTHON_ENV) or key.startswith('PIP_')]
+            if key not in setup and ((key.startswith('PYTHON') and key not in ALLOWED_PYTHON_ENV) or key.startswith('PIP_')
+                                     or key in FORBIDDEN_ENV or key.startswith('BASH_FUNC_'))]
 
 
-def path_errors(entries, script_dir, base_prefix, prefix, site_dirs):
-    """Every import path must be this script's directory, the venv's site-packages or the base interpreter's stdlib."""
+def path_errors(entries, script_dir, base_prefix, prefix, site_dirs, windows=False):
+    """Every import path must be this script's directory, the venv's site-packages, on Windows the venv root that
+    CPython itself adds, or the base interpreter's stdlib."""
     script, base = Path(script_dir).resolve(), Path(base_prefix).resolve()
     sites = {Path(site).resolve() for site in site_dirs}
+    root = Path(prefix).resolve()
     errors = []
     for entry in entries:
         if entry == '':
             errors.append('python: import path outside the admitted venv and stdlib: current directory')
             continue
         resolved = Path(entry).resolve()
-        if resolved == script or resolved in sites: continue
+        if resolved == script or resolved in sites or (windows and resolved == root): continue
         if resolved.is_relative_to(base) and not {'site-packages', 'dist-packages'} & set(resolved.parts): continue
         errors.append(f'python: import path outside the admitted venv and stdlib: {entry}')
     return errors
 
 
-def interpreter_errors(which, executable, prefix, base_prefix, python_version):
+def path_key(path):
+    """Absolute, case-normalised path whose directory is resolved but whose final link is not followed.
+
+    Every POSIX venv's `python` links to the base interpreter, so resolving the file itself would make all venvs
+    built from one base, and the base itself, compare equal."""
+    path = Path(os.path.abspath(path))
+    return os.path.normcase(str(path.parent.resolve() / path.name))
+
+
+def interpreter_errors(which, executable, prefix, base_prefix, python_version, windows=False):
     """`python` on PATH must be this interpreter, inside a venv this helper created from the admitted base."""
     errors = []
-    if which is None or Path(which).resolve() != Path(executable).resolve():
+    if which is None or path_key(which) != path_key(executable):
         errors.append(f'python: PATH resolves python to {which}, not the running {executable}')
+    scripts = Path(prefix) / ('Scripts' if windows else 'bin')
+    if path_key(Path(executable).parent) != path_key(scripts):
+        errors.append(f'python: running {executable} is not the interpreter of venv {prefix}')
     marker_path = Path(prefix) / MARKER
     if not marker_path.is_file():
         return errors + [f'python: {prefix} is not a venv created by python_env.py --venv']
@@ -293,6 +327,121 @@ def interpreter_errors(which, executable, prefix, base_prefix, python_version):
     if marker['python'] != python_version:
         errors.append(f'python: venv {prefix} was created for {marker["python"]}, not the running {python_version}')
     return errors
+
+
+def record_hash(data):
+    return 'sha256=' + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode()
+
+
+def normal(path):
+    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+
+
+def cache_source(path):
+    """For `<dir>/__pycache__/<stem>.<tag>[.opt-N].pyc` of this interpreter, return (`<dir>/<stem>.py`, optimisation)."""
+    path = Path(path)
+    match = re.fullmatch(rf'([^.]+)\.{re.escape(sys.implementation.cache_tag)}(?:\.opt-([12]))?\.pyc', path.name)
+    if path.parent.name != '__pycache__' or not match: return None
+    return path.parent.parent / (match[1] + '.py'), int(match[2] or 0)
+
+
+def bytecode_errors(path, label):
+    """Cached bytecode is admitted only when it holds exactly the code compiled from its verified source."""
+    source, optimize = cache_source(path)
+    try:
+        data = Path(path).read_bytes()
+        if len(data) < 16 or data[:4] != importlib.util.MAGIC_NUMBER: return [f'{label}: not bytecode of this interpreter']
+        code = marshal.loads(data[16:])
+        expected = compile(source.read_bytes(), str(source), 'exec', dont_inherit=True, optimize=optimize)
+    except (OSError, ValueError, EOFError, TypeError, SyntaxError) as error:
+        return [f'{label}: unreadable bytecode ({error})']
+    return [] if code == expected else [f'{label}: bytecode differs from its recorded source']
+
+
+def content_errors(site_dirs, prefix, installed, admitted):
+    """Every site-packages file must be recorded, with matching SHA-256 and size, by exactly one admitted distribution.
+
+    RECORD entries without a hash are admitted only for RECORD itself and for this interpreter's cached bytecode,
+    which must compile identically from its hashed source. Unowned files, symbolic links and every path
+    configuration file outside ADMITTED_PTH are rejected; a path configuration file that runs code is named as such."""
+    errors, owned = [], {}
+    root = normal(prefix)
+    for dist in installed:
+        if normalize(dist.name) not in admitted: continue
+        label, site = f'{dist.name} {dist.version}', dist.info.parent
+        try:
+            with open(dist.info / 'RECORD', newline='', encoding='utf-8') as handle:
+                rows = [row for row in csv.reader(handle) if row]
+        except (OSError, UnicodeDecodeError, csv.Error) as error:
+            errors.append(f'{label}: unreadable RECORD ({error})')
+            continue
+        for row in rows:
+            if len(row) != 3:
+                errors.append(f'{label}: malformed RECORD row {row!r}')
+                continue
+            entry, digest, size = row
+            target = normal(os.path.join(site, entry))
+            if os.path.commonpath([root, target]) != root:
+                errors.append(f'{label}: RECORD entry {entry} lies outside the venv')
+                continue
+            if target in owned:
+                errors.append(f'{label}: {entry} is also recorded by {owned[target][0]}')
+                continue
+            owned[target] = (label, digest)
+            if not digest:
+                if entry != f'{dist.info.name}/RECORD' and cache_source(entry) is None:
+                    errors.append(f'{label}: RECORD entry {entry} has no hash')
+                continue
+            path = Path(target)
+            if path.is_symlink() or not path.is_file():
+                errors.append(f'{label}: recorded file {entry} is missing')
+                continue
+            data = path.read_bytes()
+            if record_hash(data) != digest or str(len(data)) != size:
+                errors.append(f'{label}: {entry} differs from its RECORD hash and size')
+    for site in sorted({normal(site) for site in site_dirs}):
+        if not os.path.isdir(site): continue
+        unowned = {}
+        for directory, dirnames, filenames in os.walk(site):
+            for name in sorted(dirnames + filenames):
+                full = os.path.join(directory, name)
+                relative = Path(os.path.relpath(full, site)).as_posix()
+                if os.path.islink(full):
+                    errors.append(f'site-packages: symbolic link {relative} is not admitted')
+                    continue
+                if name not in filenames: continue
+                key = normal(full)
+                if name.endswith('.pth') and directory == site:
+                    if name not in ADMITTED_PTH:
+                        errors.append(f'site-packages: path configuration file {name} is not installed by an admitted wheel')
+                    try:
+                        lines = Path(full).read_text(encoding='utf-8', errors='replace').splitlines()
+                    except OSError:
+                        lines = []
+                    if any(line.startswith(('import ', 'import\t')) for line in lines):
+                        errors.append(f'site-packages: path configuration file {name} executes code at start-up')
+                    continue
+                if key in owned and owned[key][1]: continue
+                if cache_source(full) is not None:
+                    source = normal(cache_source(full)[0])
+                    if source in owned and owned[source][1]:
+                        errors += bytecode_errors(full, f'site-packages: {relative}')
+                    else:
+                        errors.append(f'site-packages: bytecode {relative} has no recorded source')
+                    continue
+                if key in owned: continue
+                top = relative.split('/')[0]
+                unowned[top] = unowned.get(top, 0) + 1
+        for top, count in sorted(unowned.items()):
+            errors.append(f'site-packages: {top} is not owned by an admitted distribution ({count} files)')
+    return errors
+
+
+def venv_root_errors(prefix, windows):
+    """On Windows the venv root is an import path, so it may hold only the venv layout and this helper's marker."""
+    if not windows: return []
+    return [f'python: {name} in venv root {prefix} is not part of the venv layout'
+            for name in sorted(os.listdir(prefix)) if name.lower() not in WINDOWS_VENV_ROOT]
 
 
 def lock_errors(root):
@@ -340,11 +489,13 @@ def create_venv(target, path_out, expected_python):
 
 
 def runtime_errors():
-    """Re-verify the live interpreter: environment, PATH resolution, venv provenance and import paths."""
+    """Re-verify the live interpreter: environment, PATH resolution, venv provenance, import paths and venv root."""
     sites = sorted({sysconfig.get_path('purelib'), sysconfig.get_path('platlib')})
+    windows = os.name == 'nt'
     errors = environment_errors(os.environ)
-    errors += interpreter_errors(shutil.which('python'), sys.executable, sys.prefix, sys.base_prefix, platform.python_version())
-    errors += path_errors(sys.path, Path(__file__).resolve().parent, sys.base_prefix, sys.prefix, sites)
+    errors += interpreter_errors(shutil.which('python'), sys.executable, sys.prefix, sys.base_prefix, platform.python_version(), windows)
+    errors += path_errors(sys.path, Path(__file__).resolve().parent, sys.base_prefix, sys.prefix, sites, windows)
+    errors += venv_root_errors(sys.prefix, windows)
     return errors, sites
 
 
@@ -368,17 +519,17 @@ def main():
         return
     errors = lock_errors(args.root)
     live, sites = runtime_errors()
-    errors += live
-    if not errors or live:
-        requirements = parse_requirements(read_exact(args.root / REQUIREMENTS)) if not lock_errors(args.root) else {}
-        inventory = parse_inventory(read_exact(args.root / LICENSING)) if requirements else {}
-        if requirements:
-            closure_errors, report = check_closure(requirements, inventory, read_installed(sites),
-                                                   python_version=platform.python_version(), expected_python=expected,
-                                                   in_venv=sys.prefix != sys.base_prefix)
-            errors += closure_errors
-            for line in report: print(line)
-        print(f'interpreter {sys.executable}; site-packages {", ".join(sites)}')
+    if not errors:
+        requirements = parse_requirements(read_exact(args.root / REQUIREMENTS))
+        inventory = parse_inventory(read_exact(args.root / LICENSING))
+        installed = read_installed(sites)
+        closure_errors, report = check_closure(requirements, inventory, installed,
+                                               python_version=platform.python_version(), expected_python=expected,
+                                               in_venv=sys.prefix != sys.base_prefix)
+        errors += closure_errors + content_errors(sites, sys.prefix, installed, set(requirements) | set(BOOTSTRAP))
+        for line in report: print(line)
+    errors = live + errors
+    print(f'interpreter {sys.executable}; site-packages {", ".join(sites)}')
     if errors: raise SystemExit('\n'.join(errors))
     print('Python validator closure admitted')
 
