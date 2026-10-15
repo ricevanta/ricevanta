@@ -14,7 +14,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub use ricevanta_config::{DefaultPaths, Mode, Os};
+pub use ricevanta_config::{DefaultPaths, Mode, Os, is_normal_form, is_plain_name};
 
 /// The footprint metric of the OCSF `process_sample` object, fixed per OS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -497,7 +497,10 @@ pub struct CheckedDir {
 
 impl CheckedDir {
     /// Wraps a directory that `object`'s rule accepted. For [`Platform`]
-    /// implementations only.
+    /// implementations only: the type is evidence of a check only because
+    /// nothing else constructs it, so the workspace policy test
+    /// (`crates/os/tests/policy.rs`, review N-04) refuses any call outside
+    /// `agent/crates/os-*`.
     pub fn new(file: File, object: Object, path: PathBuf) -> CheckedDir {
         CheckedDir { file, object, path }
     }

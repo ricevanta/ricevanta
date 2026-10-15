@@ -731,62 +731,106 @@ fn length_ok(text: &str) -> bool {
 }
 
 /// The schema's `absolutePath`: 2 to 1,024 characters (length is checked
-/// first), no NUL, and either a Unix form starting with `/` or a drive form
-/// `X:\` followed by at least one character.
+/// first, as `OutOfBounds`), then the normal form of either OS
+/// (`InvalidValue`). The loader later requires the running OS's form.
 fn schema_path(value: &Value, pointer: &str) -> Result<String, Error> {
     let text = value.as_str().ok_or_else(|| wrong_type(pointer))?;
     if !length_ok(text) {
         return Err(out_of_bounds(pointer));
     }
-    if !pattern_ok(text) {
+    if !(unix_normal(text) || windows_normal(text)) {
         return Err(invalid(pointer));
     }
     Ok(text.to_owned())
 }
 
-fn pattern_ok(text: &str) -> bool {
-    !text.contains('\0') && (is_unix_absolute(text) || is_drive_absolute(text))
+/// Whether `text` is an absolute path in the spec section 3.1 normal form
+/// for `os`, within the schema's length bounds.
+///
+/// Unix: `/` followed by one or more segments separated by single `/`, no
+/// segment empty, `.` or `..`, no NUL, and no trailing separator. Windows: a
+/// drive letter, `:` and `\`, then one or more segments separated by single
+/// `\`, each a plain Windows name ([`is_plain_name`]); no UNC or `\\?\`
+/// prefix and no `/`. Every configured path (`--config`, the directory
+/// flags and `paths.*`) must pass for the running OS, so the path splits
+/// into a parent and a plain final name and no component can redirect the
+/// lookup before the final `O_NOFOLLOW` or reparse-point check.
+pub fn is_normal_form(os: Os, text: &str) -> bool {
+    length_ok(text)
+        && match os {
+            Os::Linux | Os::MacOs => unix_normal(text),
+            Os::Windows => windows_normal(text),
+        }
 }
 
-fn is_unix_absolute(text: &str) -> bool {
-    text.starts_with('/') && text.len() >= 2
+/// Whether `name` is a plain final name for `os`: one segment of a
+/// normal-form path. On Unix: not empty, `.` or `..`, without `/` or NUL.
+/// On Windows, following Microsoft's naming rules: none of `<`, `>`, `:`,
+/// `"`, `/`, `\`, `|`, `?`, `*` or characters 0 to 31, not ending in a
+/// period or space (which Win32 normalisation would strip, so the name
+/// opened would differ from the name checked), and not a reserved device
+/// name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`,
+/// `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³`), in any case, alone or
+/// followed by an extension.
+pub fn is_plain_name(os: Os, name: &str) -> bool {
+    match os {
+        Os::Linux | Os::MacOs => unix_segment(name),
+        Os::Windows => windows_segment(name),
+    }
 }
 
-fn is_drive_absolute(text: &str) -> bool {
+fn unix_segment(name: &str) -> bool {
+    !matches!(name, "" | "." | "..") && !name.contains(['/', '\0'])
+}
+
+fn unix_normal(text: &str) -> bool {
+    match text.strip_prefix('/') {
+        Some(rest) => rest.split('/').all(unix_segment),
+        None => false,
+    }
+}
+
+fn windows_normal(text: &str) -> bool {
     let bytes = text.as_bytes();
-    bytes.len() >= 4 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\'
+    if bytes.len() < 4 || !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' || bytes[2] != b'\\' {
+        return false;
+    }
+    text[3..].split('\\').all(windows_segment)
 }
 
-/// A directory path for `os`: absolute, and ending in a plain name. A path
-/// ending in a separator, `.` or `..` is refused, because the OS would
-/// resolve its preceding component as a directory and follow a symbolic link
-/// there before `O_NOFOLLOW` or `FILE_FLAG_OPEN_REPARSE_POINT` applies.
-fn absolute_for(os: Os, text: &str) -> bool {
-    let absolute = match os {
-        Os::Linux | Os::MacOs => is_unix_absolute(text),
-        Os::Windows => is_drive_absolute(text),
-    };
-    absolute && ends_in_plain_name(os, Path::new(text))
+fn windows_segment(name: &str) -> bool {
+    const FORBIDDEN: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    if name.is_empty()
+        || name.chars().any(|c| c < ' ' || FORBIDDEN.contains(&c))
+        || name.ends_with(['.', ' '])
+    {
+        return false;
+    }
+    let base = name.split('.').next().unwrap_or_default();
+    !is_reserved_device(base)
 }
 
-/// Whether `path` ends in a plain name for `os`: not empty, not `.` or
-/// `..`, and without a trailing separator. The core applies it to
-/// `--config` so that a path the platform would refuse is a configuration
-/// error (exit 2), as for directory values and flags.
-pub fn ends_in_plain_name(os: Os, path: &Path) -> bool {
-    let text = path.to_string_lossy();
-    let separators: &[char] = match os {
-        Os::Linux | Os::MacOs => &['/'],
-        Os::Windows => &['\\', '/'],
-    };
-    let last = text.rsplit(separators).next().unwrap_or_default();
-    !matches!(last, "" | "." | "..")
+fn is_reserved_device(base: &str) -> bool {
+    let upper = base.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+        return true;
+    }
+    match (upper.get(..3), upper.get(3..)) {
+        (Some("COM" | "LPT"), Some(digit)) => {
+            let mut chars = digit.chars();
+            matches!(
+                (chars.next(), chars.next()),
+                (Some('1'..='9' | '\u{b9}' | '\u{b2}' | '\u{b3}'), None)
+            )
+        }
+        _ => false,
+    }
 }
 
 fn os_path(os: Os, pointer: &str, value: &Option<String>) -> Result<Option<PathBuf>, Error> {
     match value {
         None => Ok(None),
-        Some(text) if absolute_for(os, text) => Ok(Some(PathBuf::from(text))),
+        Some(text) if is_normal_form(os, text) => Ok(Some(PathBuf::from(text))),
         Some(_) => Err(invalid(pointer)),
     }
 }
@@ -799,9 +843,7 @@ fn flag_path(
     match value {
         None => Ok(None),
         Some(path) => match path.to_str() {
-            Some(text) if length_ok(text) && pattern_ok(text) && absolute_for(os, text) => {
-                Ok(Some(path.clone()))
-            }
+            Some(text) if is_normal_form(os, text) => Ok(Some(path.clone())),
             _ => Err(Error::InvalidPathFlag { flag }),
         },
     }

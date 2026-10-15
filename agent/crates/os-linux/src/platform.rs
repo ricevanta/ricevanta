@@ -14,13 +14,12 @@ use ricevanta_os::unix::{
 };
 use ricevanta_os::{
     CheckedDir, DirKind, FileKind, FootprintMetric, Mode, Object, Os, Platform, ProtectionError,
-    Reason,
+    Reason, is_normal_form, is_plain_name,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File, OpenOptions, Permissions};
 use std::io;
 use std::os::fd::AsRawFd;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -108,33 +107,27 @@ fn path_form(object: Object) -> ProtectionError {
     ProtectionError::new(object, Reason::PathForm)
 }
 
-/// Splits `path` into its parent and plain final name. A path that is
-/// empty, ends in `/`, or ends in `.` or `..` has no plain final name: the
-/// kernel would resolve the preceding component as a directory, following a
-/// symbolic link there, before `O_NOFOLLOW` applies. A path without a parent
-/// component has the current directory as parent.
+/// Splits `path` into its parent and plain final name. The path must be
+/// absolute and in the spec section 3.1 normal form (no empty, `.` or `..`
+/// segment anywhere, no trailing separator), so neither the parent's own
+/// final component nor any other can redirect the lookup through a
+/// symbolic link before `O_NOFOLLOW` applies.
 fn split(path: &Path, object: Object) -> Result<(PathBuf, OsString), ProtectionError> {
-    let bytes = path.as_os_str().as_bytes();
-    let (parent, name) = match bytes.iter().rposition(|&b| b == b'/') {
-        Some(0) => (&b"/"[..], &bytes[1..]),
-        Some(at) => (&bytes[..at], &bytes[at + 1..]),
-        None => (&b"."[..], bytes),
-    };
-    check_name(OsStr::from_bytes(name), object)?;
-    Ok((
-        PathBuf::from(OsStr::from_bytes(parent)),
-        OsStr::from_bytes(name).to_os_string(),
-    ))
-}
-
-/// A name inside a checked directory: not empty, `.` or `..`, and without a
-/// separator.
-fn check_name(name: &OsStr, object: Object) -> Result<(), ProtectionError> {
-    let bytes = name.as_bytes();
-    if matches!(bytes, b"" | b"." | b"..") || bytes.contains(&b'/') {
+    let text = path.to_str().ok_or_else(|| path_form(object))?;
+    if !is_normal_form(Os::Linux, text) {
         return Err(path_form(object));
     }
-    Ok(())
+    let at = text.rfind('/').ok_or_else(|| path_form(object))?;
+    let parent = if at == 0 { "/" } else { &text[..at] };
+    Ok((PathBuf::from(parent), OsString::from(&text[at + 1..])))
+}
+
+/// A name inside a checked directory: one plain normal-form segment.
+fn check_name(name: &OsStr, object: Object) -> Result<(), ProtectionError> {
+    match name.to_str() {
+        Some(text) if is_plain_name(Os::Linux, text) => Ok(()),
+        _ => Err(path_form(object)),
+    }
 }
 
 /// `/proc/self/fd/<fd>/<name>`: `name` looked up inside the open directory.

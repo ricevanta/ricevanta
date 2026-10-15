@@ -2,7 +2,7 @@
 
 use ricevanta_config::{
     AgentConfig, Error, LoadOptions, LogLevel, LogSink, Mode, Os, SCHEMA, default_paths,
-    ends_in_plain_name, load,
+    is_normal_form, is_plain_name, load,
 };
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -470,30 +470,151 @@ fn host_os_matches_target() {
 }
 
 #[test]
-fn config_path_form() {
-    for good in [
+fn normal_form_paths() {
+    let unix_good = [
         "/etc/ricevanta/agent.json",
-        "agent.json",
-        "./agent.json",
-        "/a/.json",
-    ] {
-        assert!(ends_in_plain_name(Os::Linux, Path::new(good)), "{good}");
-    }
-    for bad in [
+        "/a",
+        "/srv/.state",
+        "/srv/log.d",
+        "/a/b c/...x",
+        "/C:/x",
+    ];
+    let unix_bad = [
         "",
         "/",
-        "/etc/ricevanta/",
-        "/etc/ricevanta/agent.json/.",
-        "a/..",
-        ".",
-    ] {
-        assert!(!ends_in_plain_name(Os::Linux, Path::new(bad)), "{bad}");
+        "agent.json",
+        "./a",
+        "//a",
+        "/a//b",
+        "/a/./b",
+        "/a/../b",
+        "/a/.",
+        "/a/..",
+        "/a/",
+        "/a\0b",
+        r"C:\x",
+    ];
+    for good in unix_good {
+        assert!(is_normal_form(Os::Linux, good), "{good:?}");
+        assert!(is_normal_form(Os::MacOs, good), "{good:?}");
+        assert!(!is_normal_form(Os::Windows, good), "{good:?}");
     }
-    assert!(ends_in_plain_name(
-        Os::Windows,
-        Path::new(r"C:\r\agent.json")
-    ));
-    for bad in [r"C:\r\", r"C:\r\.", r"C:\r\..", "C:/r/"] {
-        assert!(!ends_in_plain_name(Os::Windows, Path::new(bad)), "{bad}");
+    for bad in unix_bad {
+        assert!(!is_normal_form(Os::Linux, bad), "{bad:?}");
+    }
+    let windows_good = [
+        r"C:\ProgramData\Ricevanta\state",
+        r"d:\x",
+        r"C:\a b\c.d",
+        r"C:\COM10\CONSOLE\nul0\LPT0\x.CON",
+        r"C:\CON x",
+    ];
+    let windows_bad = [
+        r"C:\",
+        r"C:",
+        r"C:x",
+        r"\\server\share\logs",
+        r"\\?\C:\x",
+        r"\\.\C:\x",
+        r"C:\a\\b",
+        r"C:\a\.\b",
+        r"C:\a\..\b",
+        r"C:\a\",
+        r"C:/a",
+        r"C:\a/b",
+        r"C:\a.\b",
+        r"C:\a \b",
+        r"C:\a\...",
+        r"C:\a:b",
+        r"C:\a<b",
+        r"C:\a>b",
+        "C:\\a\"b",
+        r"C:\a|b",
+        r"C:\a?b",
+        r"C:\a*b",
+        "C:\\a\u{1f}b",
+        "C:\\a\tb",
+        r"C:\x\NUL",
+        r"C:\x\con",
+        r"C:\x\Aux.txt",
+        r"C:\x\prn.tar.gz",
+        r"C:\x\com1.txt",
+        r"C:\x\LPT9",
+        "C:\\x\\COM\u{b9}",
+        "C:\\x\\lpt\u{b3}.log",
+        r"C:\x\NUL.",
+        "/a",
+    ];
+    for good in windows_good {
+        assert!(is_normal_form(Os::Windows, good), "{good:?}");
+        assert!(!is_normal_form(Os::Linux, good), "{good:?}");
+    }
+    for bad in windows_bad {
+        assert!(!is_normal_form(Os::Windows, bad), "{bad:?}");
+    }
+    let long = format!("/{}", "a".repeat(1023));
+    assert!(is_normal_form(Os::Linux, &long));
+    assert!(!is_normal_form(Os::Linux, &format!("{long}a")));
+    for name in ["agent.log", "health.json.tmp", "agent.log.1"] {
+        for os in [Os::Linux, Os::MacOs, Os::Windows] {
+            assert!(is_plain_name(os, name), "{name}");
+        }
+    }
+    for name in ["", ".", "..", "a/b"] {
+        assert!(!is_plain_name(Os::Linux, name), "{name:?}");
+        assert!(!is_plain_name(Os::Windows, name), "{name:?}");
+    }
+    for name in ["logs.", "...", "x ", "a\\b", "CON", "com2.log", "a:b"] {
+        assert!(!is_plain_name(Os::Windows, name), "{name:?}");
+    }
+    assert!(is_plain_name(Os::Linux, "logs."));
+    assert!(is_plain_name(Os::Linux, "CON"));
+}
+
+#[test]
+fn loader_accepts_only_the_running_os_form() {
+    // File values: each schema-valid form is refused by the other OS.
+    let unix = doc(r#","paths":{"state_dir":"/srv/state"}"#);
+    let windows = doc(r#","paths":{"state_dir":"C:\\srv\\state"}"#);
+    let mut windows_service = LoadOptions::new(Os::Windows, Mode::Service);
+    windows_service.program_data = Some(PathBuf::from(r"C:\ProgramData"));
+    assert!(load_bytes(&unix, &linux_run()).is_ok());
+    assert!(load_bytes(&windows, &windows_service).is_ok());
+    for (bytes, options) in [(&windows, linux_run()), (&unix, windows_service.clone())] {
+        assert!(matches!(
+            load_bytes(bytes, &options),
+            Err(Error::InvalidValue { pointer }) if pointer == "/paths/state_dir"
+        ));
+    }
+    // Flags follow the same rule.
+    for bad in ["/var//lib/x", "/run/./x", "/var/log/../x", "/x/"] {
+        let mut options = linux_run();
+        options.overrides.runtime_dir = Some(PathBuf::from(bad));
+        assert!(
+            matches!(
+                load(None, &options),
+                Err(Error::InvalidPathFlag {
+                    flag: "--runtime-dir"
+                })
+            ),
+            "{bad}"
+        );
+    }
+    for bad in [
+        r"\\server\share\x",
+        r"C:\x\NUL",
+        r"C:\a.\b",
+        r"C:\x\com1.txt",
+        "/x",
+    ] {
+        let mut options = windows_service.clone();
+        options.overrides.log_dir = Some(PathBuf::from(bad));
+        assert!(
+            matches!(
+                load(None, &options),
+                Err(Error::InvalidPathFlag { flag: "--log-dir" })
+            ),
+            "{bad}"
+        );
     }
 }
