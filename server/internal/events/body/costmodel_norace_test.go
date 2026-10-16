@@ -116,10 +116,10 @@ func TestDecodeCostModel(t *testing.T) {
 				t.Fatalf("%s %s: %v\n%s", c.key(), mode, err, output)
 			}
 			if fields["shape"] != c.shape || fields["lines"] != strconv.Itoa(g.lines) {
-				t.Fatalf("%s: wrong measurement shape or line count", c.key())
+				t.Fatalf("%s: wrong measurement shape or line count\n%s", c.key(), output)
 			}
 			if g.input != nil && (fields["blocks"] != strconv.Itoa(g.input.blocks) || fields["codecs"] != strconv.Itoa(g.input.codecs)) {
-				t.Fatalf("%s: wrong preflight or codec stage", c.key())
+				t.Fatalf("%s: wrong preflight or codec stage\n%s", c.key(), output)
 			}
 			weight, _ := admission.Weight(g.window, g.size)
 			paid := max(g.window, g.size, admission.MinCharge)
@@ -127,7 +127,7 @@ func TestDecodeCostModel(t *testing.T) {
 				weight = admission.CompressedWeight
 				paid = admission.MinCharge
 			}
-			if err := validateCostValues(fields, c.n, g.window, g.size, weight, paid); err != nil {
+			if err := validateCostChildValues(output, fields, c.n, g.window, g.size, weight, paid); err != nil {
 				t.Fatalf("%s %s: %v", c.key(), mode, err)
 			}
 			t.Log(fields["line"])
@@ -238,6 +238,15 @@ func parseCostMeasurement(output []byte, tag, key, mode string) (map[string]stri
 		return nil, errorString("measurement for another case")
 	}
 	return found, nil
+}
+
+// validateCostChildValues preserves the child's complete diagnostic output when
+// a successful child process reports a measurement that fails validation.
+func validateCostChildValues(output []byte, f map[string]string, n int, window, size uint64, weight int64, paid uint64) error {
+	if err := validateCostValues(f, n, window, size, weight, paid); err != nil {
+		return fmt.Errorf("%w\n%s", err, output)
+	}
+	return nil
 }
 
 // validateCostValues binds measured numbers to the generated input and checks
@@ -555,5 +564,38 @@ func TestCostCPUBoundary(t *testing.T) {
 	fields["cpu_ns"] = "9765626"
 	if err := validateCostValues(fields, 1, 103, 103, 9197000, 131072); err == nil {
 		t.Fatal("accepted work above CPU-per-charge bound")
+	}
+}
+
+func TestCostChildValidationDiagnostics(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		cpu  int64
+		fail bool
+	}{
+		{"at-bound", 51326304, false},
+		{"above-bound", 51326305, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			output := []byte(fmt.Sprintf("=== RUN   TestDecodeCostModel\nCOST_LIMIT case=badid-10000-single/1 mode=limited baseline=5000000 limit=19877646\nCOST_MEASUREMENT case=badid-10000-single/1 mode=limited shape=badid-10000-single n=1 window=688890 size=688890 weight=14877646 baseline=5000000 limit=19877646 lines=10000 allocs=55000 cpu_ms=%d wall_ms=50 peak=18000000 peak_ratio=0.906 vmhwm=20000000 gc_cycles=6 limiter_cycle=0 preflight_cpu_ns=0 decode_cpu_ns=%d cpu_ns=%d blocks=6 codecs=1 paid=688890 repeats=1\n--- PASS: TestDecodeCostModel\n", c.cpu/int64(time.Millisecond), c.cpu, c.cpu))
+			fields, err := parseCostMeasurement(output, "COST_MEASUREMENT", "badid-10000-single/1", "limited")
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = validateCostChildValues(output, fields, 1, 688890, 688890, 14877646, 688890)
+			if !c.fail {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			cause := errorString("CPU exceeds paid-charge bound")
+			if !errors.Is(err, cause) {
+				t.Fatalf("validation: %v, want %v", err, cause)
+			}
+			if want := string(cause) + "\n" + string(output); err.Error() != want {
+				t.Fatalf("validation discarded child diagnostics: %q, want %q", err, want)
+			}
+		})
 	}
 }

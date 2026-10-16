@@ -105,6 +105,19 @@ class RequiredTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.receipt('server-validate')
         path.write_text(json.dumps(complete));self.receipt('server-validate')
 
+    def test_design_receipt_requires_same_run_openapi_contracts(self):
+        self.assertIn('openapi-contracts', inventory.checks('design'))
+        self.verify()
+        baseline = deepcopy(self.receipts)
+        for mutation in ('missing', 'check', 'runId', 'runAttempt', 'testedSha'):
+            with self.subTest(mutation=mutation):
+                self.receipts = deepcopy(baseline)
+                design = next(row for row in self.receipts if row['unit'] == 'design')
+                if mutation == 'missing': self.receipts.remove(design)
+                elif mutation == 'check': design['checks'].remove('openapi-contracts')
+                else: design[mutation] = {'runId': '124', 'runAttempt': '2', 'testedSha': 'c' * 40}[mutation]
+                with self.assertRaises(ValueError): self.verify()
+
     def test_design_receipt_requires_release_contracts(self):
         self.assertIn('release-contracts', inventory.checks('design'))
         self.verify()

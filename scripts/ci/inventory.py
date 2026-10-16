@@ -11,6 +11,8 @@ HOSTS = {'ubuntu-24.04': 'linux-x64', 'windows-2025': 'windows-x64', 'macos-15':
 CONSUMER_INPUTS = {'design': ('.github/requirements-design.txt', 'docs/specs/ocsf-profile.md',
                              'docs/specs/export-destination-schema.md', 'docs/specs/event-export.md')}
 DESIGN_COMMANDS = (
+    'python -B schemas/openapi/v1/validate.py',
+    "suite = unittest.defaultTestLoader.discover('schemas/openapi/v1', pattern='test_validate.py')",
     'schemas/ocsf/generate.py --check', 'schemas/ocsf/validate.py',
     'schemas/policy/v1alpha1/validate.py', 'schemas/export/v1alpha1/validate.py',
     'schemas/report/v1alpha1/validate.py', 'server/internal/authz/catalogue/schema_test.py',
@@ -26,7 +28,7 @@ CHECKS = {
     'semgrep': ['semgrep-admission', 'semgrep-code', 'semgrep-supply-chain', 'semgrep-gate'],
     'design': ['ocsf-schemas', 'policy-schemas', 'export-schemas', 'report-schemas',
                'permission-schema', 'fixture-contracts', 'ci-schema', 'document-limits',
-               'release-contracts', 'catalogue-compat'],
+               'release-contracts', 'catalogue-compat', 'openapi-contracts'],
     'ci-contracts': ['ci-go-helper', 'ci-unit', 'ci-policy'],
     'server-validate': ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'],
     'server-race': ['server-race'],
