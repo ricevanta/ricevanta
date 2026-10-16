@@ -1,0 +1,393 @@
+{
+  "description": "Positive and negative request/response examples for the completed identity wire contract. Credential-like repeated strings are non-secret shape fixtures.",
+  "cases": [
+    {
+      "id": "token-expiry-default",
+      "schema": "ApiTokenCreate",
+      "value": {
+        "name": "test",
+        "permissions": [
+          {
+            "name": "mdm.devices.read"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "id": "token-invalid-date",
+      "schema": "ApiTokenCreate",
+      "value": {
+        "name": "test",
+        "permissions": [
+          {
+            "name": "mdm.devices.read"
+          }
+        ],
+        "expires_at": "2026-02-30T00:00:00Z"
+      },
+      "valid": false
+    },
+    {
+      "id": "local-reauth-account-required",
+      "schema": "LocalReauthRequest",
+      "value": {
+        "password": "test",
+        "totp_code": "000000",
+        "purpose": "general"
+      },
+      "valid": false
+    },
+    {
+      "id": "local-reauth-account",
+      "schema": "LocalReauthRequest",
+      "value": {
+        "account_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "password": "test",
+        "totp_code": "000000",
+        "purpose": "general"
+      },
+      "valid": true
+    },
+    {
+      "id": "break-glass-target-required",
+      "schema": "BreakGlassAccountCreate",
+      "value": {
+        "username": "operator",
+        "justification": "Repair"
+      },
+      "valid": false
+    },
+    {
+      "id": "break-glass-existing-user",
+      "schema": "BreakGlassAccountCreate",
+      "value": {
+        "user_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "username": "operator",
+        "justification": "Repair"
+      },
+      "valid": true
+    },
+    {
+      "id": "proposal-needs-justification",
+      "schema": "JustificationRequest",
+      "value": {},
+      "valid": false
+    },
+    {
+      "id": "proposal-justification",
+      "schema": "JustificationRequest",
+      "value": {
+        "justification": "Repair"
+      },
+      "valid": true
+    },
+    {
+      "id": "factor-only-no-password",
+      "schema": "BreakGlassEnrollmentChallenge",
+      "value": {
+        "mode": "replace_factor",
+        "enrollment_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "username": "operator",
+        "totp": {
+          "algorithm": "SHA1",
+          "digits": 6,
+          "period": 30,
+          "secret_base32": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "otpauth_uri": "otpauth://totp/test",
+          "qr": {
+            "size": 21,
+            "rows": [
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000"
+            ]
+          }
+        },
+        "expires_at": "2026-01-01T00:00:00Z"
+      },
+      "valid": true
+    },
+    {
+      "id": "factor-only-forbids-password",
+      "schema": "BreakGlassEnrollmentChallenge",
+      "value": {
+        "mode": "replace_factor",
+        "enrollment_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "username": "operator",
+        "totp": {
+          "algorithm": "SHA1",
+          "digits": 6,
+          "period": 30,
+          "secret_base32": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "otpauth_uri": "otpauth://totp/test",
+          "qr": {
+            "size": 21,
+            "rows": [
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000"
+            ]
+          }
+        },
+        "expires_at": "2026-01-01T00:00:00Z",
+        "password": "AAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "valid": false
+    },
+    {
+      "id": "reset-requires-password",
+      "schema": "BreakGlassEnrollmentChallenge",
+      "value": {
+        "mode": "reset",
+        "enrollment_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "username": "operator",
+        "totp": {
+          "algorithm": "SHA1",
+          "digits": 6,
+          "period": 30,
+          "secret_base32": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "otpauth_uri": "otpauth://totp/test",
+          "qr": {
+            "size": 21,
+            "rows": [
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000"
+            ]
+          }
+        },
+        "expires_at": "2026-01-01T00:00:00Z"
+      },
+      "valid": false
+    },
+    {
+      "id": "reset-returns-password",
+      "schema": "BreakGlassEnrollmentChallenge",
+      "value": {
+        "mode": "reset",
+        "enrollment_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "username": "operator",
+        "totp": {
+          "algorithm": "SHA1",
+          "digits": 6,
+          "period": 30,
+          "secret_base32": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "otpauth_uri": "otpauth://totp/test",
+          "qr": {
+            "size": 21,
+            "rows": [
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000",
+              "000000000000000000000"
+            ]
+          }
+        },
+        "expires_at": "2026-01-01T00:00:00Z",
+        "password": "AAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "valid": true
+    },
+    {
+      "id": "problem-no-501-stub",
+      "schema": "Problem",
+      "value": {
+        "type": "https://ricevanta.io/problems/not_implemented",
+        "title": "Not implemented",
+        "status": 501,
+        "request_id": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+      },
+      "valid": false
+    },
+    {
+      "id": "local-method-account-required",
+      "schema": "AuthMethodRef",
+      "value": {
+        "method": "local"
+      },
+      "valid": false
+    },
+    {
+      "id": "local-method-account",
+      "schema": "AuthMethodRef",
+      "value": {
+        "method": "local",
+        "account_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+      },
+      "valid": true
+    },
+    {
+      "id": "oidc-method-provider-required",
+      "schema": "AuthMethodRef",
+      "value": {
+        "method": "oidc"
+      },
+      "valid": false
+    },
+    {
+      "id": "oidc-method-no-local-account",
+      "schema": "AuthMethodRef",
+      "value": {
+        "method": "oidc",
+        "provider_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "account_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+      },
+      "valid": false
+    },
+    {
+      "id": "oidc-principal-subject-required",
+      "schema": "PrincipalKey",
+      "value": {
+        "protocol": "oidc",
+        "issuer": "https://id.example"
+      },
+      "valid": false
+    },
+    {
+      "id": "oidc-principal",
+      "schema": "PrincipalKey",
+      "value": {
+        "protocol": "oidc",
+        "issuer": "https://id.example",
+        "subject": "operator"
+      },
+      "valid": true
+    },
+    {
+      "id": "saml-principal-format-required",
+      "schema": "PrincipalKey",
+      "value": {
+        "protocol": "saml",
+        "issuer": "https://id.example",
+        "name_id": "operator"
+      },
+      "valid": false
+    },
+    {
+      "id": "empty-device-grant",
+      "schema": "PermissionGrant",
+      "value": {
+        "name": "mdm.devices.read",
+        "scope": {
+          "kind": "device_groups",
+          "device_groups": []
+        }
+      },
+      "valid": false
+    },
+    {
+      "id": "all-grant-no-group-list",
+      "schema": "PermissionGrant",
+      "value": {
+        "name": "mdm.devices.read",
+        "scope": {
+          "kind": "all",
+          "device_groups": [
+            "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
+      "id": "change-marker-canonical",
+      "schema": "ChangeToken",
+      "value": "AAAAAAAAAAAAAAAAAAAAAA",
+      "valid": true
+    },
+    {
+      "id": "change-marker-unused-bits",
+      "schema": "ChangeToken",
+      "value": "AAAAAAAAAAAAAAAAAAAAAB",
+      "valid": false
+    },
+    {
+      "id": "approval-recovery-pending",
+      "schema": "ApprovalRequest",
+      "value": {
+        "request_uid": "0193a000-0000-7000-8000-000000000001",
+        "kind": "identity_authority",
+        "status": "recovery_pending",
+        "action": "updateIdentityProvider",
+        "requester_user_uid": "0193a000-0000-7000-8000-000000000001",
+        "binding_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "targets_count": 1,
+        "created_at": "2026-01-01T00:00:00Z",
+        "expires_at": "2026-01-04T00:00:00Z"
+      },
+      "valid": true
+    }
+  ]
+}

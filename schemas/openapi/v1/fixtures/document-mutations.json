@@ -1,0 +1,592 @@
+{
+ "description": "Single mutations of openapi.yaml, each of which the validator must reject with the named rule code (schemas/openapi/v1/test_validate.py).",
+ "cases": [
+  {
+   "id": "remove-authorization",
+   "description": "An operation without its authorization binding",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1sessions/get/x-ricevanta-authorization"
+    }
+   ],
+   "expect": "R05"
+  },
+  {
+   "id": "unknown-permission",
+   "description": "Binding names a permission that is not in the catalogue",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/x-ricevanta-authorization/permissions/0/name",
+     "value": "identity.sessions.list"
+    }
+   ],
+   "expect": "R07"
+  },
+  {
+   "id": "foreign-use",
+   "description": "Binding names a catalogue use of another operation",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/x-ricevanta-authorization/permissions/0/uses",
+     "value": "listUsers"
+    }
+   ],
+   "expect": "R07"
+  },
+  {
+   "id": "protected-without-202",
+   "description": "Identity-authority operation answers without an approval request",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers/post/responses/202"
+    }
+   ],
+   "expect": "R09"
+  },
+  {
+   "id": "token-creation-without-reauth",
+   "description": "createApiToken without recent authentication",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1api-tokens/post/x-ricevanta-authorization/reauth",
+     "value": "none"
+    }
+   ],
+   "expect": "R08"
+  },
+  {
+   "id": "approval-by-token",
+   "description": "An approval decision that accepts API tokens",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1approve/post/x-ricevanta-authorization/credentials",
+     "value": [
+      "session",
+      "token"
+     ]
+    }
+   ],
+   "expect": "R08"
+  },
+  {
+   "id": "bound-reauth-on-ordinary-approval",
+   "description": "Bound re-authentication outside identity authority",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1approve/post/x-ricevanta-authorization/reauth",
+     "value": "bound"
+    }
+   ],
+   "expect": "R08"
+  },
+  {
+   "id": "logout-without-csrf",
+   "description": "Unsafe session operation without the synchronizer token",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session~1logout/post/x-ricevanta-authorization/csrf",
+     "value": "none"
+    }
+   ],
+   "expect": "R10"
+  },
+  {
+   "id": "open-request-object",
+   "description": "Request object accepts unknown members",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/schemas/LocalLoginRequest/additionalProperties"
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "unbounded-request-string",
+   "description": "Request string without maxLength",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/schemas/LocalLoginRequest/properties/password/maxLength"
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "missing-body-limit",
+   "description": "Request body without x-ricevanta-max-body-bytes",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1auth~1local/post/x-ricevanta-max-body-bytes"
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "duplicate-operation-id",
+   "description": "Two operations share an operationId",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/operationId",
+     "value": "getSession"
+    }
+   ],
+   "expect": "R04"
+  },
+  {
+   "id": "operation-id-grammar",
+   "description": "operationId outside the lowerCamelCase grammar",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/operationId",
+     "value": "List_Sessions"
+    }
+   ],
+   "expect": "R04"
+  },
+  {
+   "id": "path-grammar",
+   "description": "Path segment outside the lowercase kebab-case grammar",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1Sessions",
+     "value": {}
+    }
+   ],
+   "expect": "R03"
+  },
+  {
+   "id": "openapi-patch-version",
+   "description": "Document declares another 3.1 patch release",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/openapi",
+     "value": "3.1.0"
+    }
+   ],
+   "expect": "R01"
+  },
+  {
+   "id": "info-version",
+   "description": "info.version outside 1.<revision>",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/info/version",
+     "value": "2.0"
+    }
+   ],
+   "expect": "R02"
+  },
+  {
+   "id": "external-reference",
+   "description": "A schema reference outside the document",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session/get/responses/200/content/application~1json/schema",
+     "value": {
+      "$ref": "https://example.com/session.json"
+     }
+    }
+   ],
+   "expect": "R18"
+  },
+  {
+   "id": "security-mismatch",
+   "description": "Security requirement omits the CSRF scheme for an unsafe session operation",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session~1logout/post/security",
+     "value": [
+      {
+       "session": []
+      }
+     ]
+    }
+   ],
+   "expect": "R06"
+  },
+  {
+   "id": "public-with-credentials",
+   "description": "Public operation that declares credentials",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1auth~1options/get/x-ricevanta-authorization/credentials",
+     "value": [
+      "session"
+     ]
+    }
+   ],
+   "expect": "R05"
+  },
+  {
+   "id": "unknown-gate",
+   "description": "Operation gated on an unknown decision",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1setup/post/x-ricevanta-gates",
+     "value": [
+      "BE-99"
+     ]
+    }
+   ],
+   "expect": "R14"
+  },
+  {
+   "id": "path-parameter-not-uid",
+   "description": "Path parameter that is not a Uid",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/ProviderUid/schema",
+     "value": {
+      "type": "string",
+      "maxLength": 64
+     }
+    }
+   ],
+   "expect": "R15"
+  },
+  {
+   "id": "undeclared-request-header",
+   "description": "Operation reads a header outside the declared set",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/get/parameters/3",
+     "value": {
+      "name": "X-Debug",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "maxLength": 8
+      }
+     }
+    }
+   ],
+   "expect": "R21"
+  },
+  {
+   "id": "approval-without-idempotency",
+   "description": "A 202 operation without Idempotency-Key",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1break-glass-accounts/post/x-ricevanta-idempotency"
+    }
+   ],
+   "expect": "R09"
+  },
+  {
+   "id": "problem-table-drift",
+   "description": "Problem.type enum differs from the problem table",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/schemas/Problem/properties/type/enum/20"
+    }
+   ],
+   "expect": "R16"
+  },
+  {
+   "id": "navigation-with-problem",
+   "description": "Navigation operation that answers JSON problems",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1auth~1oidc~1{provider_uid}~1start/get/responses/default",
+     "value": {
+      "$ref": "#/components/responses/Problem"
+     }
+    }
+   ],
+   "expect": "R11"
+  },
+  {
+   "id": "stream-without-events",
+   "description": "Event stream without its declared events",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1changes/get/responses/200/content/text~1event-stream/x-ricevanta-events"
+    }
+   ],
+   "expect": "R17"
+  },
+  {
+   "id": "subject-unselected-permission",
+   "description": "Subject operation adds a permission without a selector",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests/get/x-ricevanta-authorization/permissions/0",
+     "value": {
+      "name": "authz.approvals.read",
+      "uses": "listApprovalRequests#all"
+     }
+    }
+   ],
+   "expect": "R19"
+  },
+  {
+   "id": "schema-violation",
+   "description": "Document violates the OpenAPI 3.1 schema",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session/get/responses",
+     "value": "none"
+    }
+   ],
+   "expect": "S01"
+  },
+  {
+   "id": "missing-production-gate",
+   "description": "missing-production-gate",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session/get/x-ricevanta-gates",
+     "value": []
+    }
+   ],
+   "expect": "R14"
+  },
+  {
+   "id": "authority-approval-not-bound",
+   "description": "authority-approval-not-bound",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1authority-approve/post/x-ricevanta-authorization/reauth",
+     "value": "recent"
+    }
+   ],
+   "expect": "R22"
+  },
+  {
+   "id": "selector-substring-refused",
+   "description": "selector-substring-refused",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1api-tokens/get/x-ricevanta-authorization/permissions/0/selector",
+     "value": "ow"
+    }
+   ],
+   "expect": "R07"
+  },
+  {
+   "id": "unbounded-query-parameter",
+   "description": "unbounded-query-parameter",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1auth~1oidc~1{provider_uid}~1callback/get/parameters/1/schema",
+     "value": {
+      "type": "string"
+     }
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "versioned-write-missing-if-match",
+   "description": "versioned write missing if match",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/parameters/1"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-optional-if-match",
+   "description": "versioned write optional if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/required",
+     "value": false
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-weakened-if-match",
+   "description": "versioned write weakened if match",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/parameters/IfMatch/schema/pattern"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-wildcard-if-match",
+   "description": "versioned write wildcard if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/schema/pattern",
+     "value": ".*"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-unbounded-if-match",
+   "description": "versioned write unbounded if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/schema/maxLength",
+     "value": 100
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-query-if-match",
+   "description": "versioned write query if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/in",
+     "value": "query"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-missing-classification",
+   "description": "versioned write missing classification",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/x-ricevanta-concurrency"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-downgraded",
+   "description": "versioned write downgraded",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/x-ricevanta-concurrency",
+     "value": "not_versioned"
+    },
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/parameters/1"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-action-downgraded",
+   "description": "versioned action downgraded",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1break-glass-accounts~1{account_uid}~1reset/post/x-ricevanta-concurrency",
+     "value": "not_versioned"
+    },
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1break-glass-accounts~1{account_uid}~1reset/post/parameters/1"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "unsafe-missing-concurrency",
+   "description": "unsafe missing concurrency",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1session~1logout/post/x-ricevanta-concurrency"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "path-level-parameters-refused",
+   "description": "path level parameters refused",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/parameters",
+     "value": []
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-inline-optional-if-match",
+   "description": "versioned inline optional if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/parameters/1",
+     "value": {
+      "name": "If-Match",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "pattern": "^\"r[1-9][0-9]{0,18}\"$",
+       "maxLength": 22
+      }
+     }
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "decision-replay-marker-missing",
+   "description": "decision replay marker missing",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1authority-approve/post/x-ricevanta-decision-replay"
+    }
+   ],
+   "expect": "R22"
+  },
+  {
+   "id": "decision-replay-on-secret-claim",
+   "description": "decision replay on secret claim",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1break-glass-enrollment-code/post/x-ricevanta-decision-replay",
+     "value": "exact_result"
+    }
+   ],
+   "expect": "R22"
+  }
+ ]
+}

@@ -1,0 +1,758 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/openapi/v1/fixtures.schema.json",
+  "title": "Shared /api/v1 fixture files",
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"},
+    "wrapper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "cases"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1, "maxLength": 512},
+        "cases": {"type": "array", "minItems": 1, "maxItems": 256}
+      }
+    },
+    "problems": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "valid", "problem"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "valid": {"type": "boolean"}, "problem": {}}
+      }}}
+    },
+    "http_guards": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "request", "expect"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "request": {
+            "type": "object", "additionalProperties": false,
+            "required": ["csrf", "credentials", "method", "body", "session_cookie", "bearer", "origin", "sec_fetch_site", "content_type", "csrf_header"],
+            "properties": {
+              "csrf": {"enum": ["none", "synchronizer", "origin", "navigation", "navigation_callback", "cross_site_post"]},
+              "credentials": {"type": "array", "maxItems": 2, "uniqueItems": true, "items": {"enum": ["session", "token"]}},
+              "method": {"enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]},
+              "body": {"type": "boolean"},
+              "session_cookie": {"enum": ["absent", "valid", "invalid"]},
+              "bearer": {"enum": ["absent", "valid", "invalid"]},
+              "origin": {"type": ["string", "null"], "maxLength": 256},
+              "sec_fetch_site": {"enum": [null, "same-origin", "same-site", "cross-site", "none"]},
+              "content_type": {"type": ["string", "null"], "maxLength": 128},
+              "csrf_header": {"enum": ["absent", "match", "mismatch"]}
+            }
+          },
+          "expect": {"type": "string", "pattern": "^(allow|[a-z_]+|redirect:[a-z_]+)$"}
+        }
+      }}}
+    },
+    "return_paths": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "input", "expect"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "input": {"type": ["string", "null"], "maxLength": 1024}, "expect": {"type": "string", "maxLength": 512}}
+      }}}
+    },
+    "totp": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "required": ["id", "kind", "rfc_seed_ascii"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "kind": {"enum": ["rfc", "verify"]},
+          "rfc_seed_ascii": {"type": "string", "const": "12345678901234567890"}
+        },
+        "oneOf": [
+          {"additionalProperties": false, "required": ["time", "rfc_code_8", "code_6"],
+           "properties": {"id": true, "kind": {"const": "rfc"}, "rfc_seed_ascii": true, "time": {"type": "integer", "minimum": 0},
+                          "rfc_code_8": {"type": "string", "pattern": "^[0-9]{8}$"}, "code_6": {"type": "string", "pattern": "^[0-9]{6}$"}}},
+          {"additionalProperties": false, "required": ["now", "code", "last_step", "expect"],
+           "properties": {"id": true, "kind": {"const": "verify"}, "rfc_seed_ascii": true, "now": {"type": "integer", "minimum": 0},
+                          "code": {"type": "string", "pattern": "^[0-9]{6}$"}, "last_step": {"type": ["integer", "null"]},
+                          "expect": {"type": "object"}}}
+        ]
+      }}}
+    },
+    "sse": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "required": ["id", "kind", "expect"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["encode", "parse", "subscribe"]}},
+        "oneOf": [
+          {"additionalProperties": false, "required": ["items"],
+           "properties": {"id": true, "kind": {"const": "encode"}, "expect": {"type": "string"},
+                          "items": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "object", "required": ["kind"],
+                            "properties": {"kind": {"enum": ["retry", "comment", "event"]}}}}}},
+          {"additionalProperties": false, "required": ["chunks"],
+           "properties": {"id": true, "kind": {"const": "parse"}, "chunks": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "string"}},
+                          "expect": {"type": "object", "required": ["events", "retry"]}}},
+          {"additionalProperties": false, "required": ["request"],
+           "properties": {"id": true, "kind": {"const": "subscribe"}, "expect": {"type": "object"},
+                          "request": {"type": "object", "additionalProperties": false, "required": ["topics", "permissions", "visible"],
+                            "properties": {"topics": {"type": "array", "maxItems": 32, "items": {"type": "string"}},
+                                           "permissions": {"type": "array", "items": {"type": "string"}},
+                                           "visible": {"type": "object", "additionalProperties": {"type": "boolean"}}}}}}
+        ]
+      }}}
+    },
+    "sessions": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "kind", "input", "expect"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["timeout", "activity", "config", "cookie"]},
+                       "input": {"type": "object"}, "expect": {"type": ["string", "integer", "boolean"]}}
+      }}}
+    },
+    "login": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "facts", "expect"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "facts": {"$ref": "#/$defs/login_facts"}, "expect": {"type": "string"}}
+      }}}
+    },
+    "login_facts": {
+      "type": "object",
+      "required": ["protocol", "purpose", "provider_enabled", "record", "record_provider_match", "session_valid", "link", "user_enabled", "same_user"],
+      "properties": {
+        "protocol": {"enum": ["oidc", "saml"]},
+        "purpose": {"enum": ["login", "reauth"]},
+        "provider_enabled": {"type": "boolean"},
+        "record": {"enum": ["found", "missing", "expired", "consumed"]},
+        "record_provider_match": {"type": "boolean"},
+        "session_valid": {"type": "boolean"},
+        "link": {"enum": ["linked", "unlinked", "request_cap"]},
+        "user_enabled": {"type": "boolean"},
+        "same_user": {"type": "boolean"}
+      },
+      "oneOf": [
+        {"required": ["login_cookie", "state_match", "error_param", "iss_supported", "iss_param", "code_present", "token_exchange", "id_token", "auth_time"],
+         "properties": {
+           "protocol": {"const": "oidc"},
+           "login_cookie": {"type": "boolean"}, "state_match": {"type": "boolean"}, "error_param": {"type": "boolean"},
+           "iss_supported": {"type": "boolean"}, "iss_param": {"enum": ["absent", "match", "mismatch"]},
+           "code_present": {"type": "boolean"}, "token_exchange": {"enum": ["ok", "rejected", "unreachable"]},
+           "auth_time": {"enum": ["absent", "fresh", "stale"]},
+           "id_token": {"type": "object", "additionalProperties": false,
+             "required": ["alg_allowed", "signature_valid", "iss_match", "aud_match", "azp_ok", "exp_valid", "iat_ok", "nonce_match"],
+             "properties": {"alg_allowed": {"type": "boolean"}, "signature_valid": {"type": "boolean"}, "iss_match": {"type": "boolean"},
+                            "aud_match": {"type": "boolean"}, "azp_ok": {"type": "boolean"}, "exp_valid": {"type": "boolean"},
+                            "iat_ok": {"type": "boolean"}, "nonce_match": {"type": "boolean"}}}
+         }},
+        {"required": ["saml_cookie", "in_response_to", "destination", "status_success", "issuer_match", "assertion_count",
+                      "assertion_signature_valid", "bearer_confirmation", "recipient_match", "confirmation_unexpired",
+                      "confirmation_window_ok", "conditions_time_ok", "audience_match", "authn_statement", "name_id_persistent",
+                      "replayed", "authn_instant"],
+         "properties": {
+           "protocol": {"const": "saml"},
+           "saml_cookie": {"type": "boolean"}, "in_response_to": {"enum": ["match", "absent", "mismatch"]},
+           "destination": {"enum": ["match", "absent", "mismatch"]}, "status_success": {"type": "boolean"},
+           "issuer_match": {"type": "boolean"}, "assertion_count": {"type": "integer", "minimum": 0, "maximum": 3},
+           "assertion_signature_valid": {"type": "boolean"}, "bearer_confirmation": {"type": "boolean"},
+           "recipient_match": {"type": "boolean"}, "confirmation_unexpired": {"type": "boolean"},
+           "confirmation_window_ok": {"type": "boolean"}, "conditions_time_ok": {"type": "boolean"},
+           "audience_match": {"type": "boolean"}, "authn_statement": {"type": "boolean"},
+           "name_id_persistent": {"type": "boolean"}, "replayed": {"type": "boolean"},
+           "authn_instant": {"enum": ["fresh", "stale"]}
+         }}
+      ]
+    },
+    "document_mutations": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {"cases": {"items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "description", "ops", "expect"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "description": {"type": "string", "minLength": 1, "maxLength": 256},
+          "ops": {"type": "array", "minItems": 1, "maxItems": 8, "items": {
+            "type": "object", "additionalProperties": false, "required": ["op", "path"],
+            "properties": {"op": {"enum": ["set", "delete"]}, "path": {"type": "string", "pattern": "^(/[^/]*)+$"}, "value": {}}
+          }},
+          "expect": {"type": "string", "pattern": "^[RYSCU][0-9]{2}$"}
+        }
+      }}}
+    },
+    "security": {
+      "$ref": "#/$defs/wrapper",
+      "properties": {
+        "cases": {
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "input",
+              "expect"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "kind": {
+                "enum": [
+                  "fresh",
+                  "authority",
+                  "decision",
+                  "enrollment",
+                  "decision_replay",
+                  "application",
+                  "enrollment_claim",
+                  "stream_abort"
+                ]
+              },
+              "input": {
+                "type": "object"
+              },
+              "expect": {
+                "type": "boolean"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "fresh"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "now",
+                        "authenticated_at",
+                        "verified",
+                        "binding",
+                        "evidence_purpose",
+                        "hash_match",
+                        "epoch_match",
+                        "consumed",
+                        "unaffected"
+                      ],
+                      "properties": {
+                        "now": {
+                          "type": "integer"
+                        },
+                        "authenticated_at": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "verified": {
+                          "type": "boolean"
+                        },
+                        "binding": {
+                          "type": "string"
+                        },
+                        "evidence_purpose": {
+                          "type": "string"
+                        },
+                        "hash_match": {
+                          "type": "boolean"
+                        },
+                        "epoch_match": {
+                          "type": "boolean"
+                        },
+                        "consumed": {
+                          "type": "boolean"
+                        },
+                        "unaffected": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "authority"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "mac_valid",
+                        "epoch_current",
+                        "generation_current",
+                        "dependencies_current",
+                        "lease_live",
+                        "published",
+                        "denied"
+                      ],
+                      "properties": {
+                        "mac_valid": {
+                          "type": "boolean"
+                        },
+                        "epoch_current": {
+                          "type": "boolean"
+                        },
+                        "generation_current": {
+                          "type": "boolean"
+                        },
+                        "dependencies_current": {
+                          "type": "boolean"
+                        },
+                        "lease_live": {
+                          "type": "boolean"
+                        },
+                        "published": {
+                          "type": "boolean"
+                        },
+                        "denied": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "decision"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "route_kind",
+                        "request_kind",
+                        "decision",
+                        "pending",
+                        "hash_match",
+                        "eligible",
+                        "different_user",
+                        "target_user",
+                        "fresh",
+                        "bound",
+                        "unaffected",
+                        "session_valid",
+                        "csrf_valid",
+                        "visible",
+                        "unexpired",
+                        "epoch_current",
+                        "dependencies_current",
+                        "inspection_permitted",
+                        "evidence_consumed"
+                      ],
+                      "properties": {
+                        "route_kind": {
+                          "enum": [
+                            "access_policy",
+                            "identity_authority"
+                          ]
+                        },
+                        "request_kind": {
+                          "enum": [
+                            "access_policy",
+                            "identity_authority"
+                          ]
+                        },
+                        "decision": {
+                          "enum": [
+                            "approve",
+                            "reject"
+                          ]
+                        },
+                        "pending": {
+                          "type": "boolean"
+                        },
+                        "hash_match": {
+                          "type": "boolean"
+                        },
+                        "eligible": {
+                          "type": "boolean"
+                        },
+                        "different_user": {
+                          "type": "boolean"
+                        },
+                        "target_user": {
+                          "type": "boolean"
+                        },
+                        "fresh": {
+                          "type": "boolean"
+                        },
+                        "bound": {
+                          "type": "boolean"
+                        },
+                        "unaffected": {
+                          "type": "boolean"
+                        },
+                        "session_valid": {
+                          "type": "boolean"
+                        },
+                        "csrf_valid": {
+                          "type": "boolean"
+                        },
+                        "visible": {
+                          "type": "boolean"
+                        },
+                        "unexpired": {
+                          "type": "boolean"
+                        },
+                        "epoch_current": {
+                          "type": "boolean"
+                        },
+                        "dependencies_current": {
+                          "type": "boolean"
+                        },
+                        "inspection_permitted": {
+                          "type": "boolean"
+                        },
+                        "evidence_consumed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "enrollment"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "epoch_current",
+                        "generation_current",
+                        "consumed",
+                        "proof_valid",
+                        "now",
+                        "expires_at",
+                        "attempts"
+                      ],
+                      "properties": {
+                        "epoch_current": {
+                          "type": "boolean"
+                        },
+                        "generation_current": {
+                          "type": "boolean"
+                        },
+                        "consumed": {
+                          "type": "boolean"
+                        },
+                        "proof_valid": {
+                          "type": "boolean"
+                        },
+                        "now": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "expires_at": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "decision_replay"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "session_valid",
+                        "csrf_valid",
+                        "visible",
+                        "record_current",
+                        "epoch_current",
+                        "same_decider",
+                        "exact_input"
+                      ],
+                      "properties": {
+                        "session_valid": {
+                          "type": "boolean"
+                        },
+                        "csrf_valid": {
+                          "type": "boolean"
+                        },
+                        "visible": {
+                          "type": "boolean"
+                        },
+                        "record_current": {
+                          "type": "boolean"
+                        },
+                        "epoch_current": {
+                          "type": "boolean"
+                        },
+                        "same_decider": {
+                          "type": "boolean"
+                        },
+                        "exact_input": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "application"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "record_current",
+                        "unexpired",
+                        "epoch_current",
+                        "binding_current",
+                        "dependencies_current",
+                        "requester_authorized",
+                        "eligible",
+                        "different_user",
+                        "target_user",
+                        "inspection_permitted",
+                        "decision_session_valid",
+                        "fresh",
+                        "evidence_consumed_by_decision",
+                        "unaffected",
+                        "application_consumed",
+                        "state",
+                        "request_kind"
+                      ],
+                      "properties": {
+                        "record_current": {
+                          "type": "boolean"
+                        },
+                        "unexpired": {
+                          "type": "boolean"
+                        },
+                        "epoch_current": {
+                          "type": "boolean"
+                        },
+                        "binding_current": {
+                          "type": "boolean"
+                        },
+                        "dependencies_current": {
+                          "type": "boolean"
+                        },
+                        "requester_authorized": {
+                          "type": "boolean"
+                        },
+                        "eligible": {
+                          "type": "boolean"
+                        },
+                        "different_user": {
+                          "type": "boolean"
+                        },
+                        "target_user": {
+                          "type": "boolean"
+                        },
+                        "inspection_permitted": {
+                          "type": "boolean"
+                        },
+                        "decision_session_valid": {
+                          "type": "boolean"
+                        },
+                        "fresh": {
+                          "type": "boolean"
+                        },
+                        "evidence_consumed_by_decision": {
+                          "type": "boolean"
+                        },
+                        "unaffected": {
+                          "type": "boolean"
+                        },
+                        "application_consumed": {
+                          "type": "boolean"
+                        },
+                        "state": {
+                          "enum": [
+                            "pending",
+                            "approved",
+                            "rejected",
+                            "applied",
+                            "recovery_pending"
+                          ]
+                        },
+                        "request_kind": {
+                          "enum": [
+                            "access_policy",
+                            "identity_authority"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "enrollment_claim"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "session_valid",
+                        "csrf_valid",
+                        "requester_enabled",
+                        "same_requester",
+                        "original_permission",
+                        "fresh",
+                        "applied",
+                        "epoch_current",
+                        "generation_current",
+                        "deadline_live",
+                        "consumed"
+                      ],
+                      "properties": {
+                        "session_valid": {
+                          "type": "boolean"
+                        },
+                        "csrf_valid": {
+                          "type": "boolean"
+                        },
+                        "requester_enabled": {
+                          "type": "boolean"
+                        },
+                        "same_requester": {
+                          "type": "boolean"
+                        },
+                        "original_permission": {
+                          "type": "boolean"
+                        },
+                        "fresh": {
+                          "type": "boolean"
+                        },
+                        "applied": {
+                          "type": "boolean"
+                        },
+                        "epoch_current": {
+                          "type": "boolean"
+                        },
+                        "generation_current": {
+                          "type": "boolean"
+                        },
+                        "deadline_live": {
+                          "type": "boolean"
+                        },
+                        "consumed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "stream_abort"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "input": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "now",
+                        "observed_at",
+                        "credential_deadline",
+                        "last_progress_at",
+                        "sibling_deadline",
+                        "already_closed",
+                        "read_blocked",
+                        "write_blocked"
+                      ],
+                      "properties": {
+                        "now": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "observed_at": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "credential_deadline": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "last_progress_at": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "sibling_deadline": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0
+                        },
+                        "already_closed": {
+                          "type": "boolean"
+                        },
+                        "read_blocked": {
+                          "type": "boolean"
+                        },
+                        "write_blocked": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "wire": {"$ref": "#/$defs/wrapper", "properties": {"cases": {"items": {"type": "object", "additionalProperties": false, "required": ["id", "schema", "value", "valid"], "properties": {"id": {"$ref": "#/$defs/id"}, "schema": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]+$"}, "value": {}, "valid": {"type": "boolean"}}}}}}
+  }
+}
