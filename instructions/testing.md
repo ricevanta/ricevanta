@@ -133,7 +133,7 @@ The ordinary suite runs every shared fixture and the deterministic `fuzz_recover
 
 CI runs fixture regeneration, fmt, Clippy, ordinary tests and the extended property test natively on macOS ARM64, Windows x64 and Linux x64 with the exact Rust pin. These checks establish portable codec behavior, not file permissions, power-loss durability, sensors, resource budgets or full platform support. Add native integration checks only with their reviewed slice and [platform qualification](../docs/specs/platform-qualification.md).
 
-No releasable binary exists, so the repository has no binary, installer, container or upgrade test yet.
+The repository has server command/runtime tests, native agent-library checks and a footprint harness that tests a fake agent. These checks do not establish a releasable installation: the agent core executable, server console embedding, release integration, full-agent footprint baselines, installer/upgrade qualification and required native/platform evidence remain gated. Production administration API, identity and change-stream handlers also require their reviewed implementation plans and BE-12. Follow the [contract validation plan](../docs/plans/contract-validation.md) for required OpenAPI checks and native footprint unit evidence, and the [release plan](../docs/plans/release-builds.md) for artifact qualification.
 
 ## Console
 

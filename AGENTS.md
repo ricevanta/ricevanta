@@ -6,7 +6,7 @@ This file applies to every agent (Codex, Claude Code and others) and to people. 
 
 ## State
 
-Implementation proceeds in reviewed slices. Each slice needs an independently reviewed design and implementation plan before code starts. Unresolved native, platform and security gates remain implementation blockers for the code that depends on them. The repository holds Go server libraries under `server/internal/`, Rust agent crates under `agent/crates/` and the static Vue console foundation under `console/`, but no releasable binary, server runtime or sensor. Brand assets and their build script remain in `branding/`.
+Implementation proceeds in reviewed slices. Each slice needs an independently reviewed design and implementation plan before code starts. Unresolved native, platform and security gates remain implementation blockers for the code that depends on them. The repository holds independently reviewed Go server runtime source under `server/cmd/ricevanta-server` and `server/internal/`, Rust agent libraries and native platform support under `agent/crates/`, and the static Vue console foundation under `console/`. The agent core executable is absent. Server console embedding, release integration and required native qualification remain gated; no releasable installation or sensor exists. Reviewed administration API, identity and change-stream contracts and offline validators are present, but production handlers require their own reviewed implementation plans and BE-12. Brand assets and their build script remain in `branding/`.
 
 ## Map
 
