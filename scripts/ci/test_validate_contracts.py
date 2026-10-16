@@ -109,4 +109,19 @@ class AdmissionContractTests(unittest.TestCase):
         self.assertEqual(admission, ADMISSION_PAIRS)
         with redirect_stdout(io.StringIO()) as output:
             checker.main()
-        self.assertIn("Contract validation passed", output.getvalue())
+        self.assertIn("24 schemas, 37 pairs, 458 instances", output.getvalue())
+
+    def test_unregistered_file_still_rejected(self):
+        path_class = type(checker.ROOT)
+        original = path_class.rglob
+        extra = checker.ROOT / "schemas/extension/v1alpha1/unregistered.py"
+        def with_extra(path, pattern):
+            yield from original(path, pattern)
+            if path == checker.ROOT / "schemas/extension/v1alpha1" and pattern == "*":
+                yield extra
+        original_is_file = path_class.is_file
+        with patch.object(path_class, "rglob", with_extra), patch.object(
+            path_class, "is_file", lambda path: path == extra or original_is_file(path)
+        ):
+            with self.assertRaisesRegex(ValueError, "Fixture inventory mismatch.*unregistered.py"):
+                checker.main()

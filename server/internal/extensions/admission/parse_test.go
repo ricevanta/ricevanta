@@ -266,7 +266,7 @@ func maximalInstances(t testing.TB) (request, resource, record, snapshot []byte,
 		for _, o := range []string{"macos", "windows", "linux"} {
 			os[o] = map[string]any{"policy_names": regNames, "native_host": false}
 		}
-		registrations = append(registrations, map[string]any{"id": maxID(i, "r"), "browser": maxLabel(i, "a"), "registration_generation": maxU64, "os": os,
+		registrations = append(registrations, map[string]any{"id": maxID(i, "r"), "browser": maxLabel(i, "a"), "registration_generation": maxU64, "recovery_epoch": maxU64, "os": os,
 			"bound": map[string]any{"id": maxID(0, "a"), "component": maxLabel(i, "a"), "state": "recovery_pending"}})
 	}
 	var priors, profiles, groups []any
@@ -288,7 +288,7 @@ func maximalInstances(t testing.TB) (request, resource, record, snapshot []byte,
 		tombstones = append(tombstones, map[string]any{"id": maxID(0, "a"), "version": maxVersion(i), "publisher": testFingerprint(i), "manifest_sha256": strings.Repeat("0", 64), "package_sha256": strings.Repeat("0", 64)})
 	}
 	snapshot = marshal(t, map[string]any{"recovery_epoch": maxU64, "approval_policy_disabled": false, "approval_policy_generation": maxU64,
-		"first_start": false, "release_version": maxVersion(0), "project_key": testFingerprint(4000),
+		"first_start": false, "automatic_release_floor": maxVersion(0), "release_version": maxVersion(0), "project_key": testFingerprint(4000),
 		"served_interfaces": interfaces, "trust_list": trust,
 		"revocations":           []any{map[string]any{"id": maxID(0, "a")}, map[string]any{"id": maxID(0, "a"), "version": maxVersion(0)}},
 		"revocation_generation": maxU64,
@@ -318,7 +318,7 @@ func TestBounds(t *testing.T) {
 		{"request", request, 1264586, 2 << 20, func(b []byte) error { _, e := ParseRequest(b); return e }},
 		{"resource", resource, 1266858, 2 << 20, func(b []byte) error { _, e := ParseResource(b); return e }},
 		{"grant record", record, 19994, 1 << 20, func(b []byte) error { _, e := ParseGrantRecord(b); return e }},
-		{"snapshot", snapshot, 7346073, 16 << 20, func(b []byte) error { _, e := ParseSnapshot(b); return e }},
+		{"snapshot", snapshot, 7348790, 16 << 20, func(b []byte) error { _, e := ParseSnapshot(b); return e }},
 	}
 	for _, c := range checks {
 		t.Run(c.name, func(t *testing.T) {

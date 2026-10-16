@@ -23,8 +23,10 @@ DIRECTORIES = (
     "schemas/server/console-manifest/v1",
     "schemas/extension/v1alpha1",
 )
-# These files describe the event protocol rather than fixture instances.
+# Protocol descriptions and exact generator tooling paths are not fixtures.
 NON_FIXTURES = {
+    "schemas/extension/v1alpha1/generate_admission.py",
+    "schemas/extension/v1alpha1/admission_vector_recipes.py",
     "schemas/events/v1/contract.json",
     "schemas/events/v1/header.abnf",
 }

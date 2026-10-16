@@ -7,7 +7,7 @@ import (
 	"github.com/ricevanta/ricevanta/server/internal/signing/ed25519key"
 )
 
-// input: well-formed evidence, the snapshot's field rules and its eleven
+// input: well-formed evidence, the snapshot's field rules and its thirteen
 // rules, and the request's field rules and its four rules.
 func (d *decider) input() []Reason {
 	var reasons []Reason
@@ -30,7 +30,7 @@ func (d *decider) input() []Reason {
 	return reasons
 }
 
-// snapshotRules checks the twelve snapshot rules. The comparisons with the
+// snapshotRules checks the thirteen snapshot rules. The comparisons with the
 // evidence's id and version (rules 3 to 6) run only on valid evidence, so a
 // malformed evidence id is one defect with one reason, input.evidence.
 func (d *decider) snapshotRules(evidenceOK bool) bool {
@@ -111,8 +111,17 @@ func (d *decider) snapshotRules(evidenceOK bool) bool {
 	if (s.Install != nil || len(s.Tombstones) > 0) && s.Ownership == nil {
 		return false
 	}
-	// Rule 9: one record per registration id.
+	// Rule 13: reserved-id history cannot exceed the installation-wide floor.
+	for _, t := range s.Tombstones {
+		if reservedID(t.ID) && (s.AutomaticReleaseFloor == "" || compareRelease(t.Version, s.AutomaticReleaseFloor) > 0) {
+			return false
+		}
+	}
+	// Rule 9: one record per registration id, no future epoch.
 	for i := range s.Registrations {
+		if s.Registrations[i].RecoveryEpoch > s.RecoveryEpoch {
+			return false
+		}
 		for j := 0; j < i; j++ {
 			if s.Registrations[j].ID == s.Registrations[i].ID {
 				return false
@@ -311,6 +320,9 @@ func (d *decider) component() []Reason {
 		if reg == nil {
 			reasons = append(reasons, Reason{Code: CodeComponentRegistrationUnknown, Subject: c.Name})
 			continue
+		}
+		if reg.RecoveryEpoch != d.s.RecoveryEpoch {
+			reasons = append(reasons, Reason{Code: CodeComponentRegistrationEpoch, Subject: c.Name})
 		}
 		for _, pair := range [][2]*OSPolicy{{b.OS.MacOS, reg.OS.MacOS}, {b.OS.Windows, reg.OS.Windows}, {b.OS.Linux, reg.OS.Linux}} {
 			requested, registered := pair[0], pair[1]
