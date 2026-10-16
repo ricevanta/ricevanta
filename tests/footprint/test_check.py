@@ -120,6 +120,9 @@ class CheckTestCase(unittest.TestCase):
         elif baseline is not MISSING:
             base_path.write_text(json.dumps(baseline), encoding="utf-8")
         out_dir = self.dir / "out"
+        result = out_dir / 'result.json'
+        if result.exists():
+            result.unlink()
         argv = ["--evidence", str(ev_path), "--budgets", str(budgets_path), "--baseline", str(base_path)]
         if out:
             argv += ["--out", str(out_dir / "result.json")]
@@ -599,6 +602,71 @@ class ExitCodeTests(CheckTestCase):
                 self.assertIn(key, line)
         self.assertTrue(any(l.startswith("outcome=") for l in run.stdout.splitlines()))
 
+
+class ProtocolAdmissionTests(CheckTestCase):
+    def malformed_runs(self):
+        for name in ('idle', 'load'):
+            ev = make_evidence()
+            ev['phases'] = [phase(ev, name)]
+            yield name + '-only', ev
+        ev = make_evidence()
+        ev['phases'].append(copy.deepcopy(ev['phases'][0]))
+        yield 'duplicate-phase', ev
+        for key, value in (('sample_interval_ms', 60000), ('warmup_ms', 0),
+                           ('samples', 1), ('samples', 119), ('samples', 121)):
+            ev = make_evidence()
+            phase(ev, 'idle')[key] = value
+            yield f'{key}-{value}', ev
+
+    def test_full_evidence_rejects_incomplete_external_protocol(self):
+        for label, ev in self.malformed_runs():
+            with self.subTest(case=label):
+                self.assertEqual(check.load_evidence_validator().errors(ev), [])
+                run = self.run_check(ev)
+                self.assertEqual(run.code, 2)
+                self.assertFalse((run.out_dir / check.CANDIDATE_NAME).exists())
+
+    def test_baseline_admission_rejects_claimed_pass_with_incomplete_protocol(self):
+        for label, base in self.malformed_runs():
+            with self.subTest(case=label):
+                run = self.run_check(make_evidence(), baseline=base)
+                self.assertEqual(run.code, 1)
+                self.assertEqual(run.outcome('baseline_invalid'), 'fail')
+                self.assertFalse(run.rows('regression_footprint_p95', 'idle'))
+
+    def test_candidate_admission_rechecks_protocol_despite_claimed_pass(self):
+        for label, ev in self.malformed_runs():
+            with self.subTest(case=label):
+                self.assertEqual(ev['outcome'], 'pass')
+                self.assertFalse(check.qualifies_as_candidate(ev))
+        ev = make_evidence()
+        phase(ev, 'load')['duration_ms'] = 1000
+        phase(ev, 'load')['samples'] = 1
+        self.assertFalse(check.qualifies_as_candidate(ev))
+
+    def test_baseline_admission_rejects_relabelled_short_smoke(self):
+        base = make_evidence()
+        phase(base, 'load').update(duration_ms=1000, samples=1)
+        run = self.run_check(make_evidence(), baseline=base)
+        self.assertEqual(run.code, 1)
+        self.assertEqual(run.outcome('baseline_invalid'), 'fail')
+
+    def test_missing_baseline_phase_cannot_record_regressions(self):
+        base = make_evidence()
+        base['phases'] = [phase(base, 'load')]
+        with self.assertRaises(check.InputError):
+            check._regression(make_evidence(), base, BUDGETS)
+
+    def test_partial_smoke_remains_diagnostic_and_cannot_be_promoted(self):
+        ev = make_evidence(smoke=True)
+        ev['phases'] = [phase(ev, 'load')]
+        phase(ev, 'load')['warmup_ms'] = 500
+        run = self.run_check(ev)
+        self.assertEqual(run.code, 0)
+        self.assertFalse(check.qualifies_as_candidate(run.doc))
+        self.assertFalse((run.out_dir / check.CANDIDATE_NAME).exists())
+
+
 class WorkloadTests(CheckTestCase):
     def test_all_expected_checks(self):
         cases = [c for c in CASES['cases'] if 'expected_checks' in c]
@@ -638,7 +706,7 @@ class WorkloadTests(CheckTestCase):
                      lambda p: p['health_progress']['end'].update(sampled_uptime_ms=999999),
                      lambda p: p['health_progress'].update(observations=61),
                      lambda p: p['health_progress'].update(max_sample_age_ms=0),
-                     lambda p: p.update(duration_ms=59999),
+                     lambda p: p.update(duration_ms=59999, samples=59),
                      lambda p: p['health_progress']['end'].update(observed_elapsed_ms=58999)]
         for mutate in mutations:
             ev = make_evidence()
