@@ -543,6 +543,8 @@ def shadow_errors(root):
 def customize_errors(paths):
     """No sitecustomize or usercustomize may be importable from the interpreter's or the venv's paths."""
     from importlib.machinery import PathFinder
+    # A new hook may share the cached directory's timestamp on a coarse filesystem.
+    PathFinder.invalidate_caches()
     return [f'python: {name} on the import path at {spec.origin}' for name in ('sitecustomize', 'usercustomize')
             for spec in [PathFinder.find_spec(name, list(paths))] if spec is not None]
 

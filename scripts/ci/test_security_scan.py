@@ -1936,7 +1936,7 @@ class EmptyParserQualificationTests(unittest.TestCase):
 
     def test_isolated_command_uses_unmodified_parser_without_token_network_or_observer(self):
         import tempfile
-        from pathlib import Path
+        from pathlib import Path, PurePosixPath
         from unittest.mock import patch
         import security_scan as scan
         lock=scan.load_lock(inventory.ROOT)
@@ -1951,7 +1951,17 @@ class EmptyParserQualificationTests(unittest.TestCase):
                 self.assertEqual(set(env),{'PATH','HOME'})
                 report=synthetic_empty_qualification(lock,hashes)
                 scan.write_json(output/'empty-parser.json',dict(version=report['version'],inputs=report['inputs']))
-            with patch.object(scan,'execute',side_effect=execute):
+            real_container_command=scan.container_command
+            def linux_container(image,source,out,control,*,scan):
+                self.assertEqual(source,output/'empty-parser-source')
+                self.assertEqual(out,output)
+                self.assertEqual(control,inventory.ROOT/'scripts/ci')
+                self.assertFalse(scan)
+                # The scanner's command contract is Linux-only; filesystem staging
+                # above still uses real files on the machine running this unit test.
+                return real_container_command(image,PurePosixPath('/source'),PurePosixPath('/out'),
+                                              PurePosixPath('/control'),scan=scan,identity=(1001,1001))
+            with patch.object(scan,'execute',side_effect=execute), patch.object(scan,'container_command',side_effect=linux_container):
                 result=scan.empty_parser_controls('admitted-image',inventory.ROOT,output,inventory.ROOT,hashes,lock)
             self.assertEqual(result,synthetic_empty_qualification(lock,hashes))
 

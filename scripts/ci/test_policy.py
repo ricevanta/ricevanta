@@ -77,12 +77,15 @@ class EnvironmentAdmissionTests(unittest.TestCase):
             hook = Path(tmp) / 'hook.sh'
             hook.write_bytes(b'printf "hook-ran\\n"\n')
             import os
-            env = {**os.environ, 'BASH_ENV': str(hook)}
-            unsafe = subprocess.run(['bash', '--noprofile', '--norc', '-c', 'printf consumer'], env=env, capture_output=True, text=True)
-            self.assertEqual(unsafe.returncode, 0, unsafe.stderr)
+            # The workflow uses Git for Windows Bash, not a bare name that can select WSL.
+            bash = str(Path(os.environ['ProgramFiles']) / 'Git/bin/bash.exe') if os.name == 'nt' else shutil.which('bash')
+            self.assertIsNotNone(bash, 'the workflow Bash is required')
+            env = {**os.environ, 'BASH_ENV': hook.as_posix()}
+            unsafe = subprocess.run([bash, '--noprofile', '--norc', '-c', 'printf consumer'], env=env, capture_output=True, text=True)
+            self.assertEqual(unsafe.returncode, 0, f'{bash}: {unsafe.stdout}{unsafe.stderr}')
             self.assertIn('hook-ran', unsafe.stdout)
-            safe = subprocess.run([*python_env.ADMISSION_SHELL.split()[:-1], '-c', 'printf consumer'], env=env, capture_output=True, text=True)
-            self.assertEqual(safe.returncode, 0, safe.stderr)
+            safe = subprocess.run([bash, *python_env.ADMISSION_SHELL.split()[1:-1], '-c', 'printf consumer'], env=env, capture_output=True, text=True)
+            self.assertEqual(safe.returncode, 0, f'{bash}: {safe.stdout}{safe.stderr}')
             self.assertEqual(safe.stdout, 'consumer')
 
     def test_native_powershell_exception_is_exact(self):

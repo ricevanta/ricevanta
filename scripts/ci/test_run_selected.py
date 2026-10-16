@@ -55,7 +55,7 @@ def event(action, package, test=None, output=None):
     return (json.dumps(row) + '\n').encode()
 
 
-def go_package(path, tests=(), xtests=(), directory='/fixtures/none'):
+def go_package(path, tests=(), xtests=(), directory=str(FIXTURES / 'none')):
     """One go list -json record as the pinned runner prints it (empty lists omitted)."""
     row = {'Dir': directory, 'ImportPath': path}
     if tests: row['TestGoFiles'] = list(tests)
@@ -327,7 +327,15 @@ class GoSuiteTests(unittest.TestCase):
                        'skips': {(TINY, 'TestSkipped'): {'reason': 'helper', 'proof': 'tiny-selected'}}}
         self.listing = fixture('go-list.txt')
         self.packages = fixture('go-packages.txt')
-        self.declarations = fixture('go-declarations.txt')
+        # Keep the captured records and names, rebasing only their Linux paths to
+        # this host's real fixture paths, as native go list and gotestdecls do.
+        for relative in ('tiny-go', 'tiny-go/notest', 'tiny-go/sub'):
+            self.packages = self.packages.replace(json.dumps('/fixtures/' + relative), json.dumps(str(FIXTURES / relative)))
+        self.declarations = ''
+        for line in fixture('go-declarations.txt').splitlines():
+            kind, name, path = line.split('\t')
+            self.assertTrue(path.startswith('/fixtures/'))
+            self.declarations += f'{kind}\t{name}\t{FIXTURES / path.removeprefix("/fixtures/")}\n'
         self.events = fixture('go-suite.jsonl', binary=True)
 
     def verify(self, listing=None, events=None, exit_code=0, target=None, packages=None, declarations=None):
@@ -338,7 +346,7 @@ class GoSuiteTests(unittest.TestCase):
 
     def test_declarations_fixture_matches_the_parser(self):
         real = declare([FIXTURES / 'tiny-go/tiny_test.go', FIXTURES / 'tiny-go/sub/sub_test.go'])
-        self.assertEqual(real.replace(str(FIXTURES), '/fixtures'), self.declarations)
+        self.assertEqual(real, self.declarations)
 
     def test_positive_captured_output(self):
         summary = self.verify()
@@ -356,7 +364,7 @@ class GoSuiteTests(unittest.TestCase):
             'renamed selector': dict(listing=self.listing.replace('TestBeta', 'TestGamma2')),
             'extra discovered test never ran': dict(listing=self.listing.replace('TestBeta\n', 'TestBeta\nTestDelta\n')),
             'missing binary': dict(listing=self.listing + 'TestOther\nok  \texample.com/other\t0.001s\n', packages=self.packages + go_package('example.com/other', ['other_test.go']),
-                                   declarations=self.declarations + 'test\tTestOther\t/fixtures/none/other_test.go\n'),
+                                   declarations=self.declarations + f'test\tTestOther\t{FIXTURES / "none/other_test.go"}\n'),
             'undiscovered package ran': dict(listing=self.listing.replace(TINY + '/sub', TINY + '/different')),
             'unexpected skip': dict(target={**self.target, 'skips': {}}),
             'duplicate event': dict(events=duplicate_line(events, '"Action":"pass","Package":"example.com/tiny","Test":"TestBeta"')),
@@ -378,9 +386,9 @@ class GoSuiteTests(unittest.TestCase):
             'example listed but not run': dict(events=drop_lines(events, '"Test":"ExampleHello"', 4)),
             'unexpected discovery line': dict(listing=self.listing.replace('ok  ', 'go: downloading x\nok  ', 1)),
             'hidden package with test files': dict(listing=self.listing + 'ok  \t%s/hidden\t0.001s\n' % TINY, packages=self.packages + go_package(TINY + '/hidden', ['hidden_test.go']), events=events + hidden,
-                                                   declarations=self.declarations + 'test\tTestHidden\t/fixtures/none/hidden_test.go\n'),
-            'declared test missing from discovery': dict(declarations=self.declarations + 'test\tTestDelta\t/fixtures/tiny-go/tiny_test.go\n'),
-            'declared benchmark missing from discovery': dict(declarations=self.declarations + 'benchmark\tBenchmarkOther\t/fixtures/tiny-go/sub/sub_test.go\n'),
+                                                   declarations=self.declarations + f'test\tTestHidden\t{FIXTURES / "none/hidden_test.go"}\n'),
+            'declared test missing from discovery': dict(declarations=self.declarations + f'test\tTestDelta\t{FIXTURES / "tiny-go/tiny_test.go"}\n'),
+            'declared benchmark missing from discovery': dict(declarations=self.declarations + f'benchmark\tBenchmarkOther\t{FIXTURES / "tiny-go/sub/sub_test.go"}\n'),
             'listed name never declared': dict(listing=self.listing.replace('TestGamma\n', 'TestGamma\nTestUndeclared\n'),
                                                events=insert_before(events, '"Action":"run","Package":"example.com/tiny","Test":"TestAlpha"', event('run', TINY + '/sub', 'TestUndeclared') + event('pass', TINY + '/sub', 'TestUndeclared'))),
             'declarations for an unknown file': dict(declarations=self.declarations + 'test\tTestX\t/elsewhere/x_test.go\n'),
@@ -393,7 +401,7 @@ class GoSuiteTests(unittest.TestCase):
             'package inventory names a nested file': dict(packages=self.packages.replace('"sub_test.go"', '"../sub_test.go"')),
             'package inventory twice': dict(packages=self.packages + go_package(TINY + '/sub', ['sub_test.go'])),
             'unlisted fuzz target': dict(listing=self.listing.replace('FuzzThing\n', 'FuzzThing\nFuzzOther\n'),
-                                         declarations=self.declarations + 'fuzz\tFuzzOther\t/fixtures/tiny-go/tiny_test.go\n',
+                                         declarations=self.declarations + f'fuzz\tFuzzOther\t{FIXTURES / "tiny-go/tiny_test.go"}\n',
                                          events=insert_before(events, '"Action":"output","Package":"example.com/tiny","Output":"PASS',
                                                               event('run', TINY, 'FuzzOther') + event('pass', TINY, 'FuzzOther'))),
             'fuzz inventory names a missing target': dict(target={**self.target, 'fuzz_inventory': [['tiny', 'FuzzThing'], ['tiny/sub', 'FuzzMissing']]}),
@@ -448,9 +456,9 @@ class GoSuiteTests(unittest.TestCase):
                 with self.subTest(hidden=name), self.assertRaises(EvidenceError) as caught:
                     self.verify(**extend([name]))
                 self.assertIn('differ from discovery', str(caught.exception))
-            self.assertEqual(declare([paths['leadingcomment'], paths['blockoutput'], paths['hiddentestmaint'], paths['stringonly']]).replace(tmp, ''),
-                             'test\tTestHidden\t/leadingcomment/leadingcomment_test.go\nexample\tExample_hidden\t/blockoutput/blockoutput_test.go\n'
-                             'test\tTestMain\t/hiddentestmaint/hiddentestmaint_test.go\n')
+            self.assertEqual(declare([paths['leadingcomment'], paths['blockoutput'], paths['hiddentestmaint'], paths['stringonly']]),
+                             f'test\tTestHidden\t{paths["leadingcomment"]}\nexample\tExample_hidden\t{paths["blockoutput"]}\n'
+                             f'test\tTestMain\t{paths["hiddentestmaint"]}\n')
         with self.assertRaises(EvidenceError): declare([FIXTURES / 'tiny-go/missing_test.go'])
 
     def test_build_failure_is_named(self):
@@ -781,8 +789,9 @@ class GoCostModelTests(unittest.TestCase):
             with self.subTest(package=pkg,name=name),self.assertRaises(EvidenceError):run_selected.check_skip(target,{},pkg,name)
         with self.assertRaises(EvidenceError):run_selected.check_skip(TARGETS['ingest-cost-model'],{},package,'TestDecodeCostModel')
         suite={**target,'packages':['./internal/events/body'],'fuzz_inventory':[]}
-        packages=json.dumps({'ImportPath':package,'Dir':'/tmp/cost-fixture','TestGoFiles':['cost_test.go']})
-        declarations='test\tTestDecodeCostModel\t/tmp/cost-fixture/cost_test.go\n'
+        directory=FIXTURES/'cost-fixture'
+        packages=json.dumps({'ImportPath':package,'Dir':str(directory),'TestGoFiles':['cost_test.go']})
+        declarations=f'test\tTestDecodeCostModel\t{directory / "cost_test.go"}\n'
         skipped=event('run',package,'TestDecodeCostModel')+event('skip',package,'TestDecodeCostModel')+event('pass',package)
         summary=run_selected.verify_go_suite(suite,self.listing,run_selected.parse_go_events(skipped),0,packages,declarations)
         self.assertEqual(summary['skipped'][0]['proof'],'ingest-cost-model')

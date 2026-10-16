@@ -1050,9 +1050,10 @@ class BootstrapTests(unittest.TestCase):
         self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
         execute = FakeExecute(responses('linux-x64'))
         def ldd(argv, env, cwd):
-            library_path = env.get('LD_LIBRARY_PATH', '').split(':')
-            if argv[-1].endswith('/libclearkey.so'): return '\tlibstdc++.so.7 => not found\n'
-            if argv[-1].endswith('/firefox/firefox') and not any(p.endswith('/firefox-1511/firefox') for p in library_path):
+            library_path = env.get('LD_LIBRARY_PATH', '').replace('\\', '/').split(':')
+            path = Path(argv[-1]).as_posix()
+            if path.endswith('/libclearkey.so'): return '\tlibstdc++.so.7 => not found\n'
+            if path.endswith('/firefox/firefox') and not any(p.endswith('/firefox-1511/firefox') for p in library_path):
                 return '\tlibmozgtk.so => not found\n'
             return '\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n'
         execute.responses['ldd'] = ldd
@@ -1068,11 +1069,11 @@ class BootstrapTests(unittest.TestCase):
 
     def test_rust_components_must_come_from_the_admitted_rustc_build(self):
         self.fixtures.rust()
-        for tool, output in (('rustfmt', 'rustfmt 1.10.0-stable (0123456789 2026-09-28)\n'), ('cargo-clippy', 'clippy 0.1.99 (b940084d7f 2026-09-28)\n'),
-                             ('rustfmt', 'rustfmt 1.10.0-stable (b9 2026-09-28)\n')):
+        for index, (tool, output) in enumerate((('rustfmt', 'rustfmt 1.10.0-stable (0123456789 2026-09-28)\n'), ('cargo-clippy', 'clippy 0.1.99 (b940084d7f 2026-09-28)\n'),
+                                               ('rustfmt', 'rustfmt 1.10.0-stable (b9 2026-09-28)\n'))):
             with self.subTest(tool=tool, output=output):
                 canned = responses(); canned[tool] = output
-                code, error, *_ = self.run_bootstrap('rust', execute=FakeExecute(canned), dest=self.base / ('dest-' + output[-20:-12]))
+                code, error, *_ = self.run_bootstrap('rust', execute=FakeExecute(canned), dest=self.base / f'dest-{index}')
                 self.assertEqual(code, 1); self.assertIn('admitted rustc commit', error)
 
     def test_cargo_subcommands_resolve_to_the_admitted_binaries(self):
@@ -1107,7 +1108,7 @@ class BootstrapTests(unittest.TestCase):
         self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
         canned = responses('linux-x64')
         canned['ldd'] = lambda argv, env, cwd: ('\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6\n'
-                                               if argv[-1].endswith('/chrome-headless-shell') else '\tlibc.so.6 => /lib/libc.so.6\n')
+                                               if Path(argv[-1]).name == 'chrome-headless-shell' else '\tlibc.so.6 => /lib/libc.so.6\n')
         code, error, journal, execute, dest = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned))
         self.assertEqual(code, 1)
         self.assertIn('libnss3.so', error); self.assertIn('libgbm.so.1', error); self.assertIn('chromium-headless-shell', error)
@@ -1246,7 +1247,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(bootstrap.inherited_path(host), runner, 'only the leading wrapper entries go; the runner keeps its own Git entries')
         self.assertEqual(bootstrap.inherited_path(make_host('windows-x64', self.base, environ={**environ, 'MSYSTEM': ''})), wrapper + runner,
                          'outside Git Bash nothing is removed')
-        self.assertEqual(bootstrap.inherited_path(make_host('linux-x64', self.base, environ={'PATH': '/usr/local/bin:/usr/bin', 'MSYSTEM': 'MINGW64'})),
+        self.assertEqual(bootstrap.inherited_path(make_host('linux-x64', self.base, environ={'PATH': os.pathsep.join(['/usr/local/bin', '/usr/bin']), 'MSYSTEM': 'MINGW64'})),
                          ['/usr/local/bin', '/usr/bin'])
         fixtures = Fixtures(self.base / 'win', 'windows-x64'); fixtures.base.mkdir(); self.fixtures = fixtures
         fixtures.go()
@@ -1297,6 +1298,18 @@ class ControlsTests(unittest.TestCase):
         self.addCleanup(sys.path.remove, str(ROOT / 'scripts/ci/bootstrap'))
         import controls
         self.controls = controls
+        real_which = controls.which
+        def fixture_which(name, windows):
+            if os.name != 'nt' or windows: return real_which(name, windows)
+            # Synthetic POSIX payloads are not Windows executables. Resolve their
+            # real fixture files in PATH order without Windows PATHEXT substitution.
+            for directory in controls.step_path(windows):
+                candidate = Path(directory) / name
+                if candidate.is_file() and os.access(candidate, os.X_OK): return str(candidate)
+            return None
+        resolver = mock.patch.object(controls, 'which', fixture_which)
+        resolver.start()
+        self.addCleanup(resolver.stop)
 
     def test_controls_pass_for_the_real_verifier_and_detect_a_lenient_one(self):
         fixtures = Fixtures(self.base)
@@ -1338,6 +1351,16 @@ class ControlsTests(unittest.TestCase):
         with mock.patch.dict(os.environ, admitted), contextlib.redirect_stdout(io.StringIO()):
             report = self.controls.run(argv)
         self.assertEqual(report['failures'], [])
+        warm = self.base / 'warm-bin'; warm.mkdir()
+        warm_go = warm / ('go.exe' if HOST.startswith('windows') else 'go')
+        warm_go.write_bytes(b'synthetic unadmitted executable'); warm_go.chmod(0o755)
+        separator = ';' if HOST.startswith('windows') else os.pathsep
+        with mock.patch.dict(os.environ, {**admitted, 'PATH': separator.join([str(warm), admitted['PATH']])}), contextlib.redirect_stdout(io.StringIO()):
+            report = self.controls.run(argv)
+        self.assertTrue(any('go on PATH resolves to' in f and 'not under the admitted root' in f
+                            for f in report['failures']), report)
+        self.assertEqual([Path(row['resolved']) for row in report['controls']
+                          if row.get('control') == 'path' and row.get('executable') == 'go'], [warm_go])
         with mock.patch.dict(os.environ, {**admitted, 'GOROOT': str(self.base / 'warm-goroot')}), contextlib.redirect_stdout(io.StringIO()):
             report = self.controls.run(argv)
         self.assertTrue(any('GOROOT' in f for f in report['failures']), report)
