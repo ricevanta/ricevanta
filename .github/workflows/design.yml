@@ -74,6 +74,22 @@ jobs:
       run: |
         python schemas/policy/v1alpha1/validate.py
         python schemas/policy/v1alpha1/test_validate.py
+    - name: openapi-contracts
+      id: openapi-contracts
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -B schemas/openapi/v1/validate.py
+        python -B - <<'PY'
+        import unittest
+        suite = unittest.defaultTestLoader.discover('schemas/openapi/v1', pattern='test_validate.py')
+        expected = suite.countTestCases()
+        if expected == 0:
+            raise SystemExit('OpenAPI test discovery is empty')
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        if not result.wasSuccessful() or result.skipped or result.expectedFailures or result.testsRun != expected:
+            raise SystemExit('OpenAPI tests did not all pass')
+        PY
     - name: release-contracts
       id: release-contracts
       shell: bash --noprofile --norc -p -e -o pipefail {0}
@@ -154,7 +170,7 @@ jobs:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: design
         CHECKS: '["ocsf-schemas", "policy-schemas", "export-schemas", "report-schemas", "permission-schema", "fixture-contracts",
-          "ci-schema", "document-limits", "release-contracts", "catalogue-compat"]'
+          "ci-schema", "document-limits", "release-contracts", "catalogue-compat", "openapi-contracts"]'
         HOST_OS: ''
       run: |
         python - <<'PY'

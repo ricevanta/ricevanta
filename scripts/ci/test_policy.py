@@ -815,6 +815,65 @@ class PolicyTests(unittest.TestCase):
                     self.assertTrue(check_policy.check(self.root))
         path.write_text(yaml.safe_dump(baseline, sort_keys=False))
 
+    def test_openapi_step_is_complete_and_blocking(self):
+        data = yaml.load((ROOT / '.github/workflows/design.yml').read_text(), Loader=yaml.BaseLoader)
+        steps = data['jobs']['validate']['steps']
+        matches = [step for step in steps if step.get('id') == 'openapi-contracts']
+        self.assertEqual(len(matches), 1, 'one blocking OpenAPI contract step is required')
+        self.assertEqual(check_policy.openapi_contract_errors(data['jobs']['validate']), [])
+
+    def test_openapi_step_mutations_fail_for_the_contract_omission(self):
+        data = yaml.load((ROOT / '.github/workflows/design.yml').read_text(), Loader=yaml.BaseLoader)
+        baseline = data['jobs']['validate']
+        self.assertTrue(any(s.get('id') == 'openapi-contracts' for s in baseline['steps']))
+        for mutation in ('delete', 'validator', 'discovery', 'count', 'result', 'condition', 'advisory',
+                         'narrow', 'mutation-cli', 'move', 'duplicate', 'cwd', 'expected-failures'):
+            with self.subTest(mutation=mutation):
+                job = deepcopy(baseline)
+                step = next(s for s in job['steps'] if s.get('id') == 'openapi-contracts')
+                if mutation == 'delete': job['steps'].remove(step)
+                elif mutation == 'condition': step['if'] = 'success()'
+                elif mutation == 'advisory': step['continue-on-error'] = 'true'
+                elif mutation == 'duplicate': job['steps'].append(deepcopy(step))
+                elif mutation == 'cwd': step['working-directory'] = 'schemas/openapi/v1'
+                elif mutation == 'move':
+                    job['steps'].append({'name': 'Moved snippets', 'run': step['run']})
+                    step['run'] = 'true'
+                elif mutation == 'narrow': step['run'] = step['run'].replace("pattern='test_validate.py'", "pattern='test_one.py'")
+                elif mutation == 'mutation-cli': step['run'] = 'python -B schemas/openapi/v1/test_validate.py'
+                else:
+                    token = {'validator': 'python -B schemas/openapi/v1/validate.py',
+                             'discovery': "suite = unittest.defaultTestLoader.discover('schemas/openapi/v1', pattern='test_validate.py')",
+                             'count': 'if expected == 0:',
+                             'result': 'if not result.wasSuccessful() or result.skipped or result.expectedFailures or result.testsRun != expected:',
+                             'expected-failures': ' or result.expectedFailures'}[mutation]
+                    self.assertIn(token, step['run'])
+                    step['run'] = step['run'].replace(token, '')
+                self.assertEqual(check_policy.openapi_contract_errors(job),
+                                 ['exact blocking openapi-contracts step required'])
+                changed = deepcopy(data)
+                changed['jobs']['validate'] = job
+                (self.root / '.github/workflows/design.yml').write_text(yaml.safe_dump(changed, sort_keys=False))
+                self.assertIn('.github/workflows/design.yml: exact blocking openapi-contracts step required',
+                              check_policy.check(self.root))
+
+    def test_openapi_receipt_check_is_exact(self):
+        path = self.root / '.github/workflows/design.yml'
+        baseline = path.read_text()
+        for mutation in ('omit', 'rename', 'duplicate'):
+            with self.subTest(mutation=mutation):
+                data = yaml.load(baseline, Loader=yaml.BaseLoader)
+                proof = next(s for s in data['jobs']['validate']['steps'] if s.get('id') == 'proof')
+                checks = json.loads(proof['env']['CHECKS'])
+                self.assertIn('openapi-contracts', checks)
+                if mutation == 'omit': checks.remove('openapi-contracts')
+                elif mutation == 'rename': checks[checks.index('openapi-contracts')] = 'openapi-renamed'
+                else: checks.append('openapi-contracts')
+                proof['env']['CHECKS'] = json.dumps(checks)
+                path.write_text(yaml.safe_dump(data, sort_keys=False))
+                self.assertIn('.github/workflows/design.yml: validate: receipt checks mismatch', check_policy.check(self.root))
+        path.write_text(baseline)
+
     def test_each_design_consumer_is_required(self):
         for command in check_policy.DESIGN_COMMANDS:
             with self.subTest(command=command):
