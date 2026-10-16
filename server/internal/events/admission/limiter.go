@@ -175,10 +175,21 @@ func (e *deviceEntry) idle(now time.Time, elapsed time.Duration) bool {
 type waiter struct {
 	ticket   *Ticket
 	need     int64
-	size     uint64
 	done     chan struct{}
+	cancel   <-chan struct{}
+	deadline time.Time
+	reason   Reason
 	admitted bool
 	released bool
+}
+
+func (w *waiter) expired(now time.Time) bool {
+	select {
+	case <-w.cancel:
+		return true
+	default:
+		return !now.Before(w.deadline)
+	}
 }
 
 // Limiter is the per-process decode admission limiter. It holds no goroutines.
@@ -385,45 +396,55 @@ func (t *Ticket) Decode(ctx context.Context, window, size uint64) (Decision, err
 	need := weight - CompressedWeight
 	q := priorityQueue(t.class)
 	if len(l.queues[q]) == 0 && l.fits(q, need) {
-		l.admit(t, need, size, now)
+		l.admit(t, need)
+		e.add(l.minute(now), counterBytes, size)
 		l.mu.Unlock()
 		return Decision{Finding: finding}, nil
 	}
-	w := &waiter{ticket: t, need: need, size: size, done: make(chan struct{})}
+	w := &waiter{ticket: t, need: need, done: make(chan struct{}), cancel: ctx.Done(), deadline: now.Add(l.config.DecodeWait)}
 	l.queues[q] = append(l.queues[q], w)
 	l.waitingBytes += need
 	t.waiter = w
 	timer := l.clock.NewTimer(l.config.DecodeWait)
 	l.mu.Unlock()
 
-	canceled := false
 	select {
 	case <-w.done:
 	case <-timer.C():
 	case <-ctx.Done():
-		canceled = true
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	timer.Stop()
-	if w.admitted {
-		return Decision{Finding: finding}, nil
-	}
-	if w.released {
+	if t.released || w.released {
 		return Decision{Finding: finding}, ErrState
 	}
 	now = l.clock.Now()
+	err = ctx.Err()
+	if w.admitted && err == nil && now.Before(w.deadline) {
+		e.add(l.minute(now), counterBytes, size)
+		return Decision{Finding: finding}, nil
+	}
 	// Only a head that fits the whole budget was held back by the reserve; a
 	// waiter behind a larger head was held back by that head.
-	head := len(l.queues[q]) > 0 && l.queues[q][0] == w
-	l.unqueue(w)
-	l.dispatch(now)
-	if canceled {
-		return Decision{Finding: finding}, ctx.Err()
+	head := w.admitted || len(l.queues[q]) > 0 && l.queues[q][0] == w
+	if w.admitted {
+		// Dispatch reserves bytes before waking Decode. Expiry while Decode
+		// reacquires the lock must return that reservation, not receive bytes.
+		l.inUse -= need
+		t.charge = 0
 	}
-	reason := ReasonBudget
-	if q == 1 && head && l.config.Budget-l.inUse-need >= 0 {
-		reason = ReasonReserve
+	l.unqueue(w)
+	l.dispatch()
+	if err != nil {
+		return Decision{Finding: finding}, err
+	}
+	reason := w.reason
+	if reason == "" {
+		reason = ReasonBudget
+		if q == 1 && head && l.config.Budget-l.inUse-need >= 0 {
+			reason = ReasonReserve
+		}
 	}
 	l.refused[reason]++
 	retryWeight := need
@@ -473,7 +494,7 @@ func (t *Ticket) Release() {
 	sec := int64(l.elapsed(now) / time.Second)
 	l.drain.add(sec, freed)
 	l.slotReleases.add(sec, 1)
-	l.dispatch(now)
+	l.dispatch()
 }
 
 // Unavailable computes the 503 decision for a handler-level refusal of a
@@ -545,22 +566,35 @@ func (l *Limiter) fits(q int, need int64) bool {
 	return available >= l.reserve
 }
 
-func (l *Limiter) admit(t *Ticket, need int64, size uint64, now time.Time) {
+func (l *Limiter) admit(t *Ticket, need int64) {
 	l.inUse += need
 	t.charge = need
-	t.entry.add(l.minute(now), counterBytes, size)
 }
 
 // dispatch admits queue heads in priority order until neither head fits. A
-// head that does not fit blocks only its own queue.
-func (l *Limiter) dispatch(now time.Time) {
+// live head that does not fit blocks only its own queue. Invalid heads leave
+// without acquiring any decode bytes, even if they do not fit.
+func (l *Limiter) dispatch() {
 	for progressed := true; progressed; {
 		progressed = false
 		for q := range l.queues {
-			for len(l.queues[q]) > 0 && l.fits(q, l.queues[q][0].need) {
+			for len(l.queues[q]) > 0 {
 				w := l.queues[q][0]
+				if w.expired(l.clock.Now()) {
+					w.reason = ReasonBudget
+					if q == 1 && l.config.Budget-l.inUse-w.need >= 0 {
+						w.reason = ReasonReserve
+					}
+					l.unqueue(w)
+					close(w.done)
+					progressed = true
+					continue
+				}
+				if !l.fits(q, w.need) {
+					break
+				}
 				l.unqueue(w)
-				l.admit(w.ticket, w.need, w.size, now)
+				l.admit(w.ticket, w.need)
 				w.admitted = true
 				close(w.done)
 				progressed = true
