@@ -916,8 +916,12 @@ class RealToolTests(unittest.TestCase):
         (admitted / 'bootstrap-evidence.json').write_text(json.dumps(proof))
         env = {**self.env, 'CI_ADMITTED_ROOT': str(admitted), 'PATH': str(tools) + os.pathsep + self.env['PATH']}
         run_selected.admitted_tool_guard(env)
-        for path in (self.env['PATH'], str(admitted / 'shim') + os.pathsep + env['PATH']):
-            with self.subTest(path=path):
+        # The ambient PATH may start with this interpreter's venv, which has its own marker refusal.
+        # An explicit unrelated prefix keeps these controls at the admitted tool PATH boundary.
+        missing_prefix = str(self.root / 'unadmitted-bin') + os.pathsep + self.env['PATH']
+        for case, path in (('missing admitted prefix', missing_prefix),
+                           ('shim before admitted prefix', str(admitted / 'shim') + os.pathsep + env['PATH'])):
+            with self.subTest(case=case):
                 evidence = self.root / 'path-refusal'
                 with self.assertRaisesRegex(EvidenceError, 'PATH does not begin'):
                     run_selected.run('tiny-suite', evidence, root=self.root, env={**env, 'PATH': path})
