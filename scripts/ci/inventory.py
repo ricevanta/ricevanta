@@ -98,6 +98,8 @@ def units(groups):
         elif group == 'console': result += ['console', 'console-webkit:macos-arm64']
         elif group in ('agent', 'loader', 'ocsf', 'bootstrap'):
             result += [f'{group}:{host}' for host in HOSTS.values()]
+            if group == 'agent':
+                result += [f'footprint-unit:{host}' for host in HOSTS.values()]
             if group == 'loader':
                 result += [f'loader-gate-b:{host}' for host in HOSTS.values()]
         else: result.append(group)
@@ -129,6 +131,7 @@ def checks(unit):
         return ['go-fuzz:' + unit.removeprefix('server-fuzz:')]
     group, _, host = unit.partition(':')
     if host not in HOSTS.values(): raise ValueError('unknown leaf: ' + unit)
+    if group == 'footprint-unit': return ['footprint-unit-' + host]
     if group == 'loader-gate-b': return ['loader-gate-b-extended']
     if group == 'loader': return ['loader-extended', 'loader-repeat', 'loader-fuzz']
     if group == 'ocsf': return ['ocsf-native']
@@ -148,7 +151,9 @@ def select_groups(paths):
         if path.startswith(('server/',) + tuple(f'schemas/{s}/' for s in
                 ('dsse', 'events', 'ocsf', 'cel', 'export', 'policy', 'report', 'extension', 'permissions'))):
             selected.update(('server', 'loader', 'ocsf', 'interop')); matched = True
-        if path.startswith(('agent/', 'schemas/agent/')):
+        if path.startswith(('agent/', 'schemas/agent/', 'tests/footprint/', 'docs/specs/ci-', 'docs/plans/ci-')) or path in (
+                'docs/design/agent.md', 'docs/specs/agent-runtime.md', 'docs/plans/agent-runtime.md', 'docs/specs/footprint-harness.md',
+                'docs/plans/footprint-harness.md', 'docs/plans/contract-validation.md', 'docs/specs/ci-hardening.md'):
             selected.update(('agent', 'interop')); matched = True
         if path in ('server/go.mod', 'server/go.sum') or path.startswith('schemas/events/'):
             selected.add('agent'); matched = True

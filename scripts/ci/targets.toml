@@ -1863,3 +1863,84 @@ specs = [
   "trusted-function > policy-free control succeeds",
   "trusted-function > protected operation rejects with the configured directive",
 ]
+
+[[selected]]
+id = "footprint-unit-linux-x64"
+mode = "python-unittest"
+cwd = "tests"
+directory = "footprint"
+pattern = "test_*.py"
+files = ["test_check.py", "test_measure.py", "test_samplers.py"]
+platform = "linux-x64"
+
+[[selected]]
+id = "footprint-unit-windows-x64"
+mode = "python-unittest"
+cwd = "tests"
+directory = "footprint"
+pattern = "test_*.py"
+files = ["test_check.py", "test_measure.py", "test_samplers.py"]
+platform = "windows-x64"
+
+[[selected]]
+id = "footprint-unit-macos-arm64"
+mode = "python-unittest"
+cwd = "tests"
+directory = "footprint"
+pattern = "test_*.py"
+files = ["test_check.py", "test_measure.py", "test_samplers.py"]
+platform = "macos-arm64"
+
+[[python_skips]]
+test = "test_measure.ObserverTests.test_windows_readers_allow_atomic_replacement_and_rotation"
+hosts = ["linux-x64", "macos-arm64"]
+reason = "native Windows delete-sharing and atomic replacement"
+proof = "footprint-unit:windows-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_clk_tck_is_user_hz"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_stat_with_parenthesis_in_comm"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_synthetic_proc_sample"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_pid_reuse_is_detected"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_zombie_is_a_failed_sample"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_missing_pss_is_a_failed_sample"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_preflight_requires_smaps_rollup"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"
+
+[[python_skips]]
+test = "test_samplers.LinuxSamplerTests.test_preflight_requires_user_hz"
+hosts = ["windows-x64", "macos-arm64"]
+reason = "Linux /proc parsing"
+proof = "footprint-unit:linux-x64"

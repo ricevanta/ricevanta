@@ -18,6 +18,7 @@ import warnings
 from unittest.mock import patch
 
 import inventory
+import python_env
 import run_selected
 from run_selected import EvidenceError
 
@@ -1499,3 +1500,130 @@ class VerifiedRecordTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+class PythonUnittestEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.assertIn('python-unittest', run_selected.MODES)
+        self.tmp = tempfile.TemporaryDirectory(prefix='selected-python-')
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / 'footprint').mkdir()
+        self.target = {'id': 'footprint-unit-linux-x64', 'mode': 'python-unittest', 'cwd': 'tests',
+                       'directory': 'footprint', 'pattern': 'test_*.py', 'files': ['test_tiny.py'],
+                       'platform': run_selected.python_host()}
+        self.target['id'] = 'footprint-unit-' + self.target['platform']
+        self.env = {key: value for key, value in os.environ.items() if not python_env.environment_errors({key: value})}
+        self.env.update(GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='1', GITHUB_SHA='b' * 40)
+        self.source = self.root / 'footprint/test_tiny.py'
+        self.source.write_text('import unittest\nclass Base(unittest.TestCase):\n    def test_base(self): pass\nclass Child(Base):\n    def test_child(self): print("PASS")\n')
+
+    def run_tiny(self):
+        evidence = self.root / 'evidence'
+        evidence.mkdir()
+        return run_selected.run_python_unittest(self.target, evidence, self.root, self.env)
+
+    def test_python_unittest_fresh_children_and_local_inheritance(self):
+        self.assertEqual(run_selected.python_declarations(self.root, self.target),
+                         ['test_tiny.Base.test_base', 'test_tiny.Child.test_base', 'test_tiny.Child.test_child'])
+        record = self.run_tiny()
+        self.assertEqual(record['summary']['passed'], 3)
+        self.assertEqual(record['summary']['skipped'], [])
+        self.assertTrue((self.root / 'evidence/verified.json').is_file())
+
+    def test_python_unittest_refuses_filtered_dynamic_and_failed_work(self):
+        outside = self.root / 'outside'
+        outside.mkdir()
+        (outside / 'test_shadow.py').write_text('import unittest\nclass Shadow(unittest.TestCase):\n    def test_shadow(self): pass\n')
+        cases = {
+            'outside import': 'import unittest, sys\nsys.path.insert(0, ' + repr(str(outside)) + ')\nimport test_shadow\nclass T(unittest.TestCase):\n    def test_a(self): pass\n',
+            'renamed method': 'import unittest\nclass T(unittest.TestCase):\n    def test_a(self): pass\nT.test_renamed = T.test_a\ndel T.test_a\n',
+            'empty': 'import unittest\n',
+            'missing method': 'import unittest\nclass T(unittest.TestCase):\n    def test_a(self): pass\ndel T.test_a\n',
+            'load_tests': 'import unittest\ndef load_tests(loader, tests, pattern): return unittest.TestSuite()\n',
+            'assigned hook': 'import unittest\nclass T(unittest.TestCase):\n    def test_a(self): pass\nload_tests = lambda loader, tests, pattern: unittest.TestSuite()\n',
+            'custom suite': 'import unittest\nclass Custom(unittest.TestSuite): pass\nunittest.TestLoader.suiteClass = Custom\nclass T(unittest.TestCase):\n    def test_a(self): pass\n',
+            'override run': 'import unittest\nclass T(unittest.TestCase):\n    def run(self, result): pass\n    def test_a(self): pass\n',
+            'replace method': 'import unittest\nclass T(unittest.TestCase):\n    def test_a(self): pass\nT.test_a = lambda self: None\n',
+            'fixture error': 'import unittest\nclass T(unittest.TestCase):\n    @classmethod\n    def setUpClass(cls): raise RuntimeError("fixture")\n    def test_a(self): pass\n',
+            'subtest': 'import unittest\nclass T(unittest.TestCase):\n    def test_a(self):\n        with self.subTest(x=1): self.fail("subtest")\n',
+            'xfail': 'import unittest\nclass T(unittest.TestCase):\n    @unittest.expectedFailure\n    def test_a(self): self.fail()\n',
+            'unexpected success': 'import unittest\nclass T(unittest.TestCase):\n    @unittest.expectedFailure\n    def test_a(self): pass\n',
+            'skip': 'import unittest\nclass T(unittest.TestCase):\n    @unittest.skip("unauthorized")\n    def test_a(self): pass\n',
+            'fake stdout and early exit': 'import unittest, os\nclass T(unittest.TestCase):\n    def test_a(self):\n        print("PASS", flush=True)\n        os._exit(0)\n',
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                self.source.write_text(source)
+                with self.assertRaises((EvidenceError, ValueError)): self.run_tiny()
+                self.assertFalse((self.root / 'evidence/verified.json').exists())
+                if label in ('fixture error', 'subtest', 'xfail', 'unexpected success', 'skip', 'fake stdout and early exit'):
+                    self.assertEqual(json.loads((self.root / 'evidence/discovery.status.json').read_text()), {'exit': 0})
+                    self.assertTrue((self.root / 'evidence/execution.events.jsonl').is_file())
+                shutil.rmtree(self.root / 'evidence')
+
+    def test_python_unittest_authorized_skip_and_child_identity(self):
+        self.source.unlink()
+        if self.target['platform'] == 'windows-x64':
+            module, cls, method = 'test_samplers', 'LinuxSamplerTests', 'test_clk_tck_is_user_hz'
+            reason, proof = 'Linux /proc parsing', 'footprint-unit:linux-x64'
+        else:
+            module, cls, method = 'test_measure', 'ObserverTests', 'test_windows_readers_allow_atomic_replacement_and_rotation'
+            reason, proof = 'native Windows delete-sharing and atomic replacement', 'footprint-unit:windows-x64'
+        self.source = self.root / ('footprint/' + module + '.py')
+        self.target['files'] = [module + '.py']
+        self.source.write_text('import unittest, os\nclass ' + cls + '(unittest.TestCase):\n'
+                              '    @unittest.skip(' + repr(reason) + ')\n'
+                              '    def ' + method + '(self): pass\n'
+                              '    def test_pure(self): print(os.getpid())\n')
+        record = self.run_tiny()
+        self.assertEqual(record['summary']['passed'], 1)
+        self.assertEqual(record['summary']['skipped'], [{'id': module + '.' + cls + '.' + method, 'reason': reason, 'proof': proof}])
+        self.assertNotEqual((self.root / 'evidence/execution.txt').read_text().strip(), str(os.getpid()))
+        self.source.write_text(self.source.read_text().replace('    def test_pure(self): print(os.getpid())\n', ''))
+        shutil.rmtree(self.root / 'evidence')
+        with self.assertRaisesRegex(ValueError, 'incomplete or failed Python test execution'): self.run_tiny()
+
+    def test_python_unittest_event_protocol_and_bounds(self):
+        record = self.run_tiny()
+        evidence = self.root / 'evidence'
+        baseline = (evidence / 'execution.events.jsonl').read_bytes()
+        rows = [json.loads(line) for line in baseline.splitlines()]
+        for label, mutated in (
+            ('missing terminal', rows[:3] + rows[4:]),
+            ('duplicate terminal', rows[:4] + [rows[3]] + rows[4:]),
+            ('out of order', rows[:2] + [rows[3], rows[2]] + rows[4:]),
+            ('trailing', rows + [rows[-1]]),
+            ('unknown event', rows + [{'event': 'unknown'}]),
+            ('forged totals', rows[:-1] + [{**rows[-1], 'passed': 42}]),
+            ('wrong identity', [{**rows[0], 'GITHUB_RUN_ID': '124'}] + rows[1:]),
+            ('wrong inventory', [rows[0], {'event': 'inventory', 'ids': ['other.T.test_a']}] + rows[2:]),
+        ):
+            with self.subTest(label=label):
+                (evidence / 'execution.events.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in mutated))
+                with self.assertRaises(ValueError):
+                    run_selected.validate_python_record(record, evidence, self.target, self.root, self.env)
+        for payload in (b'{"event":"header","event":"header"}\n', b'{"x":NaN}\n', baseline[:-1], b'{}\n' + b' ' * 65536 + b'\n'):
+            (evidence / 'execution.events.jsonl').write_bytes(payload)
+            with self.assertRaises(ValueError): run_selected.read_python_events(evidence / 'execution.events.jsonl')
+        (evidence / 'execution.events.jsonl').write_bytes(b' ' * (16 * 1024 * 1024 + 1))
+        with self.assertRaises(ValueError): run_selected.read_python_events(evidence / 'execution.events.jsonl')
+        with self.assertRaises(ValueError): run_selected.python_ids([f'a.T.test_{i:05d}' for i in range(10001)])
+        self.assertEqual(len(run_selected.python_ids([f'a.T.test_{i:05d}' for i in range(10000)])), 10000)
+        with self.assertRaises(ValueError): run_selected.python_ids([])
+
+    def test_python_unittest_listing_includes_every_exact_skip(self):
+        listing = run_selected.listing()
+        for test, row in run_selected.PYTHON_SKIPS.items():
+            self.assertIn('skip\tpython-unittest\t' + test + '\t' + row['reason'] + '\t' + row['proof'], listing)
+
+    def test_python_unittest_files_and_native_skip_rules(self):
+        self.source.rename(self.source.with_name('test_renamed.py'))
+        with self.assertRaises(ValueError): run_selected.python_declarations(self.root, self.target)
+        windows = 'test_measure.ObserverTests.test_windows_readers_allow_atomic_replacement_and_rotation'
+        linux = 'test_samplers.LinuxSamplerTests.test_clk_tck_is_user_hz'
+        self.assertEqual(run_selected.python_skip(windows, 'native Windows delete-sharing and atomic replacement', 'linux-x64'),
+                         'footprint-unit:windows-x64')
+        self.assertEqual(run_selected.python_skip(linux, 'Linux /proc parsing', 'windows-x64'), 'footprint-unit:linux-x64')
+        for test, reason, host in ((windows, 'wrong', 'linux-x64'), (windows, 'native Windows delete-sharing and atomic replacement', 'windows-x64'),
+                                   (linux, 'Linux /proc parsing', 'linux-x64'), ('other.T.test_a', 'Linux /proc parsing', 'macos-arm64')):
+            with self.assertRaises(ValueError): run_selected.python_skip(test, reason, host)

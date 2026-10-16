@@ -97,6 +97,19 @@ class RouteTests(unittest.TestCase):
                 route_units = inventory.units(groups)
                 self.assertIn('design', route_units)
 
+    def test_footprint_input_families_select_every_native_leaf(self):
+        leaves = {'footprint-unit:linux-x64', 'footprint-unit:windows-x64', 'footprint-unit:macos-arm64'}
+        for path in ('tests/footprint/budgets.json', 'tests/footprint/profiles/idle.json', 'tests/footprint/baselines/linux.json',
+                     'schemas/agent/footprint/v1/evidence.schema.json', 'schemas/agent/config/v1/config.schema.json',
+                     'schemas/agent/health/v1/health.schema.json', 'docs/specs/agent-runtime.md', 'docs/design/agent.md',
+                     '.github/python-version', '.github/requirements-design.txt', 'scripts/ci/toolchains.lock.json',
+                     'docs/specs/ci-hardening.md', 'docs/specs/ci-toolchain-refresh.md', 'docs/specs/ci-toolchain-migration.md',
+                     'docs/plans/agent-runtime.md', 'docs/plans/ci-hardening.md', '.github/workflows/agent.yml'):
+            with self.subTest(path=path):
+                self.assertTrue(leaves <= set(inventory.units(inventory.select_groups([path]))))
+        for host in ('linux-x64', 'windows-x64', 'macos-arm64'):
+            self.assertEqual(inventory.checks('footprint-unit:' + host), ['footprint-unit-' + host])
+
     def test_unicode_newline_git_path(self):
         path = 'unicode-雪\nfile'
         blob = subprocess.run(['git', '-C', str(self.root), 'hash-object', '-w', '--stdin'],
@@ -249,6 +262,7 @@ class RouteTests(unittest.TestCase):
             'design', 'ci-contracts', 'gitleaks', 'semgrep', 'interop', 'console', 'console-webkit:macos-arm64',
             'server-validate', 'server-race',
             'agent:linux-x64', 'agent:windows-x64', 'agent:macos-arm64',
+            'footprint-unit:linux-x64', 'footprint-unit:windows-x64', 'footprint-unit:macos-arm64',
             'bootstrap:linux-x64', 'bootstrap:windows-x64', 'bootstrap:macos-arm64',
             'ocsf:linux-x64', 'ocsf:windows-x64', 'ocsf:macos-arm64',
             'loader:linux-x64', 'loader:windows-x64', 'loader:macos-arm64',
@@ -261,7 +275,7 @@ class RouteTests(unittest.TestCase):
         expected = json.loads((Path(__file__).parent / 'fixtures/fuzz-targets.json').read_text())
         self.assertEqual(inventory.fuzz_targets(), expected)
         self.assertEqual(len(inventory.fuzz_targets()), 28)
-        self.assertEqual(len(inventory.units(inventory.GROUPS)), 52)
+        self.assertEqual(len(inventory.units(inventory.GROUPS)), 55)
         for unit in inventory.units(inventory.GROUPS): self.assertTrue(inventory.checks(unit))
         self.assertEqual(inventory.checks('server-validate'),
                          ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'])
