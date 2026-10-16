@@ -12,8 +12,8 @@ The installed toolchain is Go 1.27.1, Rust 1.99.0 with cargo 1.99.0, Node 24.21.
 
 Later slices own:
 
-- Bounded archive and YAML loading, signature verification and file-byte digest checks, the install flow and the GitOps `extension-resource.json` resource.
-- Publisher trust-list admission, canonical Ed25519 key checks, revocation, global id ownership, protected publisher-key transfer and permanent immutable id/version tombstone storage.
+- Bounded archive and YAML loading, signature verification and file-byte digest checks ([the loader](extension-loader.md)), the install flow and the GitOps `extension-resource.schema.json` resource ([admission contracts](extension-admission-contracts.md)).
+- Publisher trust-list admission, canonical Ed25519 key checks, revocation, global id ownership, protected publisher-key transfer and permanent immutable id/version tombstone storage ([admission](extension-admission.md) defines the decision; its coordinator and storage remain blocked).
 - Browser adapter and browser-registration schemas, canonical OS targets, exclusive write ownership and OS reserved namespaces.
 - Capability-grant schemas, approval, recovery epochs, generations, compilation and revocation propagation.
 - Content validators, WIT schemas, collector disclosure profiles, console catalogue and binding schemas, connector contracts and their qualification gates.

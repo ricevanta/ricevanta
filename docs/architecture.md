@@ -47,7 +47,7 @@ The core owns the server connection, the device identity, the policy cache, the 
 
 ### 3.1 One binary, selectable roles
 
-`ricevanta-server` is a Go modular monolith. A process runs the roles named in its configuration; the default is all roles, which is what Docker Compose runs. Helm runs separate deployments per role group.
+`ricevanta-server` is a Go modular monolith. A process runs exactly the roles named in its configuration and refuses to start without that list; Docker Compose names all five roles in one process, and Helm runs separate deployments per role group. Role admission, health endpoints and console serving are in [the server runtime spec](specs/server-runtime.md) (BE-15).
 
 | Role | Listeners | State and keys |
 |---|---|---|
@@ -93,6 +93,8 @@ HTTPS with required mTLS, HTTP/2 preferred and HTTP/1.1 accepted, JSON bodies. N
 | Threat intelligence | `GET /agent/v1/intel?since_epoch=<epoch>&since=<sequence>` returns a DSSE delta of the scope's indicator sets signed by the policy signing key, or a full snapshot when the base is missing; the check-in carries the installed intel epoch and sequence (`design/edr.md` section 8.3) |
 | CRL and update | `GET /agent/v1/crl` for the issuing CA's CRL, fetched with the policy and cached; the core fetches `GET /agent/v1/update` and its package URL, then hands the opaque bytes to the updater over local IPC (`design/agent.md` section 8) |
 
+Listener: the `agent` role's HTTP server sets `ReadHeaderTimeout` 10 s, `IdleTimeout` 120 s (above the 50 s long-poll hold), `MaxHeaderBytes` 16,384 and, for HTTP/2, `MaxConcurrentStreams` 16, `MaxReceiveBufferPerStream` 256 KiB and `MaxReceiveBufferPerConnection` 512 KiB, against Go's defaults of at least 100 streams and 1 MiB per stream and per connection ([`net/http` `HTTP2Config`](https://pkg.go.dev/net/http@go1.27.1#HTTP2Config)). An agent needs about six concurrent streams: a check-in, the command long poll, a policy or blob fetch, two event uploads and an artifact part. No server-wide `ReadTimeout` or `WriteTimeout` is set, because it would cut long polls; each handler sets per-request deadlines, as the event upload does (`specs/ingest-admission.md` section 5). The receive buffers hold body bytes a client sends before a handler reads them, outside every admission budget. The transport slice therefore caps concurrent connections per device certificate per replica at about eight, two over HTTP/2 plus six over HTTP/1.1, which needs one connection per concurrent request, measures per-connection memory and the exposure of 2 × 512 KiB of HTTP/2 receive window per device against the memory left outside the decode budget, and records both here.
+
 Compatibility window: the server serves `/agent/v1` to agents from the current minor release and the two before it. Older agents are placed in update-only mode: they keep their cached policy, may fetch the release manifest and renew their certificate and nothing else, and the console flags them. The handler rules that keep this path cheap at 20,000 endpoints are in `design/backend.md`.
 
 ## 4. Keys and what they sign
@@ -105,8 +107,10 @@ Compatibility window: the server serves `/agent/v1` to agents from the current m
 | Journal signing key (Ed25519, one per organization) | `jobs` only, wrapped under its scoped key and certified by the offline root | Live authority and audit heads, prepare and commit records under `design/backend.md` section 6.1 | Every role against the independent current journal; journal protocol is an implementation blocker |
 | Audit checkpoint key (Ed25519, one per organization) | `jobs` role only, wrapped under the `jobs`-scoped key that the master key does not unwrap (`design/backend.md` section 6) | Audit-log checkpoints binding the independent tail, in DSSE envelopes every hour and every 10,000 records (`design/events.md` section 6) | `jobs` verification against the independent live head and the newest checkpoint of every `audit: true` destination, `ricevanta audit verify --anchor`, auditors holding an export |
 | Offline recovery custodian keys (Ed25519) | Separate offline media; default two signatures from three distinct keys, or a declared one-custodian single-administrator setup | Exact authority repairs and recovery transitions, including signer replacement, under the root-signed quorum manifest (`design/backend.md` section 6.1) | Every server role and agent against the manifest and distinct required signatures |
-| Release signing keys (Ed25519) | Project maintainers, offline root and successor keys; self-builders use their own | Release manifests, which carry an expiry, and packages | `ricevanta-updater`; both public keys are compiled in, a manifest signed by the successor retires the root |
-| Extension publisher keys (Ed25519) | Each publisher; the project's extension publisher key is held offline by maintainers | Extension manifests in DSSE envelopes; the project key also signs the extension index | `api` at install, against the operator's trust list; agents never verify them (EXT-02) |
+| Release signing keys (Ed25519) | Project maintainers, offline root and successor keys; self-builders use their own | Release manifests, which carry an expiry, and packages | `ricevanta-updater`; both public keys are compiled in, a manifest signed by the successor retires the root. `ricevanta-server` at start, to establish its running release: signature under the compiled keys, target and the running executable's SHA-256, no expiry; once a successor-signed manifest verifies, the journal records the root as retired and a root-signed manifest no longer counts ([extension admission section 6](specs/extension-admission.md#6-approval-binding)) |
+| Extension publisher keys (Ed25519) | Each publisher | Extension manifests in DSSE envelopes | `api` at install, against the operator's trust list; agents never verify them (EXT-02) |
+| Production project extension key (Ed25519) | Maintainers, offline; compiled into tag builds | First-party extension manifests of releases and the extension index | `api` at install; only the entry for the compiled project key carries the project-publisher flag (EXT-09) |
+| Development project extension key (Ed25519) | Maintainers, offline; CI holds it in no slice yet; compiled into master and pull-request builds only | First-party extension manifests labelled `<core>-dev.0.g<FULL_SHA>` | `api` at install on development builds; tag builds never trust it |
 | RADIUS sealing key (X25519) | `radius` role, under its role-scoped data key; public key known to `api` | Nothing; `api` seals gateway shared secrets and binding tokens to it | `radius` replicas open them |
 | Platform code-signing identities | The company (PF-03) | Binaries, system extensions, the WHCP submission of the driver | Operating systems |
 
@@ -127,13 +131,15 @@ High availability: `api`, `agent` and `device` are stateless and run two or more
 
 Server container images are built for `linux/amd64` and `linux/arm64`.
 
+Memory: every process that runs the `agent` role needs a Go memory limit, `server.memory_limit` or `GOMEMLIMIT`, of at least 512 MiB alone or 1 GiB with other roles, and a container or service limit of that value divided by 0.9; the event decode budget derives from it and the process refuses to start without it (`specs/ingest-admission.md` section 4).
+
 Observability: Prometheus metrics on `/metrics`, structured JSON logs, health and readiness endpoints, optional OpenTelemetry traces. Server security events enter the event pipeline; administrative audit records live in the `audit` schema and are exported as OCSF (`design/events.md` section 6).
 
 ## 6. Repository layout
 
 ```
 ricevanta/
-├── agent/        Rust workspace: crates (core, updater, os-macos, os-windows, os-linux, scan, ext, session, nmhost), bpf/ (dual MIT/GPL), app bundles, packaging
+├── agent/        Rust workspace: crates (core, json, config, os, os-macos, os-windows, os-linux, spool, batch, updater, scan, ext, session, nmhost), bpf/ (dual MIT/GPL), app bundles, packaging
 ├── driver/       Windows kernel driver (C), WDK build, HLK test configuration
 ├── browser/      Browser extension (TypeScript, WebExtensions) built per engine family: chromium (Manifest V3), gecko, webkit with the Safari handler sources
 ├── server/       Go module: cmd/ricevanta-server, cmd/ricevanta, internal/<module>
@@ -154,7 +160,7 @@ One repository, one version number per release for server, console, agent, brows
 - Versioning: SemVer for the product; `/api/v1` and `/agent/v1` change additively within a major; the policy envelope is `apiVersion: ricevanta.io/v1alpha1` throughout v0.x and `v1` from v1.0.0. The v1.0.0 server migration relabels stored resources; agents receive compiled bundles whose format is versioned with `/agent/v1`, so the envelope label never reaches them. Extension interfaces carry their own versions (`ext.ricevanta.io/<kind or contract>/v1`, WIT package versions, the console bridge schema version, connector contract versions), change additively within a major and are the compatibility key for extensions, not the product version (EXT-07).
 - Failure behaviour: every policy declares its fail mode for each enforcement point (`design/agent.md`); every unsupported capability is reported, never silently skipped.
 - Privacy: classification runs on the endpoint; only the evidence DLP-02 allows leaves the device.
-- Configuration: the server reads environment variables and one YAML file; the agent reads the enrollment configuration (`design/pki.md`) plus server-delivered signed policy. Ricevanta rejects unsigned local configuration changes and requires authorization on its own uninstall paths; OS and administrator escape paths follow the limits in `design/agent.md` section 9.
+- Configuration: the server reads environment variables and one YAML file; the agent reads one root-only operational file (`agent.json`: logging, paths and intervals, never a policy, identity, server, trust or token value, [agent runtime](specs/agent-runtime.md) section 3), the enrollment configuration (`design/pki.md`) and server-delivered signed policy. Policy, identity and trust reach the agent only signed; Ricevanta rejects unsigned local changes to them and requires authorization on its own uninstall paths; OS and administrator escape paths follow the limits in `design/agent.md` section 9.
 - Tamper resistance against a local administrator is prevention only where the OS provides it and reporting elsewhere; the preconditions per OS are in `design/agent.md` and `platform-support.md`.
 - Time: the server is the clock of record; agent events carry monotonic sequence numbers and the agent's clock, and the server records receipt time.
 - Internationalization: console strings through `vue-i18n` from the first component (`project.md`).

@@ -10,7 +10,7 @@ go test -count=1 ./internal/path/to/touched/package
 
 `-count=1` prevents cached Go test results from hiding changes to fixtures outside `server/`. It does not disable compiled-object reuse.
 
-Every CI Go consumer uses `scripts/ci/fresh_go.py --root PATH --env-out PATH` to create unused absolute build and module cache directories below `RUNNER_TEMP`. The helper records zero initial entries and exports `GOCACHE`, `GOMODCACHE`, `GOTOOLCHAIN=local` and `GOFLAGS=-mod=readonly` through `GITHUB_ENV`. Children inherit these values. Each job runs `go mod download` followed by `go mod verify` before Go checks. Setup-go caching and compiled-output restores are forbidden.
+Every CI Go consumer uses `scripts/ci/fresh_go.py --root PATH --env-out PATH` to create unused absolute build and module cache directories below `RUNNER_TEMP`. The helper records zero initial entries and exports the environment fixed by [CI hardening section 5](../docs/specs/ci-hardening.md#5-fresh-go-compilation-and-dependency-caches-ci-03), including `GOENV=off` and an empty `GOCACHEPROG`, through its pinned `GITHUB_ENV` step. Children inherit these values. Each job runs `go mod download` followed by `go mod verify` before Go checks. Setup-go caching and compiled-output restores are forbidden.
 
 Cargo caches only the registry index and `.crate` archives. The same helper's Cargo mode discards restored extracted sources, checks archive SHA-256 values against `agent/Cargo.lock`, fetches locked dependencies, rechecks downloads and discards extracted sources before compilation. Each job uses a fresh `CARGO_TARGET_DIR`. Console caches no `node_modules` or build output. Tag builds restore and save no caches.
 
@@ -36,6 +36,18 @@ python -B scripts/ci/check_policy.py --root .
 actionlint .github/workflows/*.yml
 git diff --check
 ```
+
+Local and CI, repository root, for the validator and bootstrap helpers:
+
+```sh
+python -B -m unittest discover -s scripts/ci -p test_python_env.py -v
+python -B -m unittest discover -s scripts/ci -p test_bootstrap.py -v
+python -B -m unittest discover -s scripts/ci -p test_run_selected.py -v
+python -B -m unittest discover -s scripts/ci -p test_policy.py -v
+python -B -m unittest discover -s scripts/ci -p test_fresh_go.py -v
+```
+
+These helper tests inject platform identities and use tiny payload fixtures. Native cold installs, Windows per-user Python registration cleanup and Git Bash resolution, macOS system-Python re-execution and the exact MSVC PowerShell invocation run only in CI. The admitted Python closure and pinned Go must also pass there. Every Bash step uses the admission shell from [CI hardening section 8](../docs/specs/ci-hardening.md#environment-admission-in-every-authoritative-job); only the exact native MSVC step uses the no-profile PowerShell shell.
 
 Local, `server/`, focused complete-loader checks:
 
@@ -68,6 +80,23 @@ go test -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./inter
 ```
 
 The first consumer owns performance qualification and its request and candidate bounds.
+
+CI: `server-validate` requires the 50-case composite ingest proof from [ingest admission section 9.1](../docs/specs/ingest-admission.md#91-selected-test-proof-composition). From the repository root, the dedicated wrapper verifies the test phase before running and verifying the three-iteration benchmark phase:
+
+```sh
+python -B scripts/ci/run_selected.py --id ingest-cost-model --evidence "$RUNNER_TEMP/evidence"
+```
+
+The wrapper sets `GOENV=off`, `RICEVANTA_COST_MODEL=full` and `GOGC=100`. It retains both payloads and their diagnostics outside receipt directories in `ingest-measurements/cost-model.log`, uploaded for 30 days. A receipt requires both successful phases, all 50 exact case keys and the same tested commit, run and attempt. Ordinary suites allow only the exact observed `TestDecodeCostModel` skip; they never replace the dedicated proof. Without `RICEVANTA_COST_MODEL=full`, the cost-model parent starts no child.
+
+CI qualification commands, from `server/`:
+
+```sh
+RICEVANTA_COST_MODEL=full GOGC=100 go test -count=1 -timeout=15m ./internal/events/body -run '^TestDecodeCostModel$' -v
+go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body
+```
+
+Run full cost, memory, race and fuzz qualification in CI. Local body/admission checks use the focused ordinary suites; the small `TestAdversarialCostCorpus` representatives exercise structural and rejection stages without running memory-limit children. Handler integration still requires the separate CPU contention, ARM64, transport and storage qualification gates.
 
 Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix belong in PR/master CI. Console browser checks run in `.github/workflows/console.yml`.
 
@@ -104,7 +133,7 @@ The ordinary suite runs every shared fixture and the deterministic `fuzz_recover
 
 CI runs fixture regeneration, fmt, Clippy, ordinary tests and the extended property test natively on macOS ARM64, Windows x64 and Linux x64 with the exact Rust pin. These checks establish portable codec behavior, not file permissions, power-loss durability, sensors, resource budgets or full platform support. Add native integration checks only with their reviewed slice and [platform qualification](../docs/specs/platform-qualification.md).
 
-No releasable binary exists, so the repository has no binary, installer, container or upgrade test yet.
+The repository has server command/runtime tests, native agent-library checks and a footprint harness that tests a fake agent. These checks do not establish a releasable installation: the agent core executable, server console embedding, release integration, full-agent footprint baselines, installer/upgrade qualification and required native/platform evidence remain gated. Production administration API, identity and change-stream handlers also require their reviewed implementation plans and BE-12. Follow the [contract validation plan](../docs/plans/contract-validation.md) for required OpenAPI checks and native footprint unit evidence, and the [release plan](../docs/plans/release-builds.md) for artifact qualification.
 
 ## Console
 
