@@ -1,0 +1,34 @@
+# Ingest cost qualification correction plan
+
+Implement only the CPU measurement correction in [the qualification spec](../specs/ingest-cost-qualification.md). The retained memory failures stay blocked. No measured workload or further diagnostic population may run before this spec and plan receive independent `design_reviewer` approval.
+
+## Ownership and constraints
+
+An `implementer` owns `server/internal/events/body/costmodel_norace_test.go`, a new `costcpu_norace_test.go` with `!race` for pure ledger helpers/tests, `costcpu_linux_test.go` with `!race && linux`, and `costcpu_other_test.go` with `!race && !linux`. It also owns only cost-evidence parsing/protocol validation in `scripts/ci/run_selected.py`, its tests in `test_run_selected.py` and `test_required.py`, and matching protocol pins/tests in `check_policy.py` and `test_policy.py`. The primary agent owns Git and integration; workers are not alone and preserve other edits.
+
+Production code, fixtures/generators, dependencies, catalogue keys/counts, benchmarks, CI workflow commands, admission constants and generic receipt mechanisms are read-only. Existing diagnostic files/workflow are removed by the primary agent before landing. No memory sampler/GC/baseline refactor, request preallocation, observer reuse, charge or repetition change is authorized. Keep Go 1.27.1 and no new module. The spec owns all exact formulas; this plan supplies no alternative threshold.
+
+## Task 1: Deterministic counter and ledger regression checks
+
+- [ ] Add failing pure tests for the demonstrated interval-gap defect using injected monotone readings that advance only between the existing phase pairs. The corrected continuous partition must retain that cost without running a request or CPU workload.
+- [ ] Cover valid microsecond-to-nanosecond conversion; syscall errors; negative/noncanonical timevals; conversion/sum/product overflow; backward individual counters; zero full interval; a zero phase with positive total; exactly 1 or 32 repetitions according to the case; wrong N and q; missing/duplicate/out-of-order samples; changed source or guard; wrong case/mode; summary/raw-total disagreement; and division remainders. Explicitly reject old records without the CPU ledger.
+- [ ] Test the exact guarded CPU inequality at equality and one unit above it, including fractional per-request costs that displayed integer division would hide. Retain a failing CPU record and all raw values when validation fails. Test both limited and reference rejection; neither may bypass CPU validation.
+- [ ] Add lightweight helper tests with injected syscalls proving RUSAGE_SELF, no fallback, caller-owned storage and failure propagation. Check the real Linux helper compiles on amd64/arm64 and non-Linux stub compilation separately; no local clock benchmark, cost child or load loop is authorized.
+
+## Task 2: CPU machinery and evidence implementation
+
+- [ ] Implement the Linux helper and explicit unsupported stub. Keep all required request work after the unchanged memory baseline/limit. Retain fixed storage for the 65 CPU pairs after baseline; prove with source/escape inspection that the clock helper performs no new file/parsing/allocation work. Do not add allocation warm-up to the measured child.
+- [ ] Replace only CPU reads and accumulators with the spec's contiguous boundary sequence. Preserve worker/codec/clear/forced-GC lifecycle, memory sample positions and wall timer scope. Accumulate unrounded totals, apply the conservative conversion guard in exact arithmetic, then derive display averages. Emit the complete CPU ledger only after timing and sampler shutdown.
+- [ ] Add parent parsing and validation for every CPU record, including reference children. Preserve the raw-output-on-failure repair, stage assertions, original peak/limiter/wall checks, exact 50-case selection and separate benchmark. No parent retry or selective child rerun is permitted.
+- [ ] Extend the wrapper's attributed limited-record validation and verified-record reader to require the ledger and `summary.cpu_protocol = linux-getrusage-v1`. Pin that protocol in policy and add forged/stale evidence tests: missing/raw-only/cross-test/cross-package/reference-only ledgers, one substituted sample with correct count, a malformed counter, missing protocol, another protocol and an otherwise valid old receipt. Keep all existing negative evidence tests.
+
+## Task 3: Independent review and CI
+
+- [ ] Workers run only focused pure/helper Go tests, formatting and vet, plus focused Python evidence/policy tests and `python3 -B scripts/ci/check_policy.py --root .`. Record exact commands, exit statuses, intended red failures and green results. The primary agent runs required broader CI; no local measured process is substituted for it.
+- [ ] An independent `code_reviewer` reviews the complete change against the spec. Review the no-gap algebra, process-wide scope, conversion guard, arithmetic overflow, ledger provenance, non-Linux failure, and absence of pre-baseline request work or relaxed resource checks. Obtain independent fix confirmation for any changes.
+- [ ] The primary agent runs normal final-head CI with the full 50 limited/reference cases and separate three-iteration benchmark. Record the tested SHA/run/attempt, host/toolchain/kernel/architecture, fixture/source identities, every raw CPU ledger and every failed value. Stop on a failed candidate without rerunning it unchanged. A CI failure is not a license to change the spec inside implementation.
+- [ ] Return complete evidence to the designer and independent design reviewer under spec section 5. Include a pinned-source/compiler-escape audit naming removed CPU-read buffers/parsing temporaries, their lifetimes, new fixed ledger storage and absence of per-read allocation/retention. A complete normal pass plus that audit and unchanged boundaries may support explicit current-candidate memory qualification; retain the scalar failures as valid observations with causal composition unproved. A pass without the audit or an unchanged rerun cannot close the gate. A new scalar breach returns its exact evidence and allocation audit to model design and leaves memory/integration blocked. No second population or production correction belongs to this task. The missing badid value is not reconstructed by this correction.
+
+## Handoff
+
+Report owned files and hashes, counter/helper/ledger tests and exit statuses, source inspection of allocations and request boundaries, independent review identity, all normal CI results and remaining questions. The complete required proof, native server architecture/page-size qualification, endpoint matrices, contention, transport, storage and uploader gates remain separate obligations. A successful helper test or CPU correction is not a releasable ingest implementation.
