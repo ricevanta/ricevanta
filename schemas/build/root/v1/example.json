@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "floor": {
+    "glibc": "2.34",
+    "architectures": {
+      "x86_64": {
+        "interpreter": "/lib64/ld-linux-x86-64.so.2",
+        "sonames": {
+          "libc.so.6": [
+            "GLIBC"
+          ],
+          "libm.so.6": [
+            "GLIBC"
+          ],
+          "ld-linux-x86-64.so.2": [
+            "GLIBC"
+          ],
+          "libgcc_s.so.1": [
+            "GCC"
+          ]
+        },
+        "ceilings": {
+          "GLIBC": "2.34",
+          "GCC": "7.0.0",
+          "GLIBCXX": "3.4.29",
+          "CXXABI": "1.3.13"
+        },
+        "cflags": [
+          "-march=x86-64",
+          "-mtune=generic"
+        ],
+        "rootObjects": [
+          "/usr/lib64/Scrt1.o",
+          "/usr/lib64/crti.o",
+          "/usr/lib64/crtn.o",
+          "/opt/rh/gcc-toolset-14/root/usr/lib/gcc/x86_64-redhat-linux/14/crtbeginS.o",
+          "/opt/rh/gcc-toolset-14/root/usr/lib/gcc/x86_64-redhat-linux/14/crtendS.o"
+        ]
+      },
+      "aarch64": {
+        "interpreter": "/lib/ld-linux-aarch64.so.1",
+        "sonames": {
+          "libc.so.6": [
+            "GLIBC"
+          ],
+          "libm.so.6": [
+            "GLIBC"
+          ],
+          "ld-linux-aarch64.so.1": [
+            "GLIBC"
+          ],
+          "libgcc_s.so.1": [
+            "GCC"
+          ]
+        },
+        "ceilings": {
+          "GLIBC": "2.34",
+          "GCC": "11.0",
+          "GLIBCXX": "3.4.29",
+          "CXXABI": "1.3.13"
+        },
+        "cflags": [
+          "-march=armv8-a"
+        ],
+        "rootObjects": [
+          "/usr/lib64/Scrt1.o",
+          "/usr/lib64/crti.o",
+          "/usr/lib64/crtn.o",
+          "/opt/rh/gcc-toolset-14/root/usr/lib/gcc/aarch64-redhat-linux/14/crtbeginS.o",
+          "/opt/rh/gcc-toolset-14/root/usr/lib/gcc/aarch64-redhat-linux/14/crtendS.o"
+        ]
+      }
+    }
+  },
+  "roots": {
+    "x86_64": {
+      "runner": "ubuntu-26.04",
+      "platform": "linux-x64-ubuntu26.04",
+      "image": {
+        "repository": "registry.example.invalid/build-root/x86_64",
+        "tag": "synthetic-1",
+        "manifestDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "configDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "vendorKey": "0000000000000000000000000000000000000001",
+      "packages": [
+        "glibc-2.34-1.el9.x86_64",
+        "glibc-devel-2.34-1.el9.x86_64",
+        "kernel-headers-5.14.0-1.el9.x86_64",
+        "gcc-toolset-14-gcc-14.2.1-1.el9.x86_64",
+        "gcc-toolset-14-binutils-2.41-1.el9.x86_64"
+      ],
+      "cc": "/opt/rh/gcc-toolset-14/root/usr/bin/gcc",
+      "ar": "/opt/rh/gcc-toolset-14/root/usr/bin/ar"
+    },
+    "aarch64": {
+      "runner": "ubuntu-26.04-arm",
+      "platform": "linux-arm64-ubuntu26.04",
+      "image": {
+        "repository": "registry.example.invalid/build-root/aarch64",
+        "tag": "synthetic-1",
+        "manifestDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "configDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "vendorKey": "0000000000000000000000000000000000000001",
+      "packages": [
+        "glibc-2.34-1.el9.aarch64",
+        "glibc-devel-2.34-1.el9.aarch64",
+        "kernel-headers-5.14.0-1.el9.aarch64",
+        "gcc-toolset-14-gcc-14.2.1-1.el9.aarch64",
+        "gcc-toolset-14-binutils-2.41-1.el9.aarch64"
+      ],
+      "cc": "/opt/rh/gcc-toolset-14/root/usr/bin/gcc",
+      "ar": "/opt/rh/gcc-toolset-14/root/usr/bin/ar"
+    }
+  },
+  "probes": [
+    {
+      "id": "ubuntu-22.04",
+      "family": "ubuntu",
+      "release": "22.04",
+      "images": {
+        "x86_64": {
+          "repository": "registry.example.invalid/probe/ubuntu",
+          "tag": "22.04",
+          "manifestDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "configDigest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        },
+        "aarch64": {
+          "repository": "registry.example.invalid/probe/ubuntu",
+          "tag": "22.04",
+          "manifestDigest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "configDigest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+        }
+      }
+    },
+    {
+      "id": "almalinux-9",
+      "family": "almalinux",
+      "release": "9",
+      "images": {
+        "x86_64": {
+          "repository": "registry.example.invalid/probe/almalinux",
+          "tag": "9",
+          "manifestDigest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+          "configDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "aarch64": {
+          "repository": "registry.example.invalid/probe/almalinux",
+          "tag": "9",
+          "manifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "configDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    }
+  ]
+}
