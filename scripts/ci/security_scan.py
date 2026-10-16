@@ -29,7 +29,7 @@ REPOSITORY = 'ricevanta/ricevanta'
 SEMGREP_EXCEPTION_IDENTITY = dict(advisoryId='CVE-2026-93687',osvAdvisoryId='GHSA-vfj7-8cjw-p6xm',product='sca',severity='ERROR',
     rule='ssc-dc89f360-8dea-4ff2-92c4-e67670eb22ef',package='braces',packageVersion='3.0.3',ecosystem='npm',
     path='console/pnpm-lock.yaml',line=870,consoleFiles=117,
-    consoleSha256='72a9d16e71a9f481a6a3e0aabebb6ed74c7fb989cc059bc488d5994a5426369b')
+    consoleSha256='84c5c6ead3f3ee54ecb326e021cbc334eb80322d4c81a0394b9bb2be73fc6135')
 EMPTY_MANIFESTS = {
     'scripts/ci/gotestdecls/go.mod': ('ricevanta.invalid/gotestdecls','1.27.1'),
     'scripts/ci/fixtures/selected/tiny-go/go.mod': ('example.com/tiny','1.22'),

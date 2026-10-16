@@ -225,8 +225,9 @@ class RequiredTests(unittest.TestCase):
         selected = run_selected.inventory()
         wrapped = [u for u in self.route['units'] if any(c in selected for c in inventory.checks(u))]
         self.assertTrue({'server-validate', 'server-race', 'interop', 'loader:linux-x64', 'loader-gate-b:macos-arm64',
-                         'ocsf:windows-x64', 'agent:linux-x64', 'server-fuzz:./internal/extensions/loader:FuzzTar'} <= set(wrapped))
-        for unit in ('design', 'ci-contracts', 'console', 'bootstrap:linux-x64', 'gitleaks'):
+                         'ocsf:windows-x64', 'agent:linux-x64', 'server-fuzz:./internal/extensions/loader:FuzzTar',
+                         'console', 'console-webkit:macos-arm64'} <= set(wrapped))
+        for unit in ('design', 'ci-contracts', 'bootstrap:linux-x64', 'gitleaks'):
             self.assertNotIn(unit, wrapped)
             required.receipt(self.route, unit, inventory.checks(unit))
         for unit in wrapped:

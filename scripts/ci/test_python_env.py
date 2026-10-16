@@ -488,6 +488,16 @@ class RuntimeVerificationTests(unittest.TestCase):
 class StartupAndShadowTests(unittest.TestCase):
     """A-13 and A-15: start-up hooks on the import path and repository names that shadow closure modules."""
 
+    def test_customize_check_refreshes_a_cached_directory_with_the_same_mtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            self.assertEqual(python_env.customize_errors([str(directory)]), [])
+            before = directory.stat()
+            hook = directory / 'sitecustomize.py'
+            write_lf(hook, 'raise AssertionError("the checker must not execute a startup hook")\n')
+            os.utime(directory, ns=(before.st_atime_ns, before.st_mtime_ns))
+            self.assertEqual(python_env.customize_errors([str(directory)]), [f'python: sitecustomize on the import path at {hook}'])
+
     def test_sitecustomize_and_usercustomize_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             stdlib = Path(tmp) / 'lib/python3.14'
@@ -496,8 +506,10 @@ class StartupAndShadowTests(unittest.TestCase):
             for name in ('sitecustomize', 'usercustomize'):
                 with self.subTest(name=name):
                     write_lf(stdlib / f'{name}.py', 'import atexit, os\natexit.register(os._exit, 0)\n')
-                    self.assertEqual(python_env.customize_errors([str(stdlib)]), [f'python: {name} on the import path at {stdlib / name}.py'])
-                    (stdlib / f'{name}.py').unlink()
+                    try:
+                        self.assertEqual(python_env.customize_errors([str(stdlib)]), [f'python: {name} on the import path at {stdlib / name}.py'])
+                    finally:
+                        (stdlib / f'{name}.py').unlink()
             (stdlib / 'sitecustomize').mkdir()
             write_lf(stdlib / 'sitecustomize/__init__.py', '')
             self.assertEqual(len(python_env.customize_errors([str(stdlib)])), 1)

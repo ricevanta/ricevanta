@@ -77,12 +77,15 @@ class EnvironmentAdmissionTests(unittest.TestCase):
             hook = Path(tmp) / 'hook.sh'
             hook.write_bytes(b'printf "hook-ran\\n"\n')
             import os
-            env = {**os.environ, 'BASH_ENV': str(hook)}
-            unsafe = subprocess.run(['bash', '--noprofile', '--norc', '-c', 'printf consumer'], env=env, capture_output=True, text=True)
-            self.assertEqual(unsafe.returncode, 0, unsafe.stderr)
+            # The workflow uses Git for Windows Bash, not a bare name that can select WSL.
+            bash = str(Path(os.environ['ProgramFiles']) / 'Git/bin/bash.exe') if os.name == 'nt' else shutil.which('bash')
+            self.assertIsNotNone(bash, 'the workflow Bash is required')
+            env = {**os.environ, 'BASH_ENV': hook.as_posix()}
+            unsafe = subprocess.run([bash, '--noprofile', '--norc', '-c', 'printf consumer'], env=env, capture_output=True, text=True)
+            self.assertEqual(unsafe.returncode, 0, f'{bash}: {unsafe.stdout}{unsafe.stderr}')
             self.assertIn('hook-ran', unsafe.stdout)
-            safe = subprocess.run([*python_env.ADMISSION_SHELL.split()[:-1], '-c', 'printf consumer'], env=env, capture_output=True, text=True)
-            self.assertEqual(safe.returncode, 0, safe.stderr)
+            safe = subprocess.run([bash, *python_env.ADMISSION_SHELL.split()[1:-1], '-c', 'printf consumer'], env=env, capture_output=True, text=True)
+            self.assertEqual(safe.returncode, 0, f'{bash}: {safe.stdout}{safe.stderr}')
             self.assertEqual(safe.stdout, 'consumer')
 
     def test_native_powershell_exception_is_exact(self):
@@ -557,7 +560,6 @@ class PolicyTests(unittest.TestCase):
             'dropped interop prefixes': baseline.replace('subtest_prefixes = ["TestRustWriterFixtures/body/", "TestRustWriterFixtures/header/", "TestRustWriterFixtures/descriptor/"]', 'subtest_prefixes = []', 1),
             'dropped interop helper': baseline.replace('helpers = ["TestRustWriterPrecondition", "TestRustWriterCaptureChild"]', 'helpers = ["TestRustWriterPrecondition"]', 1),
             'dropped loader marker': baseline.replace('args = ["-loader-budget-extended"]\nmarker = "LOADER_MEASUREMENT"', 'args = ["-loader-budget-extended"]'),
-            'dropped fuzz inventory cross-check': baseline.replace('packages = ["./..."]\nfuzz_inventory = true\n\n[[selected]]\nid = "server-race"', 'packages = ["./..."]\n\n[[selected]]\nid = "server-race"'),
             'extra fuzz flag': baseline.replace('[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "60s"',
                                                 '[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "30s"'),
         }
@@ -568,6 +570,26 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(any(error.startswith('scripts/ci/targets.toml') for error in check_policy.check(self.root)), label)
         path.write_text(baseline)
         self.assertEqual(check_policy.check(self.root), [])
+
+    def test_fuzz_inventory_cross_checks_cannot_be_removed(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        self.assertEqual(check_policy.selected_errors(self.root), [])
+        for target_id in ('server-unit', 'server-race', 'ocsf-native'):
+            with self.subTest(target=target_id):
+                rows = [row for row in baseline.split('[[selected]]\n') if row.startswith(f'id = "{target_id}"\n')]
+                self.assertEqual(len(rows), 1)
+                row = rows[0]
+                self.assertEqual(row.count('fuzz_inventory = true\n'), 1)
+                mutated = baseline.replace('[[selected]]\n' + row,
+                                           '[[selected]]\n' + row.replace('fuzz_inventory = true\n', '', 1), 1)
+                self.assertNotEqual(mutated, baseline)
+                try:
+                    path.write_text(mutated)
+                    self.assertEqual(check_policy.selected_errors(self.root), [
+                        'scripts/ci/targets.toml: fuzz inventory cross-check mismatch: ' + target_id])
+                finally:
+                    path.write_text(baseline)
 
     def test_selected_rows_cannot_move_their_commands(self):
         self.assertEqual(set(check_policy.SELECTED_PLACES), set(check_policy.SELECTED_COMMANDS))
@@ -1004,7 +1026,7 @@ class PolicyTests(unittest.TestCase):
             ('console', 'playwright install', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'pnpm exec playwright install --with-deps chromium firefox webkit'}), 'unchecked download'),
             ('console', 'curl pipe', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'curl -fsSL https://example.invalid/tool.sh | sh'}), 'unchecked download'),
             ('console', 'setup-node', lambda d: d['jobs']['validate']['steps'].insert(1, {'uses': 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1', 'with': {'node-version-file': 'console/.node-version'}}), 'unchecked setup action'),
-            ('console', 'omit playwright', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python,node,pnpm'), 'bootstrap tools omit playwright'),
+            ('console', 'omit playwright', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python,node,pnpm'), "CI_TOOLS differs from the reviewed selection 'python,node,pnpm,playwright'"),
             ('server', 'omit go', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python'), 'bootstrap tools omit go'),
             ('server', 'tools from PR text', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='${{ github.event.pull_request.title }}'), 'CI_TOOLS must be a literal'),
             ('server', 'foreign platform', lambda d: admitted(d, 'validate')['env'].update(CI_PLATFORM='windows-x64'), 'CI_PLATFORM must come from the fixed runner matrix'),
@@ -1449,5 +1471,48 @@ class SecurityPolicyTests(PolicyTests):
         command.insert(6, '--strict')
         path.write_text('COMMAND = ' + repr(command) + '\n')
         self.assertFalse(check_policy.observer_command_valid(self.root))
+
+
+
+class ConsoleMigrationPolicyTests(unittest.TestCase):
+    def test_console_contract_controls(self):
+        import yaml
+        root = Path(__file__).resolve().parents[2]
+        original = yaml.load((root / '.github/workflows/console.yml').read_text(), Loader=check_policy.WorkflowLoader)
+        self.assertEqual(check_policy.console_errors(original), [])
+        from copy import deepcopy
+        for change in ('hidden', 'digest', 'needs', 'webkit', 'report'):
+            data = deepcopy(original)
+            if change == 'hidden':
+                next(s for s in data['jobs']['validate']['steps'] if s.get('name') == 'Upload console dist')['with']['include-hidden-files'] = 'false'
+            elif change == 'digest':
+                next(s for s in data['jobs']['webkit']['steps'] if s.get('name') == 'Verify console dist')['env']['EXPECTED_DIST_DIGEST'] = 'wrong'
+            elif change == 'needs': data['jobs']['webkit'].pop('needs')
+            elif change == 'webkit': data['jobs'].pop('webkit')
+            else:
+                next(s for s in data['jobs']['validate']['steps'] if s.get('name') == 'Upload console reports')['with']['retention-days'] = '1'
+            with self.subTest(change=change): self.assertTrue(check_policy.console_errors(data))
+
+    def test_no_os_package_installation_for_browsers(self):
+        for command in ('apt-get --yes install libx264-dev', 'apt install libavif16', 'dpkg --install library.deb',
+                        'brew install webkitgtk', 'choco install browser', 'winget install browser', 'pnpm exec playwright install --with-deps'):
+            with self.subTest(command=command): self.assertRegex(command, check_policy.UNCHECKED_DOWNLOAD)
+
+    def test_missing_webkit_receipt_fails_aggregate(self):
+        import required
+        groups = sorted(['ci-contracts', 'design', 'gitleaks', 'semgrep', 'console'])
+        units = inventory.units(groups)
+        self.assertIn('console-webkit:macos-arm64', units)
+        route = dict(kind='route', version=1, event='push', baseSha='a'*40, headSha='b'*40,
+                     testedSha='b'*40, runId='123', runAttempt='1', groups=groups, units=units)
+        needs = {name: {'result': 'success' if name in ('route', 'ci-contracts', 'gitleaks', 'semgrep', 'design', 'console') else 'skipped'}
+                 for name in required.NEEDS}
+        # Shape-only aggregate control. These rows are deliberately not execution evidence.
+        receipts = [dict(kind='receipt', version=1, testedSha='b'*40, runId='123', runAttempt='1',
+                         unit=unit, result='success', checks=inventory.checks(unit)) for unit in units]
+        required.verify(route, needs, receipts)
+        with self.assertRaisesRegex(ValueError, 'console-webkit:macos-arm64'):
+            required.verify(route, needs, [r for r in receipts if r['unit'] != 'console-webkit:macos-arm64'])
+
 
 if __name__ == '__main__': unittest.main()

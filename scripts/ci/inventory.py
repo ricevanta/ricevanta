@@ -31,6 +31,7 @@ CHECKS = {
     'server-validate': ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'],
     'server-race': ['server-race'],
     'interop': ['interop-build', 'interop-unit', 'interop-race'],
+    'console-webkit:macos-arm64': ['console-install', 'console-audit', 'console-dist', 'console-csp-webkit'],
     'console': ['console-install', 'console-typecheck', 'console-lint', 'console-format',
                 'console-audit', 'console-unit', 'console-component', 'console-build',
                 'console-reproducible', 'console-csp', 'console-fuzz'],
@@ -92,6 +93,7 @@ def units(groups):
         if group == 'server':
             result += ['server-validate', 'server-race']
             result += [f"server-fuzz:{r['package']}:{r['target']}" for r in fuzz_targets()]
+        elif group == 'console': result += ['console', 'console-webkit:macos-arm64']
         elif group in ('agent', 'loader', 'ocsf', 'bootstrap'):
             result += [f'{group}:{host}' for host in HOSTS.values()]
             if group == 'loader':

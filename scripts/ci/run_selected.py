@@ -181,7 +181,10 @@ def run_command(target):
         return ['cargo', 'test', *target['cargo'], target['test'], '--', '--ignored', '--exact', '--nocapture', '--test-threads=1']
     if mode == 'rust-root':
         return ['sudo', '{executable}', 'root_', '--ignored']
-    return list(target['command'])
+    command = list(target['command'])
+    if mode == 'console-playwright':
+        command += ['--project=' + project for project in console_projects(target)]
+    return command
 
 
 def build_command(target):
@@ -807,9 +810,23 @@ def verify_vitest_report(report, expected_tests):
     return {'tests': len(seen)}
 
 
+CONSOLE_PROJECTS = {'console-csp': ['chromium', 'firefox'], 'console-csp-webkit': ['webkit']}
+
+
+def console_projects(target):
+    expected = CONSOLE_PROJECTS.get(target['id'])
+    if not expected or target.get('projects') != expected:
+        raise EvidenceError('console project set differs from the pinned leaf: ' + target['id'])
+    return expected[:]
+
+
 def verify_playwright_report(report, expected_specs, projects=PLAYWRIGHT_PROJECTS):
     """Every selected spec must pass in each browser project; nothing may skip."""
     if not isinstance(report, dict): raise EvidenceError('malformed Playwright report')
+    if report.get('errors'): raise EvidenceError('Playwright report contains errors')
+    if report.get('config', {}).get('version') != '1.59.1': raise EvidenceError('Playwright reporter version differs from the pinned package')
+    configured = [p.get('name') for p in report.get('config', {}).get('projects', [])]
+    if sorted(configured) != sorted(projects): raise EvidenceError('Playwright configured project set differs from the selected leaf')
     stats = report.get('stats', {})
     if stats.get('unexpected') or stats.get('skipped') or stats.get('flaky'): raise EvidenceError('Playwright report has unexpected, flaky or skipped results')
     seen = Counter()
@@ -838,7 +855,7 @@ def verify_console(target, evidence_dir, exit_code):
     if not path.is_file() or path.is_symlink(): raise EvidenceError('missing console report')
     report = json.loads(path.read_text(encoding='utf-8'))
     if target['mode'] == 'console-vitest': return verify_vitest_report(report, target['tests'])
-    return verify_playwright_report(report, target['specs'])
+    return verify_playwright_report(report, target['specs'], console_projects(target))
 
 
 MODES = {'go-suite', 'go-selected', 'go-interop', 'go-cost-model', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'rust-root', 'console-vitest', 'console-playwright'}
@@ -931,6 +948,9 @@ def child_environment(target, env):
     """Go children ignore the per-user configuration file, so `go env -w` cannot supply CC, flags or a toolchain."""
     result = {**env, 'GOENV': 'off', 'GOCACHEPROG': ''} if target['mode'].startswith('go') else env
     if target['mode'] == 'go-cost-model': result.update(RICEVANTA_COST_MODEL='full', GOGC='100')
+    if target['mode'].startswith('console'):
+        result = dict(result)
+        if target['mode'] == 'console-playwright': result['RICEVANTA_CSP_PROJECTS'] = ','.join(console_projects(target))
     return result
 
 
@@ -1070,6 +1090,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
                 log.write(discovery_text)
                 log.write((evidence_dir / 'discovery.stderr.txt').read_text(encoding='utf-8', errors='replace'))
         if code != 0: raise EvidenceError('discovery exited %d' % code)
+    if target['mode'] == 'console-playwright': env['PLAYWRIGHT_JSON_OUTPUT_FILE'] = str(evidence_dir / 'report.json')
     command = [executable if part == '{executable}' else part.replace('{report}', str(evidence_dir / 'report.json'))
                for part in run_command(target)]
     cargo_guard(target, env, root)
