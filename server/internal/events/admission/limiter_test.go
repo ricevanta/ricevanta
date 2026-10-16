@@ -421,10 +421,16 @@ func TestQueueOrder(t *testing.T) {
 	r1, r2 = h.receive("r1", batch.ClassRaw), h.receive("r2", batch.ClassRaw)
 	h.admit(g1, 64*mib, 64*mib)
 	h.admit(g2, 4*mib, 4*mib)
+	clock := &waiterClock{fakeClock: h.clock}
+	h.l.clock = clock
 	ctx, cancel := context.WithCancel(context.Background())
-	h.clock.mu.Lock()
-	h.clock.hold = true // the head's timer never fires
-	h.clock.mu.Unlock()
+	// The follower's expiry dispatch also expires the head. Gate the head's
+	// result arbitration until cancellation, rather than only its timer signal.
+	resume := clock.gateNextTimer()
+	defer func() {
+		cancel()
+		resume()
+	}()
 	w1 = h.decodeAsync(ctx, r1, 64*mib, 64*mib)
 	w2 = h.decodeAsync(context.Background(), r2, 4*mib, 4*mib)
 	if avail := testBudget - h.inUse(); avail < x || avail-x >= testReserve {
@@ -434,7 +440,11 @@ func TestQueueOrder(t *testing.T) {
 	if res := h.result(w2); res.d.Status != 503 || res.d.Reason != ReasonBudget {
 		t.Fatalf("waiter behind a larger head: %+v", res)
 	}
+	if !pending(w1) {
+		t.Fatal("head returned before the cancellation gate opened")
+	}
 	cancel()
+	resume()
 	if res := h.result(w1); !errors.Is(res.err, context.Canceled) {
 		t.Fatalf("head: %+v", res)
 	}
