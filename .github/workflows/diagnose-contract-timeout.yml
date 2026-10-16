@@ -1,0 +1,266 @@
+name: Diagnose CI contract runtime
+'on':
+  push:
+    branches:
+    - wip/contract-timeout-diagnose
+permissions:
+  contents: read
+jobs:
+  diagnose-contract-timeout-profile:
+    name: diagnose-contract-timeout-two-case-profile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 2
+        ref: ${{ github.sha }}
+    - name: Bootstrap admitted toolchains
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+    - name: Create fresh Go caches
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
+    - name: Format and vet the Go test declaration helper
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: scripts/ci/gotestdecls
+      run: |
+        unformatted="$(gofmt -l .)"
+        if [ -n "$unformatted" ]; then
+          printf '%s\n' "$unformatted"
+          exit 1
+        fi
+        go vet .
+    - name: Create validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      id: closure
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -I -S -B scripts/ci/python_env.py --check
+    - name: Profile the two unchanged unittest selectors once
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -B - <<'PY'
+        """CI observation only. No test patching, retries, receipts or policy caches."""
+        import hashlib
+        import importlib.metadata
+        import json
+        import os
+        from pathlib import Path
+        import platform
+        import pstats
+        import resource
+        import shutil
+        import subprocess
+        import sys
+        import tarfile
+        import tempfile
+        import time
+        import yaml
+
+        BASE = '6b12b6b0038185607201c9f22d7ee6cabb9bc82a'
+        CHECKOUT = Path.cwd().resolve()
+        ROOT = Path(os.environ['RUNNER_TEMP']) / 'contract-timeout-source'
+        OUT = Path(os.environ['RUNNER_TEMP']) / 'contract-timeout-diagnosis'
+        ROOT.mkdir(exist_ok=False)
+        OUT.mkdir(exist_ok=False)
+        EXPECTED = {
+            'scripts/ci/check_policy.py': 'ec1da70ad0378333bc661ebf1c7b0f7b372dc05340e94ebad730c1bd074cc367',
+            'scripts/ci/test_policy.py': 'e47cc129b8508993b1839c1256f09dd9f01ec253ba6148f6f5bd1606f5ee26d6',
+            'scripts/ci/required.py': '085ab4ed624d696db111e481c534a6a1f7b93febf4246b8197d6be7457aa633f',
+            'scripts/ci/test_required.py': '95e66e466822fb0d4bbabe1982656f5d90078b1ee75fad440b7fe26677276d87',
+            'scripts/ci/inventory.py': '86ea0c49b0903802e573889d6d6a36e93afcfde9ba90e0858dd8af2530b59f1f',
+            'scripts/ci/run_selected.py': 'd033d3280ffc8e7766fdac29b5820e4c7e615f1d5d2e0eb3bf35d3b2b7563351',
+            '.github/workflows/ci.yml': 'f78bbec89991127dc7e18a1b452f20b41d6fabfa75b98d4408a0e06cf5a306ff',
+            '.github/workflows/bootstrap.yml': '456090af4b0d10fa1476946a0b827908351bbed565b7591b40f409fdb3ee2da5',
+            'docs/specs/ci-hardening.md': 'aaf5846fff2fa15095924cf701dc7f01a47957d00e112b76dd325a95322d8bc5',
+            'docs/plans/ci-hardening.md': '258980bee5dff887b412ed859e12d76f4f383d31a154b35c5e797f87cf8ea824',
+        }
+
+        def save(name, value):
+            (OUT / name).write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+        def git(*args):
+            return subprocess.run(['git', *args], cwd=CHECKOUT, text=True, capture_output=True,
+                                  check=True).stdout.strip()
+
+        def digest(path):
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        def sources():
+            names = set(EXPECTED)
+            for directory in ('scripts/ci', '.github/workflows', 'schemas/ci', 'tests/footprint'):
+                names.update(path.relative_to(ROOT).as_posix() for path in (ROOT / directory).rglob('*')
+                             if path.is_file() and '__pycache__' not in path.parts)
+            names.update(('docs/licensing.md', '.github/python-version', '.github/requirements-design.txt',
+                          'server/go.mod', 'server/go.sum', 'agent/rust-toolchain.toml',
+                          'console/.node-version', 'console/package.json', 'console/pnpm-workspace.yaml'))
+            return {name: digest(ROOT / name) for name in sorted(names)}
+
+        def host():
+            cpu = Path('/proc/cpuinfo').read_text(encoding='utf-8').splitlines()
+            result = {'system': platform.system(), 'release': platform.release(),
+                      'version': platform.version(), 'machine': platform.machine(),
+                      'cpu_count': os.cpu_count(), 'affinity': sorted(os.sched_getaffinity(0)),
+                      'load_average': os.getloadavg(),
+                      'cpu_models': sorted({line.partition(':')[2].strip() for line in cpu
+                                           if line.startswith('model name')})}
+            for name in ('cpu.max', 'cpu.stat'):
+                path = Path('/sys/fs/cgroup') / name
+                result[name] = path.read_text(encoding='utf-8') if path.is_file() else None
+            return result
+
+        def children_usage():
+            result = resource.getrusage(resource.RUSAGE_CHILDREN)
+            return {'user_seconds': result.ru_utime, 'system_seconds': result.ru_stime,
+                    'voluntary_switches': result.ru_nvcsw, 'involuntary_switches': result.ru_nivcsw}
+
+        assert platform.system() == 'Linux' and platform.machine() == 'x86_64'
+        assert sys.version_info[:3] == (3, 14, 8)
+        assert 'BOOTSTRAP_TEST_HOST' not in os.environ
+        actual = git('rev-parse', 'HEAD')
+        assert actual == os.environ['GITHUB_SHA'], actual
+        assert git('rev-parse', 'HEAD^') == BASE
+        assert git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').splitlines() == [
+            '.github/workflows/diagnose-contract-timeout.yml']
+        # The policy intentionally rejects diagnose-* workflows. Preserve the
+        # unchanged fixtures by profiling the exact parent tree outside checkout.
+        with tempfile.TemporaryFile(dir=os.environ['RUNNER_TEMP']) as archive:
+            subprocess.run(['git', 'archive', '--format=tar', BASE], cwd=CHECKOUT, stdout=archive, check=True)
+            archive.seek(0)
+            with tarfile.open(fileobj=archive, mode='r:') as source:
+                source.extractall(ROOT, filter='data')
+        before = sources()
+        assert {name: before[name] for name in EXPECTED} == EXPECTED
+        go = shutil.which('go')
+        assert go is not None
+        save('identity.json', {
+            'purpose': 'diagnosis-only', 'base_sha': BASE, 'checkout_sha': actual,
+            'profiled_tree_sha': git('rev-parse', BASE + '^{tree}'), 'profiled_root': str(ROOT),
+            'diagnostic_workflow_sha256': digest(CHECKOUT / '.github/workflows/diagnose-contract-timeout.yml'),
+            'original_run_id': '38866731117', 'original_attempt': '1',
+            'original_tested_sha': '7c5bd16ae0683a039816be6ad5c25c650725423b',
+            'workflow': {name: os.environ.get(name) for name in
+                         ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'RUNNER_OS',
+                          'RUNNER_ARCH', 'ImageOS', 'ImageVersion')},
+            'python': {'version': sys.version, 'executable': sys.executable,
+                       'executable_sha256': digest(Path(sys.executable).resolve()), 'flags': str(sys.flags)},
+            'go': {'executable': go, 'executable_sha256': digest(Path(go).resolve()),
+                   'version': subprocess.run([go, 'version'], text=True, capture_output=True, check=True).stdout.strip()},
+            'validator': {name: importlib.metadata.version(name) for name in
+                          ('PyYAML', 'jsonschema', 'attrs', 'rpds-py', 'referencing')},
+            'yaml': {'file': yaml.__file__, 'with_libyaml': yaml.__with_libyaml__},
+            'host': host(), 'sources': before,
+        })
+        cases = [
+            ('policy', 'test_policy.PolicyTests.test_c_toolchain_runner_and_path_settings_are_rejected'),
+            ('required', 'test_required.RequiredTests.test_selected_checks_require_verified_evidence'),
+        ]
+        PROFILE_CHILD = '''import cProfile
+        import sys
+        import unittest
+
+        profiler = cProfile.Profile()
+        try:
+            profiler.enable()
+            program = unittest.main(module=None, argv=['unittest', '-v', sys.argv[2]], exit=False)
+        except BaseException:
+            profiler.disable()
+            try:
+                profiler.dump_stats(sys.argv[1])
+            except BaseException:
+                pass
+            raise
+        else:
+            profiler.disable()
+            profiler.dump_stats(sys.argv[1])
+        result = program.result
+        raise SystemExit(0 if result.wasSuccessful() and result.testsRun == 1 and not result.skipped else 1)
+        '''
+        statuses = []
+        for name, selector in cases:
+            profile = OUT / (name + '.prof')
+            argv = [sys.executable, '-B', '-c', PROFILE_CHILD, str(profile), selector]
+            row = {'name': name, 'selector': selector, 'argv': argv, 'cwd': str(ROOT / 'scripts/ci'),
+                   'state': 'running', 'host_before': host(), 'children_usage_before': children_usage()}
+            statuses.append(row)
+            save('children.json', statuses)
+            started = time.monotonic()
+            with (OUT / (name + '.log')).open('wb') as output:
+                child = subprocess.run(argv, cwd=ROOT / 'scripts/ci', stdout=output,
+                                       stderr=subprocess.STDOUT, check=False)
+            row.update(state='finished', exit=child.returncode, wall_seconds=time.monotonic() - started,
+                       host_after=host(), children_usage_after=children_usage())
+            save('children.json', statuses)
+            print(json.dumps({'name': name, 'exit': child.returncode, 'wall_seconds': row['wall_seconds']}, sort_keys=True), flush=True)
+            try:
+                with (OUT / (name + '-stats.txt')).open('w', encoding='utf-8') as output:
+                    stats = pstats.Stats(str(profile), stream=output)
+                    stats.sort_stats('cumulative').print_stats(120)
+                    stats.sort_stats('tottime').print_stats(120)
+                    stats.sort_stats('calls').print_stats(120)
+                    stats.print_callers(r'check_policy|run_selected|inventory|tomllib|yaml|jsonschema|python_env')
+                rows = []
+                for (filename, line, function), (primitive, calls, own, cumulative, callers) in sorted(stats.stats.items()):
+                    rows.append({'file': filename, 'line': line, 'function': function,
+                                 'primitive_calls': primitive, 'calls': calls, 'own_seconds': own,
+                                 'cumulative_seconds': cumulative,
+                                 'callers': [{'file': key[0], 'line': key[1], 'function': key[2], 'stats': value}
+                                             for key, value in sorted(callers.items())]})
+                save(name + '-stats.json', {'total_calls': stats.total_calls, 'primitive_calls': stats.prim_calls,
+                                           'total_seconds': stats.total_tt, 'functions': rows})
+                row['profile_sha256'] = digest(profile)
+            except (OSError, ValueError, TypeError) as error:
+                row['profile_error'] = type(error).__name__
+            save('children.json', statuses)
+        after = sources()
+        save('sources-after.json', after)
+        if after != before:
+            raise AssertionError('checked source changed during diagnosis')
+        raise SystemExit(int(any(row.get('exit') != 0 or row.get('profile_error') for row in statuses)))
+        PY
+    - name: Re-verify validator environment
+      if: ${{ always() && steps.closure.outcome == 'success' }}
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -I -S -B scripts/ci/python_env.py --check
+    - name: Upload profiler evidence
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: contract-timeout-diagnosis-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          ${{ runner.temp }}/contract-timeout-diagnosis/
+          ${{ runner.temp }}/admitted/bootstrap-evidence.json
+        retention-days: 30
+        if-no-files-found: error
