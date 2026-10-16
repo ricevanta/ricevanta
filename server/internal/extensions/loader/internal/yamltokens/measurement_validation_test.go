@@ -11,7 +11,7 @@ import (
 
 func validMeasurementReport(t *testing.T) map[string]any {
 	t.Helper()
-	m := parserMeasurement{Mode: "combined", Status: "preflight-rejected", Alloc: 10, Objects: 2, LedgerBytes: 10, LedgerObjects: 2, ProcsBefore: 1, ProcsAfter: 1, MemoryLimitBefore: math.MaxInt64, MemoryLimitAfter: math.MaxInt64, GCPercentBefore: math.MaxUint64, GCPercentAfter: math.MaxUint64, GCBefore: 3, GCAfter: 3}
+	m := parserMeasurement{Mode: "combined", Status: "preflight-rejected", Size: 64, Sample: 1, Alloc: 10, Objects: 2, LedgerBytes: 10, LedgerObjects: 2, ProcsBefore: 1, ProcsAfter: 1, MemoryLimitBefore: math.MaxInt64, MemoryLimitAfter: math.MaxInt64, GCPercentBefore: math.MaxUint64, GCPercentAfter: math.MaxUint64, GCBefore: 3, GCAfter: 3}
 	data, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)
@@ -75,11 +75,23 @@ func TestParserMeasurementValidation(t *testing.T) {
 	for _, field := range []string{"Alloc", "Objects"} {
 		t.Run("rejected-combined-ledger/"+field, func(t *testing.T) { fields := validMeasurementReport(t); fields[field] = 11; check(t, fields, true) })
 	}
+	for name, value := range map[string]any{"zero": 0, "negative": -1, "fraction": 1.5, "text": "1"} {
+		t.Run("sample/"+name, func(t *testing.T) {
+			fields := validMeasurementReport(t)
+			fields["Sample"] = value
+			check(t, fields, true)
+		})
+	}
+	t.Run("negative-nanoseconds", func(t *testing.T) {
+		fields := validMeasurementReport(t)
+		fields["Nanoseconds"] = -1
+		check(t, fields, true)
+	})
 }
 
 func TestRejectedCombinedMeasurementLedger(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestParserMeasurementChild$", "-test.v")
-	cmd.Env = append(os.Environ(), "RICEVANTA_PARSER_RECIPE=tags", "RICEVANTA_PARSER_SIZE=64", "RICEVANTA_PARSER_MODE=combined", "RICEVANTA_PARSER_ACCEPTED=false", "RICEVANTA_PARSER_ERROR=YAML tag")
+	cmd.Env = append(os.Environ(), "RICEVANTA_PARSER_RECIPE=tags", "RICEVANTA_PARSER_SIZE=64", "RICEVANTA_PARSER_MODE=combined", "RICEVANTA_PARSER_ACCEPTED=false", "RICEVANTA_PARSER_ERROR=YAML tag", "RICEVANTA_PARSER_SAMPLE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("child: %v\n%s", err, out)

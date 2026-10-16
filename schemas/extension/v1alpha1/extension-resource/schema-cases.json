@@ -1,0 +1,4604 @@
+{
+  "schema": "extension-resource.schema.json",
+  "cases": [
+    {
+      "id": "content-only-air-gapped",
+      "valid": true,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "every-grant-kind",
+      "valid": true,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "disabled-prerelease",
+      "valid": true,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "2.0.0-rc.1",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0"
+            ],
+            "all_devices": false,
+            "console": false,
+            "jobs": false
+          },
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "unknown-top-level-field",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        },
+        "status": {}
+      }
+    },
+    {
+      "id": "missing-enabled",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          }
+        }
+      }
+    },
+    {
+      "id": "manifest-fields-rejected",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true,
+          "components": []
+        }
+      }
+    },
+    {
+      "id": "uppercase-id",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "Com.Example.Rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "version-with-build-metadata",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0+build.1",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "http-source-url",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "http://downloads.example.com/x"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "empty-grants",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "duplicate-grant-objects",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "grant-kind-interface-mismatch",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "content-grant-with-values",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {
+                "formats": [
+                  "sigma"
+                ]
+              }
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "memory-pages-above-ceiling",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 4097,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-roots-empty",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-relative-path",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "var/lib"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-dot-dot-segment",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/../etc"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-single-dot-segment",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/./lib"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-windows-os-posix-path",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "windows",
+                    "path": "/var/lib"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-linux-os-drive-path",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "C:\\x"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-windows-trailing-space",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files \\x"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-windows-trailing-period",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "windows",
+                    "path": "C:\\Data."
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-windows-period-space-tail",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "windows",
+                    "path": "C:\\Secret. .\\x"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-windows-three-periods",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "windows",
+                    "path": "C:\\..."
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-posix-leading-space",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "macos",
+                    "path": "/Library/ Application"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "collector-root-too-long",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "console-unknown-slot",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ],
+                  "sidebar": []
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "console-operation-not-catalogued",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "createApiToken"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "connector-udp-port-zero",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "a.b",
+                    "port": 0,
+                    "transport": "udp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "browser-unknown-os",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  },
+                  "freebsd": {
+                    "policy_names": [],
+                    "native_host": false
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "targets-device-group-not-uuid7",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "finance"
+            ],
+            "all_devices": false,
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "targets-missing-all-devices",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "console": true,
+            "jobs": true
+          },
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "targets-missing-jobs",
+      "valid": false,
+      "instance": {
+        "apiVersion": "ricevanta.io/v1alpha1",
+        "kind": "Extension",
+        "metadata": {
+          "name": "com.example.rules"
+        },
+        "spec": {
+          "version": "1.0.0",
+          "source": {
+            "sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+            "url": "https://downloads.example.com/rules-1.0.0.tar.zst"
+          },
+          "grants": [
+            {
+              "component": "rules",
+              "kind": "content",
+              "interface": "ext.ricevanta.io/content/v1",
+              "values": {}
+            },
+            {
+              "component": "chrome",
+              "kind": "browser-adapter",
+              "interface": "ext.ricevanta.io/browser-adapter/v1",
+              "values": {
+                "registration": "io.ricevanta.browser.chrome",
+                "os": {
+                  "windows": {
+                    "policy_names": [
+                      "ExtensionInstallForcelist"
+                    ],
+                    "native_host": true
+                  }
+                }
+              }
+            },
+            {
+              "component": "classifier",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/classifier@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 500
+              }
+            },
+            {
+              "component": "inventory",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/collector@1.0.0",
+              "values": {
+                "memory_pages": 256,
+                "fuel_per_call": 1000000,
+                "deadline_ms": 5000,
+                "max_roots": 3,
+                "max_path_depth": 4,
+                "max_directory_entries": 100,
+                "max_open_handles": 4,
+                "max_list_requests": 16,
+                "max_read_requests": 16,
+                "max_bytes_per_file": 65536,
+                "max_input_bytes": 262144,
+                "max_rows": 100,
+                "max_output_bytes": 65536,
+                "roots": [
+                  {
+                    "os": "linux",
+                    "path": "/var/lib/example"
+                  },
+                  {
+                    "os": "macos",
+                    "path": "/Library/Application Support/Example"
+                  },
+                  {
+                    "os": "windows",
+                    "path": "C:\\Program Files\\Example"
+                  }
+                ],
+                "disclosure_profile": "inventory.software.v1"
+              }
+            },
+            {
+              "component": "panel",
+              "kind": "console-module",
+              "interface": "ext.ricevanta.io/console-module/v1",
+              "values": {
+                "slots": {
+                  "device-tab": [
+                    "getDevice",
+                    "listAlerts"
+                  ]
+                }
+              }
+            },
+            {
+              "component": "notifier",
+              "kind": "service-connector",
+              "interface": "ext.ricevanta.io/notifier/v1",
+              "values": {
+                "outbound": [
+                  {
+                    "host": "hooks.example.com",
+                    "port": 443,
+                    "transport": "tcp"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "parser",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/parser@1.0.0",
+              "values": {
+                "memory_pages": 1,
+                "fuel_per_call": 1,
+                "deadline_ms": 1,
+                "mime_types": [
+                  "application/x-example"
+                ]
+              }
+            },
+            {
+              "component": "responder",
+              "kind": "agent-module",
+              "interface": "ricevanta:agent/responder@1.0.0",
+              "values": {
+                "memory_pages": 4096,
+                "fuel_per_call": 1000000000,
+                "deadline_ms": 60000,
+                "actions": [
+                  "edr.collect"
+                ],
+                "max_entities": 256,
+                "max_parameters_bytes": 65536,
+                "max_plan_steps": 256,
+                "max_plan_bytes": 1048576
+              }
+            }
+          ],
+          "targets": {
+            "device_groups": [
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a0",
+              "017f22e2-79b0-7cc3-98c4-dc0c0c0739a1"
+            ],
+            "all_devices": false,
+            "console": true
+          },
+          "enabled": true
+        }
+      }
+    }
+  ]
+}

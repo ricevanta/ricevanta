@@ -1,0 +1,588 @@
+{
+  "schema": "capability-grant.schema.json",
+  "cases": [
+    {
+      "id": "operator-approved-content",
+      "valid": true,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "release-fixed-grant",
+      "valid": true,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "release-fixed",
+          "release_version": "0.4.0"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "single-administrator-grant",
+      "valid": true,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "single-administrator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "principal": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "collector-max-generation-lexeme",
+      "valid": true,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "18446744073709551615",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "inventory",
+          "kind": "agent-module",
+          "interface": "ricevanta:agent/collector@1.0.0",
+          "values": {
+            "memory_pages": 256,
+            "fuel_per_call": 1000000,
+            "deadline_ms": 5000,
+            "max_roots": 2,
+            "max_path_depth": 4,
+            "max_directory_entries": 100,
+            "max_open_handles": 4,
+            "max_list_requests": 16,
+            "max_read_requests": 16,
+            "max_bytes_per_file": 65536,
+            "max_input_bytes": 262144,
+            "max_rows": 100,
+            "max_output_bytes": 65536,
+            "roots": [
+              {
+                "os": "linux",
+                "path": "/var/lib/example"
+              }
+            ],
+            "disclosure_profile": "inventory.software.v1"
+          }
+        }
+      }
+    },
+    {
+      "id": "collector-windows-root-interior-periods",
+      "valid": true,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "18446744073709551615",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "inventory",
+          "kind": "agent-module",
+          "interface": "ricevanta:agent/collector@1.0.0",
+          "values": {
+            "memory_pages": 256,
+            "fuel_per_call": 1000000,
+            "deadline_ms": 5000,
+            "max_roots": 2,
+            "max_path_depth": 4,
+            "max_directory_entries": 100,
+            "max_open_handles": 4,
+            "max_list_requests": 16,
+            "max_read_requests": 16,
+            "max_bytes_per_file": 65536,
+            "max_input_bytes": 262144,
+            "max_rows": 100,
+            "max_output_bytes": 65536,
+            "roots": [
+              {
+                "os": "windows",
+                "path": "C:\\ProgramData\\Example.d\\...a\\.cache"
+              }
+            ],
+            "disclosure_profile": "inventory.software.v1"
+          }
+        }
+      }
+    },
+    {
+      "id": "generation-leading-zero",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "07",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "generation-above-uint64",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "18446744073709551616",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "epoch-21-digits",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "111111111111111111111",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "epoch-integer-not-string",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": 3,
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "approval-missing-approver",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "operator-approval-with-principal",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3",
+          "principal": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "single-administrator-with-approver",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "single-administrator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "principal": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f",
+          "recovery_epoch": "3",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "collector-windows-root-trailing-period",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "18446744073709551615",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "inventory",
+          "kind": "agent-module",
+          "interface": "ricevanta:agent/collector@1.0.0",
+          "values": {
+            "memory_pages": 256,
+            "fuel_per_call": 1000000,
+            "deadline_ms": 5000,
+            "max_roots": 2,
+            "max_path_depth": 4,
+            "max_directory_entries": 100,
+            "max_open_handles": 4,
+            "max_list_requests": 16,
+            "max_read_requests": 16,
+            "max_bytes_per_file": 65536,
+            "max_input_bytes": 262144,
+            "max_rows": 100,
+            "max_output_bytes": 65536,
+            "roots": [
+              {
+                "os": "windows",
+                "path": "C:\\ProgramData\\Example."
+              }
+            ],
+            "disclosure_profile": "inventory.software.v1"
+          }
+        }
+      }
+    },
+    {
+      "id": "approval-unknown-kind",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "automatic",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "release-fixed-with-digest",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "release-fixed",
+          "release_version": "0.4.0",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "package-digest-prefixed",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        }
+      }
+    },
+    {
+      "id": "grant-unknown-value",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {
+            "formats": []
+          }
+        }
+      }
+    },
+    {
+      "id": "collector-missing-profile",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "18446744073709551615",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "inventory",
+          "kind": "agent-module",
+          "interface": "ricevanta:agent/collector@1.0.0",
+          "values": {
+            "memory_pages": 256,
+            "fuel_per_call": 1000000,
+            "deadline_ms": 5000,
+            "max_roots": 2,
+            "max_path_depth": 4,
+            "max_directory_entries": 100,
+            "max_open_handles": 4,
+            "max_list_requests": 16,
+            "max_read_requests": 16,
+            "max_bytes_per_file": 65536,
+            "max_input_bytes": 262144,
+            "max_rows": 100,
+            "max_output_bytes": 65536,
+            "roots": [
+              {
+                "os": "linux",
+                "path": "/var/lib/example"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "collector-root-dot-dot",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "18446744073709551615",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "inventory",
+          "kind": "agent-module",
+          "interface": "ricevanta:agent/collector@1.0.0",
+          "values": {
+            "memory_pages": 256,
+            "fuel_per_call": 1000000,
+            "deadline_ms": 5000,
+            "max_roots": 2,
+            "max_path_depth": 4,
+            "max_directory_entries": 100,
+            "max_open_handles": 4,
+            "max_list_requests": 16,
+            "max_read_requests": 16,
+            "max_bytes_per_file": 65536,
+            "max_input_bytes": 262144,
+            "max_rows": 100,
+            "max_output_bytes": 65536,
+            "roots": [
+              {
+                "os": "linux",
+                "path": "/.."
+              }
+            ],
+            "disclosure_profile": "inventory.software.v1"
+          }
+        }
+      }
+    },
+    {
+      "id": "extra-record-field",
+      "valid": false,
+      "instance": {
+        "extension_id": "com.example.rules",
+        "version": "1.0.0",
+        "package_sha256": "ddac527bea05df4388e2f5148fc606e3a1d0d8e9f9e015b24728e097cd029196",
+        "recovery_epoch": "3",
+        "grant_generation": "7",
+        "approval": {
+          "kind": "operator",
+          "request_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "approval_uid": "017f22e2-79b0-7cc3-98c4-dc0c0c073991",
+          "approver": "017f22e2-79b0-7cc3-98c4-dc0c0c073990",
+          "recovery_epoch": "3"
+        },
+        "grant": {
+          "component": "rules",
+          "kind": "content",
+          "interface": "ext.ricevanta.io/content/v1",
+          "values": {}
+        },
+        "enabled": true
+      }
+    }
+  ]
+}
