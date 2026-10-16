@@ -20,34 +20,35 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
         go mod verify
     - name: Check formatting
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unformatted="$(gofmt -l .)"
         if [ -n "$unformatted" ]; then
@@ -55,23 +56,24 @@ jobs:
           exit 1
         fi
     - name: Test key-file group rules as root
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id server-keyfile-root --evidence "$RUNNER_TEMP/evidence"
     - name: Test
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id server-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Benchmark key admission
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id key-admission-bench --evidence "$RUNNER_TEMP/evidence"
     - name: Ingest cost model
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id ingest-cost-model --evidence "$RUNNER_TEMP/evidence"
     - name: Verify ingest measurement log
       if: always()
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         set -euo pipefail
         test -s "$RUNNER_TEMP/ingest-measurements/cost-model.log"
@@ -84,10 +86,11 @@ jobs:
         retention-days: 30
         if-no-files-found: error
     - name: Vet
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: go vet ./...
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -130,40 +133,40 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
         go mod verify
     - name: Test with race detector
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id server-race --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -205,18 +208,18 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
@@ -224,7 +227,7 @@ jobs:
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Discover fuzz matrix
       id: matrix
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         targets="$(python scripts/ci/inventory.py --fuzz-matrix)"
         printf 'targets=%s\n' "$targets" >> "$GITHUB_OUTPUT"
@@ -246,35 +249,35 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
         go mod verify
     - name: Fuzz for 60 seconds
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         FUZZ_PACKAGE: ${{ matrix.package }}
@@ -290,7 +293,7 @@ jobs:
         retention-days: 30
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -327,7 +330,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: server
     strategy:
       fail-fast: false
@@ -342,25 +345,25 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         HOST_OS: ${{ matrix.os }}
@@ -375,31 +378,31 @@ jobs:
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
         go mod verify
     - name: Extended parser budget
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: |
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/loader-measurements-gate-a"
         python -B scripts/ci/run_selected.py --id loader-extended --evidence "$RUNNER_TEMP/evidence" 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/extended.log"
     - name: Repeat affected parser measurement 50 times
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: |
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/loader-measurements-gate-a"
         python -B scripts/ci/run_selected.py --id loader-repeat --evidence "$RUNNER_TEMP/evidence" 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-a/repeat.log"
     - name: Fuzz parser qualification for 60 seconds
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id loader-fuzz --evidence "$RUNNER_TEMP/evidence"
     - name: Upload failing corpus
@@ -412,6 +415,7 @@ jobs:
         retention-days: 30
     - name: Verify loader measurement logs
       if: always()
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         set -euo pipefail
         test -s "$RUNNER_TEMP/loader-measurements-gate-a/extended.log"
@@ -428,7 +432,7 @@ jobs:
         if-no-files-found: error
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -465,7 +469,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: server
     strategy:
       fail-fast: false
@@ -480,25 +484,25 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         HOST_OS: ${{ matrix.os }}
@@ -513,17 +517,17 @@ jobs:
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
         go mod verify
     - name: Extended loader budget
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: |
         set -euo pipefail
@@ -531,6 +535,7 @@ jobs:
         python -B scripts/ci/run_selected.py --id loader-gate-b-extended --evidence "$RUNNER_TEMP/evidence" 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-b/extended.log"
     - name: Verify loader measurement logs
       if: always()
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         set -euo pipefail
         test -s "$RUNNER_TEMP/loader-measurements-gate-b/extended.log"
@@ -544,7 +549,7 @@ jobs:
         if-no-files-found: error
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -580,7 +585,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: server
     strategy:
       fail-fast: false
@@ -601,25 +606,25 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,go
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         HOST_OS: ${{ matrix.os }}
@@ -634,17 +639,17 @@ jobs:
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
         go mod verify
     - name: Check native target
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       env:
         EXPECTED_GOOS: ${{ matrix.goos }}
         EXPECTED_GOARCH: ${{ matrix.goarch }}
@@ -652,12 +657,12 @@ jobs:
         test "$(go env GOOS)" = "$EXPECTED_GOOS"
         test "$(go env GOARCH)" = "$EXPECTED_GOARCH"
     - name: Test OCSF shared corpus
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id ocsf-native --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}

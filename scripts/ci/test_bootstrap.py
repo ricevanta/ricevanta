@@ -22,11 +22,12 @@ from unittest import mock
 import zipfile
 
 import bootstrap
+import run_selected
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = ROOT / 'scripts/ci/toolchains.lock.json'
 SIMULATED = os.environ.get('BOOTSTRAP_TEST_HOST')
-HOST = SIMULATED or bootstrap.host_platform()
+HOST = SIMULATED or bootstrap.host_platform(os_release={'ID': 'ubuntu', 'VERSION_ID': '24.04'})
 assert HOST in bootstrap.PLATFORMS, HOST
 POSIX = os.name != 'nt'
 # Captured from the admitted linux-x64 payloads; rustfmt and clippy print a ten-digit short hash, rustc nine.
@@ -124,6 +125,51 @@ class FakeRegistry:
 
     def delete(self, registration):
         self.items.remove(registration); self.deleted.append(registration)
+
+
+class RegistryReaderTests(unittest.TestCase):
+    def registry(self, *, opening=None, enumeration=None, value=None):
+        class Key:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def Close(self): pass
+        class Winreg:
+            KEY_READ = KEY_WOW64_64KEY = 0
+            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, HKEY_CLASSES_ROOT = 'HKCU', 'HKLM', 'HKCR'
+            def OpenKey(self, *args):
+                if opening: raise opening
+                return Key()
+            def EnumKey(self, key, index):
+                if index == 0: return 'child'
+                raise enumeration
+            def QueryValueEx(self, *args):
+                if value: raise value
+                return 'Python 3.14.8 (64-bit)', 1
+        registry = bootstrap.WindowsRegistry()
+        registry._winreg = lambda: Winreg()
+        return registry
+
+    def test_missing_registry_keys_values_and_enumeration_end_are_absent(self):
+        missing = FileNotFoundError(2, 'not found')
+        registry = self.registry(opening=missing)
+        self.assertEqual(registry.registrations('3.14'), [])
+        self.assertFalse(registry.user_core('3.14'))
+        ended = OSError('no more data'); ended.winerror = 259
+        registry = self.registry(enumeration=ended, value=missing)
+        self.assertEqual(registry._children('HKCU', 'key'), ['child'])
+        self.assertEqual(registry._value('HKCU', 'key', 'DisplayName'), '')
+        self.assertTrue(registry.user_core('3.14'))
+
+    def test_registry_read_errors_are_typed_refusals(self):
+        for error in (PermissionError(5, 'Access is denied'), OSError(6, 'invalid handle')):
+            for operation in ('open', 'enumerate', 'query'):
+                with self.subTest(operation=operation, error=type(error).__name__):
+                    registry = self.registry(opening=error if operation == 'open' else None,
+                                             enumeration=error, value=error if operation == 'query' else None)
+                    with self.assertRaisesRegex(bootstrap.BootstrapError, 'registry'):
+                        if operation == 'enumerate': registry._children('HKCU', 'key')
+                        elif operation == 'query': registry._value('HKCU', 'key', 'DisplayName')
+                        else: registry.user_core('3.14')
 
 
 RUNNER_PYTHON = [('HKLM', r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{bundle}', 'Python 3.14.8 (64-bit)'),
@@ -869,6 +915,29 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(code, 1); self.assertIn('outside a GitHub-hosted runner', error)
         self.assertTrue((self.framework / 'Versions' / '3.14').exists()); self.assertFalse(any(c[0] == 'sudo' for c in execute.calls))
 
+    def test_first_python_install_requires_a_github_hosted_runner(self):
+        for identity in ('windows-x64', 'macos-arm64'):
+            for runner in ('self-hosted', ''):
+                with self.subTest(identity=identity, runner=runner):
+                    base = self.base / (identity + '-' + (runner or 'unset')); base.mkdir()
+                    self.fixtures = Fixtures(base, identity); self.fixtures.python()
+                    registry = FakeRegistry()
+                    host = make_host(identity, base, registry=registry,
+                                     environ={'RUNNER_ENVIRONMENT': runner, 'PATH': ''})
+                    executor = FakeExecute(responses(identity), side_effect=installers(identity, host.framework_root))
+                    code, error, journal, execute, dest = self.run_bootstrap('python', host=host, execute=executor, dest=base / 'dest')
+                    self.assertEqual(code, 1, journal)
+                    self.assertIn('outside a GitHub-hosted runner', error)
+                    self.assertEqual(execute.calls, []); self.assertEqual(registry.deleted, [])
+                    self.assertFalse(host.framework_root.exists()); self.assertEqual(list(dest.iterdir()), [])
+
+    def test_unreadable_windows_registry_prevents_installer_execution(self):
+        self.fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures.python()
+        registry = RegistryReaderTests().registry(opening=PermissionError(5, 'Access is denied'))
+        code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, registry))
+        self.assertEqual(code, 1, journal); self.assertIn('registry', error)
+        self.assertEqual(execute.calls, []); self.assertEqual(list(dest.iterdir()), [])
+
     def test_every_archive_is_inspected_before_any_installer_runs(self):
         fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures = fixtures
         fixtures.python()
@@ -900,6 +969,25 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual([c[2] for c in execute.calls if c[0] == 'sudo'], ['rm', 'installer'])
         self.assertEqual(os.readlink(dest / 'python' / 'bin' / 'python'), str(stale / 'python3.14'))
         self.assertIn('bootstrap: replaced runner-provided ', journal)
+        (stale / 'python3.14').chmod(0o755)
+        env = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
+        run_selected.admitted_tool_guard(env)
+        alias = dest / 'python' / 'bin' / 'python'
+        alias.unlink(); alias.write_bytes(b'wrapper'); alias.chmod(0o755)
+        with self.assertRaisesRegex(run_selected.EvidenceError, 'python resolves outside'):
+            run_selected.admitted_tool_guard(env)
+        alias.unlink(); alias.symlink_to(stale / 'python3.14')
+        proof_path = dest / 'bootstrap-evidence.json'; proof = json.loads(proof_path.read_text())
+        for key, value in (('installed', str(self.base / 'foreign-python')), ('verified', False), ('version', '3.14.7')):
+            changed = json.loads(json.dumps(proof)); changed['entries'][0][key] = value
+            proof_path.write_text(json.dumps(changed))
+            with self.subTest(field=key), self.assertRaisesRegex(run_selected.EvidenceError, 'python resolves outside'):
+                run_selected.admitted_tool_guard(env)
+        proof_path.write_text(json.dumps(proof))
+        (alias.parent / 'go').symlink_to(stale / 'python3.14')
+        proof['entries'].append({'tool': 'go'}); proof_path.write_text(json.dumps(proof))
+        with self.assertRaisesRegex(run_selected.EvidenceError, 'go resolves outside'):
+            run_selected.admitted_tool_guard(env)
 
     def test_macos_reexec_leaves_the_framework_being_replaced(self):
         framework = self.base / 'Frameworks' / 'Python.framework'
@@ -1089,6 +1177,19 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('RUSTC', error)
         self.assertFalse((self.base / 'env').exists(), 'nothing is written when the env file would carry an unadmitted name')
 
+    def test_invalid_env_file_value_refuses_without_leaving_an_install(self):
+        self.fixtures.go()
+        original = bootstrap.RECIPES['go']
+        def leaky_value(ctx, entry):
+            original[2](ctx, entry)
+            ctx.env['GOROOT'] = 'bad\nRUSTC=/tmp/shim'
+        with mock.patch.dict(bootstrap.RECIPES, {'go': (original[0], original[1], leaky_value)}):
+            code, error, _, _, dest = self.run_bootstrap('go')
+        self.assertEqual(code, 1)
+        self.assertIn('environment value GOROOT', error)
+        self.assertFalse((self.base / 'env').exists())
+        self.assertFalse(any(dest.iterdir()))
+
     def test_ubuntu_release_must_match_the_platform(self):
         """24.04 and 22.04 runners are distinct identities: /etc/os-release decides, and a mismatch refuses before any download."""
         for name, base_name in (('linux-x64-ubuntu22.04', 'linux-x64'), ('linux-arm64-ubuntu22.04', 'linux-arm64')):
@@ -1131,6 +1232,12 @@ class BootstrapTests(unittest.TestCase):
                 code, error, journal, *_ = self.run_bootstrap('go', dest=self.base / ('dest-ok-' + platform))
                 self.assertEqual((code, error), (0, None), journal)
 
+    def test_windows_prefix_exception_does_not_admit_an_impostor_git_directory(self):
+        for directory in (r'C:\attacker\usr\bin', r'C:\attacker\ucrt64\bin', r'C:\attacker\mingw64\bin'):
+            with self.subTest(directory=directory):
+                entries = [directory, r'D:\a\_temp\admitted\go\bin']
+                self.assertEqual(bootstrap.strip_git_bash_prefix(entries, {'MSYSTEM': 'UCRT64', 'USERPROFILE': r'C:\Users\runneradmin'}), entries)
+
     def test_windows_path_drops_the_git_bash_prefix(self):
         runner = [r'C:\hostedtoolcache\windows\Python\3.12.10\x64', r'C:\Windows\system32', r'C:\Program Files\Git\usr\bin', r'C:\Program Files\Git\cmd']
         wrapper = [r'C:\Users\runneradmin\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin']
@@ -1161,13 +1268,16 @@ class BootstrapTests(unittest.TestCase):
         (sources / sha(payload)).write_bytes(payload)
         env = {k: v for k, v in os.environ.items() if k not in ('RUNNER_TOOL_CACHE', 'AGENT_TOOLSDIRECTORY')}
         env['CI_TOOLCHAIN_SOURCES'] = str(sources)
-        result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/bootstrap.py'), '--lock', str(self.fixtures.lock()), '--platform', HOST,
+        cli = [sys.executable, '-B', '-c',
+               "import sys; sys.path.insert(0, " + repr(str(ROOT / 'scripts/ci')) + "); import bootstrap; "
+               "bootstrap.read_os_release = lambda: {'ID': 'ubuntu', 'VERSION_ID': '24.04'}; sys.exit(bootstrap.main())"]
+        result = subprocess.run([*cli, '--lock', str(self.fixtures.lock()), '--platform', HOST,
                                  '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'sources', '--env-out', str(self.base / 'env')],
                                 env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('bootstrap: admitted go', result.stdout)
         self.assertEqual(self.env_lines()['PATH'].split(os.pathsep)[0], str(self.base / 'dest' / 'go' / 'bin'))
-        result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/ci/bootstrap.py'), '--lock', str(self.fixtures.lock()), '--platform', HOST,
+        result = subprocess.run([*cli, '--lock', str(self.fixtures.lock()), '--platform', HOST,
                                  '--tools', 'go', '--dest', str(self.base / 'dest'), '--cache-mode', 'none', '--env-out', str(self.base / 'env')],
                                 env=env, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
@@ -1252,13 +1362,13 @@ class ControlsTests(unittest.TestCase):
                           host=make_host('windows-x64', self.base, environ={'PATH': r'C:\Windows\system32'}))
         admitted = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
         home = r'C:\Users\runneradmin'
-        prefixed = ';'.join([home + r'\bin', r'C:\Program Files\Git\mingw64\bin', r'C:\Program Files\Git\usr\bin', admitted['PATH']])
+        prefixed = ';'.join([home + r'\bin', r'C:\Program Files\Git\ucrt64\bin', r'C:\Program Files\Git\usr\bin', admitted['PATH']])
         argv = ['evidence', '--lock', str(lock), '--platform', 'windows-x64', '--tools', 'go', '--evidence', str(dest / 'bootstrap-evidence.json')]
-        with mock.patch.dict(os.environ, {**admitted, 'PATH': prefixed, 'MSYSTEM': 'MINGW64', 'USERPROFILE': home}), contextlib.redirect_stdout(io.StringIO()):
+        with mock.patch.dict(os.environ, {**admitted, 'PATH': prefixed, 'MSYSTEM': 'UCRT64', 'USERPROFILE': home}), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(self.controls.run(argv)['failures'], [])
         # The allowance is the wrapper's own prefix only: outside Git Bash, or with any other directory first, PATH fails.
         for label, environ in (('not Git Bash', {**admitted, 'PATH': prefixed, 'MSYSTEM': ''}),
-                               ('other directory first', {**admitted, 'PATH': r'C:\hostedtoolcache\windows\go\1.27.1\x64\bin;' + prefixed, 'MSYSTEM': 'MINGW64', 'USERPROFILE': home})):
+                               ('other directory first', {**admitted, 'PATH': r'C:\hostedtoolcache\windows\go\1.27.1\x64\bin;' + prefixed, 'MSYSTEM': 'UCRT64', 'USERPROFILE': home})):
             with self.subTest(case=label), mock.patch.dict(os.environ, environ), contextlib.redirect_stdout(io.StringIO()):
                 failures = self.controls.run(argv)['failures']
                 self.assertTrue(any('PATH does not begin with the admitted directories' in f for f in failures), failures)

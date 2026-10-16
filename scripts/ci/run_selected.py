@@ -14,12 +14,15 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
 import tomllib
 
 import rust_env
+import python_env
+import bootstrap
 
 ROOT = Path(__file__).resolve().parents[2]
 GO_LIST_NAME = re.compile(r'^(Test|Benchmark|Fuzz|Example)\w*$')
@@ -855,12 +858,21 @@ def stream(pipe, sink, mirror):
 def execute(command, cwd, env, stdout_path, stderr_path):
     """Stream both pipes into CI logs while retaining the raw bytes."""
     with open(stdout_path, 'wb') as out, open(stderr_path, 'wb') as err:
-        process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        threads = [threading.Thread(target=stream, args=(process.stdout, out, sys.stdout)),
-                   threading.Thread(target=stream, args=(process.stderr, err, sys.stderr))]
-        for thread in threads: thread.start()
-        for thread in threads: thread.join()
-        return process.wait()
+        with subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            threads = [threading.Thread(target=stream, args=(process.stdout, out, sys.stdout)),
+                       threading.Thread(target=stream, args=(process.stderr, err, sys.stderr))]
+            try:
+                for thread in threads: thread.start()
+                for thread in threads: thread.join()
+                return process.wait()
+            except BaseException:
+                # A started pump can hold a pipe's read lock while the child blocks on the other pipe.
+                # Reap the child and join every started pump before Popen closes either reader.
+                if process.poll() is None: process.kill()
+                process.wait()
+                for thread in threads:
+                    if thread.ident is not None: thread.join()
+                raise
 
 
 def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=None, declarations=None):
@@ -917,12 +929,75 @@ def cargo_guard(target, env, root):
 
 def child_environment(target, env):
     """Go children ignore the per-user configuration file, so `go env -w` cannot supply CC, flags or a toolchain."""
-    result = {**env, 'GOENV': 'off'} if target['mode'].startswith('go') else env
+    result = {**env, 'GOENV': 'off', 'GOCACHEPROG': ''} if target['mode'].startswith('go') else env
     if target['mode'] == 'go-cost-model': result.update(RICEVANTA_COST_MODEL='full', GOGC='100')
     return result
 
 
+def admitted_framework_python(found, name, root, evidence):
+    """Only the exact macOS Python aliases made by bootstrap may leave the admitted root."""
+    rows = [row for row in evidence['entries'] if row.get('tool') == 'python']
+    if len(rows) != 1 or not found: return False
+    row = rows[0]
+    version = python_env.read_python_version((ROOT / '.github/python-version').read_text(encoding='utf-8'))
+    minor = '.'.join(version.split('.')[:2])
+    installed = Path(row.get('installed', ''))
+    alias = root / 'python' / 'bin' / name
+    if (row.get('verified') is not True or row.get('version') != version or row.get('id') != f'python-{version}-macos-arm64'
+            or not same_path(evidence.get('destination', ''), root) or not installed.is_absolute()
+            or installed.parts[-5:] != ('Python.framework', 'Versions', minor, 'bin', f'python{minor}')
+            or not same_path(found, alias) or (root / 'python').is_symlink() or alias.parent.is_symlink()):
+        return False
+    return alias.is_symlink() and os.readlink(alias) == str(installed)
+
+
+def admitted_tool_guard(env):
+    """Check bootstrap PATH order and tool resolution before discovering or executing tests."""
+    if not env.get('CI_ADMITTED_ROOT'): return
+    root = Path(env['CI_ADMITTED_ROOT'])
+    try:
+        evidence = json.loads((root / 'bootstrap-evidence.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError) as error:
+        raise EvidenceError(f'admitted tool evidence unreadable: {error}') from error
+    windows = evidence.get('platform', '').startswith('windows')
+    entries = [part for part in env.get('PATH', '').split(';' if windows else os.pathsep) if part]
+    if windows: entries = bootstrap.strip_git_bash_prefix(entries, env)
+    # GITHUB_PATH may prepend only the currently running, marker-created validator's scripts directory.
+    scripts = Path(sys.prefix) / ('Scripts' if windows else 'bin')
+    validator = None
+    if sys.prefix != sys.base_prefix and entries and bootstrap.path_identity(entries[0], windows) == bootstrap.path_identity(scripts, windows):
+        try:
+            marker = python_env.read_marker(sys.prefix)
+            current = python_env.scripts_manifest(scripts)
+            for name in ('python', 'python3', 'python.exe', 'python3.exe'):
+                if name in marker['scripts'] and marker['scripts'][name] != current.get(name):
+                    raise ValueError('validator interpreter changed')
+        except ValueError as error: raise EvidenceError(f'admitted validator: {error}') from error
+        validator = scripts
+        entries = entries[1:]
+    prefix = evidence.get('path', [])
+    if not prefix or [bootstrap.path_identity(p, windows) for p in entries[:len(prefix)]] != [bootstrap.path_identity(p, windows) for p in prefix]:
+        raise EvidenceError('PATH does not begin with the admitted directories')
+    tools = {row['tool'] for row in evidence['entries']}
+    names = {'python': ('python', 'python3'), 'go': ('go', 'gofmt'), 'rustc': ('cargo', 'rustc', 'rustdoc', 'rustfmt', 'cargo-clippy'),
+             'node': ('node',), 'pnpm': ('pnpm',)}
+    for tool, commands in names.items():
+        if tool not in tools: continue
+        for name in commands:
+            found = shutil.which(name + ('.exe' if windows else ''), path=env.get('PATH', ''))
+            allowed = found and Path(found).resolve().is_relative_to(root.resolve())
+            if evidence.get('platform') == 'macos-arm64' and tool == 'python':
+                allowed = admitted_framework_python(found, name, root, evidence)
+            if validator and name in ('python', 'python3') and found:
+                allowed = allowed or python_env.path_key(Path(found).parent) == python_env.path_key(validator)
+            if not allowed: raise EvidenceError(f'admitted tool {name} resolves outside the admitted root: {found}')
+
+
 def preconditions(target, env, root=ROOT):
+    hooks = python_env.environment_errors(env)
+    if hooks: raise EvidenceError('; '.join(hooks))
+    external = [key for key, value in env.items() if key.upper() == 'GOCACHEPROG' and value]
+    if external: raise EvidenceError('external Go cache program forbidden: ' + ', '.join(external))
     refused = rust_env.c_toolchain_names(env)
     if refused: raise EvidenceError('C toolchain variables in the environment could replace the compiler, archiver or flags: ' + ', '.join(refused))
     cargo_guard(target, env, root)
@@ -947,6 +1022,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
         cost_log.parent.mkdir(parents=True, exist_ok=True)
         cost_log.write_text('Starting ingest cost-model proof\n', encoding='utf-8')
     preconditions(target, env, root)
+    admitted_tool_guard(env)
     env = child_environment(target, env)
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)

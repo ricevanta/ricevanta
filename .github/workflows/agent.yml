@@ -15,7 +15,7 @@ jobs:
     defaults:
       run:
         working-directory: agent
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
     strategy:
       fail-fast: false
       matrix:
@@ -35,25 +35,25 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,rust
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: python,rust
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         HOST_OS: ${{ matrix.os }}
@@ -72,6 +72,7 @@ jobs:
         ACTUAL_ARCH: ${{ runner.arch }}
         EXPECTED_ARCH: ${{ matrix.arch }}
         EXPECTED_HOST: ${{ matrix.host }}
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         test "$ACTUAL_ARCH" = "$EXPECTED_ARCH"
         release="$(rustc -vV | sed -n 's/^release: //p' | tr -d '\r')"
@@ -85,10 +86,11 @@ jobs:
           ${{ runner.temp }}/admitted/cargo-home/registry/cache
         key: agent-cargo-registry-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
     - name: Admit Cargo downloads and fresh target
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Check locked dependency pins
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
@@ -101,29 +103,34 @@ jobs:
         print("Locked dependency pins verified")
         '
     - name: Check fixture drift
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: python tools/generate-spool-fixtures.py --check
     - name: Check formatting
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         cargo fmt --all -- --check
     - name: Record Unix C compiler
       if: runner.os != 'Windows'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: ${CC:-cc} --version
     - name: Record MSVC compiler
       if: runner.os == 'Windows'
-      shell: pwsh
+      shell: pwsh -NoLogo -NoProfile -NonInteractive -Command ". '{0}'"
+      working-directory: agent
       run: ./tools/check-msvc.ps1
     - name: Clippy
       env:
         CARGO_NET_OFFLINE: 'true'
         CC_ENABLE_DEBUG_OUTPUT: '1'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         cargo clippy --locked --workspace --all-targets -vv -- -D warnings
     - name: Test
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
@@ -133,7 +140,7 @@ jobs:
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         python -B scripts/ci/run_selected.py --id agent-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Extended recovery property test
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
@@ -142,7 +149,7 @@ jobs:
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         python -B scripts/ci/run_selected.py --id spool-extended --evidence "$RUNNER_TEMP/evidence"
     - name: Extended seal property test
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
@@ -151,28 +158,28 @@ jobs:
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         python -B scripts/ci/run_selected.py --id batch-extended --evidence "$RUNNER_TEMP/evidence"
     - name: Extended JSON property test
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: python -B scripts/ci/run_selected.py --id json-extended --evidence "$RUNNER_TEMP/evidence"
     - name: Root Linux protection tests
       if: runner.os == 'Linux'
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: python -B scripts/ci/run_selected.py --id agent-protection-root-linux --evidence "$RUNNER_TEMP/evidence"
     - name: Root macOS protection tests
       if: runner.os == 'macOS'
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: python -B scripts/ci/run_selected.py --id agent-protection-root-macos --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -210,36 +217,36 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go,rust
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,go,rust
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
@@ -251,6 +258,7 @@ jobs:
           ${{ runner.temp }}/admitted/cargo-home/registry/cache
         key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
     - name: Check admitted Rust and native host
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         test "$(rustc -vV | sed -n 's/^release: //p')" = '1.99.0'
         host="$(rustc -vV | sed -n 's/^host: //p')"
@@ -258,13 +266,14 @@ jobs:
         test "$RUNNER_ARCH" = 'X64'
         cc --version
     - name: Admit Cargo downloads and fresh target
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Build live writer
       working-directory: agent
       env:
         CC_ENABLE_DEBUG_OUTPUT: '1'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
@@ -274,16 +283,16 @@ jobs:
         test -x "$vector"
         echo "RICEVANTA_BATCH_VECTOR=$vector" >> "$GITHUB_ENV"
     - name: Live Go decoder conformance
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id interop-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Live Go decoder conformance with race detector
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id interop-race --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}

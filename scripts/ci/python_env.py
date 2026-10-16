@@ -289,13 +289,14 @@ def environment_errors(environ):
     def risky(key):
         name = key.upper()
         return ((name.startswith('PYTHON') and name not in ALLOWED_PYTHON_ENV) or name.startswith('PIP_')
-                or name in FORBIDDEN_ENV or name.startswith('BASH_FUNC_'))
+                or name in FORBIDDEN_ENV or name in {'SHELLOPTS', 'BASHOPTS'}
+                or name.startswith(('BASH_FUNC_', 'LD_', 'DYLD_')))
     return [f'python: environment variable {key} must not be set' for key in sorted(environ) if risky(key)]
 
 
 def path_errors(entries, script_dir, base_prefix, prefix, site_dirs, windows=False):
-    """Every import path must be this script's directory, the venv's site-packages, on Windows the venv root that
-    CPython itself adds, or the base interpreter's stdlib."""
+    """Every import path must be the helper directory, venv site-packages, Windows venv root or a path
+    below the base prefix outside site-packages and dist-packages. Base-library file mutation is a review residual."""
     script, base = Path(script_dir).resolve(), Path(base_prefix).resolve()
     sites = {Path(site).resolve() for site in site_dirs}
     root = Path(prefix).resolve()
@@ -332,6 +333,28 @@ def read_marker(prefix):
             or not isinstance(marker.get('scripts'), dict)):
         raise ValueError(f'python: malformed venv marker {path}')
     return marker
+
+
+def pyvenv_errors(prefix, base_prefix, windows=False):
+    """Read isolation settings even under -I -S, which suppresses site initialization."""
+    try:
+        fields = {}
+        for line in (Path(prefix) / 'pyvenv.cfg').read_text(encoding='utf-8').splitlines():
+            if '=' not in line: continue
+            key, value = (part.strip() for part in line.split('=', 1))
+            key = key.lower()
+            if key in fields: return [f'python: duplicate pyvenv.cfg field {key}']
+            fields[key] = value
+    except (OSError, UnicodeError) as error:
+        return [f'python: pyvenv.cfg unreadable: {error}']
+    errors = []
+    if fields.get('include-system-site-packages', '').lower() != 'false':
+        errors.append('python: pyvenv.cfg include-system-site-packages must be false')
+    expected = Path(base_prefix) if windows else Path(base_prefix) / 'bin'
+    home = fields.get('home', '')
+    if not home or not Path(home).is_absolute() or Path(home).resolve() != expected.resolve():
+        errors.append(f'python: pyvenv.cfg home must be {expected}')
+    return errors
 
 
 def scripts_manifest(directory):
@@ -508,7 +531,10 @@ def shadow_errors(root):
         if Path(directory) != Path(root) and not any(name.endswith('.py') for name in filenames): continue
         for name in sorted(dirnames + filenames):
             stem = name.split('.')[0]
-            if stem in CLOSURE_MODULES and (name in dirnames or name.endswith(IMPORTABLE_SUFFIXES)):
+            package = (name in dirnames and name in CLOSURE_MODULES
+                       and any(child.name.startswith('__init__.') and child.name.endswith(IMPORTABLE_SUFFIXES)
+                               for child in (Path(directory) / name).iterdir()))
+            if stem in CLOSURE_MODULES and (package or (name in filenames and name.endswith(IMPORTABLE_SUFFIXES))):
                 relative = Path(os.path.relpath(os.path.join(directory, name), root)).as_posix()
                 errors.append(f'{relative}: shadows the validator closure module {stem}')
     return errors
@@ -585,6 +611,7 @@ def runtime_errors():
     errors = environment_errors(os.environ)
     errors += interpreter_errors(shutil.which('python'), sys.executable, sys.prefix, sys.base_prefix, platform.python_version(), windows)
     errors += path_errors(sys.path, Path(__file__).resolve().parent, sys.base_prefix, sys.prefix, sites, windows)
+    errors += pyvenv_errors(sys.prefix, sys.base_prefix, windows)
     errors += venv_root_errors(sys.prefix, windows)
     errors += customize_errors([*sys.path, *sites])
     return errors, sites

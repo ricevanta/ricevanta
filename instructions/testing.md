@@ -37,6 +37,18 @@ actionlint .github/workflows/*.yml
 git diff --check
 ```
 
+Local and CI, repository root, for the validator and bootstrap helpers:
+
+```sh
+python -B -m unittest discover -s scripts/ci -p test_python_env.py -v
+python -B -m unittest discover -s scripts/ci -p test_bootstrap.py -v
+python -B -m unittest discover -s scripts/ci -p test_run_selected.py -v
+python -B -m unittest discover -s scripts/ci -p test_policy.py -v
+python -B -m unittest discover -s scripts/ci -p test_fresh_go.py -v
+```
+
+These helper tests inject platform identities and use tiny payload fixtures. Native cold installs, Windows per-user Python registration cleanup and Git Bash resolution, macOS system-Python re-execution and the exact MSVC PowerShell invocation run only in CI. The admitted Python closure and pinned Go must also pass there. Every Bash step uses the admission shell from [CI hardening section 8](../docs/specs/ci-hardening.md#environment-admission-in-every-authoritative-job); only the exact native MSVC step uses the no-profile PowerShell shell.
+
 Local, `server/`, focused complete-loader checks:
 
 ```sh

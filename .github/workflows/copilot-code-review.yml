@@ -31,35 +31,36 @@ jobs:
         with:
           persist-credentials: false
       - name: Bootstrap admitted toolchains
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: .
         env:
           CI_PLATFORM: linux-x64
           CI_TOOLS: python,go,rust,node,pnpm
         run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
       - name: Apply admitted toolchain environment
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: .
         run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
       - name: Verify admitted toolchain evidence
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: .
         env:
           CI_PLATFORM: linux-x64
           CI_TOOLS: python,go,rust,node,pnpm
         run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
       - name: Create fresh Go caches
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: .
         run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
       - name: Download and verify Go modules
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: server
         run: |
           go mod download
           go mod verify
       - name: Install console dependencies without lifecycle scripts
         working-directory: console
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Create validator environment
         shell: bash --noprofile --norc -p -e -o pipefail {0}
@@ -73,7 +74,7 @@ jobs:
           python -m pip check
           python -I -S -B scripts/ci/python_env.py --check
       - name: Admit Cargo downloads and fresh target
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         working-directory: .
         run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
       - name: Re-verify validator environment

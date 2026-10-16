@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
     strategy:
       fail-fast: false
       matrix:
@@ -30,32 +30,32 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Reject corrupted payloads before any extraction or execution
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: ${{ matrix.tools }}
       run: python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --work "$RUNNER_TEMP/bootstrap-controls"
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: ${{ matrix.tools }}
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
         CI_TOOLS: ${{ matrix.tools }}
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         HOST_OS: ${{ matrix.os }}
@@ -70,7 +70,7 @@ jobs:
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
     - name: Record runner compilers, SDKs and admitted tool versions
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: |
         echo "image ${ImageOS:-?} ${ImageVersion:-?}"
@@ -78,19 +78,14 @@ jobs:
         case "$RUNNER_OS" in
           Linux) cc --version; ldd --version | head -1;;
           macOS) cc --version; xcodebuild -version; sw_vers;;
-          Windows) pwsh -File agent/tools/check-msvc.ps1;;
+          Windows) pwsh -NoLogo -NoProfile -NonInteractive -File agent/tools/check-msvc.ps1;;
         esac
-        # bootstrap.py executed every admitted tool once and logged its version; this records the PATH resolution.
-        command -v python; python --version
-        command -v go; go version
-        command -v rustc; rustc -vV; cargo -V; rustfmt --version; cargo-clippy --version
-        if [ "$RUNNER_OS" = Linux ]; then ls "$PLAYWRIGHT_BROWSERS_PATH"; fi
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
@@ -107,9 +102,10 @@ jobs:
         python -m pip check
         python -I -S -B scripts/ci/python_env.py --check
     - name: Contract unit tests
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v
     - name: CI schema fixtures
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         python - <<'PY'
         import json
@@ -133,7 +129,7 @@ jobs:
       run: python -I -S -B scripts/ci/python_env.py --check
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}

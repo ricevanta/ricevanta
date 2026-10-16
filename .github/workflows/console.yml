@@ -23,55 +23,68 @@ jobs:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
     - name: Bootstrap admitted toolchains
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,node,pnpm,playwright
       run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
     - name: Apply admitted toolchain environment
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
     - name: Verify admitted toolchain evidence
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         CI_PLATFORM: linux-x64
         CI_TOOLS: python,node,pnpm,playwright
       run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Record admitted browser builds
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         node --version
         pnpm --version
         ls -1 "$PLAYWRIGHT_BROWSERS_PATH"
     - name: Frozen install
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm install --frozen-lockfile
     - name: Type check
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm typecheck
     - name: Lint
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm lint
     - name: Format check
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm format:check
     - name: Dependency audit
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm audit:deps
     - name: Unit tests
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm test:unit
     - name: Component tests
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm test:component
     - name: Production build
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm build
     - name: Reproducibility
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm check:reproducible
     - name: Enforcing CSP, Chromium, Firefox and WebKit
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm test:csp
     - name: Bundle manifest
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: cat dist/.vite/manifest.json
     - name: Bounded properties
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: pnpm test:fuzz
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}

@@ -290,7 +290,7 @@ def cargo_config_errors(root):
 
 # Shell-style assignments (`NAME=value cmd`, `export NAME=`, `env NAME=` or a GITHUB_ENV line); cc reads target-suffixed
 # names with hyphens, which `env` can pass.
-SHELL_ASSIGNMENT = re.compile(r'(?<![\w$.-])([A-Za-z_][A-Za-z0-9_-]*)\+?=')
+SHELL_ASSIGNMENT = re.compile(r'(?<![\w$.-])([A-Za-z_][A-Za-z0-9_-]*(?:%%)?)\+?=')
 
 
 def cargo_override_errors(data):
@@ -377,7 +377,7 @@ def agent_native_errors(job):
         command = wrapper('agent-protection-root-' + suffix)
         matches = [step for step in steps if command in step.get('run', '')]
         expected = {'name': 'Root ' + ('Linux' if suffix == 'linux' else 'macOS') + ' protection tests',
-                    'if': "runner.os == '" + host + "'", 'shell': 'bash', 'working-directory': '.',
+                    'if': "runner.os == '" + host + "'", 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
                     'env': {'CARGO_NET_OFFLINE': 'true'}, 'run': command}
         if matches != [expected]: errors.append('exact host-guarded root protection step required: ' + suffix)
     proof = next((step for step in steps if step.get('id') == 'proof'), {})
@@ -465,7 +465,8 @@ LITERAL_ENV_WRITE = re.compile(r'[ \t]*echo[ \t]+"([A-Za-z_][A-Za-z0-9_]*)=(?:[^
 
 def forbidden_env_name(name):
     """Section 8: names no step outside the pinned helpers may set through env or GITHUB_ENV."""
-    return (name in ADMITTED_ENV or name.startswith(ADMITTED_ENV_PREFIXES) or name in CACHE_ENV
+    name = name.upper()
+    return (name in {n.upper() for n in ADMITTED_ENV} or name.startswith(tuple(n.upper() for n in ADMITTED_ENV_PREFIXES)) or name in CACHE_ENV
             or rust_env.is_c_toolchain_name(name) or bool(rust_env.rust_overrides([name])) or name.upper() in ('BASH_ENV', 'ENV'))
 
 
@@ -516,7 +517,7 @@ ENV_FILE = re.compile(r'(?i)github_env|\bgithub\s*\.\s*env\b|_runner_file_comman
 WHOLE_GITHUB = re.compile(r'(?i)\bgithub\s*(?:[\[,)]|\}\})')
 # Ways to locate site-packages, the scripts directory, the base interpreter or start-up hooks without naming the venv.
 SITE_PROBE = re.compile(r'(?i)sysconfig|getsitepackages|getusersitepackages|site-packages|dist-packages|_base_executable|'
-                        r'\bsys\s*\.\s*(?:base_|exec_)*(?:prefix|executable)\b|\bcommand\s+-[vV]\b|\bwhich\b|'
+                        r'\bsys\s*\.\s*(?:base_|exec_)*(?:prefix|executable)\b|\bcommand\s+-[vV]\b|(?:^|[\n;|&(`])[ \t]*which\b|'
                         r'\btype\s+-[aPp]\b|\bwhereis\b|pythonlocation|python[23]?_root_dir|toolcache|\.pth\b|'
                         r'sitecustomize|usercustomize')
 PATH_PART = re.compile(r'[^/\\\s"\'$(){};|&<>=:,`]+')
@@ -531,7 +532,7 @@ RISKY_NAME = r'(PYTHON\w*|PIP_\w*|BASH_ENV|ENV|BASH_FUNC_[^\s=]*|LD_\w*|DYLD_\w*
 SHELL_ASSIGN = re.compile(rf'(?i)(?<![\w$.-]){RISKY_NAME}\+?=')
 SHELL_EXPORT = re.compile(rf'(?i)\b(?:export|declare|typeset|local|readonly)\b[^\n;|&]*?(?<![\w$.-]){RISKY_NAME}(?![\w=])')
 ALLEXPORT = re.compile(r'(?i)\bset\s+(?:[-+][a-z]*a[a-z]*\b|-o\s+allexport\b)')
-CONSUMER_SHELLS = frozenset({'bash', python_env.ADMISSION_SHELL})
+CONSUMER_SHELLS = frozenset({python_env.ADMISSION_SHELL})
 
 
 def names_venv(text):
@@ -571,13 +572,13 @@ def scanner_job(unit):
         {'uses': CHECKOUT, 'with': {'persist-credentials': 'false', 'fetch-depth': '0',
                                   'ref': '${{ fromJSON(needs.route.outputs.route).testedSha }}'}},
         *bootstrap_steps('linux-x64', 'python'),
-        {'id': 'preflight', 'shell': 'bash', 'working-directory': '.', 'env': ROUTE_ENV,
+        {'id': 'preflight', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'env': ROUTE_ENV,
          'run': PREPARE_ROUTE + scanner_command(unit, 'preflight') + '\n'},
     ]
     if unit == 'semgrep':
-        steps.append({'id': 'admission', 'shell': 'bash', 'working-directory': '.',
+        steps.append({'id': 'admission', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
                       'run': scanner_command(unit, 'admission')})
-    scan = {'id': 'scan', 'shell': 'bash', 'working-directory': '.',
+    scan = {'id': 'scan', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
             'run': scanner_command(unit, 'scan')}
     if unit == 'semgrep': scan['env'] = {'SEMGREP_APP_TOKEN': TOKEN}
     steps.append(scan)
@@ -588,7 +589,7 @@ def scanner_job(unit):
                                              for phase in phases),
                            'retention-days': '30', 'if-no-files-found': 'error'}})
     checks = json.dumps(inventory.checks(unit))
-    steps.append({'id': 'proof', 'shell': 'bash', 'working-directory': '.',
+    steps.append({'id': 'proof', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
                   'run': scanner_command(unit, 'verify') + '\n' +
                          'python -B scripts/ci/required.py --route "$RUNNER_TEMP/route.json" '
                          f"--emit-unit {unit} --checks '{checks}' " +
@@ -602,9 +603,9 @@ def scanner_job(unit):
 
 def bootstrap_steps(platform, tools):
     env = {'CI_PLATFORM': platform, 'CI_TOOLS': tools}
-    return [{'name': BOOTSTRAP_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': BOOTSTRAP_COMMAND},
-            {'name': APPLY_NAME, 'shell': 'bash', 'working-directory': '.', 'run': APPLY_COMMAND},
-            {'name': EVIDENCE_NAME, 'shell': 'bash', 'working-directory': '.', 'env': dict(env), 'run': EVIDENCE_COMMAND}]
+    return [{'name': BOOTSTRAP_NAME, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'env': dict(env), 'run': BOOTSTRAP_COMMAND},
+            {'name': APPLY_NAME, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': APPLY_COMMAND},
+            {'name': EVIDENCE_NAME, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'env': dict(env), 'run': EVIDENCE_COMMAND}]
 
 
 def lock_tools(root):
@@ -694,7 +695,7 @@ def bootstrap_errors(data, name):
         index = bootstraps[0]
         step = steps[index]
         env = step.get('env', {})
-        if (set(step) != {'name', 'shell', 'working-directory', 'env', 'run'} or step.get('name') != BOOTSTRAP_NAME or step.get('shell') != 'bash'
+        if (set(step) != {'name', 'shell', 'working-directory', 'env', 'run'} or step.get('name') != BOOTSTRAP_NAME or step.get('shell') != python_env.ADMISSION_SHELL
                 or step.get('working-directory') != '.' or not isinstance(env, dict) or set(env) != {'CI_PLATFORM', 'CI_TOOLS'}):
             fail('bootstrap step must be unconditional at root with bash and literal CI_PLATFORM and CI_TOOLS'); continue
         runner = job.get('runs-on', '')
@@ -708,7 +709,7 @@ def bootstrap_errors(data, name):
         expanded = set(bootstrap.expand_tools(','.join(sorted(selected)))) if selected else set()
         for tool in sorted(required):
             if {'rust': 'rustc', 'playwright': 'chromium-headless-shell'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
-        apply = {'name': APPLY_NAME, 'shell': 'bash', 'working-directory': '.', 'run': APPLY_COMMAND}
+        apply = {'name': APPLY_NAME, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': APPLY_COMMAND}
         if not (index + 1 < len(steps) and steps[index + 1] == apply) or sum(s.get('run') == APPLY_COMMAND for s in steps) != 1:
             fail('the exact admitted environment step must directly follow the bootstrap step')
         if not (index + 2 < len(steps) and steps[index + 2] == {**step, 'name': EVIDENCE_NAME, 'run': EVIDENCE_COMMAND}):
@@ -819,7 +820,7 @@ CARGO_FRESH = ('python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fres
 # Cargo's home is the admitted, bin-free CARGO_HOME from the bootstrap; only its registry index and archives are cached.
 CARGO_CACHE_PATHS = ['${{ runner.temp }}/admitted/cargo-home/registry/index', '${{ runner.temp }}/admitted/cargo-home/registry/cache']
 # GOENV is fresh_go.py's `off`: a per-user `go env -w` file could otherwise supply CC, flags or a toolchain.
-CACHE_ENV = {'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'GOENV', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
+CACHE_ENV = {'GOCACHEPROG', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN', 'GOFLAGS', 'GOENV', 'CARGO_TARGET_DIR', 'CARGO_HOME'}
 
 
 def wrapper_id(run):
@@ -845,7 +846,8 @@ def cache_errors(data, root):
         steps = job.get('steps', [])
         def fail(message): errors.append(f'{jid}: {message}')
         for scope in (data, job, *steps):
-            if CACHE_ENV & set(scope.get('env', {})):
+            env = scope.get('env', {})
+            if isinstance(env, dict) and CACHE_ENV & {str(key).upper() for key in env}:
                 fail('compiler cache environment override forbidden')
         go_setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-go@')]
         go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('go', 'unknown')]
@@ -860,7 +862,7 @@ def cache_errors(data, root):
                 if paths != CARGO_CACHE_PATHS:
                     fail('cache restore may contain only Cargo index and archives')
             run = step.get('run', '')
-            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
+            if re.search(r'\benv\s+-i\b|\bunset\s+(?:GOCACHEPROG|GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\b|\b(?:GOCACHEPROG|GOCACHE|GOMODCACHE|GOFLAGS|GOTOOLCHAIN|GOENV|CARGO_TARGET_DIR|CARGO_HOME)\s*=', run):
                 fail('compiler cache environment reset forbidden')
         def admission(command, consumers):
             matching = [i for i, s in enumerate(steps) if s.get('run') == command]
@@ -869,7 +871,7 @@ def cache_errors(data, root):
                 return None
             index = matching[0]
             step = steps[index]
-            if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != 'bash' or step.get('working-directory') != '.':
+            if any(k in step for k in ('if', 'continue-on-error')) or step.get('shell') != python_env.ADMISSION_SHELL or step.get('working-directory') != '.':
                 fail('fresh cache admission must be unconditional at root with bash')
             if consumers and index >= min(consumers):
                 fail('fresh cache admission must precede consumers')
@@ -889,6 +891,67 @@ def cache_errors(data, root):
             index = admission(CARGO_FRESH, cargo_consumers)
             if index is not None and any(i > index for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/cache')):
                 fail('Cargo cache restore must precede integrity admission')
+    return errors
+
+
+MSVC_SHELL = 'pwsh -NoLogo -NoProfile -NonInteractive -Command \". \'{0}\'\"'
+TOOL_NAMES = r'(?:python[23]?|go|gofmt|cargo|rustc|rustdoc|rustfmt|cargo-clippy|node|pnpm|bash)'
+LOOKUP_REPLACEMENT = re.compile(rf'(?im)(?:\bfunction\s+{TOOL_NAMES}\b|(?<![\w.-]){TOOL_NAMES}\s*\(\s*\)\s*\{{|'
+                                rf'\balias\s+(?:[^;\n]*?\s+)?{TOOL_NAMES}\s*=|\bhash\s+-p\s+[^;\n]+\s+{TOOL_NAMES}\b)')
+SOURCED_STARTUP = re.compile(r'(?m)(?:^|[;|&]\s*|\bthen\s+|\bdo\s+)[ \t]*(?:source\s+|\.\s+)')
+STARTUP_OPTIONS = re.compile(r'(?i)\b(?:bash|sh|zsh|ksh)\s+[^;\n]*?(?:--(?:rcfile|init-file|login)\b|(?<![\w-])-[a-z]*[il][a-z]*\b)')
+ENV_REFERENCE = re.compile(r'(?i)\b(?:unset|export|declare|typeset|readonly|local)\b[^;\n|&]*|\benv\s+[^;\n|&]*')
+ENV_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*(?:%%)?')
+POWERSHELL_ENV = re.compile(r"(?i)\$\{?env:([A-Za-z_][A-Za-z0-9_]*)|(?:Set|New|Remove)-Item\s+(?:-Path\s+)?['\"]?Env:([A-Za-z_][A-Za-z0-9_]*)|"
+                            r"SetEnvironmentVariable\(\s*['\"]([A-Za-z_][A-Za-z0-9_%]*)['\"]")
+
+
+def protected_environment_name(name):
+    upper = name.upper()
+    return (upper not in python_env.ALLOWED_PYTHON_ENV and
+            (upper.startswith(('PYTHON', 'PIP_', 'BASH_FUNC_', 'LD_', 'DYLD_'))
+             or upper in {'BASH_ENV', 'ENV', 'PATH', 'SHELLOPTS', 'BASHOPTS', 'GOCACHEPROG'}
+             or forbidden_env_name(upper)))
+
+
+def environment_admission_errors(data, workflow):
+    """Universal startup and command-lookup boundary; exceptions are exact helper steps, never PATH prefixes."""
+    errors = []
+    for jid, job in data.get('jobs', {}).items():
+        def fail(message): errors.append(f'{jid}: {message}')
+        for scope in (data, job, *job.get('steps', [])):
+            if 'env' in scope:
+                env = scope['env']
+                if not isinstance(env, dict): fail('environment must be a literal mapping')
+                else:
+                    for key in env:
+                        if not isinstance(key, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', key):
+                            fail('environment names must be static identifiers')
+                        elif protected_environment_name(key): fail('protected environment override forbidden: ' + key)
+        for scope in (data, job):
+            defaults = run_defaults(scope)
+            if defaults is not None and 'shell' in defaults and defaults['shell'] != python_env.ADMISSION_SHELL:
+                fail('default shell must be the admission shell')
+        for step in job.get('steps', []):
+            if 'run' not in step: continue
+            shell = step.get('shell', (run_defaults(job) or {}).get('shell', (run_defaults(data) or {}).get('shell')))
+            native = (workflow == 'agent' and step == {'name': 'Record MSVC compiler', 'if': "runner.os == 'Windows'",
+                      'shell': MSVC_SHELL, 'working-directory': 'agent', 'run': './tools/check-msvc.ps1'})
+            if shell != python_env.ADMISSION_SHELL and not native: fail('run step requires the admission shell')
+            for text in (step.get('run', ''), step.get('shell', '')):
+                # Join shell continuations before matching, while preserving real newlines and tabs.
+                text = str(text).replace('\\\n', '')
+                names = set(SHELL_ASSIGNMENT.findall(text))
+                for match in ENV_REFERENCE.finditer(text):
+                    names.update(ENV_NAME.findall(match.group())[1:])
+                    names.update(re.findall(r'(?:^|\s)-u([A-Za-z_][A-Za-z0-9_]*(?:%%)?)', match.group()))
+                for match in POWERSHELL_ENV.finditer(text):
+                    names.update(group for group in match.groups() if group)
+                for key in names:
+                    if protected_environment_name(key): fail('protected shell environment forbidden: ' + key)
+                if ALLEXPORT.search(text) or re.search(r'\benv\s+-i\b', text): fail('shell environment reset forbidden')
+                if LOOKUP_REPLACEMENT.search(text): fail('admitted tool lookup replacement forbidden')
+                if SOURCED_STARTUP.search(text) or STARTUP_OPTIONS.search(text): fail('sourced startup file or custom startup shell forbidden')
     return errors
 
 
@@ -963,11 +1026,11 @@ def python_errors(data):
         for message in scope_errors(step_text({key: value for key, value in job.items() if key != 'steps'})):
             fail(f'job settings: {message}')
         for scope in (data, job):
-            shell = (run_defaults(scope) or {}).get('shell', 'bash')
-            if shell != 'bash': fail('closure consumer default shell must be bash')
+            shell = (run_defaults(scope) or {}).get('shell', python_env.ADMISSION_SHELL)
+            if shell != python_env.ADMISSION_SHELL: fail('closure consumer default shell must be bash')
         for step in steps:
             run, text = step.get('run', ''), step_text(step)
-            if step.get('shell', 'bash') not in CONSUMER_SHELLS:
+            if step.get('shell', (run_defaults(job) or {}).get('shell', python_env.ADMISSION_SHELL)) not in CONSUMER_SHELLS:
                 fail('closure consumer step shell must be bash or the admission shell')
             if WHOLE_GITHUB.search(text):
                 fail('whole github context forbidden in closure consumer')
@@ -979,7 +1042,7 @@ def python_errors(data):
                 fail('environment writes outside the fresh cache helper and admitted bootstrap forbidden in closure consumer')
             if names_venv(text) and run != python_env.VENV_COMMAND:
                 fail('validator venv named outside its admitted step in closure consumer')
-            if SITE_PROBE.search(text):
+            if run != EVIDENCE_COMMAND and SITE_PROBE.search(text):
                 fail('site-packages, scripts directory, base interpreter or start-up hook located in closure consumer')
             for script in (run, step.get('shell', '')):
                 for name in shell_env_names(script):
@@ -1010,8 +1073,8 @@ def fuzz_evidence_errors(job, root, native_parser=False):
         target_id = wrapper_id(run)
         return '-fuzz=' in run or (target_id is not None and (target_id.startswith('go-fuzz:') or target_id in fuzz_ids))
     selected = [step for step in job.get('steps', []) if fuzzing(step.get('run', ''))]
-    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'shell': 'bash', 'working-directory': '.', 'run': command} if native_parser else
-                {'name': 'Fuzz for 60 seconds', 'shell': 'bash', 'working-directory': '.',
+    expected = ({'name': 'Fuzz parser qualification for 60 seconds', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': command} if native_parser else
+                {'name': 'Fuzz for 60 seconds', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
                  'env': {'FUZZ_PACKAGE': '${{ matrix.package }}', 'FUZZ_TARGET': '${{ matrix.target }}'}, 'run': command})
     errors = []
     if selected != [expected]: errors.append('exact unconditional fuzz command required')
@@ -1034,7 +1097,7 @@ def loader_qualification_errors(job, gate):
         fail('exact native job identity required')
     if job.get('timeout-minutes') != ('15' if gate == 'a' else '20'):
         fail('qualification timeout mismatch')
-    if job.get('defaults') != {'run': {'shell': 'bash', 'working-directory': 'server'}}:
+    if job.get('defaults') != {'run': {'shell': python_env.ADMISSION_SHELL, 'working-directory': 'server'}}:
         fail('qualification requires literal Bash in server')
     if job.get('strategy') != {'fail-fast': 'false', 'matrix': {'os': list(inventory.HOSTS)}}:
         fail('qualification requires all three independent native rows')
@@ -1046,13 +1109,13 @@ def loader_qualification_errors(job, gate):
         run = ('set -euo pipefail\n'
                f'mkdir -p "$RUNNER_TEMP/loader-measurements-gate-{gate}"\n'
                f'{command} 2>&1 | tee "$RUNNER_TEMP/loader-measurements-gate-{gate}/{log}.log"\n')
-        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'shell': 'bash', 'working-directory': '.', 'run': run}]
+        matches = [i for i, step in enumerate(steps) if step == {'name': name, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': run}]
         if len(matches) != 1: fail('exact unconditional measurement pipeline required: ' + log)
         else: indices += matches
     log_paths = [f'${{{{ runner.temp }}}}/loader-measurements-gate-{gate}/{log}.log' for _, log, _ in recipes]
     verify_run = 'set -euo pipefail\n' + ''.join(
         f'test -s "$RUNNER_TEMP/loader-measurements-gate-{gate}/{log}.log"\n' for _, log, _ in recipes)
-    verify = {'name': 'Verify loader measurement logs', 'if': 'always()', 'run': verify_run}
+    verify = {'name': 'Verify loader measurement logs', 'if': 'always()', 'shell': python_env.ADMISSION_SHELL, 'run': verify_run}
     upload = {'name': 'Upload loader measurements', 'if': 'always()', 'uses': UPLOAD,
               'with': {'name': 'loader-measurements-${{ github.run_id }}-${{ github.run_attempt }}-gate-' + gate + '-${{ matrix.os }}',
                        'path': '\n'.join(log_paths) + ('\n' if len(log_paths) > 1 else ''),
@@ -1080,7 +1143,7 @@ def loader_qualification_errors(job, gate):
                 "arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]\n"
                 "assert actual + '-' + arch == expected, (actual, arch, expected)\n"
                 "PY\n")
-    host = {'name': 'Assert native receipt host', 'shell': 'bash', 'working-directory': '.',
+    host = {'name': 'Assert native receipt host', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
             'env': {'HOST_OS': '${{ matrix.os }}'}, 'run': host_run}
     if sum(step == host for step in steps) != 1:
         fail('exact native host assertion required')
@@ -1091,8 +1154,9 @@ def ingest_evidence_errors(job, root):
     """Pin the composite proof, both required inventories and retained diagnostics."""
     errors = []
     expected = [
-        {'name': 'Ingest cost model', 'shell': 'bash', 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
+        {'name': 'Ingest cost model', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
         {'name': 'Verify ingest measurement log', 'if': 'always()',
+         'shell': python_env.ADMISSION_SHELL,
          'run': 'set -euo pipefail\ntest -s "$RUNNER_TEMP/ingest-measurements/cost-model.log"\n'},
         {'name': 'Upload ingest measurements', 'if': 'always()', 'uses': UPLOAD,
          'with': {'name': 'ingest-measurements-${{ github.run_id }}-${{ github.run_attempt }}',
@@ -1133,6 +1197,7 @@ def check(root: Path) -> list[str]:
         for error in cache_errors(data, root): fail(name, error)
         for error in python_errors(data): fail(name, error)
         for error in bootstrap_errors(data, name): fail(name, error)
+        for error in environment_admission_errors(data, name): fail(name, error)
         for error in cargo_override_errors(data): fail(name, error)
         if name.startswith('diagnose-'): fail(name, 'remove diagnosis before landing')
         # Optional Copilot setup has its own event, but receives no required-check authority.
@@ -1192,7 +1257,7 @@ def check(root: Path) -> list[str]:
     for unit in ('gitleaks', 'semgrep'):
         if jobs.get(unit) != scanner_job(unit):
             fail('ci', f'{unit}: exact unconditional scanner recipe required')
-    if ci.get('env') or ci.get('defaults') not in (None, {'run': {'shell': 'bash'}}):
+    if ci.get('env') or ci.get('defaults') not in (None, {'run': {'shell': python_env.ADMISSION_SHELL}}):
         fail('ci', 'scanner workflow environment and defaults overrides forbidden')
     aggregate = jobs.get('ci-required', {})
     if aggregate.get('name') != 'ci-required' or aggregate.get('needs') != list(NEEDS) or aggregate.get('if') != '${{ always() }}':
@@ -1218,7 +1283,7 @@ def check(root: Path) -> list[str]:
             ('step', terminal),
             ('job', aggregate.get('defaults', {}).get('run', {})),
             ('workflow', ci.get('defaults', {}).get('run', {}))):
-        if 'shell' in settings and settings['shell'] != 'bash':
+        if 'shell' in settings and settings['shell'] != python_env.ADMISSION_SHELL:
             fail('ci', f'ci-required: verifier shell must be literal bash at {scope} level')
     if not any(step.get('env', {}).get('NEEDS_JSON') == '${{ toJSON(needs) }}'
                and step.get('env', {}).get('ROUTE_JSON') == '${{ needs.route.outputs.route }}'
@@ -1276,7 +1341,7 @@ def check(root: Path) -> list[str]:
             expected_needs = 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
             if job.get('needs') != expected_needs: fail(name, f'{jid}: needs mismatch')
     helper = [s for s in jobs.get('ci-contracts', {}).get('steps', []) if 'go vet .' in s.get('run', '')]
-    if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != 'bash' or 'if' in helper[0]:
+    if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != python_env.ADMISSION_SHELL or 'if' in helper[0]:
         fail('ci', 'ci-contracts: the Go declaration helper must be formatted and vetted in scripts/ci/gotestdecls')
     design_steps = workflows['design']['jobs']['validate']['steps']
     for command in DESIGN_COMMANDS:
@@ -1292,12 +1357,12 @@ def check(root: Path) -> list[str]:
     race_checks = [step for step in race_steps
                    if step.get('name') == 'Test with race detector'
                    or re.search(r'\bgo\s+test\b|run_selected\.py', step.get('run', ''))]
-    if race_checks != [{'name': 'Test with race detector', 'shell': 'bash', 'working-directory': '.',
+    if race_checks != [{'name': 'Test with race detector', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
                         'run': COMMANDS[('server', 'race')][0]}]:
         fail('server', 'race: exact unconditional race command required')
     for scope, settings in (('workflow', workflows['server']), ('job', race)):
         defaults = run_defaults(settings)
-        if defaults is None or ('shell' in defaults and defaults['shell'] != 'bash'):
+        if defaults is None or ('shell' in defaults and defaults['shell'] != python_env.ADMISSION_SHELL):
             fail('server', 'race: unsafe execution defaults at ' + scope)
         if scope == 'job' and (defaults or {}).get('working-directory') != 'server':
             fail('server', 'race: working-directory must be server')
