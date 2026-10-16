@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from jsonschema import Draft202012Validator
 
@@ -232,6 +233,70 @@ class RunVariantTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("version", proc.stdout + proc.stderr)
         self.assertFalse(out.exists())
+
+
+class VersionOutputTests(unittest.TestCase):
+    def identity(self, script, timeout=5):
+        children = []
+        popen = subprocess.Popen
+
+        def start(*args, **kwargs):
+            child = popen(*args, **kwargs)
+            children.append(child)
+            return child
+
+        try:
+            with mock.patch.object(measure.subprocess, 'Popen', side_effect=start), \
+                    mock.patch.object(measure, 'VERSION_TIMEOUT_S', timeout):
+                return measure.reported_identity([sys.executable, '-B', '-c', script],
+                                                 measure.check.load_evidence_validator())
+        finally:
+            for child in children:
+                self.assertIsNotNone(child.returncode, 'version child was not reaped')
+                self.assertTrue(child.stdout.closed)
+                self.assertTrue(child.stderr.closed)
+
+    def test_version_overflow_stops_each_stream_before_child_can_finish_output(self):
+        for stream in ('stdout', 'stderr'):
+            with self.subTest(stream=stream), tempfile.TemporaryDirectory() as directory:
+                marker = Path(directory) / 'finished'
+                script = (f'import sys; from pathlib import Path; '
+                          f'sys.{stream}.buffer.write(b"x" * 10485760); sys.{stream}.flush(); '
+                          f'Path({str(marker)!r}).write_text("finished"); '
+                          f'print({json.dumps(CLAIMED)!r})')
+                with self.assertRaisesRegex(measure.MeasureFailure, 'version_failed:'):
+                    self.identity(script)
+                self.assertFalse(marker.exists(), 'overflow was read to completion before rejection')
+
+    def test_version_accepts_exact_stdout_limit_and_drains_exact_stderr_limit(self):
+        script = (f'import sys; sys.stderr.buffer.write(b"x" * 65536); sys.stderr.flush(); '
+                  f'sys.stdout.buffer.write({json.dumps(CLAIMED)!r}.encode().ljust(65536, b" "))')
+        self.assertEqual(self.identity(script), CLAIMED)
+
+    def test_version_rejects_one_byte_above_each_stream_limit(self):
+        for stream in ('stdout', 'stderr'):
+            with self.subTest(stream=stream):
+                script = (f'import sys; sys.{stream}.buffer.write('
+                          f'{json.dumps(CLAIMED)!r}.encode().ljust(65537, b" "))')
+                with self.assertRaisesRegex(measure.MeasureFailure, 'version_failed:.*' + stream):
+                    self.identity(script)
+
+    def test_version_timeout_reaps_child_without_waiting_for_eof(self):
+        started = time.monotonic()
+        with self.assertRaisesRegex(measure.MeasureFailure, 'version_failed:.*timed out'):
+            self.identity('import time; time.sleep(60)', timeout=0.3)
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_version_timeout_after_both_pipes_close_still_reaps_child(self):
+        started = time.monotonic()
+        with self.assertRaisesRegex(measure.MeasureFailure, 'version_failed:.*timed out'):
+            self.identity('import os, time; os.close(1); os.close(2); time.sleep(60)', timeout=0.3)
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_version_nonzero_exit_does_not_expose_stderr(self):
+        with self.assertRaisesRegex(measure.MeasureFailure, 'version_failed: exit 7') as error:
+            self.identity('import sys; print("private diagnostic", file=sys.stderr); sys.exit(7)')
+        self.assertNotIn('private diagnostic', str(error.exception))
 
 
 class UsageTests(unittest.TestCase):

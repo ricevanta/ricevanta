@@ -39,9 +39,9 @@ PROFILES_DIR = HERE / "profiles"
 BUDGETS_PATH = HERE / "budgets.json"
 
 # Phase name -> (profile, full duration in ms), spec section 3.
-PHASES = {"idle": ("idle", 120_000), "load": ("health-burst", 60_000)}
-WARMUP_MS = 10_000
-SAMPLE_INTERVAL_MS = 1_000
+PHASES = check.PHASE_PROFILES
+WARMUP_MS = check.WARMUP_MS
+SAMPLE_INTERVAL_MS = check.SAMPLE_INTERVAL_MS
 READY_TIMEOUT_MS = 30_000
 STOP_GRACE_MS = 5_000
 VERSION_TIMEOUT_S = 30
@@ -253,16 +253,59 @@ def binary_record(path):
     return {"name": expected, "size": size, "sha256": digest.hexdigest()}, prefix, stand_in
 
 
+def _version_output(prefix):
+    """Read both pipes without buffering more than the identity limit per stream."""
+    proc = subprocess.Popen(prefix + ["version", "--json"], stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+    try:
+        deadline = time.monotonic() + VERSION_TIMEOUT_S
+        streams = {proc.stdout: ('stdout', 0), proc.stderr: ('stderr', 0)}
+        output = bytearray()
+        for stream in streams:
+            # Python 3.14 supports nonblocking pipe descriptors on Unix and Windows.
+            os.set_blocking(stream.fileno(), False)
+        while streams:
+            if time.monotonic() >= deadline:
+                raise MeasureFailure('version_failed: timed out')
+            progressed = False
+            for stream, (name, count) in list(streams.items()):
+                raw = stream.read(min(4096, MAX_IDENTITY_BYTES + 1 - count))
+                if raw is None:
+                    continue
+                progressed = True
+                if not raw:
+                    del streams[stream]
+                    continue
+                count += len(raw)
+                if count > MAX_IDENTITY_BYTES:
+                    raise MeasureFailure(f'version_failed: {name} larger than {MAX_IDENTITY_BYTES} bytes')
+                streams[stream] = name, count
+                if name == 'stdout':
+                    output.extend(raw)
+            if not progressed:
+                time.sleep(min(0.01, max(0, deadline - time.monotonic())))
+        proc.wait(timeout=max(0, deadline - time.monotonic()))
+        if proc.returncode != 0:
+            raise MeasureFailure(f"version_failed: exit {proc.returncode}")
+        return bytes(output)
+    finally:
+        try:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=VERSION_TIMEOUT_S)
+        finally:
+            proc.stdout.close()
+            proc.stderr.close()
+
+
 def reported_identity(prefix, validator):
     try:
-        proc = subprocess.run(prefix + ["version", "--json"], stdin=subprocess.DEVNULL, capture_output=True,
-                              timeout=VERSION_TIMEOUT_S)
+        raw = _version_output(prefix)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise MeasureFailure(f"version_failed: {exc}") from exc
-    if proc.returncode != 0:
-        raise MeasureFailure(f"version_failed: exit {proc.returncode}")
+        reason = 'timed out' if isinstance(exc, subprocess.TimeoutExpired) else (exc.strerror or 'process I/O error')
+        raise MeasureFailure(f"version_failed: {reason}") from exc
     try:
-        doc = check.loads_strict(proc.stdout, MAX_IDENTITY_BYTES)
+        doc = check.loads_strict(raw, MAX_IDENTITY_BYTES)
     except check.InputError as exc:
         raise MeasureFailure(f"version_failed: {exc}") from exc
     errs = validator.errors(doc, "#/$defs/reportedIdentity")

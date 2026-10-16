@@ -314,6 +314,10 @@ def read_baseline(path, validator):
         return Baseline("invalid", problem="identity_null")
     if doc["identity"]["channel"] not in BASELINE_CHANNELS:
         return Baseline("invalid", problem=f"channel_{doc['identity']['channel']}")
+    try:
+        check_protocol(doc, require_full_duration=True)
+    except InputError as exc:
+        return Baseline("invalid", problem=f"protocol: {exc}")
     return Baseline("valid", doc=doc)
 
 
@@ -327,6 +331,32 @@ def _check_processes(evidence):
 # Protocol rules from spec section 3.1, shared by measurement and checking.
 COUNTERS = ('samples', 'sample_failures', 'log_errors', 'health_write_failures', 'log_rotations')
 PHASE_PROFILES = {'idle': ('idle', 120000), 'load': ('health-burst', 60000)}
+WARMUP_MS = 10000
+SAMPLE_INTERVAL_MS = 1000
+
+
+def check_protocol(evidence, *, require_full_duration=False):
+    """Admit complete full runs; smoke may use a unique subset and reduced windows."""
+    phases = evidence['phases']
+    names = [p['name'] for p in phases]
+    if len(names) != len(set(names)):
+        raise InputError('duplicate phase')
+    if evidence['smoke']:
+        return
+    if set(names) != set(PHASE_PROFILES):
+        raise InputError('full evidence requires exactly one idle phase and one load phase')
+    for p in phases:
+        profile, duration = PHASE_PROFILES[p['name']]
+        if p['profile']['name'] != profile:
+            raise InputError(f"phase {p['name']}: wrong profile")
+        if p['sample_interval_ms'] != SAMPLE_INTERVAL_MS:
+            raise InputError(f"phase {p['name']}: external sample interval must be {SAMPLE_INTERVAL_MS} ms")
+        if p['warmup_ms'] != WARMUP_MS:
+            raise InputError(f"phase {p['name']}: full warm-up must be {WARMUP_MS} ms")
+        if p['samples'] != p['duration_ms'] // SAMPLE_INTERVAL_MS:
+            raise InputError(f"phase {p['name']}: external sample count does not cover the measured window")
+        if require_full_duration and p['duration_ms'] < duration:
+            raise InputError(f"phase {p['name']}: shortened full run")
 
 
 def phase_profile(p):
@@ -553,11 +583,10 @@ def _regression(evidence, base_doc, budgets):
         return "recorded" if observed < base_value else "pass"
 
     pairs = [(p, base_phases.get(p["name"])) for p in evidence["phases"]]
+    if any(b is None for _, b in pairs):
+        raise InputError('baseline is missing a measured phase')
     for p, b in pairs:
         o = p["metrics"]["footprint_bytes"]["p95"]
-        if b is None:
-            rows.append(_row("regression_footprint_p95", p["name"], _num(o), None, None, "recorded"))
-            continue
         base = b["metrics"]["footprint_bytes"]["p95"]
         delta = o - base
         exceeded = delta > tol["footprint_ratio"] * base and delta > tol["footprint_bytes"]
@@ -565,18 +594,12 @@ def _regression(evidence, base_doc, budgets):
         rows.append(_row("regression_footprint_p95", p["name"], _num(o), limit, _num(base), judge(o, base, exceeded)))
     for p, b in pairs:
         o = p["metrics"]["threads"]["max"]
-        if b is None:
-            rows.append(_row("regression_threads_max", p["name"], o, None, None, "recorded"))
-            continue
         base = b["metrics"]["threads"]["max"]
         limit = base + tol["threads"]
         rows.append(_row("regression_threads_max", p["name"], o, limit, base, judge(o, base, o > limit)))
     for p, b in pairs:
         desc = p["metrics"]["descriptors"]
         o = desc["max"]
-        if b is None:
-            rows.append(_row("regression_descriptors_max", p["name"], o, None, None, "recorded"))
-            continue
         base = b["metrics"]["descriptors"]["max"]
         limit = base + tol["descriptors_" + desc["kind"]]
         rows.append(_row("regression_descriptors_max", p["name"], o, limit, base, judge(o, base, o > limit)))
@@ -618,6 +641,7 @@ def _baseline_rows(evidence, budgets, baseline):
 
 def evaluate(evidence, budgets, shutdown_limits, baseline=SKIP):
     """Return (results, baseline object, outcome) for a schema-valid evidence document."""
+    check_protocol(evidence)
     rows = _absolute(evidence, budgets, shutdown_limits)
     base_obj = {"kind": "none", "identity": None, "environment_match": None}
     if baseline.status != "skip":
@@ -639,12 +663,19 @@ def complete(evidence, budgets, shutdown_limits, baseline=SKIP):
 
 
 def qualifies_as_candidate(doc):
-    return (
+    eligible = (
         doc["outcome"] == "pass"
         and doc["smoke"] is False
         and doc["identity"] is not None
         and doc["identity"]["channel"] in BASELINE_CHANNELS
     )
+    if not eligible:
+        return False
+    try:
+        check_protocol(doc, require_full_duration=True)
+    except InputError:
+        return False
+    return True
 
 
 def _fmt(value):
