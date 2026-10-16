@@ -95,3 +95,20 @@ it.each(['os: linux', 'cpu: [123]', 'libc: [glibc,]', 'os: [linux]\n    os: [aix
     ).toThrow('Invalid locked platform')
   },
 )
+
+it('queries all 376 frozen pairs including the four removable leaves', async () => {
+  const locked = lockedPackages(readFileSync('pnpm-lock.yaml', 'utf8'))
+  const queries: string[] = []
+  await scanOSV(locked, (body) => {
+    const values = (body as { queries: { package: { name: string }; version: string }[] }).queries
+    expect(values.length).toBeLessThanOrEqual(100)
+    queries.push(...values.map((value) => `${value.package.name}@${value.version}`))
+    return Promise.resolve({ results: values.map(() => ({})) })
+  })
+  expect(queries).toHaveLength(376)
+  expect(new Set(queries)).toEqual(new Set(locked.map((pkg) => `${pkg.name}@${pkg.version}`)))
+  expect(queries).toContain('@rolldown/binding-linux-arm64-musl@1.2.13')
+  expect(queries).toContain('@rolldown/binding-linux-x64-musl@1.2.13')
+  expect(queries).toContain('lightningcss-linux-arm64-musl@1.33.0')
+  expect(queries).toContain('lightningcss-linux-x64-musl@1.33.0')
+})
