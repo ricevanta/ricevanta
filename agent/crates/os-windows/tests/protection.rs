@@ -381,7 +381,9 @@ fn new_output_has_trusted_owner_and_inherited_acl(
     let tree = Tree::new();
     let parent = tree.join(directory);
     if inherit_deny {
-        icacls(&parent, &["/deny", "*S-1-5-32-545:(OI)(CI)(IO)(D)"]);
+        // Basic D also denies SYNCHRONIZE and prevents ordinary readback.
+        // Specific DE gives the exact DELETE-only mask checked below.
+        icacls(&parent, &["/deny", "*S-1-5-32-545:(OI)(CI)(IO)(DE)"]);
     }
     let dir = checked(&p, &parent, dir_kind).unwrap();
     let path = parent.join(name);
@@ -390,7 +392,6 @@ fn new_output_has_trusted_owner_and_inherited_acl(
         .unwrap()
         .write_all(b"new output")
         .unwrap();
-    assert_eq!(fs::read(&path).unwrap(), b"new output");
     // Independent persisted-descriptor oracle, including inheritance flags.
     let facts = powershell(&format!(
         "$acl = [System.IO.FileSystemAclExtensions]::GetAccessControl(\
@@ -416,6 +417,7 @@ fn new_output_has_trusted_owner_and_inherited_acl(
     got.sort_unstable();
     expected.sort_unstable();
     assert_eq!(got, expected, "{}", path.display());
+    assert_eq!(fs::read(&path).unwrap(), b"new output");
 }
 
 #[test]
