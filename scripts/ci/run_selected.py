@@ -9,6 +9,8 @@ import argparse
 import ast
 from collections import Counter
 import json
+import hashlib
+import platform
 import math
 import shutil
 import os
@@ -568,6 +570,177 @@ def cost_fields(text):
     return fields
 
 
+COST_CPU_PROTOCOL = 'linux-getrusage-v1'
+COST_CPU_SAMPLE_FIELDS = frozenset('case mode index user_ns system_ns'.split())
+COST_CPU_TOTAL_FIELDS = frozenset('case mode source samples preflight_total_ns decode_total_ns total_ns guard_ns'.split())
+COST_INT64_MAX = (1 << 63) - 1
+
+
+def cost_cpu_int(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[0-9]+', value):
+        raise EvidenceError('malformed CPU ledger integer')
+    number = int(value)
+    if number > COST_INT64_MAX: raise EvidenceError('CPU ledger integer overflow')
+    return number
+
+
+def cost_cpu_fields(text, keys):
+    fields = {}
+    for token in text.split():
+        key, equal, value = token.partition('=')
+        if not equal or not key or not value or key in fields: raise EvidenceError('malformed or duplicate CPU ledger field')
+        fields[key] = value
+    if fields.keys() != keys or fields['mode'] not in ('limited', 'reference'):
+        raise EvidenceError('unexpected CPU ledger fields or mode')
+    for key, value in fields.items():
+        if key not in ('case', 'mode', 'source'): cost_cpu_int(value)
+    return fields
+
+
+def validate_cost_cpu(fields, samples, raw):
+    values = {key: cost_cpu_int(fields[key]) for key in
+              ('n', 'window', 'size', 'codecs', 'paid', 'repeats', 'preflight_cpu_ns', 'decode_cpu_ns', 'cpu_ns', 'cpu_ms')}
+    repeats = 32 if values['size'] <= 131072 or values['codecs'] == 0 else 1
+    n, paid = values['n'], values['paid']
+    if not n or n > COST_INT64_MAX // repeats or values['repeats'] != repeats:
+        raise EvidenceError('wrong CPU divisor or repetitions')
+    q = n * repeats
+    if len(samples) != 2 * repeats + 1 or raw is None:
+        raise EvidenceError('missing complete CPU ledger')
+    boundaries = []
+    previous = None
+    for index, row in enumerate(samples):
+        if (row['case'] != fields['case'] or row['mode'] != 'limited' or cost_cpu_int(row['index']) != index):
+            raise EvidenceError('CPU ledger identity or index mismatch')
+        pair = (cost_cpu_int(row['user_ns']), cost_cpu_int(row['system_ns']))
+        if sum(pair) > COST_INT64_MAX or previous and any(a < b for a, b in zip(pair, previous)):
+            raise EvidenceError('backward or overflowing CPU counter')
+        boundaries.append(sum(pair)); previous = pair
+    if (raw['case'] != fields['case'] or raw['mode'] != 'limited' or raw['source'] != 'linux-getrusage'
+            or raw['guard_ns'] != '2000' or cost_cpu_int(raw['samples']) != len(samples)):
+        raise EvidenceError('CPU ledger provenance mismatch')
+    preflight = sum(boundaries[i] - boundaries[i-1] for i in range(1, len(boundaries), 2))
+    decode = sum(boundaries[i] - boundaries[i-1] for i in range(2, len(boundaries), 2))
+    total = boundaries[-1] - boundaries[0]
+    if total <= 0 or total > COST_INT64_MAX - 2000 or preflight + decode != total:
+        raise EvidenceError('invalid CPU complete interval')
+    if any(cost_cpu_int(raw[key]) != expected for key, expected in (
+            ('preflight_total_ns', preflight), ('decode_total_ns', decode), ('total_ns', total))):
+        raise EvidenceError('CPU raw total differs from samples')
+    average, preflight_average = total // q, preflight // q
+    if any(values[key] != expected for key, expected in (
+            ('cpu_ns', average), ('preflight_cpu_ns', preflight_average),
+            ('decode_cpu_ns', average - preflight_average), ('cpu_ms', average // 1000000))):
+        raise EvidenceError('CPU display differs from raw ledger')
+    if (total + 2000) * 67108864 > 5000000000 * paid * q:
+        raise EvidenceError('CPU exceeds guarded paid-charge bound')
+
+
+def cost_identity_fields(text, keys):
+    fields = {}
+    for token in text.split():
+        key, equal, value = token.partition('=')
+        if not equal or not key or not value or key in fields: raise EvidenceError('malformed cost identity')
+        fields[key] = value
+    if fields.keys() != keys: raise EvidenceError('unexpected cost identity fields')
+    return fields
+
+
+def validate_cost_fixture(row):
+    if (not isinstance(row, dict) or row.keys() != {'case', 'sha256', 'compressed'} or
+        any(not isinstance(value, str) for value in row.values()) or not row['case'] or
+        not re.fullmatch('[0-9a-f]{64}', row['sha256']) or
+        not re.fullmatch('[1-9][0-9]*', row['compressed'])):
+        raise EvidenceError('invalid compressed cost fixture identity')
+
+
+def validate_cost_toolchain(row):
+    if (not isinstance(row, dict) or row.keys() != {'go', 'arch', 'compiler'} or
+        any(not isinstance(value, str) for value in row.values()) or
+        not re.fullmatch(r'go[0-9]+\.[0-9]+\.[0-9]+', row['go']) or
+        row['arch'] not in ('amd64', 'arm64') or row['compiler'] != 'gc'):
+        raise EvidenceError('invalid cost toolchain identity')
+
+
+def cost_run_host():
+    host = platform.uname()
+    config = {'status': 'unavailable'}
+    for path in (Path('/proc/config.gz'), Path('/boot') / ('config-' + host.release)):
+        try:
+            with path.open('rb') as stream: data = stream.read(2 * 1024 * 1024 + 1)
+        except OSError: continue
+        if not data or len(data) > 2 * 1024 * 1024: continue
+        config = {'status': 'sha256', 'path': str(path), 'sha256': hashlib.sha256(data).hexdigest()}
+        break
+    return {'system': host.system, 'release': host.release, 'version': host.version, 'machine': host.machine,
+            'page_size': os.sysconf('SC_PAGE_SIZE'), 'cpu_count': os.cpu_count(), 'kernel_config': config}
+
+
+def cost_run_toolchain(env):
+    admitted = Path(env.get('CI_ADMITTED_ROOT', ''))
+    if not env.get('CI_ADMITTED_ROOT'): raise EvidenceError('cost identity requires admitted Go evidence')
+    evidence_path = admitted / 'bootstrap-evidence.json'
+    evidence_bytes = evidence_path.read_bytes()
+    evidence = json.loads(evidence_bytes)
+    rows = [row for row in evidence.get('entries', []) if row.get('tool') == 'go']
+    executable = shutil.which('go', path=env.get('PATH', ''))
+    if (len(rows) != 1 or rows[0].get('verified') is not True or not executable or
+        not Path(executable).resolve().is_relative_to(admitted.resolve()) or
+        not same_path(executable, rows[0].get('installed', ''))):
+        raise EvidenceError('cost identity lacks admitted Go executable')
+    arch = {'linux-x64': 'amd64', 'linux-arm64': 'arm64'}.get(evidence.get('platform'))
+    return {'go': 'go' + rows[0]['version'], 'arch': arch, 'compiler': 'gc',
+            'executable_sha256': bootstrap.digest_file(Path(executable)),
+            'bootstrap_sha256': hashlib.sha256(evidence_bytes).hexdigest()}
+
+
+def cost_run_identity(env, root):
+    binding = {key: env.get(key) for key in RUN_BINDING}
+    if (not isinstance(binding['GITHUB_SHA'], str) or not re.fullmatch('[0-9a-f]{40}', binding['GITHUB_SHA']) or
+        any(not isinstance(binding[key], str) or not re.fullmatch('[1-9][0-9]*', binding[key]) for key in RUN_BINDING[:2])):
+        raise EvidenceError('cost identity requires tested SHA, run and attempt')
+    paths = [root / name for name in ('server/go.mod', 'server/go.sum', 'scripts/ci/run_selected.py',
+                                     'scripts/ci/targets.toml', 'scripts/ci/toolchains.lock.json')]
+    for component in ('body', 'admission'):
+        paths.extend(sorted((root / 'server/internal/events' / component).glob('*.go')))
+    if any(path.is_symlink() or not path.is_file() for path in paths): raise EvidenceError('invalid cost source input')
+    row = {'run': binding, 'host': cost_run_host(), 'toolchain': cost_run_toolchain(env),
+           'sources': {str(path.relative_to(root)): bootstrap.digest_file(path) for path in paths}}
+    validate_cost_run_identity(row, binding)
+    return row
+
+
+def validate_cost_run_identity(row, binding):
+    if not isinstance(row, dict) or row.keys() != {'run', 'host', 'toolchain', 'sources'} or row['run'] != {key: binding.get(key) for key in RUN_BINDING}:
+        raise EvidenceError('missing or mismatched cost run identity')
+    run, host, tool, sources = row['run'], row['host'], row['toolchain'], row['sources']
+    if (not isinstance(run.get('GITHUB_SHA'), str) or not re.fullmatch('[0-9a-f]{40}', run['GITHUB_SHA']) or
+        any(not isinstance(run.get(key), str) or not re.fullmatch('[1-9][0-9]*', run[key]) for key in RUN_BINDING[:2])):
+        raise EvidenceError('invalid cost source/run identity')
+    if (not isinstance(host, dict) or host.keys() != {'system', 'release', 'version', 'machine', 'page_size', 'cpu_count', 'kernel_config'} or
+        host['system'] != 'Linux' or host['machine'] not in ('x86_64', 'aarch64') or
+        any(not isinstance(host[key], str) or not host[key].strip() for key in ('release', 'version')) or
+        any(type(host[key]) is not int or host[key] <= 0 for key in ('page_size', 'cpu_count'))):
+        raise EvidenceError('invalid cost kernel/configuration identity')
+    config = host['kernel_config']
+    if config != {'status': 'unavailable'} and (not isinstance(config, dict) or config.keys() != {'status', 'path', 'sha256'} or
+        config['status'] != 'sha256' or not isinstance(config['path'], str) or not config['path'].startswith('/') or
+        not isinstance(config['sha256'], str) or not re.fullmatch('[0-9a-f]{64}', config['sha256'])):
+        raise EvidenceError('invalid cost kernel configuration evidence')
+    if not isinstance(tool, dict) or tool.keys() != {'go', 'arch', 'compiler', 'executable_sha256', 'bootstrap_sha256'}:
+        raise EvidenceError('missing admitted cost toolchain identity')
+    validate_cost_toolchain({key: tool[key] for key in ('go', 'arch', 'compiler')})
+    if (tool['arch'] != {'x86_64': 'amd64', 'aarch64': 'arm64'}[host['machine']] or
+        any(not isinstance(tool[key], str) or not re.fullmatch('[0-9a-f]{64}', tool[key]) for key in ('executable_sha256', 'bootstrap_sha256'))):
+        raise EvidenceError('mismatched admitted cost toolchain identity')
+    required = {'server/go.mod', 'server/go.sum', 'scripts/ci/run_selected.py', 'scripts/ci/targets.toml',
+                'scripts/ci/toolchains.lock.json', 'server/internal/events/body/costmodel_norace_test.go'}
+    if (not isinstance(sources, dict) or not required <= sources.keys() or
+        any(not isinstance(key, str) or key.startswith('/') or '..' in key.split('/') or
+            not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value) for key, value in sources.items())):
+        raise EvidenceError('missing cost source input digests')
+
+
 def verify_go_cost_model(target, discovery, events, exit_code):
     summary = verify_go_selected(target, discovery, events, exit_code)
     if summary['package'] != COST_PACKAGE: raise EvidenceError('wrong cost-model package')
@@ -575,24 +748,55 @@ def verify_go_cost_model(target, discovery, events, exit_code):
     if any(pkg != COST_PACKAGE or not (name == 'TestDecodeCostModel' or name.startswith('TestDecodeCostModel/')) for pkg,name in results):
         raise EvidenceError('unselected cost-model test')
     keys, totals = [], []
+    ledgers, fixtures, toolchains = {}, {}, []
     expected = target['case_keys']
     if len(expected) != 50 or len(set(expected)) != 50 or target['cases'] != 50:
         raise EvidenceError('invalid cost-model case catalogue')
     for package, test, line in go_lines(events):
         measurement = 'COST_MEASUREMENT ' in line
         total = 'COST_MODEL_CASES ' in line
-        if not (measurement or total): continue
+        sample = 'COST_CPU_SAMPLE ' in line
+        cpu = 'COST_CPU ' in line
+        fixture = 'COST_FIXTURE ' in line
+        toolchain = 'COST_TOOLCHAIN ' in line
+        if not (measurement or total or sample or cpu or fixture or toolchain): continue
         if (package != COST_PACKAGE or test is None or
             not (test == 'TestDecodeCostModel' or test.startswith('TestDecodeCostModel/')) or
             results.get((package, test)) != 'pass'):
             raise EvidenceError('cost-model marker outside a passing selected test')
+        if fixture:
+            row = cost_identity_fields(line.split('COST_FIXTURE ', 1)[1], {'case', 'sha256', 'compressed'})
+            validate_cost_fixture(row)
+            if row['case'] not in expected or row['case'] in fixtures or keys:
+                raise EvidenceError('duplicate, unknown or late cost fixture identity')
+            fixtures[row['case']] = row
+        if toolchain:
+            row = cost_identity_fields(line.split('COST_TOOLCHAIN ', 1)[1], {'go', 'arch', 'compiler'})
+            validate_cost_toolchain(row)
+            if toolchains or fixtures or keys: raise EvidenceError('duplicate or late cost toolchain identity')
+            toolchains.append(row)
+        if sample or cpu:
+            tag = 'COST_CPU_SAMPLE ' if sample else 'COST_CPU '
+            row = cost_cpu_fields(line.split(tag, 1)[1], COST_CPU_SAMPLE_FIELDS if sample else COST_CPU_TOTAL_FIELDS)
+            if row['mode'] == 'reference': continue  # The Go parent validates every reference child.
+            identity = (package, test, row['case'])
+            ledger = ledgers.setdefault(identity, {'samples': [], 'raw': None})
+            if ledger['raw'] is not None: raise EvidenceError('duplicate or out-of-order CPU ledger')
+            if sample:
+                if len(ledger['samples']) >= 65: raise EvidenceError('too many CPU samples')
+                ledger['samples'].append(row)
+            else: ledger['raw'] = row
         if measurement:
             fields = cost_fields(line.split('COST_MEASUREMENT ', 1)[1])
+            ledger = ledgers.pop((package, test, fields['case']), {'samples': [], 'raw': None})
+            validate_cost_cpu(fields, ledger['samples'], ledger['raw'])
             keys.append(fields['case'])
         if total: totals.append(line.split('COST_MODEL_CASES ', 1)[1].strip())
-    if len(keys) != 50 or set(keys) != set(expected) or totals != ['n=50']:
+    if ledgers or len(keys) != 50 or set(keys) != set(expected) or totals != ['n=50']:
         raise EvidenceError('incomplete, duplicate or substituted cost-model measurements')
-    return {**summary, 'measurements': len(keys), 'case_keys': sorted(keys)}
+    if set(fixtures) != set(expected) or len(toolchains) != 1: raise EvidenceError('missing cost fixture or toolchain identity')
+    return {**summary, 'measurements': len(keys), 'case_keys': sorted(keys), 'cpu_protocol': COST_CPU_PROTOCOL,
+            'fixtures': fixtures, 'toolchain': toolchains[0]}
 
 
 def cost_model_benchmark(target):
@@ -1050,6 +1254,10 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
     cwd = root / target['cwd']
+    if cost_log is not None:
+        run_identity = cost_run_identity(env, root)
+        with cost_log.open('a', encoding='utf-8') as log:
+            log.write('COST_RUN_IDENTITY ' + json.dumps(run_identity, sort_keys=True) + '\n')
     if target['mode'] == 'python-unittest': return run_python_unittest(target, evidence_dir, cwd, env)
     build, executable = build_command(target), None
     if build:
@@ -1106,6 +1314,9 @@ def run(target_id, evidence_root, root=ROOT, env=None):
                      exit_code, evidence_dir, packages_text, declarations_text)
     benchmark_commands = None
     if cost_log is not None:
+        summary['run_identity'] = run_identity
+        if summary['toolchain'] != {key: run_identity['toolchain'][key] for key in ('go', 'arch', 'compiler')}:
+            raise EvidenceError('cost runtime differs from admitted toolchain')
         bench = cost_model_benchmark(target)
         bench_discovery = discovery_command(bench)
         code = cost_execute(bench_discovery, 'benchmark-discovery.txt', 'benchmark-discovery.stderr.txt')
@@ -1199,8 +1410,17 @@ def validate_cost_record(record):
         raise ValueError('incomplete cost-model command proof')
     if (not isinstance(summary, dict) or summary.get('package') != COST_PACKAGE or
         summary.get('tests') != ['TestDecodeCostModel'] or summary.get('measurements') != 50 or
-        summary.get('case_keys') != sorted(target['case_keys'])):
+        summary.get('case_keys') != sorted(target['case_keys']) or summary.get('cpu_protocol') != COST_CPU_PROTOCOL):
         raise ValueError('incomplete cost-model test proof')
+    validate_cost_run_identity(summary.get('run_identity'), record)
+    validate_cost_toolchain(summary.get('toolchain'))
+    if summary['toolchain'] != {key: summary['run_identity']['toolchain'][key] for key in ('go', 'arch', 'compiler')}:
+        raise ValueError('cost runtime differs from admitted toolchain')
+    fixtures = summary.get('fixtures')
+    if not isinstance(fixtures, dict) or set(fixtures) != set(target['case_keys']): raise ValueError('missing cost fixture identities')
+    for key, row in fixtures.items():
+        validate_cost_fixture(row)
+        if row['case'] != key: raise ValueError('mismatched cost fixture identity')
     benchmark = summary.get('benchmark', {})
     if (not isinstance(benchmark, dict) or benchmark.get('package') != COST_PACKAGE or
         benchmark.get('operations') != 3 or not isinstance(benchmark.get('results'), dict) or not benchmark['results']):

@@ -4,6 +4,7 @@ package body
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -59,6 +60,8 @@ func TestDecodeCostModel(t *testing.T) {
 		window, size         uint64
 		badID, hostile, flat bool
 		input                *costInput
+		digest               [32]byte
+		compressed           int
 	}
 	dir := t.TempDir()
 	frames := map[string]generated{}
@@ -80,7 +83,7 @@ func TestDecodeCostModel(t *testing.T) {
 		if err := os.WriteFile(path, frame, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		frames[s.name] = generated{path, bytes.Count(plain, []byte{'\n'}), f.Window(), f.ContentSize(), s.badID, s.hostile, s.flat, nil}
+		frames[s.name] = generated{path, bytes.Count(plain, []byte{'\n'}), f.Window(), f.ContentSize(), s.badID, s.hostile, s.flat, nil, sha256.Sum256(frame), len(frame)}
 		t.Logf("COST_FRAME shape=%s size=%d lines=%d compressed=%d window=%d", s.name, len(plain), frames[s.name].lines, len(frame), f.Window())
 	}
 	for _, key := range adversarialCostKeys {
@@ -89,8 +92,14 @@ func TestDecodeCostModel(t *testing.T) {
 		if err := os.WriteFile(path, c.frame, 0600); err != nil {
 			t.Fatal(err)
 		}
+		digest, compressed := sha256.Sum256(c.frame), len(c.frame)
 		c.frame = nil // Only the child needs compressed bytes after the file is written.
-		frames[key] = generated{path: path, lines: c.lines, window: c.window, size: c.size, input: &c}
+		frames[key] = generated{path: path, lines: c.lines, window: c.window, size: c.size, input: &c, digest: digest, compressed: compressed}
+	}
+	t.Logf("COST_TOOLCHAIN go=%s arch=%s compiler=%s", runtime.Version(), runtime.GOARCH, runtime.Compiler)
+	for _, c := range cases {
+		g := frames[c.shape]
+		t.Logf("COST_FIXTURE case=%s sha256=%x compressed=%d", c.key(), g.digest, g.compressed)
 	}
 	var hostileCPU, flatCPU int64
 	for _, c := range cases {
@@ -129,6 +138,10 @@ func TestDecodeCostModel(t *testing.T) {
 			}
 			if err := validateCostChildValues(output, fields, c.n, g.window, g.size, weight, paid); err != nil {
 				t.Fatalf("%s %s: %v", c.key(), mode, err)
+			}
+			cpuLines, _ := validateCostCPU(output, fields, c.n, paid)
+			for _, line := range cpuLines {
+				t.Log(line)
 			}
 			t.Log(fields["line"])
 			results[mode] = fields
@@ -246,6 +259,9 @@ func validateCostChildValues(output []byte, f map[string]string, n int, window, 
 	if err := validateCostValues(f, n, window, size, weight, paid); err != nil {
 		return fmt.Errorf("%w\n%s", err, output)
 	}
+	if _, err := validateCostCPU(output, f, n, paid); err != nil {
+		return fmt.Errorf("%w\n%s", err, output)
+	}
 	return nil
 }
 
@@ -272,7 +288,7 @@ func validateCostValues(f map[string]string, n int, window, size uint64, weight 
 		return errorString("short measurement was not repeated")
 	}
 	cpu := read("cpu_ns")
-	if cpu <= 0 || cpu != read("preflight_cpu_ns")+read("decode_cpu_ns") || read("cpu_ms") != cpu/int64(time.Millisecond) {
+	if cpu < 0 || cpu != read("preflight_cpu_ns")+read("decode_cpu_ns") || read("cpu_ms") != cpu/int64(time.Millisecond) {
 		return errorString("inconsistent CPU measurement")
 	}
 	if cpu > int64(5*time.Second)*int64(paid)/(64<<20) {
@@ -311,32 +327,6 @@ func usedMemory() uint64 {
 	sample := []metrics.Sample{{Name: "/memory/classes/total:bytes"}, {Name: "/memory/classes/heap/released:bytes"}}
 	metrics.Read(sample)
 	return sample[0].Value.Uint64() - sample[1].Value.Uint64()
-}
-
-// processCPU returns user plus system CPU time from /proc/self/stat (clock
-// ticks of 10 ms), or the runtime's own CPU estimate where /proc is absent.
-func processCPU() time.Duration {
-	if b, err := os.ReadFile("/proc/self/stat"); err == nil {
-		if i := bytes.LastIndexByte(b, ')'); i > 0 {
-			fields := strings.Fields(string(b[i+1:]))
-			if len(fields) > 13 {
-				user, e1 := strconv.ParseInt(fields[11], 10, 64)
-				system, e2 := strconv.ParseInt(fields[12], 10, 64)
-				if e1 == nil && e2 == nil {
-					return time.Duration(user+system) * 10 * time.Millisecond
-				}
-			}
-		}
-	}
-	sample := []metrics.Sample{{Name: "/cpu/classes/user:cpu-seconds"}, {Name: "/cpu/classes/gc/total:cpu-seconds"}, {Name: "/cpu/classes/scavenge/total:cpu-seconds"}}
-	metrics.Read(sample)
-	seconds := 0.0
-	for _, s := range sample {
-		if s.Value.Kind() == metrics.KindFloat64 {
-			seconds += s.Value.Float64()
-		}
-	}
-	return time.Duration(seconds * float64(time.Second))
 }
 
 func vmHWM() uint64 {
@@ -435,13 +425,18 @@ func costChild(t *testing.T) {
 		}
 	}()
 	start := time.Now()
-	var preflightCPU, decodeCPU time.Duration
 	var codecCalls atomic.Int64
 	results := make([][]Line, n)
 	frames := make([]Frame, n)
 	errs := make([]error, n)
-	for range repeats {
-		cpu0 := processCPU()
+	// This noinline allocator is deliberately after the unchanged baseline and limit.
+	cpuStorage := newCostCPUStorage()
+	cpuStorage.readErr = cpuStorage.clock.read(&cpuStorage.samples[0])
+	cpuStorage.count = 0
+	if cpuStorage.readErr == nil {
+		cpuStorage.count = 1
+	}
+	for iteration := 0; iteration < repeats && cpuStorage.readErr == nil; iteration++ {
 		var wg sync.WaitGroup
 		for i := range n {
 			wg.Add(1)
@@ -451,8 +446,11 @@ func costChild(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		preflightCPU += processCPU() - cpu0
-		cpu0 = processCPU()
+		cpuStorage.readErr = cpuStorage.clock.read(&cpuStorage.samples[2*iteration+1])
+		if cpuStorage.readErr != nil {
+			break
+		}
+		cpuStorage.count++
 		for i := range n {
 			if codecs == 0 {
 				if os.Getenv("RICEVANTA_COST_RATE") == "true" {
@@ -489,15 +487,17 @@ func costChild(t *testing.T) {
 			clear(results)
 			runtime.GC()
 		}
-		decodeCPU += processCPU() - cpu0
+		cpuStorage.readErr = cpuStorage.clock.read(&cpuStorage.samples[2*iteration+2])
+		if cpuStorage.readErr == nil {
+			cpuStorage.count++
+		}
 	}
-	if codecCalls.Load() != int64(codecs*n*repeats) {
+	if cpuStorage.readErr == nil && codecCalls.Load() != int64(codecs*n*repeats) {
 		t.Fatalf("codec entries=%d", codecCalls.Load())
 	}
 	wall := time.Since(start) / time.Duration(repeats)
-	preflightCPU /= time.Duration(n * repeats)
-	decodeCPU /= time.Duration(n * repeats)
-	cpu := preflightCPU + decodeCPU
+	cpuStorage.normalize(n, repeats)
+
 	sample()
 	close(done)
 	<-sampled
@@ -506,8 +506,9 @@ func costChild(t *testing.T) {
 	limiterCycle := readUint64Metric("/gc/limiter/last-enabled:gc-cycle")
 	hwm := vmHWM()
 	runtime.KeepAlive(results)
+	emitCostCPULedger(t, cpuStorage, key, mode, n, repeats)
 	fmt.Printf("%s case=%s mode=%s shape=%s n=%d window=%d size=%d weight=%d baseline=%d limit=%d lines=%d allocs=%d cpu_ms=%d wall_ms=%d peak=%d peak_ratio=%.3f vmhwm=%d gc_cycles=%d limiter_cycle=%d preflight_cpu_ns=%d decode_cpu_ns=%d cpu_ns=%d blocks=%d codecs=%d paid=%d repeats=%d\n",
-		costTag(mode), key, mode, shape, n, window, size, weight, baseline, limit, lines, allocs, cpu.Milliseconds(), wall.Milliseconds(), peak.Load(), float64(peak.Load())/float64(limit), hwm, cycles, limiterCycle, preflightCPU.Nanoseconds(), decodeCPU.Nanoseconds(), cpu.Nanoseconds(), blocks, codecs, paid, repeats)
+		costTag(mode), key, mode, shape, n, window, size, weight, baseline, limit, lines, allocs, cpuStorage.cpu.Milliseconds(), wall.Milliseconds(), peak.Load(), float64(peak.Load())/float64(limit), hwm, cycles, limiterCycle, cpuStorage.preflight.Nanoseconds(), cpuStorage.decode.Nanoseconds(), cpuStorage.cpu.Nanoseconds(), blocks, codecs, paid, repeats)
 }
 
 func TestCostModelHarness(t *testing.T) {
@@ -556,14 +557,12 @@ func TestCostMeasurementValues(t *testing.T) {
 }
 
 func TestCostCPUBoundary(t *testing.T) {
-	fields := map[string]string{"n": "1", "window": "103", "size": "103", "weight": "9197000", "paid": "131072", "baseline": "1000000", "limit": "10197000", "peak": "10000000", "peak_ratio": "0.981", "preflight_cpu_ns": "9765625", "decode_cpu_ns": "0", "cpu_ns": "9765625", "cpu_ms": "9", "repeats": "32"}
-	if err := validateCostValues(fields, 1, 103, 103, 9197000, 131072); err != nil {
+	fields := map[string]string{"case": "boundary", "mode": "limited", "size": "103", "codecs": "0", "repeats": "32", "cpu_ns": "9765562", "preflight_cpu_ns": "0", "decode_cpu_ns": "9765562", "cpu_ms": "9"}
+	if _, err := validateCostCPU([]byte(costCPUTestLedger("boundary", "limited", 312498000, 0, 32)), fields, 1, 131072); err != nil {
 		t.Fatal(err)
 	}
-	fields["preflight_cpu_ns"] = "9765626"
-	fields["cpu_ns"] = "9765626"
-	if err := validateCostValues(fields, 1, 103, 103, 9197000, 131072); err == nil {
-		t.Fatal("accepted work above CPU-per-charge bound")
+	if _, err := validateCostCPU([]byte(costCPUTestLedger("boundary", "limited", 312498001, 0, 32)), fields, 1, 131072); err == nil {
+		t.Fatal("fractional overrun hidden by displayed average")
 	}
 }
 
@@ -573,11 +572,12 @@ func TestCostChildValidationDiagnostics(t *testing.T) {
 		cpu  int64
 		fail bool
 	}{
-		{"at-bound", 51326304, false},
-		{"above-bound", 51326305, true},
+		{"at-bound", 51324304, false},
+		{"above-bound", 51324305, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			output := []byte(fmt.Sprintf("=== RUN   TestDecodeCostModel\nCOST_LIMIT case=badid-10000-single/1 mode=limited baseline=5000000 limit=19877646\nCOST_MEASUREMENT case=badid-10000-single/1 mode=limited shape=badid-10000-single n=1 window=688890 size=688890 weight=14877646 baseline=5000000 limit=19877646 lines=10000 allocs=55000 cpu_ms=%d wall_ms=50 peak=18000000 peak_ratio=0.906 vmhwm=20000000 gc_cycles=6 limiter_cycle=0 preflight_cpu_ns=0 decode_cpu_ns=%d cpu_ns=%d blocks=6 codecs=1 paid=688890 repeats=1\n--- PASS: TestDecodeCostModel\n", c.cpu/int64(time.Millisecond), c.cpu, c.cpu))
+			output = append([]byte(costCPUTestLedger("badid-10000-single/1", "limited", c.cpu, 0, 1)), output...)
 			fields, err := parseCostMeasurement(output, "COST_MEASUREMENT", "badid-10000-single/1", "limited")
 			if err != nil {
 				t.Fatal(err)

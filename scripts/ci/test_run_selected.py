@@ -602,17 +602,103 @@ class GoCostModelTests(unittest.TestCase):
         self.target['case_keys'] = ['case%d' % n for n in range(50)]
         self.listing = 'TestDecodeCostModel\nok  \t' + self.package + '\t0.002s\n'
         self.events = event('run', self.package, 'TestDecodeCostModel')
+        self.events += event('output', self.package, 'TestDecodeCostModel', 'COST_TOOLCHAIN go=go1.27.1 arch=amd64 compiler=gc\n')
         for n in range(50):
-            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_MEASUREMENT case=case{n} mode=limited shape=a n=1 window=1 size=1 weight=1 baseline=1 limit=2 lines=1 allocs=1 cpu_ms=1 wall_ms=1 peak=1 peak_ratio=0.5 vmhwm=1 gc_cycles=1 limiter_cycle=0 preflight_cpu_ns=1 decode_cpu_ns=1 cpu_ns=2 blocks=1 codecs=1 paid=131072 repeats=1\n')
+            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_FIXTURE case=case{n} sha256={"0" * 64} compressed=123\n')
+        for n in range(50):
+            for index in range(3):
+                self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_CPU_SAMPLE case=case{n} mode=limited index={index} user_ns={index} system_ns=0\n')
+            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_CPU case=case{n} mode=limited source=linux-getrusage samples=3 preflight_total_ns=1 decode_total_ns=1 total_ns=2 guard_ns=2000\n')
+            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_MEASUREMENT case=case{n} mode=limited shape=a n=1 window=1 size=131073 weight=1 baseline=1 limit=2 lines=1 allocs=1 cpu_ms=0 wall_ms=1 peak=1 peak_ratio=0.5 vmhwm=1 gc_cycles=1 limiter_cycle=0 preflight_cpu_ns=1 decode_cpu_ns=1 cpu_ns=2 blocks=1 codecs=1 paid=131073 repeats=1\n')
         self.events += event('output', self.package, 'TestDecodeCostModel', 'COST_MODEL_CASES n=50\n')
         self.events += event('pass', self.package, 'TestDecodeCostModel') + event('pass', self.package)
+
+    def identity(self):
+        sources = ('server/go.mod', 'server/go.sum', 'scripts/ci/run_selected.py', 'scripts/ci/targets.toml',
+                   'scripts/ci/toolchains.lock.json', 'server/internal/events/body/costmodel_norace_test.go')
+        return {'run': {'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1', 'GITHUB_RUN_ATTEMPT': '1'},
+                'host': {'system': 'Linux', 'release': '6.17-test', 'version': '#1-test', 'machine': 'x86_64',
+                         'page_size': 4096, 'cpu_count': 2, 'kernel_config': {'status': 'unavailable'}},
+                'toolchain': {'go': 'go1.27.1', 'arch': 'amd64', 'compiler': 'gc',
+                              'executable_sha256': 'b' * 64, 'bootstrap_sha256': 'c' * 64},
+                'sources': {name: 'd' * 64 for name in sources}}
+
+    def test_cost_identity_validation_and_injected_collection(self):
+        identity = self.identity()
+        run_selected.validate_cost_run_identity(identity, identity['run'])
+        for field in ('run', 'host', 'toolchain', 'sources'):
+            changed = deepcopy(identity); changed.pop(field)
+            with self.subTest(field=field), self.assertRaises(EvidenceError):
+                run_selected.validate_cost_run_identity(changed, identity['run'])
+        for section, field, value in (('host', 'release', ''), ('host', 'version', ''), ('host', 'page_size', 0),
+            ('host', 'kernel_config', {}), ('toolchain', 'arch', 'arm64'), ('toolchain', 'executable_sha256', 'x'),
+            ('run', 'GITHUB_SHA', '0' * 40), ('sources', 'server/go.mod', 'invalid')):
+            changed = deepcopy(identity); changed[section][field] = value
+            with self.subTest(section=section, field=field), self.assertRaises(EvidenceError):
+                run_selected.validate_cost_run_identity(changed, identity['run'])
+        with patch.object(run_selected, 'cost_run_host', return_value=identity['host']), patch.object(run_selected, 'cost_run_toolchain', return_value=identity['toolchain']):
+            collected = run_selected.cost_run_identity(identity['run'], run_selected.ROOT)
+            self.assertGreater(len(collected['sources']), len(identity['sources']))
+            self.assertIn('server/internal/events/body/costcpu_linux_test.go', collected['sources'])
+            with self.assertRaises(EvidenceError): run_selected.cost_run_identity({}, run_selected.ROOT)
+        with self.assertRaises(EvidenceError): run_selected.cost_run_toolchain({})
+
+    def test_missing_run_identity_fails_before_discovery_and_clears_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = Path(temp) / 'evidence'
+            directory = evidence / run_selected.evidence_name('ingest-cost-model')
+            directory.mkdir(parents=True)
+            (directory / 'verified.json').write_text('{"result":"success"}')
+            with patch.object(run_selected, 'execute') as execute, self.assertRaises(EvidenceError):
+                run_selected.run('ingest-cost-model', evidence, env={'RUNNER_TEMP': temp})
+            execute.assert_not_called()
+            self.assertFalse((directory / 'verified.json').exists())
+            self.assertIn('Starting ingest', (Path(temp) / 'ingest-measurements/cost-model.log').read_text())
+
+    def test_injected_host_and_admitted_executable_identity(self):
+        host = type('Host', (), dict(system='Linux', release='6.17-test', version='#1-test', machine='x86_64'))()
+        with patch.object(run_selected.platform, 'uname', return_value=host), patch.object(run_selected.os, 'sysconf', return_value=4096), patch.object(run_selected.os, 'cpu_count', return_value=2), patch.object(Path, 'open', side_effect=FileNotFoundError):
+            self.assertEqual(run_selected.cost_run_host(), self.identity()['host'])
+        with tempfile.TemporaryDirectory() as temp:
+            admitted = Path(temp); executable = admitted / 'go'; executable.write_bytes(b'injected-go'); executable.chmod(0o700)
+            evidence = {'platform': 'linux-x64', 'entries': [{'tool': 'go', 'version': '1.27.1', 'verified': True, 'installed': str(executable)}]}
+            (admitted / 'bootstrap-evidence.json').write_text(json.dumps(evidence))
+            env = {'CI_ADMITTED_ROOT': temp, 'PATH': temp}
+            collected = run_selected.cost_run_toolchain(env)
+            self.assertEqual(collected['go'], 'go1.27.1')
+            self.assertEqual(collected['executable_sha256'], run_selected.bootstrap.digest_file(executable))
+            evidence['entries'][0]['verified'] = False
+            (admitted / 'bootstrap-evidence.json').write_text(json.dumps(evidence))
+            with self.assertRaises(EvidenceError): run_selected.cost_run_toolchain(env)
+
+    def test_cost_fixture_and_toolchain_identity_controls(self):
+        for name, changed in {
+            'missing fixture': drop_lines(self.events, 'COST_FIXTURE case=case0 '),
+            'duplicate fixture': duplicate_line(self.events, 'COST_FIXTURE case=case0 '),
+            'bad digest': self.events.replace(('sha256=' + '0' * 64).encode(), b'sha256=x'),
+            'empty compressed': self.events.replace(b'compressed=123', b'compressed=0'),
+            'missing toolchain': drop_lines(self.events, 'COST_TOOLCHAIN '),
+            'duplicate toolchain': duplicate_line(self.events, 'COST_TOOLCHAIN '),
+            'wrong architecture': self.events.replace(b'arch=amd64', b'arch=wasm'),
+            'malformed toolchain': self.events.replace(b'go=go1.27.1', b'go=unknown'),
+        }.items():
+            with self.subTest(name=name), self.assertRaises(EvidenceError):
+                run_selected.verify(self.target, self.listing, changed, b'', 0, None)
+
+    def test_missing_retained_cost_identities_are_rejected(self):
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(self.target, self.listing, drop_lines(self.events, 'COST_FIXTURE '), b'', 0, None)
+
+    def test_old_cost_success_without_cpu_provenance_is_rejected(self):
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(self.target, self.listing, b''.join((json.dumps(row) + '\n').encode() for row in run_selected.parse_go_events(self.events) if 'COST_CPU' not in row.get('Output', '')), b'', 0, None)
 
     def test_complete_measurements_and_negative_controls(self):
         summary = run_selected.verify(self.target, self.listing, self.events, b'', 0, None)
         self.assertEqual(summary['measurements'], 50)
         for name, data, status in (
-            ('missing measurement', drop_lines(self.events, 'case=case0'), 0),
-            ('extra measurement', duplicate_line(self.events, 'case=case0'), 0),
+            ('missing measurement', drop_lines(self.events, 'COST_MEASUREMENT case=case0'), 0),
+            ('extra measurement', duplicate_line(self.events, 'COST_MEASUREMENT case=case0'), 0),
             ('missing total', drop_lines(self.events, 'COST_MODEL_CASES'), 0),
             ('wrong total', self.events.replace(b'n=50', b'n=49'), 0),
             ('duplicate total', duplicate_line(self.events, 'COST_MODEL_CASES'), 0),
@@ -663,6 +749,55 @@ class GoCostModelTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             run_selected.verify(self.target, self.listing, event('run',self.package,'TestDecodeCostModel')+event('pass',self.package,'TestDecodeCostModel')+event('pass',self.package), self.events, 0, None)
 
+    def test_cpu_ledger_provenance_and_substitutions(self):
+        rows = run_selected.parse_go_events(self.events)
+        sample = next(i for i, row in enumerate(rows) if 'COST_CPU_SAMPLE ' in row.get('Output', ''))
+        for label in ('missing', 'duplicate', 'substitute', 'malformed', 'other-case', 'other-mode', 'other-test', 'other-package', 'raw-only', 'samples-only'):
+            changed = deepcopy(rows)
+            if label == 'missing': changed.pop(sample)
+            elif label == 'duplicate': changed.insert(sample, deepcopy(changed[sample]))
+            elif label == 'substitute': changed[sample+1]['Output'] = changed[sample+1]['Output'].replace('user_ns=1', 'user_ns=2')
+            elif label == 'malformed': changed[sample]['Output'] = changed[sample]['Output'].replace('user_ns=0', 'user_ns=x')
+            elif label == 'other-case': changed[sample]['Output'] = changed[sample]['Output'].replace('case=case0', 'case=case1')
+            elif label == 'other-mode': changed[sample]['Output'] = changed[sample]['Output'].replace('mode=limited', 'mode=reference')
+            elif label == 'other-test': changed[sample]['Test'] = 'TestDecodeCostModel/other'
+            elif label == 'other-package': changed[sample]['Package'] = 'example/wrong'
+            elif label == 'raw-only': changed = [row for row in changed if 'COST_CPU_SAMPLE ' not in row.get('Output', '')]
+            else: changed = [row for row in changed if 'COST_CPU ' not in row.get('Output', '')]
+            with self.subTest(label=label), self.assertRaises(EvidenceError):
+                run_selected.verify(self.target, self.listing, b''.join((json.dumps(row)+'\n').encode() for row in changed), b'', 0, None)
+
+    def test_guarded_raw_cpu_equality_and_remainders(self):
+        fields = dict(case='boundary', mode='limited', n='1', window='103', size='103', codecs='0', paid='131072', repeats='32',
+                      preflight_cpu_ns='0', decode_cpu_ns='9765562', cpu_ns='9765562', cpu_ms='9')
+        samples = [dict(case='boundary', mode='limited', index=str(i), user_ns='0' if i < 64 else '312498000', system_ns='0') for i in range(65)]
+        raw = dict(case='boundary', mode='limited', source='linux-getrusage', samples='65', preflight_total_ns='0', decode_total_ns='312498000', total_ns='312498000', guard_ns='2000')
+        run_selected.validate_cost_cpu(fields, samples, raw)
+        samples[-1]['user_ns'] = raw['decode_total_ns'] = raw['total_ns'] = '312498001'
+        with self.assertRaises(EvidenceError): run_selected.validate_cost_cpu(fields, samples, raw)
+        samples[-1]['user_ns'] = raw['decode_total_ns'] = raw['total_ns'] = '312498000'
+        for key, value in (('guard_ns', '0'), ('source', 'runtime'), ('total_ns', '9223372036854775808')):
+            changed = {**raw, key: value}
+            with self.subTest(key=key), self.assertRaises(EvidenceError): run_selected.validate_cost_cpu(fields, samples, changed)
+        for key, value in (('n', '0'), ('n', '9223372036854775807'), ('repeats', '1')):
+            with self.subTest(key=key, value=value), self.assertRaises(EvidenceError):
+                run_selected.validate_cost_cpu({**fields, key: value}, samples, raw)
+        samples[0]['system_ns'] = '1'
+        with self.assertRaises(EvidenceError): run_selected.validate_cost_cpu(fields, samples, raw)
+        samples[0]['system_ns'] = '0'
+        samples[-1]['user_ns'] = raw['decode_total_ns'] = raw['total_ns'] = '1'
+        fields.update(cpu_ns='0', preflight_cpu_ns='0', decode_cpu_ns='0', cpu_ms='0')
+        run_selected.validate_cost_cpu(fields, samples, raw)
+        samples[-1]['user_ns'] = raw['decode_total_ns'] = raw['total_ns'] = '0'
+        with self.assertRaises(EvidenceError): run_selected.validate_cost_cpu(fields, samples, raw)
+        fields.update(n='2', cpu_ns='2', preflight_cpu_ns='0', decode_cpu_ns='2', cpu_ms='0')
+        for i, row in enumerate(samples): row['user_ns'] = '0' if i == 0 else '3' if i == 1 else '129'
+        raw.update(preflight_total_ns='3', decode_total_ns='126', total_ns='129')
+        run_selected.validate_cost_cpu(fields, samples, raw)
+        with self.assertRaises(EvidenceError):
+            run_selected.validate_cost_cpu({**fields, 'cpu_ns': '1', 'decode_cpu_ns': '1'}, samples, raw)
+
+
     def test_catalogue_sets_full_model_and_pinned_budgets(self):
         target = TARGETS['ingest-cost-model']
         command = run_selected.run_command(target)
@@ -695,7 +830,7 @@ class GoCostModelTests(unittest.TestCase):
                     stderr.write_bytes((b'benchmark diagnostic\n' if is_bench else b'test diagnostic\n') if '-list' not in command else b'')
                     return benchmark_exit if is_bench and '-list' not in command else 0
                 evidence = Path(temp) / 'evidence'
-                with patch.object(run_selected, 'execute', side_effect=execute):
+                with patch.object(run_selected, 'execute', side_effect=execute), patch.object(run_selected, 'cost_run_identity', return_value=self.identity()):
                     if benchmark_exit:
                         with self.assertRaises(EvidenceError):
                             run_selected.run('ingest-cost-model', evidence, env={'RUNNER_TEMP': temp})
@@ -705,6 +840,8 @@ class GoCostModelTests(unittest.TestCase):
                 self.assertEqual(len(calls), 4)
                 log = (Path(temp) / 'ingest-measurements/cost-model.log').read_text()
                 self.assertEqual(log.count('COST_MEASUREMENT '), 50)
+                self.assertIn('COST_RUN_IDENTITY ', log)
+                self.assertIn('COST_FIXTURE ', log)
                 self.assertIn(bench + '-2 3 10 ns/op', log)
                 self.assertIn('benchmark diagnostic', log)
                 self.assertIn('test diagnostic', log)
@@ -731,7 +868,7 @@ class GoCostModelTests(unittest.TestCase):
                         data=b'malformed payload stdout\n'
                     stdout.write_bytes(data);stderr.write_text(phase+' stderr diagnostic\n')
                     return 1 if failed==phase else 0
-                with patch.object(run_selected,'execute',side_effect=execute), self.assertRaises(EvidenceError):
+                with patch.object(run_selected,'execute',side_effect=execute), patch.object(run_selected, 'cost_run_identity', return_value=self.identity()), self.assertRaises(EvidenceError):
                     run_selected.run('ingest-cost-model',evidence,env={'RUNNER_TEMP':temp})
                 self.assertFalse((directory/'verified.json').exists())
                 status_files=list(directory.glob('*.status.json'))
@@ -742,9 +879,30 @@ class GoCostModelTests(unittest.TestCase):
                     self.assertEqual(status['command'][0:2],['go','test'])
                 log=(Path(temp)/'ingest-measurements/cost-model.log').read_text()
                 self.assertTrue(log)
+                self.assertIn('COST_RUN_IDENTITY ', log)
                 for phase in calls:self.assertIn(phase+' stderr diagnostic',log)
                 if failed.endswith('-validation'):self.assertIn('malformed payload stdout',log)
                 if failed.startswith('test-'):self.assertFalse(any(c.startswith('benchmark') for c in calls))
+
+    def test_runtime_toolchain_mismatch_retains_identity_before_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            identity = self.identity(); identity['toolchain']['go'] = 'go1.27.2'
+            calls = []
+            def execute(command, cwd, env, stdout, stderr):
+                calls.append(command)
+                stdout.write_bytes(self.listing.encode() if '-list' in command else self.catalogue_events())
+                stderr.write_text('injected diagnostic\n')
+                return 0
+            evidence = Path(temp) / 'evidence'
+            with patch.object(run_selected, 'execute', side_effect=execute), patch.object(run_selected, 'cost_run_identity', return_value=identity), self.assertRaisesRegex(EvidenceError, 'runtime differs'):
+                run_selected.run('ingest-cost-model', evidence, env={'RUNNER_TEMP': temp})
+            self.assertEqual(len(calls), 2)
+            self.assertFalse((evidence / run_selected.evidence_name('ingest-cost-model') / 'verified.json').exists())
+            log = (Path(temp) / 'ingest-measurements/cost-model.log').read_text()
+            self.assertIn('COST_RUN_IDENTITY ', log)
+            self.assertIn('go1.27.2', log)
+            self.assertIn('COST_TOOLCHAIN go=go1.27.1', log)
+            self.assertIn('COST_FIXTURE ', log)
 
     def test_benchmark_phase_negative_controls(self):
         target=run_selected.cost_model_benchmark(TARGETS['ingest-cost-model'])

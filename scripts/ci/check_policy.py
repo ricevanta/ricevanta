@@ -1383,9 +1383,34 @@ def loader_qualification_errors(job, gate):
     return errors
 
 
+def cost_cpu_protocol_errors(root):
+    """Pin the raw-ledger verifier and the protocol written and required by receipts."""
+    try:
+        tree = ast.parse((root / 'scripts/ci/run_selected.py').read_text())
+        pins = [ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Name) and target.id == 'COST_CPU_PROTOCOL' for target in node.targets)]
+        functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+        verifier, reader = functions['verify_go_cost_model'], functions['validate_cost_record']
+        validates = any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'validate_cost_cpu'
+                        for node in ast.walk(verifier))
+        emits = any(isinstance(node, ast.Dict) and any(isinstance(key, ast.Constant) and key.value == 'cpu_protocol'
+                    and isinstance(value, ast.Name) and value.id == 'COST_CPU_PROTOCOL'
+                    for key, value in zip(node.keys, node.values)) for node in ast.walk(verifier))
+        requires = any(isinstance(node, ast.Compare) and ast.dump(node.left) == ast.dump(ast.parse("summary.get('cpu_protocol')", mode='eval').body)
+                       and len(node.ops) == 1 and isinstance(node.ops[0], ast.NotEq)
+                       and len(node.comparators) == 1 and isinstance(node.comparators[0], ast.Name)
+                       and node.comparators[0].id == 'COST_CPU_PROTOCOL' for node in ast.walk(reader))
+        calls = lambda function, name: any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name for node in ast.walk(function))
+        identities = (calls(functions['run'], 'cost_run_identity') and calls(reader, 'validate_cost_run_identity')
+                      and calls(verifier, 'validate_cost_fixture') and calls(verifier, 'validate_cost_toolchain'))
+        if pins == ['linux-getrusage-v1'] and validates and emits and requires and identities: return []
+    except (OSError, SyntaxError, ValueError, TypeError, KeyError): pass
+    return ['ingest CPU protocol or evidence enforcement changed']
+
+
 def ingest_evidence_errors(job, root):
     """Pin the composite proof, both required inventories and retained diagnostics."""
-    errors = []
+    errors = cost_cpu_protocol_errors(root)
     expected = [
         {'name': 'Ingest cost model', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
         {'name': 'Verify ingest measurement log', 'if': 'always()',

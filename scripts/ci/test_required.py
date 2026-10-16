@@ -39,7 +39,13 @@ def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
             bench = run_selected.cost_model_benchmark(target)
             record.update(mode='go-cost-model', cwd='server', discovery=run_selected.discovery_command(target), command=run_selected.run_command(target),
                           benchmark={'discovery': run_selected.discovery_command(bench), 'command': run_selected.run_command(bench)},
-                          summary={'package': run_selected.COST_PACKAGE, 'tests': ['TestDecodeCostModel'], 'measurements': 50, 'case_keys': sorted(target['case_keys']),
+                          summary={'run_identity': {'run': {'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha},
+                                   'host': {'system': 'Linux', 'release': '6.17-test', 'version': '#1-test', 'machine': 'x86_64', 'page_size': 4096, 'cpu_count': 2, 'kernel_config': {'status': 'unavailable'}},
+                                   'toolchain': {'go': 'go1.27.1', 'arch': 'amd64', 'compiler': 'gc', 'executable_sha256': 'b'*64, 'bootstrap_sha256': 'c'*64},
+                                   'sources': {name: 'd'*64 for name in ('server/go.mod', 'server/go.sum', 'scripts/ci/run_selected.py', 'scripts/ci/targets.toml', 'scripts/ci/toolchains.lock.json', 'server/internal/events/body/costmodel_norace_test.go')}},
+                                   'toolchain': {'go': 'go1.27.1', 'arch': 'amd64', 'compiler': 'gc'},
+                                   'fixtures': {key: {'case': key, 'sha256': 'e'*64, 'compressed': '123'} for key in target['case_keys']},
+                                   'cpu_protocol': 'linux-getrusage-v1', 'package': run_selected.COST_PACKAGE, 'tests': ['TestDecodeCostModel'], 'measurements': 50, 'case_keys': sorted(target['case_keys']),
                                    'benchmark': {'package': run_selected.COST_PACKAGE, 'operations': 3, 'results': {'BenchmarkDecodeCost/a': {'operations': 3, 'ns_per_op': 10, 'bytes_per_op': 1, 'allocs_per_op': 1}}}})
         if target['mode'] == 'python-unittest':
             env = {'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
@@ -110,8 +116,9 @@ class RequiredTests(unittest.TestCase):
             row=deepcopy(complete);row.pop(key);mutations.append((key,row))
         for key,value in (('result','failure'),('exit',1),('GITHUB_SHA','c'*40),('GITHUB_RUN_ID','124'),('GITHUB_RUN_ATTEMPT','2')):
             row=deepcopy(complete);row[key]=value;mutations.append((key,row))
-        for field,value in (('measurements',49),('case_keys',complete['summary']['case_keys'][:-1]),('benchmark',{})):
+        for field,value in (('run_identity',None),('toolchain',{}),('fixtures',{}),('cpu_protocol',None),('cpu_protocol','old-protocol'),('measurements',49),('case_keys',complete['summary']['case_keys'][:-1]),('benchmark',{})):
             row=deepcopy(complete);row['summary'][field]=value;mutations.append((field,row))
+        row=deepcopy(complete);row['summary'].pop('cpu_protocol');mutations.append(('missing CPU protocol',row))
         row=deepcopy(complete);row['summary']['benchmark']['results']['BenchmarkDecodeCost/a']['operations']=1;mutations.append(('iterations',row))
         row=deepcopy(complete);row['summary']['benchmark']['results']['BenchmarkDecodeCost/a']['ns_per_op']=float('inf');mutations.append(('infinite time',row))
         for label,row in mutations:

@@ -922,6 +922,23 @@ class PolicyTests(PolicyFixture, unittest.TestCase):
                 self.assertTrue(any('Python' in error or 'python' in error for error in check_policy.selected_errors(self.root)))
         targets.write_text(baseline)
 
+    def test_ingest_cpu_protocol_and_enforcement_are_pinned(self):
+        path = self.root / 'scripts/ci/run_selected.py'
+        baseline = path.read_text()
+        for old, new in (("COST_CPU_PROTOCOL = 'linux-getrusage-v1'", "COST_CPU_PROTOCOL = 'legacy'"),
+                         ("validate_cost_cpu(fields, ledger['samples'], ledger['raw'])", 'None'),
+                         ("summary.get('cpu_protocol')", "summary.get('legacy_protocol')"),
+                         ("'cpu_protocol': COST_CPU_PROTOCOL", "'legacy_protocol': COST_CPU_PROTOCOL"),
+                         ("run_identity = cost_run_identity(env, root)", "run_identity = {}"),
+                         ("validate_cost_run_identity(summary.get('run_identity'), record)", "None"),
+                         ("validate_cost_fixture(row)", "None"),
+                         ("validate_cost_toolchain(row)", "None")):
+            with self.subTest(mutation=old):
+                self.assertIn(old, baseline)
+                path.write_text(baseline.replace(old, new))
+                self.assertTrue(any('ingest CPU protocol' in error for error in check_policy.check(self.root)))
+        path.write_text(baseline)
+
     def test_each_design_consumer_is_required(self):
         for command in check_policy.DESIGN_COMMANDS:
             with self.subTest(command=command):
