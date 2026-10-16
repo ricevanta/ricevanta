@@ -712,10 +712,18 @@ fn run_child_under_umask(test: &str, umask: &str) {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let passed = format!("test {test} ... ok");
     assert!(
-        output.status.success() && stdout.contains("1 passed"),
+        output.status.success()
+            && stdout.lines().filter(|line| *line == passed).count() == 1
+            && stdout.lines().any(|line| {
+                line.starts_with("test result: ok. 1 passed; 0 failed; 0 ignored;")
+            }),
         "{test} under umask {umask}: {stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
+    );
+    eprintln!(
+        "RUST_CHILD {{\"target\":\"protection\",\"parent\":\"created_modes_do_not_depend_on_umask\",\"test\":\"{test}\",\"result\":\"success\"}}"
     );
 }
 

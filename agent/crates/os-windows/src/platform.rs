@@ -10,6 +10,8 @@
 //! `GetSecurityInfo` on that handle. Files inside a checked directory are
 //! created by path, as the spec allows on Windows, each opened with
 //! `FILE_FLAG_OPEN_REPARSE_POINT` and refused when it is a reparse point.
+//! In service mode the final writable handle also passes the owner and DACL
+//! check before the file is truncated or returned for writing.
 //! Every path is in normal form and every name a plain Windows name, which
 //! Win32 normalisation leaves unchanged (no trailing period or space, no
 //! reserved device name), so the final component checked is the final
@@ -167,7 +169,7 @@ impl Platform for WindowsPlatform {
             // it leaves no other principal any right, group write included.
             check_object(&dir, object, true)?;
         }
-        Ok((CheckedDir::new(dir, object, parent), name))
+        Ok((CheckedDir::new(dir, object, parent, mode), name))
     }
 
     fn open_or_create_dir(
@@ -198,7 +200,7 @@ impl Platform for WindowsPlatform {
             Mode::Service => check_object(&dir, object, true)?,
             Mode::Run => {}
         }
-        Ok(CheckedDir::new(dir, object, target))
+        Ok(CheckedDir::new(dir, object, target, mode))
     }
 
     fn create_file(
@@ -226,7 +228,13 @@ impl Platform for WindowsPlatform {
             FileKind::Log => options.append(true),
         };
         let file = options.open(&target).map_err(io_error(object))?;
-        check_kind(&file, object, false)?;
+        if dir.mode() == Mode::Service {
+            // The final writable handle is the one validated. Existing
+            // children can have a different owner or DACL from the parent.
+            check_object(&file, object, false)?;
+        } else {
+            check_kind(&file, object, false)?;
+        }
         if kind == FileKind::HealthDocument {
             file.set_len(0).map_err(io_error(object))?;
         }

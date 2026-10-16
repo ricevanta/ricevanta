@@ -19,7 +19,7 @@ use ricevanta_os::{
 use std::ffi::{CString, OsStr, OsString};
 use std::fs::{File, OpenOptions, Permissions};
 use std::io;
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::fd::OwnedFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -154,13 +154,9 @@ fn set_mode(file: &File, mode: u32, object: Object) -> Result<(), ProtectionErro
         .map_err(|e| ProtectionError::new(object, Reason::io(e)))
 }
 
-/// Whether the open directory has no entries. `/dev/fd/<fd>` opens a
-/// duplicate of the directory descriptor, so the listing is of the checked
-/// directory itself.
+/// Whether the open directory has no entries, without resolving its path.
 fn is_empty(dir: &File, object: Object) -> Result<bool, ProtectionError> {
-    let mut entries = std::fs::read_dir(format!("/dev/fd/{}", dir.as_raw_fd()))
-        .map_err(|e| ProtectionError::new(object, Reason::io(e)))?;
-    Ok(entries.next().is_none())
+    sys::directory_is_empty(dir).map_err(|e| ProtectionError::new(object, Reason::io(e)))
 }
 
 fn mode16(mode: u32) -> u16 {
@@ -180,7 +176,7 @@ impl MacPlatform {
         check_parent(&facts(&dir, object)?, group_write_allowed, mode, self.euid)
             .map_err(|r| ProtectionError::new(object, r))?;
         check_acl(&dir, object)?;
-        Ok(CheckedDir::new(dir, object, path))
+        Ok(CheckedDir::new(dir, object, path, mode))
     }
 }
 
@@ -273,7 +269,7 @@ impl Platform for MacPlatform {
         }
         check_dir(&facts(&dir, object)?, kind, mode, self.euid).map_err(fail)?;
         check_acl(&dir, object)?;
-        Ok(CheckedDir::new(dir, object, diagnostic))
+        Ok(CheckedDir::new(dir, object, diagnostic, mode))
     }
 
     fn create_file(
@@ -326,5 +322,37 @@ impl Platform for MacPlatform {
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(ProtectionError::new(object, Reason::io(e))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn emptiness_uses_the_open_directory_after_its_path_is_replaced() {
+        let root = std::env::temp_dir().join(format!("rv-empty-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("original");
+        let moved = root.join("moved");
+        std::fs::create_dir(&path).unwrap();
+        let dir = open_dir(&path).unwrap();
+        std::fs::rename(&path, &moved).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        std::fs::write(path.join("replacement-entry"), b"").unwrap();
+        // A listing through the old path would see the replacement entry.
+        assert!(is_empty(&dir, Object::RuntimeDir).unwrap());
+        std::fs::write(moved.join(".hidden"), b"").unwrap();
+        assert!(!is_empty(&dir, Object::RuntimeDir).unwrap());
+        assert!(!is_empty(&dir, Object::RuntimeDir).unwrap());
+        std::fs::remove_file(moved.join(".hidden")).unwrap();
+        // Each check starts at the beginning and leaves the caller's fd live.
+        assert!(is_empty(&dir, Object::RuntimeDir).unwrap());
+        assert!(is_empty(&dir, Object::RuntimeDir).unwrap());
+        assert!(dir.metadata().unwrap().is_dir());
+        let file = File::open(path.join("replacement-entry")).unwrap();
+        assert!(is_empty(&file, Object::RuntimeDir).is_err());
+        assert!(file.metadata().unwrap().is_file());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

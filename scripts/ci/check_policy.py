@@ -65,6 +65,8 @@ def wrapper(target_id):
 
 FUZZ_WRAPPER = 'python -B scripts/ci/run_selected.py --id "go-fuzz:${FUZZ_PACKAGE}:${FUZZ_TARGET}" --evidence "$RUNNER_TEMP/evidence"'
 RECEIPT_WITH_EVIDENCE = "required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')"
+AGENT_CHECKS = "checks = json.loads(os.environ['CHECKS']) + inventory.agent_native_checks(inventory.HOSTS[os.environ['HOST_OS']])"
+AGENT_RECEIPT = "required.receipt(route, unit, checks, pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')"
 SELECTED_COMMANDS = {
     'server-keyfile-root': ("go test -list '^(TestReadKeyFileGroupRules)$' ./internal/platform/config",
                             "go test -json -count=1 -exec 'sudo -n --' ./internal/platform/config -run '^(TestReadKeyFileGroupRules)$'"),
@@ -84,7 +86,7 @@ SELECTED_COMMANDS = {
     'loader-gate-b-extended': ("go test -list '^(TestLoaderBudgetExtended)$' ./internal/extensions/loader",
                                "go test -json -count=1 ./internal/extensions/loader -run '^(TestLoaderBudgetExtended)$' -args -loader-budget-extended"),
     'ocsf-native': ("go test -list '.*' ./internal/events/ocsf", 'go test -json -count=1 ./internal/events/ocsf'),
-    'agent-unit': ('cargo test --locked --workspace -- --list', 'cargo test --locked --workspace'),
+    'agent-unit': ('cargo test --locked --workspace -- --list', 'cargo test --locked --workspace -- --nocapture'),
     'spool-extended': ('cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --list',
                        'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --nocapture --test-threads=1'),
     'batch-extended': ('cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact --list',
@@ -94,6 +96,13 @@ SELECTED_COMMANDS = {
     'interop-race': ("go test -race -tags rustinterop -list '^TestRustWriter' ./internal/events/body",
                      "go test -json -race -tags rustinterop -count=1 ./internal/events/body -run '^TestRustWriter'"),
 }
+SELECTED_COMMANDS.update({
+    'json-extended': ('cargo test --locked -p ricevanta-json --test fuzz_json fuzz_json_extended -- --ignored --exact --list',
+                      'cargo test --locked -p ricevanta-json --test fuzz_json fuzz_json_extended -- --ignored --exact --nocapture --test-threads=1'),
+    'agent-protection-root-linux': ("sudo '{executable}' root_ --ignored --list", "sudo '{executable}' root_ --ignored"),
+    'agent-protection-root-macos': ("sudo '{executable}' root_ --ignored --list", "sudo '{executable}' root_ --ignored"),
+})
+
 INTEROP_PROOF = {
     'tests': ['TestRustWriterFixtures', 'TestRustWriterBoundaries', 'TestRustWriterMutations', 'TestRustWriterCaptureOverflow'],
     'helpers': ['TestRustWriterPrecondition', 'TestRustWriterCaptureChild'],
@@ -176,6 +185,18 @@ SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_sa
 # Ordinary suites whose discovered Fuzz* names must equal the fuzz inventory.
 FUZZ_INVENTORY_SUITES = ('server-unit', 'server-race', 'ocsf-native')
 LOADER_FUZZ = ('./internal/extensions/loader', 'FuzzParserQualification')
+SELECTED_PLACES.update({'json-extended': ('agent', 'rust-selected'),
+                        'agent-protection-root-linux': ('agent', 'rust-root'),
+                        'agent-protection-root-macos': ('agent', 'rust-root')})
+SELECTED_BUDGETS['json-extended'] = {'seed': '0x52564a534f4e5631', 'cases': 20000}
+AGENT_ROOT_TESTS = ['root_foreign_owner_of_config_and_parent_fails', 'root_directory_parent_owner_and_group_rules', 'root_service_mode_refuses_unprivileged_directory_owner', 'root_foreign_health_file_is_refused_untouched']
+for suffix, platform in (('linux', 'linux'), ('macos', 'darwin')):
+    SELECTED_BUDGETS['agent-protection-root-' + suffix] = {
+        'platform': platform, 'target': 'protection', 'tests': AGENT_ROOT_TESTS,
+        'cargo': ['--locked', '-p', 'ricevanta-os-' + suffix, '--test', 'protection']}
+SELECTED_BUDGETS['agent-unit'] = {'required': [
+    {'platform': 'linux', 'target': 'growth', 'test': 'sampling_does_not_grow_private_memory'}]}
+
 # The closed skip allowance: each row names its separate proving unit or parent test.
 LOADER = 'github.com/ricevanta/ricevanta/server/internal/extensions/loader'
 YAMLTOKENS = LOADER + '/internal/yamltokens'
@@ -207,6 +228,29 @@ SKIP_ALLOWANCES = [
     {'package': 'ricevanta-batch', 'test': 'fuzz_seal_extended', 'reason': 'extended 20,000-case native property budget',
      'target': 'fuzz_seal', 'proof': 'batch-extended', 'modes': ['agent-unit']},
 ]
+
+
+SKIP_ALLOWANCES.append({
+    'package': 'ricevanta-json', 'test': 'fuzz_json_extended',
+    'reason': 'extended 20,000-case native JSON property budget',
+    'target': 'fuzz_json', 'proof': 'json-extended', 'modes': ['agent-unit']})
+for suffix, platform in (('linux', 'linux'), ('macos', 'darwin')):
+    for name in AGENT_ROOT_TESTS:
+        SKIP_ALLOWANCES.append({
+            'package': 'ricevanta-os-' + suffix, 'test': name,
+            'reason': 'privileged native ownership and protection assertions',
+            'target': 'protection', 'proof': 'agent-protection-root-' + suffix,
+            'modes': ['agent-unit'], 'platform': platform})
+    for name in ('umask_child_narrow', 'umask_child_open'):
+        SKIP_ALLOWANCES.append({
+            'package': 'ricevanta-os-' + suffix, 'test': name,
+            'reason': 'isolated umask child of created_modes_do_not_depend_on_umask',
+            'target': 'protection', 'parent': 'created_modes_do_not_depend_on_umask',
+            'modes': ['agent-unit'], 'platform': platform})
+SKIP_ALLOWANCES.append({
+    'package': 'ricevanta-os-linux', 'test': 'from_env_child',
+    'reason': 'isolated notification environment child', 'target': 'notify',
+    'parent': 'environment_is_read_by_from_env', 'modes': ['agent-unit'], 'platform': 'linux'})
 
 
 # test2json treats a stdout line starting with 0x16 as its own framing, so a test
@@ -325,6 +369,27 @@ def selected_errors(root):
     return errors
 
 
+def agent_native_errors(job):
+    """Every native root proof executes on exactly its own host before receipt creation."""
+    errors = []
+    steps = job.get('steps', [])
+    for suffix, host in (('linux', 'Linux'), ('macos', 'macOS')):
+        command = wrapper('agent-protection-root-' + suffix)
+        matches = [step for step in steps if command in step.get('run', '')]
+        expected = {'name': 'Root ' + ('Linux' if suffix == 'linux' else 'macOS') + ' protection tests',
+                    'if': "runner.os == '" + host + "'", 'shell': 'bash', 'working-directory': '.',
+                    'env': {'CARGO_NET_OFFLINE': 'true'}, 'run': command}
+        if matches != [expected]: errors.append('exact host-guarded root protection step required: ' + suffix)
+    proof = next((step for step in steps if step.get('id') == 'proof'), {})
+    if AGENT_CHECKS not in proof.get('run', '') or AGENT_RECEIPT not in proof.get('run', ''):
+        errors.append('agent receipt must include native root evidence for its host')
+    root_steps = [step for step in steps if any(wrapper('agent-protection-root-' + suffix) in step.get('run', '')
+                                               for suffix in ('linux', 'macos'))]
+    if proof and any(steps.index(step) > steps.index(proof) for step in root_steps):
+        errors.append('native root proofs must precede the receipt')
+    return errors
+
+
 COMMANDS = {
     ('server', 'validate'): ('gofmt -l .', wrapper('server-keyfile-root'), wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench'), wrapper('ingest-cost-model')),
     ('server', 'race'): (wrapper('server-race'),),
@@ -334,7 +399,7 @@ COMMANDS = {
     ('server', 'ocsf-native'): (wrapper('ocsf-native'),),
     ('agent', 'validate'): ('cargo metadata --locked --format-version 1', 'python tools/generate-spool-fixtures.py --check',
         'cargo fmt --all -- --check', 'cargo clippy --locked --workspace --all-targets -vv -- -D warnings',
-        wrapper('agent-unit'), wrapper('spool-extended'), wrapper('batch-extended')),
+        wrapper('agent-unit'), wrapper('spool-extended'), wrapper('batch-extended'), wrapper('json-extended')),
     ('agent', 'rustinterop'): ('cargo build --locked -p ricevanta-batch --example seal-vector -vv',
         wrapper('interop-unit'), wrapper('interop-race')),
     ('console', 'validate'): ('pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm lint',
@@ -1169,6 +1234,8 @@ def check(root: Path) -> list[str]:
         for jid, unit in leaves.items():
             job = workflows[name].get('jobs', {}).get(jid, {})
             steps = job.get('steps', [])
+            if unit == 'agent':
+                for error in agent_native_errors(job): fail(name, jid + ': ' + error)
             for command in COMMANDS.get((name, jid), ()):
                 matches = [s for s in steps if command in s.get('run', '')]
                 if not matches or any('if' in step or 'continue-on-error' in step for step in matches):
@@ -1176,7 +1243,7 @@ def check(root: Path) -> list[str]:
             proofs = [s for s in steps if s.get('id') == 'proof']
             native = unit in ('loader', 'loader-gate-b', 'ocsf', 'agent', 'bootstrap')
             wanted = (['go-fuzz:${{ matrix.package }}:${{ matrix.target }}'] if jid == 'fuzz' else
-                      inventory.checks(unit + ':linux-x64' if native else unit))
+                      inventory.checks('agent:windows-x64' if unit == 'agent' else unit + ':linux-x64' if native else unit))
             if len(proofs) != 1 or proofs[0].get('env', {}).get('UNIT') != unit:
                 fail(name, f'{jid}: missing leaf proof')
             else:
@@ -1185,7 +1252,7 @@ def check(root: Path) -> list[str]:
                 if actual != wanted or 'if' in proofs[0] or 'required.receipt(' not in proofs[0].get('run', ''):
                     fail(name, f'{jid}: receipt checks mismatch')
                 elif (any(check in selected_ids or check.startswith('go-fuzz:') for check in actual)
-                      and RECEIPT_WITH_EVIDENCE not in proofs[0]['run']):
+                      and (AGENT_RECEIPT if unit == 'agent' else RECEIPT_WITH_EVIDENCE) not in proofs[0]['run']):
                     fail(name, f'{jid}: receipt must bind verified selected-run evidence')
             if not steps or steps[-1].get('uses') != UPLOAD or steps[-1].get('with') != {
                     'name': '${{ steps.proof.outputs.artifact }}', 'path': '${{ runner.temp }}/ci-proof/receipt.json',

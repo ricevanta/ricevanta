@@ -621,7 +621,9 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(workflow=workflow, job=jid):
                 def change(data):
                     proof = next(s for s in data['jobs'][jid]['steps'] if s.get('id') == 'proof')
-                    proof['run'] = proof['run'].replace(check_policy.RECEIPT_WITH_EVIDENCE, "required.receipt(route, unit, json.loads(os.environ['CHECKS']))")
+                    expected = check_policy.AGENT_RECEIPT if workflow == 'agent' and jid == 'validate' else check_policy.RECEIPT_WITH_EVIDENCE
+                    self.assertIn(expected, proof['run'])
+                    proof['run'] = proof['run'].replace(expected, "required.receipt(route, unit, json.loads(os.environ['CHECKS']))")
                 self.mutate(workflow, change)
                 self.assertTrue(any('receipt must bind verified selected-run evidence' in error for error in check_policy.check(self.root)))
                 shutil.copyfile(ROOT / f'.github/workflows/{workflow}.yml', self.root / f'.github/workflows/{workflow}.yml')

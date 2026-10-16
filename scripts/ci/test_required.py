@@ -14,21 +14,37 @@ def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
     """Write verified selected-run records so emission can bind every wrapper check."""
     import run_selected
     selected = run_selected.inventory()
+    def write_record(check):
+        target = selected[check]
+        for proof in target.get('requires', []):
+            write_record(proof)
+        summary = {}
+        if target['mode'] == 'rust-root':
+            summary = {'tests': sorted(target['tests']), 'passed': len(target['tests'])}
+        if target['mode'] == 'rust-suite':
+            ignored = [{k: row[k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in row}
+                       for row in target['skips'].values()]
+            children = [{'target': row['target'], 'parent': row['parent'], 'test': row['test'], 'result': 'success'}
+                        for row in ignored if 'parent' in row]
+            summary = {'ignored': ignored, 'children': children,
+                       'required': [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                                    if row.get('platform', sys.platform) == sys.platform]}
+            for row in ignored:
+                if 'proof' in row: write_record(row['proof'])
+        directory = root / run_selected.evidence_name(check)
+        directory.mkdir(exist_ok=True)
+        record = {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
+                  'summary': summary, 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
+        if check == 'ingest-cost-model':
+            bench = run_selected.cost_model_benchmark(target)
+            record.update(mode='go-cost-model', cwd='server', discovery=run_selected.discovery_command(target), command=run_selected.run_command(target),
+                          benchmark={'discovery': run_selected.discovery_command(bench), 'command': run_selected.run_command(bench)},
+                          summary={'package': run_selected.COST_PACKAGE, 'tests': ['TestDecodeCostModel'], 'measurements': 50, 'case_keys': sorted(target['case_keys']),
+                                   'benchmark': {'package': run_selected.COST_PACKAGE, 'operations': 3, 'results': {'BenchmarkDecodeCost/a': {'operations': 3, 'ns_per_op': 10, 'bytes_per_op': 1, 'allocs_per_op': 1}}}})
+        (directory / 'verified.json').write_text(json.dumps(record))
     for check in checks:
         if check in selected:
-            verified_evidence(root, selected[check].get('requires', []), run_id, attempt, sha)
-            directory = root / run_selected.evidence_name(check)
-            directory.mkdir(exist_ok=True)
-            record={'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
-                    'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
-            if check=='ingest-cost-model':
-                target=selected[check];bench=run_selected.cost_model_benchmark(target)
-                record.update(mode='go-cost-model',cwd='server',discovery=run_selected.discovery_command(target),command=run_selected.run_command(target),
-                              benchmark={'discovery':run_selected.discovery_command(bench),'command':run_selected.run_command(bench)},
-                              summary={'package':run_selected.COST_PACKAGE,'tests':['TestDecodeCostModel'],'measurements':50,'case_keys':sorted(target['case_keys']),
-                                       'benchmark':{'package':run_selected.COST_PACKAGE,'operations':3,'results':{'BenchmarkDecodeCost/a':{'operations':3,'ns_per_op':10,'bytes_per_op':1,'allocs_per_op':1}}}})
-            (directory / 'verified.json').write_text(json.dumps(record))
-
+            write_record(check)
 
 
 class RequiredTests(unittest.TestCase):
