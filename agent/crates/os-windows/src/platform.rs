@@ -219,15 +219,28 @@ impl Platform for WindowsPlatform {
             check_kind(&existing, object, false)?;
         }
         let mut options = OpenOptions::new();
-        options
-            .create(true)
-            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
         // Never truncating on open: a reparse point stays untouched.
         match kind {
             FileKind::HealthDocument => options.write(true),
             FileKind::Log => options.append(true),
         };
-        let file = options.open(&target).map_err(io_error(object))?;
+        let file = if dir.mode() == Mode::Service {
+            match sys::create_service_output(&target, kind) {
+                Ok(file) => file,
+                // No creation or ownership repair on this path. A raced-in
+                // object is opened as existing and judged on that handle.
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    options.open(&target).map_err(io_error(object))?
+                }
+                Err(e) => return Err(io_error(object)(e)),
+            }
+        } else {
+            options
+                .create(true)
+                .open(&target)
+                .map_err(io_error(object))?
+        };
         if dir.mode() == Mode::Service {
             // The final writable handle is the one validated. Existing
             // children can have a different owner or DACL from the parent.

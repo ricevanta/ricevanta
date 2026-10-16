@@ -5,21 +5,29 @@
 //! `extern` item leaves this module; callers get owned Rust values.
 
 use crate::dacl::{ACCESS_ALLOWED_ACE_TYPE, ACCESS_DENIED_ACE_TYPE, Ace, SecurityFacts};
+use ricevanta_os::{FileKind, Os, is_plain_name};
 use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::os::windows::ffi::OsStringExt;
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+use std::path::Path;
 use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_SUCCESS, FILETIME, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
 };
 use windows_sys::Win32::Security::Authorization::{
-    ConvertSidToStringSidW, GetSecurityInfo, SE_FILE_OBJECT,
+    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo,
+    SDDL_REVISION_1, SE_FILE_OBJECT,
 };
 use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce,
     GetSecurityDescriptorLength, IsValidSid, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
-    PSID,
+    PSID, SECURITY_ATTRIBUTES,
+};
+use windows_sys::Win32::Storage::FileSystem::{
+    CREATE_NEW, CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_OPEN_REPARSE_POINT,
+    FILE_GENERIC_WRITE, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    FILE_WRITE_DATA,
 };
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
@@ -134,11 +142,12 @@ pub(crate) fn program_data() -> io::Result<OsString> {
         .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidData))
 }
 
-/// The self-relative security descriptor `GetSecurityInfo` allocated.
+/// A self-relative security descriptor allocated by GetSecurityInfo or
+/// ConvertStringSecurityDescriptorToSecurityDescriptorW.
 ///
-/// Invariant: `start` is null or the descriptor, `len` its
-/// `GetSecurityDescriptorLength`, all of it readable until `drop`, which
-/// frees it with `LocalFree` once.
+/// Invariant: `start` is null or a live system descriptor. Its first `len`
+/// bytes are readable; the system reports that bound. Drop releases the
+/// allocation exactly once with LocalFree.
 struct Descriptor {
     start: PSECURITY_DESCRIPTOR,
     len: usize,
@@ -175,14 +184,109 @@ impl Descriptor {
 impl Drop for Descriptor {
     #[expect(
         unsafe_code,
-        reason = "LocalFree: the descriptor came from GetSecurityInfo, which documents LocalFree as its release, and is freed once"
+        reason = "LocalFree: GetSecurityInfo and ConvertStringSecurityDescriptorToSecurityDescriptorW both allocate descriptors released exactly once with LocalFree"
     )]
     fn drop(&mut self) {
         if !self.start.is_null() {
-            // SAFETY: allocated by GetSecurityInfo and released once here.
+            // SAFETY: allocated by one of the descriptor APIs above and released once here.
             unsafe { LocalFree(self.start) };
         }
     }
+}
+
+/// Checks a completed output's spelling, without applying the configured
+/// directory's scalar-value length limit again after appending its name.
+fn output_path_is_normal(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes.len() >= 4
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && bytes[2] == b'\\'
+        && text[3..]
+            .split('\\')
+            .all(|name| is_plain_name(Os::Windows, name))
+        // Bound the native allocation, including the four-unit extended
+        // prefix and terminating NUL. UTF-16 units differ from the schema's
+        // Unicode scalar values, so a 1,024-scalar directory can use more
+        // than 1,024 units even before the plain output name is appended.
+        && text.encode_utf16().take(MAX_WIDE - 4).count() < MAX_WIDE - 4
+}
+
+/// Exclusively creates a service output with the Administrators owner.
+/// Only the owner is explicit: the DACL, including deny entries, inherits
+/// from the checked directory. CREATE_NEW never modifies an existing object.
+#[expect(
+    unsafe_code,
+    reason = "ConvertStringSecurityDescriptorToSecurityDescriptorW and CreateFileW: NUL-terminated input buffers and security attributes stay alive for the calls; the descriptor is LocalFree-owned and a successful handle transfers once to OwnedHandle"
+)]
+pub(crate) fn create_service_output(path: &Path, kind: FileKind) -> io::Result<File> {
+    let text = path
+        .to_str()
+        .filter(|text| output_path_is_normal(text))
+        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+    // Normal form fixes every component's Win32 interpretation. The internal
+    // extended prefix preserves std's support for paths longer than MAX_PATH.
+    let path: Vec<u16> = r"\\?\"
+        .encode_utf16()
+        .chain(text.encode_utf16())
+        .chain([0])
+        .collect();
+    // SDDL O:BA sets only the owner. A parent's owner is not inherited by
+    // children; a default token owner can be an individual administrator.
+    let owner = [b'O' as u16, b':' as u16, b'B' as u16, b'A' as u16, 0];
+    let mut descriptor = Descriptor {
+        start: std::ptr::null_mut(),
+        len: 0,
+    };
+    let mut length = 0;
+    // SAFETY: owner is NUL-terminated; both outputs are live writable values.
+    // Descriptor owns and releases any returned allocation on all paths.
+    let converted = unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            owner.as_ptr(),
+            SDDL_REVISION_1,
+            &raw mut descriptor.start,
+            &raw mut length,
+        )
+    };
+    if converted == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if descriptor.start.is_null() {
+        return Err(io::Error::from(io::ErrorKind::InvalidData));
+    }
+    descriptor.len = length as usize;
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor.start,
+        bInheritHandle: 0,
+    };
+    let access = match kind {
+        FileKind::HealthDocument => FILE_GENERIC_WRITE,
+        // Without FILE_WRITE_DATA, writes append at the kernel's EOF, like
+        // std's Windows OpenOptions::append, even with concurrent writers.
+        FileKind::Log => FILE_GENERIC_WRITE & !FILE_WRITE_DATA,
+    } | FILE_READ_ATTRIBUTES;
+    // SAFETY: path is NUL-terminated; attributes and its valid descriptor
+    // remain alive for the call, which copies the security information.
+    // No existing object is opened or truncated by CREATE_NEW.
+    let handle = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            &raw const attributes,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: CreateFileW returned a live owned handle. This is its sole
+    // ownership transfer; File closes it once on every later success/error path.
+    Ok(File::from(unsafe { OwnedHandle::from_raw_handle(handle) }))
 }
 
 /// A SID inside a borrowed [`Descriptor`].
@@ -459,4 +563,79 @@ pub(crate) fn thread_count(pid: u32) -> io::Result<u32> {
         ok = unsafe { Process32NextW(snapshot.0, &raw mut entry) };
     }
     Err(io::Error::from(io::ErrorKind::NotFound))
+}
+
+#[cfg(test)]
+mod output_path_tests {
+    use super::{MAX_WIDE, output_path_is_normal};
+    use ricevanta_os::{Os, is_normal_form};
+
+    #[test]
+    fn maximum_configured_directories_allow_plain_output_names() {
+        for symbol in ['x', '界', '🦀'] {
+            let mut directory = String::from("C:");
+            let mut remaining: usize = 1_024 - directory.chars().count();
+            let max_component = 200 / symbol.len_utf16();
+            let components = remaining.div_ceil(max_component + 1);
+            for left in (1..=components).rev() {
+                let length = remaining / left - 1;
+                let component: String = std::iter::repeat_n(symbol, length).collect();
+                assert!(component.encode_utf16().count() <= 200);
+                directory.push('\\');
+                directory.push_str(&component);
+                remaining -= length + 1;
+            }
+            assert_eq!(remaining, 0);
+            assert_eq!(directory.chars().count(), 1_024);
+            assert!(is_normal_form(Os::Windows, &directory));
+            for name in ["health.json.tmp", "agent.log"] {
+                let output = format!(r"{directory}\{name}");
+                assert!(!is_normal_form(Os::Windows, &output));
+                assert!(output_path_is_normal(&output), "{symbol:?} {name}");
+            }
+        }
+    }
+
+    #[test]
+    fn output_paths_preserve_drive_and_plain_name_rules() {
+        assert!(output_path_is_normal(r"C:\valid.log"));
+        assert!(output_path_is_normal(r"z:\界\🦀.log"));
+        for text in [
+            "",
+            r"C:\",
+            r"relative\agent.log",
+            r"C:agent.log",
+            r"1:\agent.log",
+            r"\\server\share\agent.log",
+            r"\\?\C:\agent.log",
+            r"C:/agent.log",
+            r"C:\x\\agent.log",
+            r"C:\x\..\agent.log",
+            r"C:\x\.\agent.log",
+            r"C:\x\agent.log\",
+            r"C:\x\CON.txt",
+            r"C:\x\CON .txt",
+            r"C:\x\COM¹.log",
+            r"C:\x\conout$.log",
+            r"C:\x\agent.log.",
+            r"C:\x\agent.log ",
+            r"C:\x\agent:stream",
+            r"C:\x\*.log",
+            "C:\\x\\agent\0.log",
+            "C:\\x\\agent\u{1f}.log",
+        ] {
+            assert!(!output_path_is_normal(text), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn output_path_native_buffer_stays_bounded_in_utf16_units() {
+        // Each component is legal and at most 200 UTF-16 units. The whole
+        // path exceeds the native bound despite having fewer scalar values.
+        let component = "🦀".repeat(100);
+        let text = format!(r"C:\{}", vec![component; 164].join(r"\"));
+        assert!(text.chars().count() < MAX_WIDE - 5);
+        assert!(text.encode_utf16().count() > MAX_WIDE - 5);
+        assert!(!output_path_is_normal(&text));
+    }
 }
