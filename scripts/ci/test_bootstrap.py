@@ -10,7 +10,7 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import stat
 import struct
 import subprocess
@@ -542,7 +542,9 @@ class BootstrapTests(unittest.TestCase):
                 self.assertEqual(call_env['CARGO_HOME'], str(dest / 'cargo-home'))
         if HOST == 'linux-x64':
             relocated = next(e for e in evidence['entries'] if e['tool'] == 'python')['relocated']
-            self.assertEqual(sorted(relocated), ['bin/python3.14', 'lib/libpython3.14.so.1.0', 'lib/python3.14/lib-dynload/_lzma.cpython-314-x86_64-linux-gnu.so'])
+            self.assertEqual(sorted(relocated), [str(Path(name)) for name in (
+                'bin/python3.14', 'lib/libpython3.14.so.1.0',
+                'lib/python3.14/lib-dynload/_lzma.cpython-314-x86_64-linux-gnu.so')])
             self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(dest / 'python' / 'bin' / 'python3.14')], ['$ORIGIN/../lib'])
             self.assertEqual([v for _, _, v in bootstrap.elf_runpaths(dest / 'python' / 'lib' / 'python3.14' / 'lib-dynload' / '_lzma.cpython-314-x86_64-linux-gnu.so')], ['$ORIGIN/../..'])
             self.assertEqual(env['PLAYWRIGHT_BROWSERS_PATH'], str(dest / 'ms-playwright'))
@@ -1555,7 +1557,8 @@ class BrowserMigrationTests(unittest.TestCase):
             self.assertEqual(ctx.execute.call_count, 17)
 
     def test_macho_load_resolution(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        # Mach-O system paths use POSIX grammar; payload files still use the host filesystem.
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(bootstrap, 'Path', PurePosixPath):
             root = Path(tmp)
             binary = root / 'bin/MiniBrowser'
             binary.parent.mkdir()
