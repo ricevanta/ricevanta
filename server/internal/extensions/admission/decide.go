@@ -26,7 +26,7 @@ func Decide(e Evidence, s Snapshot, r Request, v []Verdict) Decision {
 		if reasons := stage.run(); len(reasons) > 0 {
 			return reject(stage.name, reasons)
 		}
-		if d.identical {
+		if stage.name == StageComponent && d.identical {
 			return Decision{Outcome: IdenticalRetry}
 		}
 	}
@@ -120,6 +120,9 @@ func (d *decider) approval() Decision {
 	case ReleaseFixed:
 		if !d.releaseFixedPreconditions() {
 			return reject(StageApproval, []Reason{{Code: CodeApprovalReleaseFixed}})
+		}
+		if d.s.AutomaticReleaseFloor != "" && compareRelease(d.e.Version, d.s.AutomaticReleaseFloor) < 0 {
+			return required([]Reason{{Code: CodeApprovalReleaseRollback}})
 		}
 		if needs := d.releaseOperation(); len(needs) > 0 {
 			return required(needs)
@@ -245,15 +248,20 @@ func (d *decider) intent() *Intent {
 	if bindings == nil {
 		bindings = []Binding{}
 	}
+	floorRaise := ""
+	if reservedID(d.e.ID) && (d.s.AutomaticReleaseFloor == "" || compareRelease(d.e.Version, d.s.AutomaticReleaseFloor) > 0) {
+		floorRaise = d.e.Version
+	}
 	return &Intent{
-		Operation:        d.op,
-		ApprovalKind:     a.Kind,
-		TombstoneCreate:  d.tomb == nil,
-		OwnershipCreate:  d.s.Ownership == nil,
-		Enabled:          enabled,
-		Grants:           grants,
-		Targets:          Targets{DeviceGroups: sortedStrings(d.r.Targets.DeviceGroups), AllDevices: d.r.Targets.AllDevices, Console: d.r.Targets.Console, Jobs: d.r.Targets.Jobs},
-		RegistrationBind: bindings,
-		ApprovalConsume:  consume,
+		Operation:         d.op,
+		ApprovalKind:      a.Kind,
+		TombstoneCreate:   d.tomb == nil,
+		ReleaseFloorRaise: floorRaise,
+		OwnershipCreate:   d.s.Ownership == nil,
+		Enabled:           enabled,
+		Grants:            grants,
+		Targets:           Targets{DeviceGroups: sortedStrings(d.r.Targets.DeviceGroups), AllDevices: d.r.Targets.AllDevices, Console: d.r.Targets.Console, Jobs: d.r.Targets.Jobs},
+		RegistrationBind:  bindings,
+		ApprovalConsume:   consume,
 	}
 }

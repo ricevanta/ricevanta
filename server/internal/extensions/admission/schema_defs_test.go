@@ -78,7 +78,7 @@ func TestSchemaEnumParity(t *testing.T) {
 		goCodes = append(goCodes, string(c))
 	}
 	sort.Strings(goCodes)
-	if !reflect.DeepEqual(codes, goCodes) || len(goCodes) != 53 {
+	if !reflect.DeepEqual(codes, goCodes) || len(goCodes) != 55 {
 		t.Errorf("reason codes differ: schema %v, Go %v", codes, goCodes)
 	}
 	stages := enum(expected["stage"])

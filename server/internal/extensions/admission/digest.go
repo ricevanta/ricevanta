@@ -409,7 +409,7 @@ func closureObject(e *Evidence, s *Snapshot, r *Request) (jv, error) {
 		if b := reg.Bound; b != nil {
 			bound = jobj("id", jstr(b.ID), "component", jstr(b.Component), "state", jstr(string(b.State)))
 		}
-		registrations = append(registrations, jobj("id", jstr(reg.ID), "registration_generation", u64(reg.RegistrationGeneration), "os", osPoliciesJV(&reg.OS), "bound", bound))
+		registrations = append(registrations, jobj("id", jstr(reg.ID), "recovery_epoch", u64(reg.RecoveryEpoch), "registration_generation", u64(reg.RegistrationGeneration), "os", osPoliciesJV(&reg.OS), "bound", bound))
 	}
 	var required []string
 	for _, interfaces := range e.Requires {
@@ -425,12 +425,17 @@ func closureObject(e *Evidence, s *Snapshot, r *Request) (jv, error) {
 			profiles = append(profiles, a.DisclosureProfile)
 		}
 	}
+	floor := jnull()
+	if reservedID(e.ID) {
+		floor = optionalString(s.AutomaticReleaseFloor)
+	}
 	return jobj(
 		"profile", jstr("ricevanta-extension-admission-closure-v1"),
 		"recovery_epoch", u64(s.RecoveryEpoch),
 		"approval_policy_disabled", jbool(s.ApprovalPolicyDisabled),
 		"approval_policy_generation", u64(s.ApprovalPolicyGeneration),
 		"release", release,
+		"automatic_release_floor", floor,
 		"id", jstr(e.ID),
 		"version", jstr(e.Version),
 		"trust_entry", jobj("fingerprint", jstr(entry.Fingerprint), "generation", u64(entry.Generation), "prefixes", jstrs(sortedStrings(entry.Prefixes)),

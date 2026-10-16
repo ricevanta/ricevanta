@@ -240,8 +240,8 @@ func TestNoAliasing(t *testing.T) {
 			t.Errorf("%s: decision slices alias inputs", c.Name)
 		}
 	}
-	if admitted != 22 {
-		t.Errorf("checked %d admitted decisions, want 22", admitted)
+	if admitted != 29 {
+		t.Errorf("checked %d admitted decisions, want 29", admitted)
 	}
 }
 

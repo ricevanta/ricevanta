@@ -81,7 +81,8 @@ type expectation struct {
 			Registration string `json:"registration"`
 			Component    string `json:"component"`
 		} `json:"registration_bind"`
-		ApprovalConsume *string `json:"approval_consume"`
+		ReleaseFloorRaise *string `json:"release_floor_raise"`
+		ApprovalConsume   *string `json:"approval_consume"`
 	} `json:"intent"`
 }
 
@@ -138,15 +139,15 @@ func TestDigests(t *testing.T) {
 		}
 		checked++
 	}
-	if checked != 49 {
-		t.Errorf("checked %d recorded digest pairs, want 49", checked)
+	if checked != 67 {
+		t.Errorf("checked %d recorded digest pairs, want 67", checked)
 	}
 	first := corpusCases(t)[0]
 	var x expectation
 	if err := json.Unmarshal(first.Expected, &x); err != nil {
 		t.Fatal(err)
 	}
-	if x.ClosureDigest != "sha256:bbeccf4b02703e63331e4b4dc051fa0353160bfbed00d668219389c6e015165e" || x.RequestDigest != "sha256:a7986aab67d48ff8e0878fb0e54db689b805131a26019b0c35344d7e760bc4e7" {
+	if x.ClosureDigest != "sha256:c76da84b001eabfaa264cabf18c18df05192946b98182f8d2cb2e31250c69052" || x.RequestDigest != "sha256:8a04711e8837aa35020c9e1467a0332a4a4df1255e014e9da75894ec0e6fd94e" {
 		t.Error("first corpus case digests differ from the contracts' section 3")
 	}
 }

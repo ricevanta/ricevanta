@@ -3,7 +3,9 @@ package admission
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ricevanta/ricevanta/server/internal/extensions/manifest"
@@ -12,21 +14,28 @@ import (
 func decodeJSONInto(raw []byte, v any) error { return json.Unmarshal(raw, v) }
 
 // fuzzEvidence is every distinct valid evidence the corpus embeds.
-func fuzzEvidence(f *testing.F) ([]Evidence, map[string]int) {
+func fuzzEvidence(f testing.TB) ([]Evidence, map[string]int) {
 	f.Helper()
 	var out []Evidence
 	index := map[string]int{}
+	seen := map[string]int{}
 	for _, c := range corpusCases(f) {
 		e, err := FromPackage(corpusPackage(f, c.Evidence), manifest.Options{})
 		if err != nil {
 			continue
 		}
-		key := e.ID + "@" + e.Version + "@" + e.PublisherFingerprint + string(e.PackageSHA256[:]) + string(e.ManifestSHA256[:])
-		if _, ok := index[key]; !ok {
-			index[key] = len(out)
+		// Encode the complete projection. Fixture digests are synthetic and
+		// cannot stand in for components, capabilities or the envelope digest.
+		encoded, err := json.Marshal(e)
+		if err != nil {
+			f.Fatal(err)
+		}
+		key := string(encoded)
+		if _, ok := seen[key]; !ok {
+			seen[key] = len(out)
 			out = append(out, e)
 		}
-		index[c.Name] = index[key]
+		index[c.Name] = seen[key]
 	}
 	return out, index
 }
@@ -100,7 +109,10 @@ func checkInvariants(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdic
 		}
 		return
 	case IdenticalRetry:
-		if d.Stage != "" || len(d.Reasons) != 0 || d.Operation != "" || d.ClosureDigest != "" || d.Intent != nil {
+		if !registrationAuthority(e, s) {
+			t.Fatal("identical retry bypassed current registration authority")
+		}
+		if d.Stage != "" || len(d.Reasons) != 0 || d.Operation != "" || d.ClosureDigest != "" || d.RequestDigest != "" || d.Intent != nil {
 			t.Fatalf("malformed identical retry: %+v", d)
 		}
 		if s.Install == nil || s.Install.State != StateActive || s.Install.Version != e.Version || r.GrantUpdate {
@@ -113,7 +125,7 @@ func checkInvariants(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdic
 		}
 		for _, reason := range d.Reasons {
 			switch reason.Code {
-			case CodeApprovalReleaseOperation, CodeApprovalWidened, CodeApprovalTargetsChanged:
+			case CodeApprovalReleaseOperation, CodeApprovalReleaseRollback, CodeApprovalWidened, CodeApprovalTargetsChanged:
 			default:
 				t.Fatalf("approval_required with %s", reason.Code)
 			}
@@ -227,6 +239,9 @@ func checkInvariants(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdic
 			s.ReleaseVersion == "" || a.ReleaseVersion != s.ReleaseVersion || a.ReleaseVersion != e.Version || d.Intent.ApprovalConsume != "" {
 			t.Fatal("release-fixed preconditions broken")
 		}
+		if s.AutomaticReleaseFloor != "" && oracleReleaseOrder(e.Version, s.AutomaticReleaseFloor) < 0 {
+			t.Fatal("automatic mutation below the journaled release floor")
+		}
 		in := s.Install
 		switch d.Operation {
 		case OperationInstall:
@@ -330,6 +345,18 @@ func FuzzParse(f *testing.F) {
 	for _, c := range schemaCases(f, "extension-resource/schema-cases.json", "extension-resource.schema.json") {
 		f.Add(uint8(3), compact(f, c.Instance))
 	}
+	for _, c := range schemaCases(f, "admission-vectors/schema-cases.json", "admission-vectors.schema.json") {
+		var envelope struct {
+			Cases []corpusCase `json:"cases"`
+		}
+		if decodeJSONInto(c.Instance, &envelope) != nil {
+			continue
+		}
+		for _, v := range envelope.Cases {
+			f.Add(uint8(0), []byte(v.Snapshot))
+			f.Add(uint8(1), []byte(v.Request))
+		}
+	}
 	sentinels := []error{ErrJSON, ErrShape, ErrField, ErrGrant}
 	f.Fuzz(func(t *testing.T, which uint8, data []byte) {
 		var err, again error
@@ -386,6 +413,9 @@ func FuzzParse(f *testing.F) {
 // that passed all stages (approval_required or admit) must satisfy.
 func recheckStages(t *testing.T, e Evidence, s Snapshot, r Request, v []Verdict) {
 	t.Helper()
+	if !registrationAuthority(e, s) {
+		t.Fatal("passed without current registration authority")
+	}
 	under := func(id string, prefixes []string) bool {
 		for _, p := range prefixes {
 			if id == p || len(id) > len(p) && id[:len(p)+1] == p+"." {
@@ -564,4 +594,105 @@ func recheckNarrower(t *testing.T, g, current *Grant) {
 			}
 		}
 	}
+}
+
+// registrationAuthority is independent of the production component stage and
+// checks the complete manifest request, including on the retry early return.
+func registrationAuthority(e Evidence, s Snapshot) bool {
+	seen := map[string]bool{}
+	for _, c := range e.Components {
+		b := c.Requested.BrowserAdapter
+		if b == nil {
+			continue
+		}
+		if seen[b.Registration] {
+			return false
+		}
+		seen[b.Registration] = true
+		var reg *Registration
+		for i := range s.Registrations {
+			if s.Registrations[i].ID == b.Registration {
+				reg = &s.Registrations[i]
+			}
+		}
+		if reg == nil || reg.RecoveryEpoch != s.RecoveryEpoch {
+			return false
+		}
+		if h := reg.Bound; h != nil && h.State == StateActive && h.ID != e.ID {
+			return false
+		}
+		for _, pair := range [][2]*OSPolicy{{b.OS.MacOS, reg.OS.MacOS}, {b.OS.Windows, reg.OS.Windows}, {b.OS.Linux, reg.OS.Linux}} {
+			requested, registered := pair[0], pair[1]
+			if requested == nil {
+				continue
+			}
+			if registered == nil || requested.NativeHost && !registered.NativeHost {
+				return false
+			}
+			for _, name := range requested.PolicyNames {
+				found := false
+				for _, allowed := range registered.PolicyNames {
+					found = found || name == allowed
+				}
+				if !found {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// oracleReleaseOrder uses arbitrary-precision integers rather than the
+// production comparator's string-length ordering. Inputs are schema-valid.
+func oracleReleaseOrder(a, b string) int {
+	split := func(v string) ([]string, []string) {
+		parts := strings.SplitN(v, "-", 2)
+		var pre []string
+		if len(parts) == 2 {
+			pre = strings.Split(parts[1], ".")
+		}
+		return strings.Split(parts[0], "."), pre
+	}
+	ac, ap := split(a)
+	bc, bp := split(b)
+	for i := range ac {
+		x, _ := new(big.Int).SetString(ac[i], 10)
+		y, _ := new(big.Int).SetString(bc[i], 10)
+		if c := x.Cmp(y); c != 0 {
+			return c
+		}
+	}
+	if len(ap) == 0 && len(bp) == 0 {
+		return 0
+	}
+	if len(ap) == 0 {
+		return 1
+	}
+	if len(bp) == 0 {
+		return -1
+	}
+	for i := 0; i < len(ap) && i < len(bp); i++ {
+		// SetString also accepts signs. Only digit-only identifiers are
+		// numeric in the release contract; use big.Int just for their magnitude.
+		xn := ap[i] != "" && strings.Trim(ap[i], "0123456789") == ""
+		yn := bp[i] != "" && strings.Trim(bp[i], "0123456789") == ""
+		x, _ := new(big.Int).SetString(ap[i], 10)
+		y, _ := new(big.Int).SetString(bp[i], 10)
+		var c int
+		switch {
+		case xn && yn:
+			c = x.Cmp(y)
+		case xn:
+			c = -1
+		case yn:
+			c = 1
+		default:
+			c = strings.Compare(ap[i], bp[i])
+		}
+		if c != 0 {
+			return c
+		}
+	}
+	return len(ap) - len(bp)
 }

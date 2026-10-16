@@ -104,6 +104,7 @@ const (
 	CodeInterfaceUnserved               Code = "interface.unserved"
 	CodeComponentVerdictMissing         Code = "component.verdict_missing"
 	CodeComponentVerdictFailed          Code = "component.verdict_failed"
+	CodeComponentRegistrationEpoch      Code = "component.registration_epoch"
 	CodeComponentRegistrationUnknown    Code = "component.registration_unknown"
 	CodeComponentRegistrationOS         Code = "component.registration_os"
 	CodeComponentRegistrationNames      Code = "component.registration_names"
@@ -125,6 +126,7 @@ const (
 	CodeGrantProfile                    Code = "grant.profile"
 	CodeGrantRoots                      Code = "grant.roots"
 	CodeGrantRetiredKey                 Code = "grant.retired_key"
+	CodeApprovalReleaseRollback         Code = "approval.release_rollback"
 	CodeApprovalReleaseFixed            Code = "approval.release_fixed"
 	CodeApprovalReleaseOperation        Code = "approval.release_operation"
 	CodeApprovalWidened                 Code = "approval.widened"
@@ -145,10 +147,10 @@ var allCodes = []Code{
 	CodeTombstoneManifest, CodeTombstonePackage, CodeTombstonePublisher, CodeTombstoneGrants, CodeTombstoneTargets, CodeTombstoneNotInstalled,
 	CodeOwnershipOwner, CodeOwnershipAssignmentRequired,
 	CodeInterfaceUnserved,
-	CodeComponentVerdictMissing, CodeComponentVerdictFailed, CodeComponentRegistrationUnknown, CodeComponentRegistrationOS, CodeComponentRegistrationNames, CodeComponentRegistrationNativeHost, CodeComponentRegistrationBound, CodeComponentRegistrationDuplicate,
+	CodeComponentVerdictMissing, CodeComponentVerdictFailed, CodeComponentRegistrationUnknown, CodeComponentRegistrationEpoch, CodeComponentRegistrationOS, CodeComponentRegistrationNames, CodeComponentRegistrationNativeHost, CodeComponentRegistrationBound, CodeComponentRegistrationDuplicate,
 	CodeTargetsDeviceGroupsRequired, CodeTargetsDeviceGroupsForbidden, CodeTargetsAllDevices, CodeTargetsConsole, CodeTargetsJobs, CodeTargetsUnknownGroup, CodeTargetsRetiredKey,
 	CodeGrantMissing, CodeGrantExtra, CodeGrantKind, CodeGrantRegistration, CodeGrantExceeds, CodeGrantProfile, CodeGrantRoots, CodeGrantRetiredKey,
-	CodeApprovalReleaseFixed, CodeApprovalReleaseOperation, CodeApprovalWidened, CodeApprovalTargetsChanged, CodeApprovalEpoch, CodeApprovalDigest, CodeApprovalSeparation, CodeApprovalExemptUnavailable, CodeApprovalExemptPrincipal, CodeApprovalConsumed,
+	CodeApprovalReleaseFixed, CodeApprovalReleaseRollback, CodeApprovalReleaseOperation, CodeApprovalWidened, CodeApprovalTargetsChanged, CodeApprovalEpoch, CodeApprovalDigest, CodeApprovalSeparation, CodeApprovalExemptUnavailable, CodeApprovalExemptPrincipal, CodeApprovalConsumed,
 }
 
 // Evidence is the typed projection of a loader-verified package.
@@ -231,6 +233,7 @@ type Snapshot struct {
 	ApprovalPolicyDisabled   bool
 	ApprovalPolicyGeneration uint64
 	FirstStart               bool
+	AutomaticReleaseFloor    string // journal maximum reserved-id version; empty before any prepare
 	ReleaseVersion           string // empty without a verified release manifest (JSON null)
 	ProjectKey               string
 	ServedInterfaces         []string
@@ -298,6 +301,7 @@ type Registration struct {
 	ID                     string
 	Browser                string
 	RegistrationGeneration uint64
+	RecoveryEpoch          uint64
 	OS                     OSPolicies
 	Bound                  *Bound
 }
@@ -361,15 +365,16 @@ type Reason struct {
 }
 
 type Intent struct {
-	Operation        Operation
-	ApprovalKind     ApprovalKind
-	TombstoneCreate  bool
-	OwnershipCreate  bool
-	Enabled          bool
-	Grants           []string
-	Targets          Targets
-	RegistrationBind []Binding // the id's complete binding set after commit; unnamed bindings are released
-	ApprovalConsume  string
+	Operation         Operation
+	ApprovalKind      ApprovalKind
+	TombstoneCreate   bool
+	ReleaseFloorRaise string // irreversible maximum at prepare; empty when unchanged
+	OwnershipCreate   bool   // irreversible reservation at prepare, retained on abort
+	Enabled           bool
+	Grants            []string
+	Targets           Targets
+	RegistrationBind  []Binding // the id's complete binding set after commit; unnamed bindings are released
+	ApprovalConsume   string
 }
 
 type Binding struct {
