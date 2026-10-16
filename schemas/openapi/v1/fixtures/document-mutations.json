@@ -301,7 +301,7 @@
    "ops": [
     {
      "op": "delete",
-     "path": "/components/schemas/Problem/properties/type/enum/21"
+     "path": "/components/schemas/Problem/properties/type/enum/20"
     }
    ],
    "expect": "R16"
@@ -357,6 +357,236 @@
     }
    ],
    "expect": "S01"
+  },
+  {
+   "id": "missing-production-gate",
+   "description": "missing-production-gate",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1session/get/x-ricevanta-gates",
+     "value": []
+    }
+   ],
+   "expect": "R14"
+  },
+  {
+   "id": "authority-approval-not-bound",
+   "description": "authority-approval-not-bound",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1authority-approve/post/x-ricevanta-authorization/reauth",
+     "value": "recent"
+    }
+   ],
+   "expect": "R22"
+  },
+  {
+   "id": "selector-substring-refused",
+   "description": "selector-substring-refused",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1api-tokens/get/x-ricevanta-authorization/permissions/0/selector",
+     "value": "ow"
+    }
+   ],
+   "expect": "R07"
+  },
+  {
+   "id": "unbounded-query-parameter",
+   "description": "unbounded-query-parameter",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1auth~1oidc~1{provider_uid}~1callback/get/parameters/1/schema",
+     "value": {
+      "type": "string"
+     }
+    }
+   ],
+   "expect": "R12"
+  },
+  {
+   "id": "versioned-write-missing-if-match",
+   "description": "versioned write missing if match",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/parameters/1"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-optional-if-match",
+   "description": "versioned write optional if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/required",
+     "value": false
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-weakened-if-match",
+   "description": "versioned write weakened if match",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/components/parameters/IfMatch/schema/pattern"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-wildcard-if-match",
+   "description": "versioned write wildcard if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/schema/pattern",
+     "value": ".*"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-unbounded-if-match",
+   "description": "versioned write unbounded if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/schema/maxLength",
+     "value": 100
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-query-if-match",
+   "description": "versioned write query if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/components/parameters/IfMatch/in",
+     "value": "query"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-missing-classification",
+   "description": "versioned write missing classification",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/x-ricevanta-concurrency"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-write-downgraded",
+   "description": "versioned write downgraded",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/x-ricevanta-concurrency",
+     "value": "not_versioned"
+    },
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/parameters/1"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-action-downgraded",
+   "description": "versioned action downgraded",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1break-glass-accounts~1{account_uid}~1reset/post/x-ricevanta-concurrency",
+     "value": "not_versioned"
+    },
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1break-glass-accounts~1{account_uid}~1reset/post/parameters/1"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "unsafe-missing-concurrency",
+   "description": "unsafe missing concurrency",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1session~1logout/post/x-ricevanta-concurrency"
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "path-level-parameters-refused",
+   "description": "path level parameters refused",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1sessions/parameters",
+     "value": []
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "versioned-inline-optional-if-match",
+   "description": "versioned inline optional if match",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1identity-providers~1{provider_uid}/put/parameters/1",
+     "value": {
+      "name": "If-Match",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "pattern": "^\"r[1-9][0-9]{0,18}\"$",
+       "maxLength": 22
+      }
+     }
+    }
+   ],
+   "expect": "R24"
+  },
+  {
+   "id": "decision-replay-marker-missing",
+   "description": "decision replay marker missing",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1authority-approve/post/x-ricevanta-decision-replay"
+    }
+   ],
+   "expect": "R22"
+  },
+  {
+   "id": "decision-replay-on-secret-claim",
+   "description": "decision replay on secret claim",
+   "ops": [
+    {
+     "op": "set",
+     "path": "/paths/~1api~1v1~1approval-requests~1{request_uid}~1break-glass-enrollment-code/post/x-ricevanta-decision-replay",
+     "value": "exact_result"
+    }
+   ],
+   "expect": "R22"
   }
  ]
 }

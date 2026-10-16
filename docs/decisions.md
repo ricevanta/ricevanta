@@ -513,22 +513,22 @@ Rejected: a required message queue; PostgreSQL `LISTEN`/`NOTIFY` and job tables 
 Detail: `architecture.md` section 5.
 
 ### BE-08. Console stack and components
-Decision: the console is a Vue 3 single-page application in TypeScript built by Vite, with Pinia, Vue Router route-level chunks, a client typed by `openapi-typescript` and `openapi-fetch` from the hand-written OpenAPI 3.1 document, and in-house components on Reka UI primitives with TanStack Table and Virtual; Apache ECharts draws charts, Cytoscape.js with dagre draws lineage graphs, and CodeMirror 6 edits policies. Nothing in the build needs `eval`, inline script or inline style elements; CodeMirror injects its styles through constructable stylesheets, which needs its host element in a shadow root.
+Decision: the console is a Vue 3 single-page application in TypeScript built by Vite, with Pinia, Vue Router route-level chunks, a client typed by checked generated `.ts` output from `openapi-typescript` and wrapped by `openapi-fetch` from the hand-written OpenAPI 3.1 document, and in-house components on Reka UI primitives with TanStack Table and Virtual; Apache ECharts draws charts, Cytoscape.js with dagre draws lineage graphs, and CodeMirror 6 edits policies. Nothing in the build needs `eval`, inline script or inline style elements; CodeMirror injects its styles through constructable stylesheets, which needs its host element in a shadow root.
 Why: WCAG 2.2 AA and a strict Content-Security-Policy need components with WAI-ARIA keyboard behaviour and static styles, and the brand tokens must drive every surface.
 Rejected: Element Plus, which states no accessibility position and labels its virtualized table beta; PrimeVue 5, whose license requires a key and forbids redistribution; Monaco, heavier and worker-based.
-Detail: `design/console.md` section 1.
+Detail: `design/console.md` section 1 and [API foundation](specs/api-foundation.md) section 9; generated types are checked `.ts` build output under the console foundation's declaration-file ban.
 
 ### BE-09. Console sessions
-Decision: OIDC login (authorization code with PKCE) or SP-initiated SAML ends in a server-side session in a `__Host-` cookie with `SameSite=Strict`, defended by a synchronizer CSRF token plus Fetch Metadata and Origin checks; idle and absolute timeouts default to 15 minutes and 8 hours, and to 5 minutes and 1 hour for break-glass. Approving a protected action and changing identity providers, principal links, mappings, directory authorities, recovery paths, break-glass accounts, roles, access policies or the trust list need an interactive session authenticated within 10 minutes; identity-authority approval must use an unaffected authentication method; API tokens can request protected actions but never approve them.
+Decision: OIDC login (authorization code with PKCE) or SP-initiated SAML ends in a server-side session in a `__Host-` cookie with `SameSite=Strict`, defended by a synchronizer CSRF token plus Fetch Metadata and Origin checks; idle and absolute timeouts default to 15 minutes and 8 hours, and to 5 minutes and 1 hour for break-glass. Approving a protected action and changing identity providers, principal links, mappings, directory authorities, recovery paths, break-glass accounts, roles, access policies or the trust list need an interactive session with verified authentication evidence less than 10 minutes old, never freshness inferred from session issuance; a new identity-authority approval also binds unconsumed evidence to the exact request hash and uses an unaffected authentication method; API tokens can request protected actions but never approve them.
 Why: a stolen or unattended session is the cheapest route to a protected action, and OWASP treats SameSite as defence in depth only.
 Rejected: tokens in browser storage, readable by any injected script; IdP-initiated SAML, which binds no request.
-Detail: `design/console.md` section 2.
+Detail: [Identity login](specs/identity-login.md) and [identity sessions](specs/identity-sessions.md); production credential and authority paths remain gated on BE-12.
 
 ### BE-10. Console live updates
-Decision: the console refreshes from a Server-Sent Events stream on `/api/v1/changes` that carries per-topic invalidation watermarks and never rows; each `api` replica reads module watermarks from PostgreSQL every 2 seconds, views refetch through ordinary authorized operations, and 30-second polling is the fallback.
-Why: the traffic is one-way, rides the session cookie and per-request authorization, and costs one query per replica rather than per operator at 20,000 endpoints (EV-01).
-Rejected: WebSocket, a bidirectional channel no view needs, with its own handshake checks; polling only, which costs a query per tab and delays alerts and approvals.
-Detail: `design/console.md` section 4.
+Decision: the console reads `/api/v1/changes` through a fetch-based Server-Sent Events reader with per-topic equality tokens and no rows, event ids or replay cursor; each connection starts with a full snapshot. A per-replica hub polls watermarks every 2 seconds, checks authority independently under a five-second maximum read lease, and hard-aborts the shared transport connection on lease expiry or lost authority; visible views also refetch every 30 seconds with bounded jitter, including when the stream is healthy.
+Why: invalidations reduce latency while authorized reads and independent reconciliation prevent mutable watermarks from becoming authority or the only freshness signal.
+Rejected: WebSocket adds an unused bidirectional protocol; event replay adds retained history and restore ambiguity; watermark-only revocation permits a database writer to hide a deny; handler cancellation and progress timeouts alone do not fence a trickling HTTP/2 write.
+Detail: [Change stream](specs/change-stream.md); BE-12 still blocks production stream admission and publication.
 
 ### BE-11. Report templates
 Decision: reports, schedules and dashboard panels use `ReportTemplate`, a declarative `ricevanta.io/v1alpha1` resource of parameters, datasets over a server-published source catalogue with fixed filter operators and measures, and a layout of text, KPI, chart and table blocks, with no SQL, script or markup. The `events` module owns templates, runs and schedules, and every module publishes and executes its report sources through a Go interface; runs execute with the runner's permissions and device-group scope, and every later reader, including the runner, must currently hold every source permission and cover the immutable entity footprint on metadata, result, download and cache paths. Private result blobs cannot bypass that check; the extension `content` format `report` carries the same resource.
@@ -559,6 +559,24 @@ Decision: `ricevanta-server` runs exactly the roles listed in one strictly decod
 Why: release Tasks 4 and 5 need a serving contract and version identity, the console's production header boundary must hold against its binary, and bounded input sizes do not bound startup I/O time.
 Rejected: a default of all roles that silently runs only the implemented ones; serving console files from a directory that nothing verifies; `http.FileServer`, whose listings, redirects, sniffing and `Last-Modified` contradict the contract; a development flag that relaxes headers; `501` for `/api/v1`, which would advertise an undefined API; boundary-only stop checks that cannot interrupt blocked I/O; rejecting required compressed sidecars or admitting them as independent MIME types.
 Detail: [server runtime spec](specs/server-runtime.md) and [implementation plan](plans/server-runtime.md).
+
+### BE-16. Administration API contract and permission bindings
+Decision: one hand-written OpenAPI 3.1.2 document defines strict bounded requests, problem details, keyset pagination, explicit versioned-write classifications with mandatory strong revision preconditions, scoped idempotency and exact permission or protocol/subject bindings, validated offline with shared fixtures. A proposed catalogue delta remains separate until the canonical and embedded catalogues and coverage inventory can change together; the existing runtime keeps its reserved-prefix refusal until complete reviewed handlers are admitted.
+Why: one explicit contract makes omitted authorization and client/server drift detectable without advertising unimplemented endpoints.
+Rejected: undocumented handlers, permissive request parsing and `501` route stubs, which weaken the BE-15 runtime boundary.
+Detail: [API foundation](specs/api-foundation.md), `schemas/openapi/v1/`.
+
+### BE-17. Identity proofs, sessions and recovery
+Decision: stable explicitly approved principal links resolve provider proofs to users; local accounts use generated passwords and one-use TOTP steps, with single-use enrollment and no response-secret replay. New decisions, authorized exact-result replay and one-use application have separate predicates; replay cannot execute, and application requires the approved state and still-valid decision session and freshness. Epoch-bound keyed records protect sessions and token ceilings from forgery, while current generations, denies, authentication dependencies and proof consumptions require BE-12's independently fenced authority; restore stays sealed and repairs local credentials under a new epoch.
+Why: record MACs cannot detect replay of valid old database state, and a recent or stolen console session must not become an identity-authority bypass.
+Rejected: email-based linking, freshness inferred from callback time, repeatable enrollment codes, consuming decision evidence again at replay/application and a database-only production authority reader.
+Detail: [Identity login](specs/identity-login.md), [identity sessions](specs/identity-sessions.md); SAML source/library qualification, licensing, notifier delivery and BE-12 remain implementation gates.
+
+### BE-18. Bounded change invalidation and authorization
+Decision: modules bump scoped watermark rows in the same transaction as visible changes; a bounded per-replica hub derives equality tokens from its instance/generation and each topic's authorized scope, with snapshot-on-connect and no row data. Subscription and tick checks enforce credential generations and current authority; an independent raw TCP abort fence enforces the earliest stream deadline across a shared connection, discarding pending writes and closing all HTTP/2 siblings. Database watermark hints and write progress cannot renew that authority.
+Why: transaction-visible invalidations avoid pre-commit sequence gaps, while bounded scans and queues make overload explicit and independent polling repairs missing hints.
+Rejected: row payloads in events, scope unions across permissions, unbounded hub scans, cached authorization renewed by notifications and stream-reset-only cancellation behind a blocked frame writer.
+Detail: [Change stream](specs/change-stream.md).
 
 ## Extensions (EXT)
 
