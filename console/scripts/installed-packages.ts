@@ -604,6 +604,19 @@ export interface PhysicalLicense {
   declared: string
   paths: string[]
 }
+function manifestLicense(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'type' in value &&
+    typeof value.type === 'string' &&
+    value.type.length
+  )
+    return value.type
+  return undefined
+}
 export function validateCatalogue(inventory: PhysicalInventory, raw: unknown): PhysicalLicense[] {
   const result = new Map<string, PhysicalLicense>()
   const physical = new Map<string, Instance[]>()
@@ -645,7 +658,9 @@ export function validateCatalogue(inventory: PhysicalInventory, raw: unknown): P
             throw new Error(`Absent catalogue package: ${pair}`)
           continue // Complete independent enumeration above proved no corresponding payload or link.
         }
-        if (instances.some((instance) => instance.manifest['license'] !== declared))
+        if (
+          instances.some((instance) => manifestLicense(instance.manifest['license']) !== declared)
+        )
           throw new Error(`Catalogue license mismatch: ${pair}`)
         if (
           instances.some(

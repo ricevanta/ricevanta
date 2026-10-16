@@ -69,6 +69,64 @@ it('inventories all 342 eligible pairs and peer-qualified physical instances', (
   expect(inventory.instances.some((item) => item.key.includes('('))).toBe(true)
   expect(validateCatalogue(inventory, value.catalogue).length).toBe(342)
 })
+it('verifies the legacy object license declaration in the pinned config-chain manifest', () => {
+  const value = fixture()
+  const path = value.paths.get('config-chain@1.1.13') ?? ''
+  const manifest = JSON.parse(
+    readFileSync(join(value.root, path, 'package.json'), 'utf8'),
+  ) as Record<string, unknown>
+  manifest['license'] = {
+    type: 'MIT',
+    url: 'https://raw.githubusercontent.com/dominictarr/config-chain/master/LICENCE',
+  }
+  value.put(`${path}/package.json`, JSON.stringify(manifest))
+  expect(
+    validateCatalogue(installedPackages(value.root), value.catalogue).find(
+      (item) => item.name === 'config-chain',
+    ),
+  ).toEqual({
+    name: 'config-chain',
+    version: '1.1.13',
+    declared: 'MIT',
+    paths: [join(value.root, path)],
+  })
+})
+it.each([
+  { type: 'GPL-3.0' },
+  { type: 'mit' },
+  { type: 'MIT OR ISC' },
+  { type: '' },
+  { type: ['MIT'] },
+  { name: 'MIT' },
+  [{ type: 'MIT' }],
+  {},
+  null,
+  42,
+])('rejects mismatched or unsupported manifest license representation: %j', (license) => {
+  const value = fixture()
+  const path = value.paths.get('config-chain@1.1.13') ?? ''
+  const manifest = JSON.parse(
+    readFileSync(join(value.root, path, 'package.json'), 'utf8'),
+  ) as Record<string, unknown>
+  manifest['license'] = license
+  value.put(`${path}/package.json`, JSON.stringify(manifest))
+  expect(() => validateCatalogue(installedPackages(value.root), value.catalogue)).toThrow(
+    'Catalogue license mismatch: config-chain@1.1.13',
+  )
+})
+it('requires the manifest license field instead of inferring it from legacy licenses', () => {
+  const value = fixture()
+  const path = value.paths.get('config-chain@1.1.13') ?? ''
+  const manifest = JSON.parse(
+    readFileSync(join(value.root, path, 'package.json'), 'utf8'),
+  ) as Record<string, unknown>
+  delete manifest['license']
+  manifest['licenses'] = [{ type: 'MIT' }]
+  value.put(`${path}/package.json`, JSON.stringify(manifest))
+  expect(() => validateCatalogue(installedPackages(value.root), value.catalogue)).toThrow(
+    'Catalogue license mismatch: config-chain@1.1.13',
+  )
+})
 it.each([false, true])(
   'validates grouped catalogue versions with reordered paths=%s',
   (reverse) => {

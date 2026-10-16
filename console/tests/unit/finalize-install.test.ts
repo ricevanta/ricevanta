@@ -52,6 +52,79 @@ it.each([false, true])(
   },
 )
 it.each([false, true])(
+  'finalizes exact legacy manifest license evidence without rewriting it: extras=%s',
+  async (extras) => {
+    const value = fixture(extras)
+    const path = value.paths.get('config-chain@1.1.13') ?? ''
+    const manifest = JSON.parse(
+      readFileSync(join(value.root, path, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>
+    manifest['license'] = {
+      type: 'MIT',
+      url: 'https://raw.githubusercontent.com/dominictarr/config-chain/master/LICENCE',
+    }
+    const bytes = JSON.stringify(manifest)
+    value.put(`${path}/package.json`, bytes)
+    const result = await finalizeInstall(value.root, () => Promise.resolve(value.catalogue))
+    expect(result.after.pairs).toHaveLength(342)
+    expect(result.removed.map((item) => item.pair).sort()).toEqual(extras ? removable : [])
+    expect(result.licenses.find((item) => item.name === 'config-chain')).toEqual({
+      name: 'config-chain',
+      version: '1.1.13',
+      declared: 'MIT',
+      normalized: 'MIT',
+      paths: [join(value.root, path)],
+    })
+    expect(readFileSync(join(value.root, path, 'package.json'), 'utf8')).toBe(bytes)
+  },
+)
+it.each(['unapproved-eligible', 'changed-candidate'])(
+  'rejects legacy manifest license evidence before any removal: %s',
+  async (kind) => {
+    const value = fixture(true)
+    const name =
+      kind === 'unapproved-eligible' ? 'config-chain' : '@rolldown/binding-linux-x64-musl'
+    const pair = kind === 'unapproved-eligible' ? 'config-chain@1.1.13' : `${name}@1.2.13`
+    const path = value.paths.get(pair) ?? ''
+    const manifest = JSON.parse(
+      readFileSync(join(value.root, path, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>
+    manifest['license'] = { type: kind === 'unapproved-eligible' ? 'GPL-3.0' : 'MIT' }
+    value.put(`${path}/package.json`, JSON.stringify(manifest))
+    if (kind === 'unapproved-eligible') {
+      value.catalogue['MIT'] = (value.catalogue['MIT'] ?? []).filter(
+        (item) => !(item && typeof item === 'object' && 'name' in item && item.name === name),
+      )
+      value.catalogue['GPL-3.0'] = [{ name, versions: ['1.1.13'], paths: [join(value.root, path)] }]
+    }
+    const candidates = removable.map((pair) => {
+      const payload = join(value.root, value.paths.get(pair) ?? '', 'payload')
+      const incoming = join(
+        value.root,
+        'node_modules/.pnpm',
+        pair.startsWith('lightningcss-') ? 'lightningcss@1.33.0' : 'rolldown@1.2.13',
+        'node_modules',
+        pair.slice(0, pair.lastIndexOf('@')),
+      )
+      return { payload, bytes: readFileSync(payload), incoming, target: readlinkSync(incoming) }
+    })
+    const error = await finalizeInstall(value.root, () => Promise.resolve(value.catalogue)).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+    expect(error).toBeInstanceOf(Error)
+    expect(error instanceof Error ? String(error.cause) : '').toContain(
+      kind === 'unapproved-eligible'
+        ? 'Unapproved license: GPL-3.0'
+        : 'Removal candidate license mismatch',
+    )
+    for (const candidate of candidates) {
+      expect(readFileSync(candidate.payload)).toEqual(candidate.bytes)
+      expect(readlinkSync(candidate.incoming)).toBe(candidate.target)
+    }
+  },
+)
+it.each([false, true])(
   'finalizes grouped multiversion catalogue evidence with extras=%s',
   async (extras) => {
     const value = fixture(extras)
