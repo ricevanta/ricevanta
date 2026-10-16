@@ -1680,12 +1680,207 @@ class PythonUnittestEvidenceTests(unittest.TestCase):
         evidence.mkdir()
         return run_selected.run_python_unittest(self.target, evidence, self.root, self.env)
 
+    def test_python_failure_diagnostic_retains_actual_assertion_location(self):
+        self.source.write_text('import unittest\nclass T(unittest.TestCase):\n    def test_a(self):\n        local_sentinel = "LOCAL_DIAGNOSTIC_SENTINEL"\n        self.assertEqual(1, 2, "actual assertion message")\n')
+        with self.assertRaises(EvidenceError): self.run_tiny()
+        evidence = self.root / 'evidence'
+        diagnostic = (evidence / 'execution.stderr.txt').read_text()
+        self.assertIn(str(self.source) + ':5', diagnostic)
+        self.assertIn('AssertionError', diagnostic)
+        self.assertIn('actual assertion message', diagnostic)
+        self.assertNotIn('LOCAL_DIAGNOSTIC_SENTINEL', diagnostic)
+        self.assertEqual(json.loads((evidence / 'execution.status.json').read_text()), {'exit': 1})
+        self.assertFalse((evidence / 'verified.json').exists())
+
+    def test_python_diagnostics_preserve_failure_events_and_accounting(self):
+        cases = [
+            ('assertion', '    def test_a(self): self.fail("assertion detail")\n', 'addFailure', 'AssertionError', 3, 'fail', 1, 0),
+            ('exception', '    def test_a(self): raise ValueError("error detail")\n', 'addError', 'ValueError', 3, 'error', 0, 1),
+            ('assertion subtest', '    def test_a(self):\n        with self.subTest(value="part"): self.fail("subtest detail")\n', 'addSubTest', 'AssertionError', 4, 'error', 1, 0),
+            ('error subtest', '    def test_a(self):\n        with self.subTest(value="part"): raise ValueError("subtest detail")\n', 'addSubTest', 'ValueError', 4, 'error', 0, 1),
+            ('expected failure', '    @unittest.expectedFailure\n    def test_a(self): self.fail("expected detail")\n', 'addExpectedFailure', 'AssertionError', 4, 'fail', 1, 0),
+            ('unexpected success', '    @unittest.expectedFailure\n    def test_a(self): pass\n', 'addUnexpectedSuccess', 'unexpected success', 3, 'fail', 1, 0),
+            ('instance setup', '    def setUp(self): raise ValueError("setup detail")\n    def test_a(self): pass\n', 'addError', 'ValueError', 3, 'error', 0, 1),
+            ('instance teardown', '    def tearDown(self): raise ValueError("teardown detail")\n    def test_a(self): pass\n', 'addError', 'ValueError', 3, 'error', 0, 1),
+            ('instance cleanup', '    def cleanup(self): raise ValueError("cleanup detail")\n    def test_a(self): self.addCleanup(self.cleanup)\n', 'addError', 'ValueError', 3, 'error', 0, 1),
+        ]
+        for label, methods, kind, exception, line, terminal, failed, errors in cases:
+            with self.subTest(label=label):
+                self.source.write_text('import unittest\nclass T(unittest.TestCase):\n' + methods)
+                with self.assertRaises(EvidenceError): self.run_tiny()
+                evidence = self.root / 'evidence'
+                rows = run_selected.read_python_events(evidence / 'execution.events.jsonl')
+                self.assertEqual(rows[2:-1], [{'event': 'start', 'id': 'test_tiny.T.test_a'}, {'event': terminal, 'id': 'test_tiny.T.test_a'}])
+                self.assertEqual(rows[-1], {'event': 'totals', 'discovered': 1, 'testsRun': 1, 'passed': 0, 'skipped': 0, 'failed': failed, 'errors': errors})
+                self.assertEqual(json.loads((evidence / 'execution.status.json').read_text()), {'exit': 1})
+                text = (evidence / 'execution.stderr.txt').read_text()
+                self.assertIn('kind=' + kind, text)
+                self.assertIn(exception, text)
+                self.assertIn(str(self.source) + ':' + str(line), text)
+                if 'subtest' in label:
+                    self.assertIn('parent=test_tiny.T.test_a', text)
+                    self.assertIn("value='part'", text)
+                if label == 'unexpected success':
+                    self.assertIn('declared method ', text)
+                    self.assertNotIn('exception=', text)
+                    self.assertNotIn('frame=', text)
+                self.assertFalse((evidence / 'verified.json').exists())
+                shutil.rmtree(evidence)
+
+    def test_python_fixture_diagnostics_without_start_and_after_pass(self):
+        sources = {
+            'module setup': 'import unittest\ndef setUpModule(): raise RuntimeError("module setup")\nclass T(unittest.TestCase):\n    def test_a(self): pass\n',
+            'module teardown': 'import unittest\ndef tearDownModule(): raise RuntimeError("module teardown")\nclass T(unittest.TestCase):\n    def test_a(self): pass\n',
+            'module cleanup': 'import unittest\ndef cleanup(): raise RuntimeError("module cleanup")\ndef setUpModule(): unittest.addModuleCleanup(cleanup)\nclass T(unittest.TestCase):\n    def test_a(self): pass\n',
+            'class setup': 'import unittest\nclass T(unittest.TestCase):\n    @classmethod\n    def setUpClass(cls): raise RuntimeError("class setup")\n    def test_a(self): pass\n',
+            'class teardown': 'import unittest\nclass T(unittest.TestCase):\n    @classmethod\n    def tearDownClass(cls): raise RuntimeError("class teardown")\n    def test_a(self): pass\n',
+            'class cleanup': 'import unittest\nclass T(unittest.TestCase):\n    @classmethod\n    def cleanup(cls): raise RuntimeError("class cleanup")\n    @classmethod\n    def setUpClass(cls): cls.addClassCleanup(cls.cleanup)\n    def test_a(self): pass\n',
+        }
+        for label, source in sources.items():
+            with self.subTest(label=label):
+                self.source.write_text(source)
+                with self.assertRaises(EvidenceError): self.run_tiny()
+                evidence = self.root / 'evidence'
+                rows = run_selected.read_python_events(evidence / 'execution.events.jsonl')
+                started = 0 if label.endswith('setup') else 1
+                expected = [] if not started else [{'event': 'start', 'id': 'test_tiny.T.test_a'}, {'event': 'pass', 'id': 'test_tiny.T.test_a'}]
+                fixture_id = ('setUpModule (test_tiny)' if label == 'module setup' else 'tearDownModule (test_tiny)' if label.startswith('module') else
+                              'setUpClass (test_tiny.T)' if label == 'class setup' else 'tearDownClass (test_tiny.T)')
+                self.assertEqual(rows[2:-1], expected + [{'event': 'error', 'id': fixture_id}])
+                self.assertEqual(rows[-1], {'event': 'totals', 'discovered': 1, 'testsRun': started, 'passed': started - 1, 'skipped': 0, 'failed': 0, 'errors': 1})
+                text = (evidence / 'execution.stderr.txt').read_text()
+                self.assertIn('kind=addError id=' + fixture_id, text)
+                self.assertIn('RuntimeError', text)
+                self.assertIn('message=' + label, text)
+                self.assertIn(str(self.source) + ':', text)
+                self.assertEqual(json.loads((evidence / 'execution.status.json').read_text()), {'exit': 1})
+                self.assertFalse((evidence / 'verified.json').exists())
+                shutil.rmtree(evidence)
+
+    def test_python_snapshot_precedes_cleanup_and_base_callback_runs_once(self):
+        self.source.write_text(textwrap.dedent('''\
+            import unittest, sys
+            original = unittest.TestResult.addFailure
+            def counted(result, test, err):
+                sys.stderr.write("BASE_CALLBACK\\n")
+                original(result, test, err)
+                tb = err[2]
+                present = False
+                while tb is not None:
+                    present = present or tb.tb_frame.f_code.co_name == 'test_a'
+                    tb = tb.tb_next
+                sys.stderr.write("AFTER_BASE_ASSERTION_PRESENT=" + str(present) + "\\n")
+            unittest.TestResult.addFailure = counted
+            class T(unittest.TestCase):
+                def test_a(self): self.fail("cleanup regression")
+        '''))
+        with self.assertRaises(EvidenceError): self.run_tiny()
+        text = (self.root / 'evidence/execution.stderr.txt').read_text()
+        self.assertIn(str(self.source) + ':14', text)
+        self.assertEqual(text.count('BASE_CALLBACK\n'), 1)
+        self.assertIn('AFTER_BASE_ASSERTION_PRESENT=False', text)
+        self.assertLess(text.index('PYTHON_DIAGNOSTIC'), text.index('BASE_CALLBACK\n'))
+
+    def test_diagnostic_faults_preserve_original_callback_event_and_exit(self):
+        common = '''import unittest, sys
+Reporter = sys.modules['__main__'].PythonFailureDiagnostics
+original = unittest.TestResult.addFailure
+def counted(result, test, err):
+    sys.__stderr__.write("BASE_CALLBACK\\n")
+    original(result, test, err)
+unittest.TestResult.addFailure = counted
+'''
+        faults = {
+            'formatter': 'def broken(*args): raise ValueError("formatter fault")\nReporter.format_record = broken\n',
+            'encoder': 'def broken(*args): raise UnicodeError("encoder fault")\nReporter.encode = staticmethod(broken)\n',
+            'capture': 'capture = Reporter.capture\ndef broken(self, *args):\n    capture(self, *args)\n    raise ValueError("capture fault")\nReporter.capture = broken\n',
+            'write': '''init = Reporter.__init__
+class Sink:
+    def write(self, text):
+        sys.__stderr__.write("DIAGNOSTIC_WRITE_ATTEMPT\\n")
+        raise OSError("write fault")
+    def flush(self): pass
+def injected(self, *args, **kwargs):
+    init(self, *args, **kwargs)
+    self.sink = Sink()
+Reporter.__init__ = injected
+''',
+            'flush': '''init = Reporter.__init__
+class Sink:
+    def write(self, text):
+        sys.__stderr__.write("DIAGNOSTIC_WRITE_ATTEMPT\\n")
+        return len(text)
+    def flush(self): raise OSError("flush fault")
+def injected(self, *args, **kwargs):
+    init(self, *args, **kwargs)
+    self.sink = Sink()
+Reporter.__init__ = injected
+''',
+        }
+        for label, fault in faults.items():
+            with self.subTest(label=label):
+                source = common + fault + 'class T(unittest.TestCase):\n    def test_a(self): self.fail("original failure")\n'
+                self.source.write_text(source)
+                with self.assertRaises(EvidenceError): self.run_tiny()
+                evidence = self.root / 'evidence'
+                rows = run_selected.read_python_events(evidence / 'execution.events.jsonl')
+                self.assertEqual(rows[2:-1], [{'event': 'start', 'id': 'test_tiny.T.test_a'}, {'event': 'fail', 'id': 'test_tiny.T.test_a'}])
+                self.assertEqual(rows[-1], {'event': 'totals', 'discovered': 1, 'testsRun': 1, 'passed': 0, 'skipped': 0, 'failed': 1, 'errors': 0})
+                text = (evidence / 'execution.stderr.txt').read_text()
+                self.assertEqual(text.count('BASE_CALLBACK\n'), 1)
+                if label in ('formatter', 'encoder', 'capture'):
+                    self.assertIn('diagnostic unavailable', text)
+                    self.assertIn('id=test_tiny.T.test_a', text)
+                    self.assertIn(str(self.source) + ':' + str(len(source.splitlines())), text)
+                    self.assertIn('AssertionError', text)
+                else:
+                    self.assertEqual(text.count('DIAGNOSTIC_WRITE_ATTEMPT\n'), 1)
+                    self.assertNotIn('diagnostic unavailable', text)
+                self.assertEqual(json.loads((evidence / 'execution.status.json').read_text()), {'exit': 1})
+                self.assertFalse((evidence / 'verified.json').exists())
+                shutil.rmtree(evidence)
+
+    def test_base_callback_exception_still_escapes_without_terminal_or_totals(self):
+        self.source.write_text('import unittest\ndef broken(*args): raise RuntimeError("BASE_CALLBACK_PROPAGATES")\nunittest.TestResult.addFailure = broken\nclass T(unittest.TestCase):\n    def test_a(self): self.fail("original failure")\n')
+        with self.assertRaises(EvidenceError): self.run_tiny()
+        evidence = self.root / 'evidence'
+        rows = run_selected.read_python_events(evidence / 'execution.events.jsonl')
+        self.assertEqual(rows[2:], [{'event': 'start', 'id': 'test_tiny.T.test_a'}])
+        self.assertIn('BASE_CALLBACK_PROPAGATES', (evidence / 'execution.stderr.txt').read_text())
+        self.assertEqual(json.loads((evidence / 'execution.status.json').read_text()), {'exit': 1})
+        self.assertFalse((evidence / 'verified.json').exists())
+
+    def test_repeated_subtest_failure_exhaustion_keeps_every_original_event(self):
+        source = 'import unittest, sys\nReporter = sys.modules["__main__"].PythonFailureDiagnostics\ninit = Reporter.__init__\ndef bounded(self, declarations, *args, **kwargs):\n    init(self, declarations, record_bytes=1024, child_bytes=2500, field_bytes=256, frames=4)\nReporter.__init__ = bounded\nclass T(unittest.TestCase):\n    def test_a(self):\n        for i in range(20):\n            with self.subTest(part=i): self.fail("é" * 1000)\n'
+        self.source.write_text(source)
+        with self.assertRaises(EvidenceError): self.run_tiny()
+        evidence = self.root / 'evidence'
+        rows = run_selected.read_python_events(evidence / 'execution.events.jsonl')
+        self.assertEqual(rows[2:-1], [{'event': 'start', 'id': 'test_tiny.T.test_a'}] + [{'event': 'error', 'id': 'test_tiny.T.test_a'}] * 20)
+        self.assertEqual(rows[-1], {'event': 'totals', 'discovered': 1, 'testsRun': 1, 'passed': -19, 'skipped': 0, 'failed': 20, 'errors': 0})
+        text = (evidence / 'execution.stderr.txt').read_text()
+        self.assertLessEqual(len(text.encode()), 2500)
+        self.assertEqual(text.count('[child diagnostic budget exhausted]'), 1)
+        self.assertIn(str(self.source) + ':10', text)
+        self.assertEqual(json.loads((evidence / 'execution.status.json').read_text()), {'exit': 1})
+        self.assertFalse((evidence / 'verified.json').exists())
+
+    def test_successful_subtests_add_no_diagnostics_or_extra_events(self):
+        self.source.write_text('import unittest\nclass T(unittest.TestCase):\n    def test_a(self):\n        for i in range(2):\n            with self.subTest(part=i): self.assertEqual(1, 1)\n')
+        record = self.run_tiny()
+        evidence = self.root / 'evidence'
+        self.assertEqual((evidence / 'execution.stderr.txt').read_text(), '')
+        self.assertEqual(record['summary']['passed'], 1)
+        self.assertEqual(run_selected.read_python_events(evidence / 'execution.events.jsonl')[2:-1],
+                         [{'event': 'start', 'id': 'test_tiny.T.test_a'}, {'event': 'pass', 'id': 'test_tiny.T.test_a'}])
+
     def test_python_unittest_fresh_children_and_local_inheritance(self):
         self.assertEqual(run_selected.python_declarations(self.root, self.target),
                          ['test_tiny.Base.test_base', 'test_tiny.Child.test_base', 'test_tiny.Child.test_child'])
         record = self.run_tiny()
         self.assertEqual(record['summary']['passed'], 3)
         self.assertEqual(record['summary']['skipped'], [])
+        self.assertEqual((self.root / 'evidence/execution.stderr.txt').read_text(), '')
         self.assertTrue((self.root / 'evidence/verified.json').is_file())
 
     def test_python_unittest_refuses_execution_substitution(self):
@@ -2009,6 +2204,7 @@ class PythonUnittestEvidenceTests(unittest.TestCase):
         record = self.run_tiny()
         self.assertEqual(record['summary']['passed'], 1)
         self.assertEqual(record['summary']['skipped'], [{'id': module + '.' + cls + '.' + method, 'reason': reason, 'proof': proof}])
+        self.assertEqual((self.root / 'evidence/execution.stderr.txt').read_text(), '')
         self.assertNotEqual((self.root / 'evidence/execution.txt').read_text().strip(), str(os.getpid()))
         self.source.write_text(self.source.read_text().replace('    def test_pure(self): print(os.getpid())\n', ''))
         shutil.rmtree(self.root / 'evidence')
@@ -2058,3 +2254,224 @@ class PythonUnittestEvidenceTests(unittest.TestCase):
         for test, reason, host in ((windows, 'wrong', 'linux-x64'), (windows, 'native Windows delete-sharing and atomic replacement', 'windows-x64'),
                                    (linux, 'Linux /proc parsing', 'linux-x64'), ('other.T.test_a', 'Linux /proc parsing', 'macos-arm64')):
             with self.assertRaises(ValueError): run_selected.python_skip(test, reason, host)
+
+class PythonFailureDiagnosticTests(unittest.TestCase):
+    class Case:
+        def id(self): return 'synthetic.T.test_a'
+
+    class UTF8StringCapture:
+        """Adapt the binary reporter contract to a deterministic in-memory text capture."""
+        def __init__(self): self.text = io.StringIO()
+        def write(self, data):
+            self.text.write(data.decode('utf-8'))
+            return len(data)
+        def flush(self): self.text.flush()
+        def getvalue(self): return self.text.getvalue()
+
+    def exception(self, message='primary failure', depth=0):
+        namespace = {'message': message}
+        exec(compile('def trigger(depth):\n    if depth: return trigger(depth - 1)\n    local_sentinel = "LOCAL_DIAGNOSTIC_SENTINEL"\n    raise RuntimeError(message)\n', '/tmp/synthetic_trace_case.py', 'exec'), namespace)
+        try: namespace['trigger'](depth)
+        except RuntimeError: return sys.exc_info()
+        self.fail('synthetic exception missing')
+
+    def reporter(self, sink=None, **limits):
+        return run_selected.PythonFailureDiagnostics({'synthetic.T.test_a': (Path('/tmp/synthetic_trace_case.py').resolve(), 1, 'T.test_a')},
+                                                    self.UTF8StringCapture() if sink is None else sink, **limits)
+
+    def test_windows_resolved_declaration_keeps_original_traceback_spelling(self):
+        from pathlib import PureWindowsPath
+        class WindowsPathModel(PureWindowsPath):
+            def resolve(self): return WindowsPathModel(PureWindowsPath('C:/review') / self)
+        with patch.object(sys.modules[__name__], 'Path', WindowsPathModel), patch.object(run_selected, 'Path', WindowsPathModel):
+            reporter = self.reporter()
+            reporter.report('addError', self.Case(), self.exception())
+        self.assertIn('location=declared test /tmp/synthetic_trace_case.py:4 in trigger', reporter.sink.getvalue())
+
+    def test_actual_utf8_caps_bypass_locale_encoding_and_newline_translation(self):
+        err = self.exception('😀' * 1024)
+        for _ in range(100): err[1].add_note('😀' * 1024)
+        for newline in ('\n', '\r\n'):
+            for record_limit, child_limit in ((65536, 16777216), (1024, 2500)):
+                with self.subTest(newline=newline, child_limit=child_limit):
+                    raw = io.BytesIO()
+                    sink = io.TextIOWrapper(raw, encoding='cp1252', errors='backslashreplace', newline=newline)
+                    # Exercise the default stderr selection, not only an explicitly injected sink.
+                    with patch.object(sys, 'stderr', sink):
+                        reporter = run_selected.PythonFailureDiagnostics({}, record_bytes=record_limit, child_bytes=child_limit)
+                        reporter.report('addError', self.Case(), err)
+                    first_record = raw.getvalue()
+                    self.assertLessEqual(len(first_record), record_limit)
+                    self.assertEqual(len(first_record), reporter.used)
+                    self.assertIn('😀', first_record.decode('utf-8'))
+                    if child_limit == 2500:
+                        for _ in range(10): reporter.report('addError', self.Case(), err)
+                    data = raw.getvalue()
+                    self.assertEqual(len(data), reporter.used)
+                    self.assertLessEqual(len(data), child_limit)
+                    self.assertNotIn(b'\r', data)
+                    self.assertNotIn(b'\\U0001f600', data)
+                    if child_limit == 2500:
+                        self.assertEqual(data.count(b'[child diagnostic budget exhausted]'), 1)
+                    data.decode('utf-8')
+
+    def test_binary_partial_none_and_failed_writes_are_bounded_and_not_retried(self):
+        class RawSink(io.RawIOBase):
+            def __init__(self, mode): self.mode, self.data, self.writes = mode, bytearray(), 0
+            def writable(self): return True
+            def write(self, data):
+                self.writes += 1
+                if self.mode == 'raise': raise OSError('binary write failure')
+                if self.mode == 'none': return None
+                self.data.extend(data[:17])
+                return 17
+        for mode in ('partial', 'none', 'raise'):
+            with self.subTest(mode=mode):
+                raw = RawSink(mode)
+                sink = io.TextIOWrapper(raw, encoding='cp1252', errors='backslashreplace', newline='\r\n')
+                reporter = self.reporter(sink, record_bytes=512, child_bytes=1250)
+                reporter.report('addError', self.Case(), self.exception('😀' * 1000))
+                reporter.report('addError', self.Case(), self.exception())
+                self.assertEqual(raw.writes, 1)
+                self.assertTrue(reporter.exhausted)
+                self.assertLessEqual(len(raw.data), reporter.used)
+                self.assertLessEqual(reporter.used, 512)
+                self.assertEqual(bytes(raw.data), b'PYTHON_DIAGNOSTIC' if mode == 'partial' else b'')
+
+    def test_text_only_sink_without_byte_interface_is_unusable_without_reconfiguration(self):
+        sink = io.StringIO(newline='\r\n')
+        reporter = self.reporter(sink)
+        reporter.report('addError', self.Case(), self.exception('😀'))
+        self.assertTrue(reporter.exhausted)
+        self.assertEqual(sink.getvalue(), '')
+
+    def test_exact_record_payload_boundary_stops_further_formatting(self):
+        record = run_selected._PythonDiagnosticBuffer(64)
+        record.add(b'x' * 34)
+        self.assertTrue(record.full)
+        self.assertEqual(bytes(record.data), b'x' * 34 + b'[diagnostic record truncated]\n')
+        record.add(b'formatter must not receive more room')
+        self.assertEqual(len(record.data), 64)
+
+    def test_utf8_fields_exact_boundary_and_control_escaping(self):
+        self.assertEqual(run_selected._python_diagnostic_field('é' * 16, 32), ('é' * 16).encode())
+        self.assertEqual(run_selected._python_diagnostic_field('é' * 17, 32), ('é' * 7 + '[field truncated]').encode())
+        reporter = self.reporter(field_bytes=64)
+        reporter.report('addError', self.Case(), self.exception('detail\n\t\x1b\x7f\u202e' + 'é' * 100))
+        text = reporter.sink.getvalue()
+        self.assertIn('detail\\n\\t\\x1b\\x7f\\u202e', text)
+        self.assertNotIn('\x1b', text)
+        self.assertIn('[field truncated]', text)
+        for line in text.splitlines():
+            if line.startswith('message='): self.assertLessEqual(len(line[len('message='):].encode()), 64)
+        self.assertEqual(text.encode().decode(), text)
+
+    def test_primary_location_survives_stack_and_message_truncation_without_locals(self):
+        reporter = self.reporter(field_bytes=128)
+        with patch.dict(os.environ, {'SYNTHETIC_DIAGNOSTIC_ENV': 'ENV_DIAGNOSTIC_SENTINEL'}):
+            reporter.report('addError', self.Case(), self.exception('é' * 5000, depth=90))
+        text = reporter.sink.getvalue()
+        self.assertIn('location=declared test /tmp/synthetic_trace_case.py:4 in trigger', text)
+        self.assertLess(text.index('location='), text.index('[field truncated]'))
+        self.assertIn('[stack truncated', text)
+        self.assertEqual(sum(line.startswith('frame=') for line in text.splitlines()), 64)
+        self.assertNotIn('LOCAL_DIAGNOSTIC_SENTINEL', text)
+        self.assertNotIn('ENV_DIAGNOSTIC_SENTINEL', text)
+
+    def test_record_cap_stops_optional_formatting_and_keeps_primary_summary(self):
+        calls = []
+        class Note(str):
+            def __str__(self):
+                calls.append(1)
+                return super().__str__()
+        err = self.exception()
+        for _ in range(1000): err[1].add_note(Note('é' * 3000))
+        reporter = self.reporter(record_bytes=2048, field_bytes=256)
+        reporter.report('addError', self.Case(), err)
+        text = reporter.sink.getvalue()
+        self.assertIn('RuntimeError', text)
+        self.assertIn('location=declared test /tmp/synthetic_trace_case.py:4', text)
+        self.assertIn('[diagnostic record truncated]', text)
+        self.assertLessEqual(len(text.encode()), 2048)
+        self.assertLess(len(calls), 10)
+        self.assertEqual(text.encode().decode(), text)
+        # ASCII chunks can reach the exact encoded record boundary including marker.
+        err = self.exception(); err[1].add_note('x' * 5000)
+        reporter = self.reporter(record_bytes=512)
+        reporter.report('addError', self.Case(), err)
+        self.assertEqual(len(reporter.sink.getvalue().encode()), 512)
+
+    def test_child_budget_marker_is_counted_once_and_then_no_work_runs(self):
+        reporter = self.reporter(record_bytes=512, child_bytes=1250, field_bytes=128)
+        err = self.exception('é' * 1000)
+        for _ in range(20): reporter.report('addSubTest', self.Case(), err, 'part=' + 'é' * 1000)
+        text = reporter.sink.getvalue()
+        self.assertLessEqual(len(text.encode()), 1250)
+        self.assertEqual(text.count('[child diagnostic budget exhausted]'), 1)
+        class Forbidden:
+            def id(self): raise AssertionError('capture after exhaustion')
+        with patch.object(reporter, 'capture', side_effect=AssertionError('capture after exhaustion')) as capture:
+            reporter.report('addFailure', Forbidden(), err)
+        capture.assert_not_called()
+        self.assertEqual(reporter.sink.getvalue(), text)
+
+    def test_chains_notes_groups_and_external_location_are_secondary(self):
+        cause = ValueError('cause detail'); cause.add_note('cause note')
+        context = RuntimeError('context detail')
+        err = self.exception('primary group')
+        group = ExceptionGroup('primary group', [cause, context])
+        group.__cause__ = cause
+        group.add_note('primary note')
+        reporter = self.reporter()
+        reporter.report('addError', self.Case(), (ExceptionGroup, group, err[2]))
+        text = reporter.sink.getvalue()
+        self.assertIn('ExceptionGroup', text)
+        self.assertIn('note=primary note', text)
+        self.assertIn('cause exception=ValueError', text)
+        self.assertIn('group[1] exception=RuntimeError', text)
+        self.assertIn('note=cause note', text)
+        self.assertLess(text.index('location=declared test'), text.index('cause exception='))
+        reporter = run_selected.PythonFailureDiagnostics({}, self.UTF8StringCapture())
+        reporter.report('addError', self.Case(), err)
+        self.assertIn('location=fixture/external /tmp/synthetic_trace_case.py:4', reporter.sink.getvalue())
+        err[1].__context__ = context
+        reporter = self.reporter(); reporter.report('addError', self.Case(), err)
+        self.assertIn('context exception=RuntimeError', reporter.sink.getvalue())
+
+    def test_formatter_encoder_and_capture_failures_emit_unavailable_safely(self):
+        for operation in ('format_record', 'encode'):
+            with self.subTest(operation=operation):
+                reporter = self.reporter()
+                with patch.object(reporter, operation, side_effect=ValueError('injected diagnostic failure')):
+                    reporter.report('addError', self.Case(), self.exception())
+                text = reporter.sink.getvalue()
+                self.assertIn('diagnostic unavailable', text)
+                self.assertIn('id=synthetic.T.test_a', text)
+                self.assertIn('/tmp/synthetic_trace_case.py:4', text)
+                self.assertIn('RuntimeError', text)
+        class BrokenCase:
+            def id(self): raise RuntimeError('capture failure')
+        reporter = self.reporter(); reporter.report('addError', BrokenCase(), self.exception())
+        self.assertIn('diagnostic unavailable', reporter.sink.getvalue())
+        class BrokenMessage(Exception):
+            def __str__(self): raise RuntimeError('formatter failure')
+        reporter = self.reporter(); reporter.report('addError', self.Case(), (BrokenMessage, BrokenMessage(), self.exception()[2]))
+        self.assertIn('diagnostic unavailable', reporter.sink.getvalue())
+
+    def test_write_flush_and_partial_sink_failures_stop_without_recursive_reporting(self):
+        class Sink:
+            def __init__(self, mode): self.mode, self.writes, self.flushes = mode, 0, 0
+            def write(self, text):
+                self.writes += 1
+                if self.mode == 'write': raise OSError('write failed')
+                return len(text) - 1 if self.mode == 'partial' else len(text)
+            def flush(self):
+                self.flushes += 1
+                raise OSError('flush failed')
+        for mode in ('write', 'flush', 'partial'):
+            with self.subTest(mode=mode):
+                sink = Sink(mode); reporter = self.reporter(sink)
+                reporter.report('addError', self.Case(), self.exception())
+                reporter.report('addError', self.Case(), self.exception())
+                self.assertEqual(sink.writes, 1)
+                self.assertEqual(sink.flushes, 1 if mode == 'flush' else 0)

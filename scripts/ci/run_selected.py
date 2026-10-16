@@ -1696,6 +1696,169 @@ def verify_python_events(target, cwd, evidence, env, exit_code):
     return {'inventory': ids, 'passed': counts['passed'], 'skipped': skipped, 'totals': totals, 'platform': target['platform']}
 
 
+class _PythonDiagnosticBuffer:
+    marker = b'[diagnostic record truncated]\n'
+
+    def __init__(self, limit):
+        self.limit, self.data, self.full = limit, bytearray(), False
+
+    def add(self, data):
+        if self.full: return False
+        available = self.limit - len(self.marker) - len(self.data)
+        if len(data) <= available:
+            self.data.extend(data)
+            if len(data) == available:
+                self.data.extend(self.marker)
+                self.full = True
+            return not self.full
+        self.data.extend(data[:max(0, available)].decode('utf-8', 'ignore').encode('utf-8'))
+        self.data.extend(self.marker[:self.limit - len(self.data)])
+        self.full = True
+        return False
+
+
+def _python_diagnostic_field(value, limit, encode=None):
+    """Escape controls and stop at an encoded field bound, including its marker."""
+    marker = b'[field truncated]'
+    data = bytearray()
+    for char in str(value):
+        text = char if char.isprintable() else char.encode('unicode_escape').decode('ascii')
+        chunk = encode(text) if encode else text.encode('utf-8', 'backslashreplace')
+        if len(data) + len(chunk) > limit:
+            prefix = data[:max(0, limit - len(marker))].decode('utf-8', 'ignore').encode('utf-8')
+            return prefix + marker[:limit - len(prefix)]
+        data.extend(chunk)
+    return bytes(data)
+
+
+class PythonFailureDiagnostics:
+    """Human diagnostics only; no exception here may alter unittest evidence."""
+    exhausted_marker = b'[child diagnostic budget exhausted]\n'
+
+    def __init__(self, declarations, sink=None, *, record_bytes=64 * 1024,
+                 child_bytes=16 * 1024 * 1024, field_bytes=4096, frames=64):
+        self.declarations = declarations
+        self.files = {str(location[0]) for location in declarations.values()}
+        self.sink = sys.stderr if sink is None else sink
+        self.record_bytes, self.child_bytes = record_bytes, child_bytes
+        self.field_bytes, self.frames = field_bytes, frames
+        self.used, self.exhausted = 0, False
+
+    @staticmethod
+    def encode(text):
+        return text.encode('utf-8', 'backslashreplace')
+
+    def field(self, value):
+        return _python_diagnostic_field(value, self.field_bytes, self.encode)
+
+    def trace(self, tb):
+        from collections import deque
+        frames, count, location = deque(maxlen=self.frames), 0, None
+        while tb is not None:
+            code = tb.tb_frame.f_code
+            frame = (code.co_filename, tb.tb_lineno, code.co_name)
+            frames.append(frame); count += 1
+            if str(Path(frame[0]).resolve()) in self.files: location = frame
+            tb = tb.tb_next
+        if location is None:
+            location = frames[-1] if frames else ('<no traceback>', 0, '<unknown>')
+            label = 'fixture/external'
+        else: label = 'declared test'
+        filename, line, function = location
+        return f'{label} {filename}:{line} in {function}', tuple(frames), count
+
+    def capture(self, snapshot, test, err):
+        snapshot['id'] = test.id()
+        if err is None:
+            snapshot['type'] = 'unexpected success'
+            filename, line, function = self.declarations[snapshot['id']]
+            snapshot['location'] = f'declared method {filename}:{line} in {function}'
+            snapshot['frames'], snapshot['count'] = (), 0
+        else:
+            snapshot['type'] = err[0].__qualname__
+            snapshot['location'], snapshot['frames'], snapshot['count'] = self.trace(err[2])
+
+    @staticmethod
+    def links(exception):
+        notes = getattr(exception, '__notes__', ())
+        if isinstance(notes, (list, tuple)):
+            for note in notes: yield 'note', note
+        if exception.__cause__ is not None: yield 'cause', exception.__cause__
+        elif exception.__context__ is not None and not exception.__suppress_context__:
+            yield 'context', exception.__context__
+        if isinstance(exception, BaseExceptionGroup):
+            for index, child in enumerate(exception.exceptions): yield f'group[{index}]', child
+
+    def format_record(self, record, kind, snapshot, err, subtest):
+        record.add(b'PYTHON_DIAGNOSTIC kind=' + self.field(kind) + b' id=' + self.field(snapshot['id']) +
+                   (b' outcome=' if err is None else b' exception=') + self.field(snapshot['type']) + b'\n')
+        if not record.full: record.add(b'location=' + self.field(snapshot['location']) + b'\n')
+        if subtest is not None and not record.full:
+            record.add(b'parent=' + self.field(snapshot['id']) + b' subtest=' + self.field(subtest) + b'\n')
+        if err is not None and not record.full: record.add(b'message=' + self.field(err[1]) + b'\n')
+        if snapshot['count'] > self.frames and not record.full:
+            record.add(b'[stack truncated to innermost frames]\n')
+        for filename, line, function in snapshot['frames']:
+            if record.full: break
+            record.add(b'frame=' + self.field(filename) + b':' + self.field(line) + b' in ' + self.field(function) + b'\n')
+        if err is None or record.full: return
+        # Consume optional notes/chains/groups only while the bounded record has room.
+        pending, seen = [iter(self.links(err[1]))], {id(err[1])}
+        while pending and not record.full:
+            try: relation, value = next(pending[-1])
+            except StopIteration:
+                pending.pop(); continue
+            if relation == 'note': record.add(b'note=' + self.field(value) + b'\n')
+            elif id(value) not in seen:
+                seen.add(id(value))
+                location, _, _ = self.trace(value.__traceback__)
+                record.add(self.field(relation) + b' exception=' + self.field(type(value).__qualname__) +
+                           b' location=' + self.field(location) + b'\n')
+                if not record.full: record.add(b'message=' + self.field(value) + b'\n')
+                if not record.full: pending.append(iter(self.links(value)))
+
+    def write(self, data):
+        # Count attempted bytes too: a partial or failed sink never grants more budget.
+        self.used += len(data)
+        try:
+            # Bypass locale encoding and newline translation without reconfiguring raw stderr.
+            sink = getattr(self.sink, 'buffer', self.sink)
+            if sink is not self.sink: self.sink.flush()
+            written = sink.write(data)
+            if type(written) is not int or written != len(data): raise OSError('partial diagnostic write')
+            sink.flush()
+        except BaseException:
+            self.exhausted = True
+
+    def report(self, kind, test, err=None, subtest=None):
+        if self.exhausted: return
+        try:
+            remaining = self.child_bytes - self.used - len(self.exhausted_marker)
+            if remaining <= len(_PythonDiagnosticBuffer.marker):
+                self.exhausted = True
+                self.write(self.exhausted_marker[:max(0, self.child_bytes - self.used)])
+                return
+            limit = min(self.record_bytes, remaining)
+            snapshot = {'id': '<unavailable>', 'type': '<unavailable>', 'location': '<unavailable>'}
+            record = _PythonDiagnosticBuffer(limit)
+            try:
+                self.capture(snapshot, test, err)
+                self.format_record(record, kind, snapshot, err, subtest)
+            except BaseException:
+                # Reuse detached identity fields; do not call a broken formatter/encoder again.
+                record = _PythonDiagnosticBuffer(limit)
+                field = lambda value: _python_diagnostic_field(value if type(value) is str else '<unavailable>', self.field_bytes)
+                record.add(b'PYTHON_DIAGNOSTIC diagnostic unavailable kind=' + field(kind) + b' id=' + field(snapshot['id']) + b'\n')
+                if not record.full: record.add(b'location=' + field(snapshot['location']) + (b' outcome=' if err is None else b' exception=') + field(snapshot['type']) + b'\n')
+            self.write(bytes(record.data))
+            if not self.exhausted and limit < self.record_bytes and record.full:
+                self.exhausted = True
+                self.write(self.exhausted_marker)
+        except BaseException:
+            # Even a capture/fallback failure cannot replace the original unittest result.
+            pass
+
+
 def python_child(target, events, phase, env):
     import unittest
     if python_host() != target['platform']: raise EvidenceError('Python test selected for a foreign host')
@@ -1715,6 +1878,7 @@ def python_child(target, events, phase, env):
         if phase == 'discover':
             emit({'event': 'totals', 'discovered': len(ids)})
             return 0
+        diagnostics = PythonFailureDiagnostics(guard.declarations)
         class Result(unittest.TestResult):
             def startTest(self, test):
                 method = guard.check(test)
@@ -1741,15 +1905,20 @@ def python_child(target, events, phase, env):
             def addSkip(self, test, reason):
                 super().addSkip(test, reason); emit({'event': 'skip', 'id': test.id(), 'reason': reason})
             def addFailure(self, test, err):
+                diagnostics.report('addFailure', test, err)
                 super().addFailure(test, err); emit({'event': 'fail', 'id': test.id()})
             def addError(self, test, err):
+                diagnostics.report('addError', test, err)
                 super().addError(test, err); emit({'event': 'error', 'id': test.id()})
             def addSubTest(self, test, subtest, err):
+                if err is not None: diagnostics.report('addSubTest', test, err, subtest)
                 super().addSubTest(test, subtest, err)
                 if err is not None: emit({'event': 'error', 'id': test.id()})
             def addExpectedFailure(self, test, err):
+                diagnostics.report('addExpectedFailure', test, err)
                 super().addExpectedFailure(test, err); emit({'event': 'fail', 'id': test.id()})
             def addUnexpectedSuccess(self, test):
+                diagnostics.report('addUnexpectedSuccess', test)
                 super().addUnexpectedSuccess(test); emit({'event': 'fail', 'id': test.id()})
         result = Result()
         result.executions = {}
