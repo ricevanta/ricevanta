@@ -19,6 +19,7 @@ from unittest import mock
 from jsonschema import Draft202012Validator
 
 import measure
+from windows_io import replace
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -513,9 +514,37 @@ class ObserverTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == 'win32', 'native Windows delete-sharing and atomic replacement')
     def test_windows_readers_allow_atomic_replacement_and_rotation(self):
+        import ctypes
         import threading
         errors = []
         with tempfile.TemporaryDirectory() as d:
+            held, source = Path(d) / 'held-target', Path(d) / 'held-source'
+            old, new = b'old-target\n', b'new-target\n'
+            held.write_bytes(old)
+            source.write_bytes(new)
+            kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+                ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
+            kernel.CreateFileW.restype = ctypes.c_void_p
+            kernel.ReadFile.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32,
+                ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
+            kernel.ReadFile.restype = ctypes.c_int32
+            kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+            kernel.CloseHandle.restype = ctypes.c_int32
+            handle = kernel.CreateFileW(str(held), 0x80000000, 7, None, 3, 0, None)
+            if handle == ctypes.c_void_p(-1).value:
+                raise ctypes.WinError(ctypes.get_last_error())
+            try:
+                replace(source, held)
+                buffer, count = ctypes.create_string_buffer(len(old)), ctypes.c_uint32()
+                if not kernel.ReadFile(handle, buffer, len(old), ctypes.byref(count), None):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                self.assertEqual(buffer.raw[:count.value], old)
+                self.assertEqual(measure.read_shared(held, 65536), new)
+                self.assertFalse(source.exists())
+            finally:
+                if not kernel.CloseHandle(handle):
+                    raise ctypes.WinError(ctypes.get_last_error())
             path = Path(d) / 'agent.log'
             path.write_bytes(b'initial\n')
             def writer():
@@ -523,8 +552,8 @@ class ObserverTests(unittest.TestCase):
                     for i in range(500):
                         tmp = Path(d) / 'next'
                         tmp.write_bytes(str(i).encode() + b'\n')
-                        os.replace(tmp, path)
-                        os.replace(path, Path(d) / 'rotation')
+                        replace(tmp, path)
+                        replace(path, Path(d) / 'rotation')
                         path.write_bytes(b'active\n')
                 except OSError as exc:
                     errors.append(exc)
@@ -596,8 +625,198 @@ class TimingAndStopTests(unittest.TestCase):
             measure._send_stop(type('Child', (), {'pid': 4242})())
         self.assertEqual(calls, [(1, 4242)])
 
+def _check_writer_contract(test):
+    """Injected APIs and metadata only; native replacement is proved separately."""
+    import ctypes
+    import importlib.util
+    import ntpath
+    import stat
+    from types import SimpleNamespace
+    with mock.patch.object(ctypes, 'WinDLL', side_effect=AssertionError('eager DLL load'), create=True):
+        spec = importlib.util.spec_from_file_location('fixture_windows_io_lazy', HERE / 'windows_io.py')
+        fresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fresh)
+        io = importlib.import_module('windows_io')
+
+    source, destination = r'C:\fixture\source', r'C:\fixture\target'
+    parent = ntpath.normcase(ntpath.dirname(source))
+    def metadata(path):
+        mode = stat.S_IFDIR if ntpath.normcase(path) == parent else stat.S_IFREG
+        return SimpleNamespace(st_mode=mode, st_file_attributes=0)
+
+    class Function:
+        def __init__(self, owner, name): self.owner, self.name = owner, name
+        def __call__(self, *args):
+            owner = self.owner
+            owner.calls.append((self.name, args))
+            if self.name == 'rename':
+                owner.buffer = ctypes.string_at(args[2], args[3])
+                test.assertEqual(ctypes.cast(args[2], ctypes.c_void_p).value % 8, 0)
+            value = owner.results[self.name]
+            if isinstance(value, BaseException): raise value
+            if not value or value in (-1, io.INVALID_HANDLE_VALUE):
+                owner.code = owner.codes[self.name]
+            return value
+
+    class Kernel:
+        def __init__(self, **results):
+            self.calls, self.code, self.buffer = [], 0, None
+            self.results = dict(open=73, rename=1, close=1) | results
+            self.codes = dict(open=5, rename=87, close=6)
+            self.CreateFileW = Function(self, 'open')
+            self.SetFileInformationByHandle = Function(self, 'rename')
+            self.CloseHandle = Function(self, 'close')
+        def last_error(self): self.calls.append(('error', ())); return self.code
+        def error(self, code):
+            error = OSError(13, f'injected Windows error {code}')
+            error.winerror = code
+            return error
+        def api(self): return io._WindowsAPI(self, self.last_error, self.error)
+
+    def replace(kernel, src=source, dst=destination, stat_call=metadata):
+        with mock.patch.object(io.os, 'lstat', side_effect=stat_call), mock.patch.object(
+                io.os, 'replace', side_effect=AssertionError('legacy replacement')), mock.patch.object(
+                io.os, 'unlink', side_effect=AssertionError('unlink fallback')), mock.patch.object(
+                io.os, 'chmod', side_effect=AssertionError('attribute repair')):
+            io._replace_windows(src, dst, api=kernel.api())
+
+    for name in ('target', 'caf\u00e9', 'pair-\U0001f642'):
+        with test.subTest(writer='buffer', name=name):
+            dst = ntpath.join(r'C:\fixture', name)
+            kernel = Kernel()
+            replace(kernel, dst=dst)
+            test.assertEqual([name for name, _ in kernel.calls], ['open', 'rename', 'close'])
+            test.assertEqual(kernel.calls[0][1], (source, 0x10000, 7, None, 3, 0x200000, None))
+            test.assertEqual(kernel.calls[1][1][:2], (73, 22))
+            test.assertEqual(kernel.calls[2][1], (73,))
+            encoded, raw = dst.encode('utf-16-le'), kernel.buffer
+            test.assertEqual(int.from_bytes(raw[:4], 'little'), 3)
+            test.assertEqual(raw[4:16], bytes(12))
+            test.assertEqual(int.from_bytes(raw[16:20], 'little'), len(encoded))
+            test.assertEqual(raw[20:20 + len(encoded)], encoded)
+            test.assertEqual(raw[20 + len(encoded):], bytes(len(raw) - 20 - len(encoded)))
+            test.assertEqual(len(raw), (20 + len(encoded) + 2 + 7) // 8 * 8)
+            test.assertEqual(kernel.CreateFileW.restype, ctypes.c_void_p)
+            test.assertEqual(kernel.CreateFileW.argtypes, [ctypes.c_wchar_p, ctypes.c_uint32,
+                ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p])
+            test.assertEqual(kernel.SetFileInformationByHandle.argtypes,
+                             [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p, ctypes.c_uint32])
+            test.assertEqual(kernel.SetFileInformationByHandle.restype, ctypes.c_int32)
+            test.assertEqual(kernel.CloseHandle.argtypes, [ctypes.c_void_p])
+            test.assertEqual(kernel.CloseHandle.restype, ctypes.c_int32)
+
+    test.assertEqual(io.MAX_NAME_UNITS, 32766)
+    test.assertEqual(io.MAX_BUFFER_BYTES, 65560)
+    test.assertEqual((io._RenameInfo.Flags.offset, io._RenameInfo.RootDirectory.offset,
+        io._RenameInfo.FileNameLength.offset, io._RenameInfo.FileName.offset,
+        ctypes.alignment(io._RenameInfo), ctypes.sizeof(io._RenameInfo)), (0, 8, 16, 20, 8, 24))
+    for path, bound in ((r'C:\a', 4), ('C:\\' + 'a' * (32766 - 3), 32766)):
+        with test.subTest(writer='allocation', bound=bound):
+            storage = io._rename_buffer(path, max_units=bound)
+            test.assertEqual(ctypes.addressof(storage) % 8, 0)
+            test.assertEqual(ctypes.sizeof(storage), (20 + len(path.encode('utf-16-le')) + 2 + 7) // 8 * 8)
+    test.assertEqual(ctypes.sizeof(io._rename_buffer('C:\\' + 'a' * 32763)), 65560)
+    for path, bound in ((r'C:\ab', 4), ('C:\\' + 'a' * 32764, 32766), (r'C:\a', 2**32),
+                        (r'C:\a', True), ('C:\\bad\ud800', 32766)):
+        with test.subTest(writer='bounded refusal', bound=bound, path=path[:20]):
+            with test.assertRaises(ValueError): io._rename_buffer(path, max_units=bound)
+
+    paths = [('', destination), (source, ''), ('relative', destination), (r'C:relative', destination),
+             (source, source.upper()), (source, r'C:\other\target'), ('C:\\bad\x00', destination),
+             (source, 'C:\\fixture\\bad\ud800'), (source, r'C:\fixture\target:stream'),
+             (source, r'\\server\share\target'), (source, r'\\?\C:\fixture\target'),
+             (source, r'\\.\C:\fixture\target'), (source, r'C:\fixture\CON'),
+             (source, 'C:\\fixture\\target\\'), (b'not-text', destination)]
+    for src, dst in paths:
+        with test.subTest(writer='path refusal', source=src, destination=dst):
+            kernel = Kernel()
+            with test.assertRaises((TypeError, ValueError)): replace(kernel, src, dst)
+            test.assertEqual(kernel.calls, [])
+    for bad_path, mode, attributes in ((source, stat.S_IFDIR, 0), (destination, stat.S_IFDIR, 0),
+            (source, stat.S_IFLNK, 0), (destination, stat.S_IFREG, 0x400),
+            (r'C:\fixture', stat.S_IFDIR, 0x400)):
+        with test.subTest(writer='file type refusal', path=bad_path, mode=mode, attributes=attributes):
+            def bad_metadata(path):
+                return (SimpleNamespace(st_mode=mode, st_file_attributes=attributes)
+                        if ntpath.normcase(path) == ntpath.normcase(bad_path) else metadata(path))
+            kernel = Kernel()
+            with test.assertRaises(ValueError): replace(kernel, stat_call=bad_metadata)
+            test.assertEqual(kernel.calls, [])
+    def missing_destination(path):
+        if path == destination: raise FileNotFoundError(path)
+        return metadata(path)
+    kernel = Kernel()
+    replace(kernel, stat_call=missing_destination)
+    test.assertEqual([name for name, _ in kernel.calls], ['open', 'rename', 'close'])
+
+    with mock.patch.object(ctypes, 'alignment', return_value=4):
+        kernel = Kernel()
+        with test.assertRaises(ValueError): replace(kernel)
+        test.assertEqual(kernel.calls, [])
+    with mock.patch.object(ctypes, 'sizeof', return_value=4):
+        kernel = Kernel()
+        with test.assertRaises(ValueError): replace(kernel)
+        test.assertEqual(kernel.calls, [])
+    class PackedRename(ctypes.Structure):
+        _layout_ = 'ms'
+        _pack_ = 1
+        _anonymous_ = ('control',)
+        _fields_ = io._RenameInfo._fields_
+    with mock.patch.object(io, '_RenameInfo', PackedRename):
+        kernel = Kernel()
+        with test.assertRaises(ValueError): replace(kernel)
+        test.assertEqual(kernel.calls, [])
+    class MissingBinding(Kernel):
+        def __getattribute__(self, name):
+            if name == 'SetFileInformationByHandle': raise AttributeError('missing rename binding')
+            return super().__getattribute__(name)
+    kernel = MissingBinding()
+    with test.assertRaises(AttributeError): replace(kernel)
+    test.assertEqual(kernel.calls, [])
+
+    for stage, value, code in (('open', io.INVALID_HANDLE_VALUE, 5), ('open', -1, 5), ('open', None, 5), ('open', 0, 5), ('rename', 0, 87),
+            ('rename', 0, 50), ('rename', 0, 32), ('rename', 0, 5), ('close', 0, 6),
+            ('open', RuntimeError('open binding'), None), ('rename', RuntimeError('rename binding'), None),
+            ('close', RuntimeError('close binding'), None)):
+        with test.subTest(writer='API failure', stage=stage, code=code):
+            kernel = Kernel(**{stage: value})
+            if code is not None: kernel.codes[stage] = code
+            with test.assertRaises(OSError if code is not None else RuntimeError) as caught:
+                replace(kernel)
+            if code is not None: test.assertEqual(caught.exception.winerror, code)
+            else: test.assertIs(caught.exception, value)
+            calls = [name for name, _ in kernel.calls]
+            expected = ['open'] if stage == 'open' else ['open', 'rename', 'close']
+            if code is not None: expected.insert(expected.index(stage) + 1, 'error')
+            test.assertEqual(calls, expected)
+    for rename, close in ((0, 0), (RuntimeError('primary binding'), 0), (0, RuntimeError('secondary binding'))):
+        with test.subTest(writer='primary error preserved', rename=rename, close=close):
+            kernel = Kernel(rename=rename, close=close)
+            with test.assertRaises(OSError if rename == 0 else RuntimeError) as caught: replace(kernel)
+            if rename == 0: test.assertEqual(caught.exception.winerror, 87)
+            else: test.assertIs(caught.exception, rename)
+            if close == 0: test.assertEqual(caught.exception.close_error.winerror, 6)
+            else: test.assertIs(caught.exception.close_error, close)
+            test.assertTrue(caught.exception.__notes__)
+            test.assertEqual([name for name, _ in kernel.calls],
+                             ['open', 'rename'] + (['error'] if rename == 0 else []) + ['close']
+                             + (['error'] if close == 0 else []))
+    with mock.patch.object(io.sys, 'platform', 'linux'), mock.patch.object(
+            io, '_load_api', side_effect=AssertionError('non-Windows DLL load')):
+        src, dst = Path('unchanged-source'), Path('unchanged-target')
+        with mock.patch.object(io.os, 'replace') as native:
+            io.replace(src, dst)
+            native.assert_called_once_with(src, dst)
+        error = OSError('non-Windows replacement')
+        with mock.patch.object(io.os, 'replace', side_effect=error) as native:
+            with test.assertRaises(OSError) as caught: io.replace(src, dst)
+            test.assertIs(caught.exception, error)
+            native.assert_called_once_with(src, dst)
+
+
 class CollectedWorkloadTests(unittest.TestCase):
     def test_healthy_full_workload_from_polled_logs(self):
+        _check_writer_contract(self)
         import copy
         import check
         from test_check import make_evidence, phase as fixture_phase
@@ -614,7 +833,7 @@ class CollectedWorkloadTests(unittest.TestCase):
             for index in range(1, 601):
                 rotation = (index - 1) // 200
                 if index in (201, 401):
-                    os.replace(path, Path(str(path) + f'.{rotation}'))
+                    replace(path, Path(str(path) + f'.{rotation}'))
                     path.write_text(json.dumps(dict(ts='2026-01-01T00:00:00.000Z', level='info',
                                                    event='log_rotated', pid=a['pid'], rotation=rotation)) + '\n')
                 event = dict(ts='2026-01-01T00:00:00.000Z', level='debug', event='sample_completed',

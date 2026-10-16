@@ -11,6 +11,7 @@ import sys
 import time
 
 import samplers
+from windows_io import replace
 
 IDENTITY = dict(version='0.0.0-local', commit='unknown', channel='local', sourceEpoch=0)
 MODES = ('healthy', 'never-ready', 'ignore-stop', 'bad-version', 'warmup-spike', 'spin',
@@ -80,7 +81,7 @@ def main():
                 source = log_path if i == 1 else Path(str(log_path) + f'.{i-1}')
                 dest = Path(str(log_path) + f'.{i}')
                 if source.exists():
-                    os.replace(source, dest)
+                    replace(source, dest)
             counters['log_rotations'] += 1
             log_path.write_bytes(encode(envelope('log_rotated', 'info', rotation=counters['log_rotations'])))
         with log_path.open('ab') as stream:
@@ -104,7 +105,7 @@ def main():
         target = Path(args.runtime_dir) / 'health.json'
         tmp = target.with_suffix('.json.tmp')
         tmp.write_text(json.dumps(last_health), encoding='utf-8')
-        os.replace(tmp, target)
+        replace(tmp, target)
         if record_path:
             record_path.write_text(json.dumps(dict(record, last_health=last_health)), encoding='utf-8')
 
