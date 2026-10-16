@@ -364,7 +364,7 @@ class Fixtures:
     def playwright(self):
         if self.platform == 'macos-arm64':
             self.add('webkit', '2272', zip_bytes([('pw_run.sh', b'#!/bin/sh\n', 0o755, False),
-                ('Playwright.app/Contents/MacOS/Playwright', b'\xcf\xfa\xed\xfe' + b'\0' * 28, 0o755, False)]), 'webkit-mac-15-arm64.zip')
+                ('Playwright.app/Contents/MacOS/Playwright', b'\xcf\xfa\xed\xfe' + b'\0' * 12 + struct.pack('<I', 1) + b'\0' * 12, 0o755, False)]), 'webkit-mac-15-arm64.zip')
             return
         self.add('chromium-headless-shell', '1217', zip_bytes([('chrome-headless-shell-linux64/chrome-headless-shell', b'ELF', 0o755, False),
                                                               ('chrome-headless-shell-linux64/LICENSE.headless_shell', b'credits', 0o644, False)]), 'chrome-headless-shell-linux64.zip')
@@ -1425,6 +1425,111 @@ class BrowserMigrationTests(unittest.TestCase):
         altered = {**lock, 'entries': lock['entries'] + [{**webkit, 'platform': 'linux-x64', 'id': 'webkit-2272-linux-x64'}]}
         with mock.patch.object(bootstrap, 'load_lock', return_value=altered):
             self.assertTrue(any('browser row on unsupported host' in error for error in bootstrap.lock_errors(ROOT)))
+
+    def test_captured_webkit_loader_environment_commands(self):
+        """All 15 recorded commands from the admitted archive use their containing executable's bundle root."""
+        xpc_names = ['Networking', 'WebContent.CaptivePortal', 'WebContent', 'WebContent.Development',
+                     'Model', 'GPU', 'WebContent.EnhancedSecurity']
+        commands = {}
+        for name in xpc_names:
+            member = f'com.apple.WebKit.{name}.xpc/Contents/MacOS/com.apple.WebKit.{name}.Development'
+            commands[member] = ['DYLD_FRAMEWORK_PATH=@executable_path/../../..',
+                                'DYLD_LIBRARY_PATH=@executable_path/../../..']
+        commands['JavaScriptCore.framework/Versions/A/Helpers/jsc'] = ['DYLD_FRAMEWORK_PATH=@executable_path/../../../..']
+        self.assertEqual(sum(map(len, commands.values())), 15)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            for member in commands:
+                binary = root / member
+                binary.parent.mkdir(parents=True, exist_ok=True)
+                binary.write_bytes(b'\xcf\xfa\xed\xfe' + b'\0' * 12 + struct.pack('<I', len(commands[member])) + b'\0' * 12)
+            def execute(argv):
+                member = Path(argv[-1]).relative_to(root).as_posix()
+                return 0, ''.join(f'Load command {i}\n          cmd LC_DYLD_ENVIRONMENT\n         name {value} (offset 12)\n'
+                                  for i, value in enumerate(commands[member]))
+            ctx = mock.Mock(execute=mock.Mock(side_effect=execute))
+            bootstrap.check_macho_browser(ctx, {'id': 'webkit-2272-macos-arm64'}, root)
+            self.assertEqual(ctx.execute.call_count, 8)
+
+    def test_loader_environment_refuses_external_escaping_and_injection_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            binary = root / 'Example.xpc/Contents/MacOS/Example'
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b'\xcf\xfa\xed\xfe' + b'\0' * 12 + struct.pack('<I', 1) + b'\0' * 12)
+            values = [
+                'DYLD_INSERT_LIBRARIES=@executable_path/../../..',
+                'DYLD_FALLBACK_LIBRARY_PATH=@executable_path/../../..',
+                'DYLD_FRAMEWORK_PATH=/System/Library/Frameworks',
+                'DYLD_LIBRARY_PATH=/tmp',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../..',
+                'DYLD_LIBRARY_PATH=@loader_path/../../..',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../missing',
+                'DYLD_LIBRARY_PATH=@executable_path/../../..:/tmp',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../$(id)',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../;id',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../"quoted"',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../back\\slash',
+                'DYLD_LIBRARY_PATH=@executable_path/../../..\nDYLD_INSERT_LIBRARIES=/tmp/evil',
+                'DYLD_LIBRARY_PATH=@executable_path/../../..\x00suffix',
+                'DYLD_LIBRARY_PATH=@executable_path/../../.. (offset 12)\nDYLD_INSERT_LIBRARIES=/tmp/evil',
+                'DYLD_LIBRARY_PATH=@executable_path/../../.. (offset 12)\nLoad command 1\n          cmd LC_UUID\n         uuid forged',
+                'DYLD_LIBRARY_PATH=', 'DYLD_LIBRARY_PATH',
+            ]
+            for value in values:
+                with self.subTest(value=value), self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.validate_macho_environment(binary, root, value)
+                output = 'Load command 0\n          cmd LC_DYLD_ENVIRONMENT\n         name ' + value + ' (offset 12)\n'
+                with self.subTest(otool=value), self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.check_macho_browser(mock.Mock(execute=lambda argv: (0, output)), {'id': 'webkit-2272-macos-arm64'}, root)
+            if POSIX:
+                (root / 'outside').symlink_to(root.parent, target_is_directory=True)
+                with self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.validate_macho_environment(binary, root, 'DYLD_LIBRARY_PATH=@executable_path/../../../outside')
+
+    @unittest.skipUnless(os.environ.get('RICEVANTA_TEST_WEBKIT_ARCHIVE'), 'requires the prefetched real WebKit archive; native CI admits it directly')
+    def test_actual_webkit_archive_all_loader_commands(self):
+        """Translate actual Mach-O command bytes to Apple's documented otool spelling, without native execution."""
+        entry = next(e for e in bootstrap.load_lock(LOCK)['entries'] if e['tool'] == 'webkit')
+        archive = Path(os.environ['RICEVANTA_TEST_WEBKIT_ARCHIVE'])
+        bootstrap.verify_file(archive, entry)
+        self.assertEqual(entry['sha256'], '2a2ed27069d2ca9ff1650202e6c4024b8165b14a8c9d9f999cc90b4436e3ae15')
+        names = {0xc: 'LC_LOAD_DYLIB', 0x18: 'LC_LOAD_WEAK_DYLIB', 0x80000018: 'LC_LOAD_WEAK_DYLIB',
+                 0x1f: 'LC_REEXPORT_DYLIB', 0x8000001f: 'LC_REEXPORT_DYLIB', 0x80000023: 'LC_LOAD_UPWARD_DYLIB',
+                 0x20: 'LC_LAZY_LOAD_DYLIB', 0xe: 'LC_LOAD_DYLINKER', 0x8000001c: 'LC_RPATH', 0x27: 'LC_DYLD_ENVIRONMENT'}
+        other_names = {0x2: 'LC_SYMTAB', 0xb: 'LC_DYSYMTAB', 0xd: 'LC_ID_DYLIB', 0x14: 'LC_SUB_UMBRELLA',
+                       0x19: 'LC_SEGMENT_64', 0x1b: 'LC_UUID', 0x1d: 'LC_CODE_SIGNATURE', 0x1e: 'LC_SEGMENT_SPLIT_INFO',
+                       0x26: 'LC_FUNCTION_STARTS', 0x29: 'LC_DATA_IN_CODE', 0x2a: 'LC_SOURCE_VERSION',
+                       0x32: 'LC_BUILD_VERSION', 0x80000028: 'LC_MAIN', 0x80000033: 'LC_DYLD_EXPORTS_TRIE',
+                       0x80000034: 'LC_DYLD_CHAINED_FIXUPS'}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / 'webkit'
+            members = bootstrap.inspect_archive(archive, entry, bootstrap.Host('macos-arm64'))
+            bootstrap.extract_archive(archive, members, root, entry)
+            outputs, environment = {}, {}
+            for binary in sorted(root.rglob('*')):
+                if not binary.is_file() or binary.is_symlink(): continue
+                data = binary.read_bytes()
+                if data[:4] != b'\xcf\xfa\xed\xfe': continue
+                offset, blocks = 32, []
+                for index in range(struct.unpack_from('<I', data, 16)[0]):
+                    command, size = struct.unpack_from('<II', data, offset)
+                    self.assertGreaterEqual(size, 8)
+                    self.assertLessEqual(offset + size, len(data))
+                    if command in names:
+                        start = struct.unpack_from('<I', data, offset + 8)[0]
+                        value = data[offset + start:offset + size].split(b'\0')[0].decode('ascii')
+                        field = 'path' if command == 0x8000001c else 'name'
+                        blocks.append(f'Load command {index}\n          cmd {names[command]}\n      cmdsize {size}\n         {field} {value} (offset {start})\n')
+                        if command == 0x27: environment.setdefault(binary, []).append(value)
+                    else:
+                        blocks.append(f'Load command {index}\n          cmd {other_names[command]}\n      cmdsize {size}\n')
+                    offset += size
+                outputs[str(binary)] = ''.join(blocks)
+            self.assertEqual((len(outputs), len(environment), sum(map(len, environment.values()))), (17, 8, 15))
+            ctx = mock.Mock(execute=mock.Mock(side_effect=lambda argv: (0, outputs[argv[-1]])))
+            bootstrap.check_macho_browser(ctx, entry, root)
+            self.assertEqual(ctx.execute.call_count, 17)
 
     def test_macho_load_resolution(self):
         with tempfile.TemporaryDirectory() as tmp:

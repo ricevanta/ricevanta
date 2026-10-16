@@ -1087,16 +1087,31 @@ def validate_macho_loads(binary, root, loads, rpaths):
             raise BootstrapError('missing or escaping bundled Mach-O load: ' + value)
 
 
+def validate_macho_environment(binary, root, setting):
+    """Admit only the bundle-local search directories embedded in the pinned WebKit executables."""
+    name, separator, value = setting.partition('=')
+    if (not separator or name not in ('DYLD_FRAMEWORK_PATH', 'DYLD_LIBRARY_PATH')
+            or not re.fullmatch(r'@executable_path/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*', value)):
+        raise BootstrapError('unsupported Mach-O loader environment setting')
+    root = root.resolve()
+    executable = binary.resolve()
+    destination = (executable.parent / value.removeprefix('@executable_path/')).resolve()
+    if not executable.is_relative_to(root) or not destination.is_relative_to(root) or not destination.is_dir():
+        raise BootstrapError('Mach-O loader environment directory is missing or escapes the payload')
+
+
 def check_macho_browser(ctx, entry, root):
     count = 0
     for binary in sorted(root.rglob('*')):
         if not binary.is_file() or binary.is_symlink(): continue
-        with binary.open('rb') as stream: magic = stream.read(4)
-        if magic != b'\xcf\xfa\xed\xfe': continue
+        with binary.open('rb') as stream: header = stream.read(32)
+        if header[:4] != b'\xcf\xfa\xed\xfe': continue
+        if len(header) != 32: raise BootstrapError('truncated Mach-O header')
         count += 1
         _, output = ctx.execute(['/usr/bin/otool', '-l', str(binary)])
         blocks = re.split(r'Load command \d+\n', output)[1:]
-        if not blocks: raise BootstrapError('Mach-O load commands are absent')
+        if not blocks or len(blocks) != struct.unpack_from('<I', header, 16)[0]:
+            raise BootstrapError('Mach-O load command count differs from the binary header')
         loads, rpaths = [], []
         for block in blocks:
             command = re.search(r'^\s*cmd (\S+)', block, re.M)
@@ -1106,7 +1121,10 @@ def check_macho_browser(ctx, entry, root):
                 value = re.search(r'^\s*(?:name|path) (.+) \(offset \d+\)', block, re.M)
                 if not value: raise BootstrapError('malformed Mach-O load path')
                 (rpaths if command == 'LC_RPATH' else loads).append(value[1])
-            elif command == 'LC_DYLD_ENVIRONMENT': raise BootstrapError('Mach-O loader environment forbidden')
+            elif command == 'LC_DYLD_ENVIRONMENT':
+                value = re.search(r'^\s*name (.*) \(offset \d+\)[ \t]*\n?\Z', block, re.M | re.S)
+                if not value: raise BootstrapError('malformed Mach-O loader environment setting')
+                validate_macho_environment(binary, root, value[1])
         validate_macho_loads(binary, root, loads, rpaths)
     if not count: raise BootstrapError(f'{entry["id"]}: missing Mach-O browser binaries')
     log('verified Mach-O load commands', entry['id'], count)

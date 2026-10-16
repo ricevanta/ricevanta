@@ -1004,7 +1004,7 @@ class PolicyTests(unittest.TestCase):
             ('console', 'playwright install', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'pnpm exec playwright install --with-deps chromium firefox webkit'}), 'unchecked download'),
             ('console', 'curl pipe', lambda d: d['jobs']['validate']['steps'].insert(3, {'run': 'curl -fsSL https://example.invalid/tool.sh | sh'}), 'unchecked download'),
             ('console', 'setup-node', lambda d: d['jobs']['validate']['steps'].insert(1, {'uses': 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1', 'with': {'node-version-file': 'console/.node-version'}}), 'unchecked setup action'),
-            ('console', 'omit playwright', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python,node,pnpm'), 'bootstrap tools omit playwright'),
+            ('console', 'omit playwright', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python,node,pnpm'), "CI_TOOLS differs from the reviewed selection 'python,node,pnpm,playwright'"),
             ('server', 'omit go', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='python'), 'bootstrap tools omit go'),
             ('server', 'tools from PR text', lambda d: admitted(d, 'validate')['env'].update(CI_TOOLS='${{ github.event.pull_request.title }}'), 'CI_TOOLS must be a literal'),
             ('server', 'foreign platform', lambda d: admitted(d, 'validate')['env'].update(CI_PLATFORM='windows-x64'), 'CI_PLATFORM must come from the fixed runner matrix'),
