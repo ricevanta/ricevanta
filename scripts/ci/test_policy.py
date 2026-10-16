@@ -8,11 +8,193 @@ from copy import deepcopy
 import inventory
 import json
 import unittest
+from unittest.mock import patch
 import yaml
 import check_policy
 import python_env
 
 ROOT = Path(__file__).resolve().parents[2]
+
+class CacheInventoryReuseTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.write_catalogue(self.root)
+
+    def write_catalogue(self, root, mode='go-suite'):
+        path = root / 'scripts/ci/targets.toml'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            '[loader]\npackage = "./loader"\ntarget = "FuzzLoader"\nfuzztime = "1s"\nparallel = 1\n'
+            '[[selected]]\nid = "same"\ncwd = "server"\nmode = "' + mode + '"\n'
+            '[[selected]]\nid = "rust"\ncwd = "agent"\nmode = "rust-suite"\n'
+            '[[selected]]\nid = "other"\ncwd = "scripts"\nmode = "python-unittest"\n',
+            encoding='utf-8')
+        return path
+
+    def wrapper(self, target):
+        return 'python -B scripts/ci/run_selected.py --id ' + target
+
+    def workflow(self, *targets, admitted=False):
+        steps = []
+        if admitted:
+            steps = [{'run': check_policy.GO_FRESH, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.'},
+                     {'run': 'go mod download\ngo mod verify\n', 'working-directory': 'server'},
+                     {'run': check_policy.CARGO_FRESH, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.'}]
+        steps += [{'run': self.wrapper(target)} for target in targets]
+        return {'jobs': {'first': {'steps': steps}}}
+
+    def missing(self, job, *kinds):
+        errors = []
+        for kind in kinds:
+            errors.append(job + ': missing exact fresh cache admission command')
+            if kind == 'go':
+                errors.append(job + ': fresh module cache download and verification required')
+        return errors
+
+    def test_cache_inventory_one_lazy_snapshot_across_jobs_and_scans(self):
+        data = self.workflow('same', 'rust', 'other', 'absent')
+        data['jobs']['second'] = self.workflow('same', 'rust')['jobs']['first']
+        original = deepcopy(data)
+        real = check_policy.run_selected.inventory
+        mapping = real(self.root)
+        saved = deepcopy(mapping)
+        expected = self.missing('first', 'go', 'cargo') + self.missing('second', 'go', 'cargo')
+        with patch.object(check_policy.run_selected, 'inventory', wraps=real) as load:
+            self.assertEqual(check_policy.cache_errors(data, self.root), expected)
+            self.assertEqual(load.call_args_list, [unittest.mock.call(self.root)])
+            self.assertEqual(check_policy.cache_errors(data, self.root), expected)
+            self.assertEqual(load.call_args_list, [unittest.mock.call(self.root)] * 2)
+        with patch.object(check_policy.run_selected, 'inventory', return_value=mapping) as load:
+            self.assertEqual(check_policy.cache_errors(data, self.root), expected)
+            self.assertEqual(load.call_count, 1)
+        self.assertEqual(mapping, saved)
+        self.assertEqual(data, original)
+        with patch.object(check_policy.run_selected, 'inventory', wraps=real) as load:
+            self.assertEqual(check_policy.cache_errors(self.workflow('same', 'rust', admitted=True), self.root), [])
+            self.assertEqual(load.call_count, 1)
+
+    def test_cache_inventory_classification_and_zero_load_fast_paths(self):
+        real = check_policy.run_selected.inventory
+        cases = [('same', 'go', ('go',)), ('rust', 'cargo', ('cargo',)),
+                 ('other', 'other', ()), ('absent', 'unknown', ('go', 'cargo')),
+                 ('go-fuzz:./x:FuzzX', 'go', ('go',))]
+        for target, kind, consumers in cases:
+            with self.subTest(target=target), patch.object(check_policy.run_selected, 'inventory', wraps=real) as load:
+                self.assertEqual(check_policy.wrapper_toolchain(self.wrapper(target), self.root), kind)
+                self.assertEqual(check_policy.wrapper_toolchain(self.wrapper(target), self.root), kind)
+                self.assertEqual(load.call_count, 0 if target.startswith('go-fuzz:') else 2)
+                load.reset_mock()
+                self.assertEqual(check_policy.cache_errors(self.workflow(target), self.root), self.missing('first', *consumers))
+                self.assertEqual(load.call_count, 0 if target.startswith('go-fuzz:') else 1)
+        for run, expected in [('echo hi', []), ('go test ./...\ncargo test\n' + self.wrapper('same'), self.missing('first', 'go', 'cargo'))]:
+            with self.subTest(run=run), patch.object(check_policy.run_selected, 'inventory', wraps=real) as load:
+                if run == 'echo hi':
+                    self.assertIsNone(check_policy.wrapper_toolchain(run, self.root))
+                self.assertEqual(check_policy.cache_errors({'jobs': {'first': {'steps': [{'run': run}]}}}, self.root), expected)
+                load.assert_not_called()
+
+    def test_cache_inventory_unknown_lookup_does_not_poison_loaded_mapping(self):
+        real = check_policy.run_selected.inventory
+        for first in ('absent', 'no-mode'):
+            mapping = real(self.root)
+            mapping['no-mode'] = {}
+            with self.subTest(first=first), patch.object(check_policy.run_selected, 'inventory', return_value=mapping) as load:
+                data = self.workflow(first)
+                data['jobs']['go'] = self.workflow('same')['jobs']['first']
+                data['jobs']['cargo'] = self.workflow('rust')['jobs']['first']
+                expected = self.missing('first', 'go', 'cargo') + self.missing('go', 'go') + self.missing('cargo', 'cargo')
+                self.assertEqual(check_policy.cache_errors(data, self.root), expected)
+                self.assertEqual(load.call_count, 1)
+                self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('same'), self.root), 'go')
+                self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('rust'), self.root), 'cargo')
+                self.assertEqual(check_policy.wrapper_toolchain(self.wrapper(first), self.root), 'unknown')
+        with patch.object(check_policy.run_selected, 'inventory', return_value={}) as load:
+            self.assertEqual(check_policy.cache_errors(self.workflow('same', 'rust'), self.root), self.missing('first', 'go', 'cargo'))
+            self.assertEqual(load.call_count, 1)
+
+    def test_cache_inventory_handled_load_errors_are_attempted_once(self):
+        for error in (KeyError('missing'), OSError('missing'), ValueError('invalid'), TypeError('invalid')):
+            with self.subTest(error=type(error).__name__), patch.object(check_policy.run_selected, 'inventory', side_effect=error) as load:
+                self.assertEqual(check_policy.cache_errors(self.workflow('same', 'rust'), self.root), self.missing('first', 'go', 'cargo'))
+                self.assertEqual(load.call_count, 1)
+                for _ in range(2):
+                    self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('same'), self.root), 'unknown')
+                self.assertEqual(load.call_count, 3)
+            real = check_policy.run_selected.inventory
+            with patch.object(check_policy.run_selected, 'inventory', side_effect=[error, real(self.root)]) as load:
+                self.assertEqual(check_policy.cache_errors(self.workflow('same', 'rust'), self.root), self.missing('first', 'go', 'cargo'))
+                self.assertEqual(check_policy.cache_errors(self.workflow('same'), self.root), self.missing('first', 'go'))
+                self.assertEqual(load.call_count, 2)
+
+    def test_cache_inventory_unhandled_errors_keep_the_existing_boundary(self):
+        for value in (RuntimeError('unhandled'), {'same': {'mode': 1}}):
+            expected = RuntimeError if isinstance(value, Exception) else AttributeError
+            options = {'side_effect': value} if isinstance(value, Exception) else {'return_value': value}
+            with self.subTest(value=value), patch.object(check_policy.run_selected, 'inventory', **options) as load:
+                with self.assertRaises(expected):
+                    check_policy.cache_errors(self.workflow('same'), self.root)
+                with self.assertRaises(expected):
+                    check_policy.wrapper_toolchain(self.wrapper('same'), self.root)
+                self.assertEqual(load.call_count, 2)
+
+    def test_cache_inventory_fresh_calls_observe_mutation_removal_corruption_and_repair(self):
+        real = check_policy.run_selected.inventory
+        data = self.workflow('same')
+        with patch.object(check_policy.run_selected, 'inventory', wraps=real) as load:
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go'))
+            path = self.write_catalogue(self.root, 'rust-suite')
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'cargo'))
+            self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('same'), self.root), 'cargo')
+            path.unlink()
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go', 'cargo'))
+            self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('same'), self.root), 'unknown')
+            path.write_text('[invalid', encoding='utf-8')
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go', 'cargo'))
+            self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('same'), self.root), 'unknown')
+            self.write_catalogue(self.root)
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go'))
+            self.assertEqual(check_policy.wrapper_toolchain(self.wrapper('same'), self.root), 'go')
+            self.assertEqual(load.call_count, 9)
+
+    def test_cache_inventory_interleaved_invocations_isolate_roots_and_identical_inputs(self):
+        second = self.root / 'second'
+        self.write_catalogue(second, 'rust-suite')
+        real = check_policy.run_selected.inventory
+        calls = []
+        data = self.workflow('same', 'same')
+        original = deepcopy(data)
+        def load(root):
+            calls.append(root)
+            result = real(root)
+            if root == self.root:
+                self.assertEqual(check_policy.cache_errors(data, second), self.missing('first', 'cargo'))
+            return result
+        with patch.object(check_policy.run_selected, 'inventory', side_effect=load):
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go'))
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go'))
+        self.assertEqual(calls, [self.root, second, self.root, second])
+        self.write_catalogue(second)
+        with patch.object(check_policy.run_selected, 'inventory', wraps=real) as counted:
+            for root in (self.root, second, self.root, second):
+                self.assertEqual(check_policy.cache_errors(data, root), self.missing('first', 'go'))
+            self.assertEqual(counted.call_args_list, [unittest.mock.call(root) for root in (self.root, second, self.root, second)])
+        active = False
+        def same_root_load(root):
+            nonlocal active
+            result = real(root)
+            if not active:
+                active = True
+                try:
+                    self.assertEqual(check_policy.cache_errors(data, root), self.missing('first', 'go'))
+                finally:
+                    active = False
+            return result
+        with patch.object(check_policy.run_selected, 'inventory', side_effect=same_root_load) as counted:
+            self.assertEqual(check_policy.cache_errors(data, self.root), self.missing('first', 'go'))
+            self.assertEqual(counted.call_args_list, [unittest.mock.call(self.root)] * 2)
+        self.assertEqual(data, original)
 
 class PolicyDiscoveryTests(unittest.TestCase):
     def test_each_policy_case_is_discovered_once(self):
@@ -998,8 +1180,8 @@ class PolicyTests(PolicyFixture, unittest.TestCase):
         for name, label, change, expected in mutations:
             with self.subTest(mutation=label):
                 self.mutate(name, change)
-                self.assertTrue(any(expected in error for error in check_policy.check(self.root)),
-                                (label, check_policy.check(self.root)))
+                errors = check_policy.check(self.root)
+                self.assertTrue(any(expected in error for error in errors), (label, errors))
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
         self.assertEqual(check_policy.check(self.root), [])
         # Fixtures are written as bytes: text-mode writes become CRLF on Windows and the lock readers are LF-strict.

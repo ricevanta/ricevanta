@@ -1062,12 +1062,12 @@ def wrapper_id(run):
     return (match[1] or match[2]) if match else None
 
 
-def wrapper_toolchain(run, root):
+def wrapper_toolchain(run, root, *, _inventory=None):
     """Classify a wrapper step by its selected ID's toolchain in the checked tree; unknown IDs count as both."""
     target_id = wrapper_id(run)
     if target_id is None: return None
     if target_id.startswith('go-fuzz:'): return 'go'
-    try: mode = run_selected.inventory(root)[target_id]['mode']
+    try: mode = (run_selected.inventory(root) if _inventory is None else _inventory())[target_id]['mode']
     except (KeyError, OSError, ValueError, TypeError): return 'unknown'
     return 'go' if mode.startswith('go') else 'cargo' if mode.startswith('rust') else 'other'
 
@@ -1075,6 +1075,19 @@ def wrapper_toolchain(run, root):
 def cache_errors(data, root):
     """Require fresh compiler environments before every workflow consumer."""
     errors = []
+    loaded = False
+    selected = None
+
+    def inventory_snapshot():
+        nonlocal loaded, selected
+        if not loaded:
+            loaded = True
+            try: selected = run_selected.inventory(root)
+            except (KeyError, OSError, ValueError, TypeError):
+                # Unavailable for this invocation; lookups remain conservative.
+                selected = None
+        return selected
+
     for jid, job in data.get('jobs', {}).items():
         steps = job.get('steps', [])
         def fail(message): errors.append(f'{jid}: {message}')
@@ -1083,8 +1096,8 @@ def cache_errors(data, root):
             if isinstance(env, dict) and CACHE_ENV & {str(key).upper() for key in env}:
                 fail('compiler cache environment override forbidden')
         go_setups = [i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/setup-go@')]
-        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('go', 'unknown')]
-        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root) in ('cargo', 'unknown')]
+        go_consumers = [i for i, s in enumerate(steps) if re.search(r'\bgo (?:test|vet|env|mod|build|run)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root, _inventory=inventory_snapshot) in ('go', 'unknown')]
+        cargo_consumers = [i for i, s in enumerate(steps) if re.search(r'\bcargo (?:metadata|build|test|clippy|fetch)\b', s.get('run', '')) or wrapper_toolchain(s.get('run', ''), root, _inventory=inventory_snapshot) in ('cargo', 'unknown')]
         for step in steps:
             action = step.get('uses', '')
             settings = step.get('with', {})
