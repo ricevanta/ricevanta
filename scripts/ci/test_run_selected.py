@@ -1632,6 +1632,177 @@ class PythonUnittestEvidenceTests(unittest.TestCase):
                 finally:
                     shutil.rmtree(self.root / 'evidence')
 
+    def test_python_unittest_declared_nested_code_and_identity_decorator_execute(self):
+        self.source.write_text(textwrap.dedent('''
+            import unittest
+            def mark(function):
+                function.marker = True
+                return function
+            class Base(unittest.TestCase):
+                @mark
+                def test_base(self, helper=(lambda: 3)):
+                    self.assertTrue(self.test_base.marker)
+                    self.assertEqual(helper(), 3)
+                    self.assertEqual(list(value for value in range(2)), [0, 1])
+            class Child(Base):
+                @mark
+                def test_child(self): self.assertEqual((lambda value: value)(3), 3)
+        '''))
+        record = self.run_tiny()
+        self.assertEqual(record['summary']['inventory'],
+                         ['test_tiny.Base.test_base', 'test_tiny.Child.test_base', 'test_tiny.Child.test_child'])
+        self.assertEqual(record['summary']['passed'], 3)
+        self.assertTrue((self.root / 'evidence/verified.json').is_file())
+
+    def test_python_unittest_refuses_same_location_code_aliases(self):
+        cases = {
+            'nested lambda': '''
+                import types, unittest
+                class T(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail"); (lambda self: None)
+                T.test_a = types.FunctionType(next(code for code in T.test_a.__code__.co_consts
+                                                  if type(code) is types.CodeType), globals())
+            ''',
+            'nested lambda with method name': '''
+                import types, unittest
+                class T(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail"); (lambda self: None)
+                T.test_a = types.FunctionType(next(code for code in T.test_a.__code__.co_consts
+                                                  if type(code) is types.CodeType), globals(), "test_a")
+            ''',
+            'default lambda': '''
+                import types, unittest
+                class T(unittest.TestCase):
+                    def test_a(self, ignored=(lambda self: None)): self.fail("declared body must fail")
+                T.test_a = types.FunctionType(T.test_a.__defaults__[0].__code__, globals())
+            ''',
+            'annotation lambda': '''
+                import types, unittest
+                class T(unittest.TestCase):
+                    def test_a(self: (lambda self: None)): self.fail("declared body must fail")
+                T.test_a = types.FunctionType(T.test_a.__annotations__["self"].__code__, globals())
+            ''',
+            'decorator lambda': '''
+                import types, unittest
+                def mark(replacement):
+                    def decorate(function):
+                        function.replacement = replacement
+                        return function
+                    return decorate
+                class T(unittest.TestCase):
+                    @mark(lambda self: None)
+                    def test_a(self): self.fail("declared body must fail")
+                T.test_a = types.FunctionType(T.test_a.replacement.__code__, globals())
+            ''',
+            'inherited nested lambda': '''
+                import types, unittest
+                class Base(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail"); (lambda self: None)
+                class Child(Base): pass
+                Base.test_a = types.FunctionType(next(code for code in Base.test_a.__code__.co_consts
+                                                     if type(code) is types.CodeType), globals())
+            ''',
+            'generator expression': '''
+                import types, unittest
+                class T(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail"); (None for _ in ())
+                T.test_a = types.FunctionType(next(code for code in T.test_a.__code__.co_consts
+                                                  if type(code) is types.CodeType), globals())
+            ''',
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                self.source.write_text(textwrap.dedent(source))
+                try:
+                    with self.assertRaises(EvidenceError): self.run_tiny()
+                    self.assertFalse((self.root / 'evidence/verified.json').exists())
+                    self.assertEqual(json.loads((self.root / 'evidence/discovery.status.json').read_text()), {'exit': 1})
+                finally:
+                    shutil.rmtree(self.root / 'evidence')
+
+    def test_python_unittest_refuses_mutated_dispatch_state(self):
+        cases = {
+            'standard method code at import': '''
+                import unittest
+                def ignore(self, method): pass
+                unittest.TestCase._callTestMethod.__code__ = ignore.__code__
+                class T(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'standard method code in class fixture': '''
+                import unittest
+                def ignore(self, method): pass
+                class T(unittest.TestCase):
+                    @classmethod
+                    def setUpClass(cls): unittest.TestCase._callTestMethod.__code__ = ignore.__code__
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'standard method code in setup': '''
+                import unittest
+                def ignore(self, method): pass
+                class T(unittest.TestCase):
+                    def setUp(self): unittest.TestCase._callTestMethod.__code__ = ignore.__code__
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'suppressed setup fixture': '''
+                import unittest
+                def ignore(self): pass
+                unittest.TestCase._callSetUp.__code__ = ignore.__code__
+                class T(unittest.TestCase):
+                    def setUp(self): self.fail("setup must fail")
+                    def test_a(self): pass
+            ''',
+            'suppressed teardown fixture': '''
+                import unittest
+                def ignore(self): pass
+                unittest.TestCase._callTearDown.__code__ = ignore.__code__
+                class T(unittest.TestCase):
+                    def tearDown(self): self.fail("teardown must fail")
+                    def test_a(self): pass
+            ''',
+            'suppressed cleanup fixture': '''
+                import unittest
+                def ignore(self): pass
+                unittest.TestCase.doCleanups.__code__ = ignore.__code__
+                class T(unittest.TestCase):
+                    def test_a(self): self.addCleanup(self.fail, "cleanup must fail")
+            ''',
+            'changed standard defaults': '''
+                import unittest
+                unittest.TestCase._callTestMethod.__defaults__ = (None,)
+                class T(unittest.TestCase):
+                    def test_a(self): pass
+            ''',
+            'changed standard keyword defaults': '''
+                import unittest
+                unittest.TestCase._callTestMethod.__kwdefaults__ = {"method": None}
+                class T(unittest.TestCase):
+                    def test_a(self): pass
+            ''',
+            'private dispatch code': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def setUp(self):
+                        function = self._callTestMethod.__func__
+                        captured = dict(zip(function.__code__.co_freevars,
+                                            (cell.cell_contents for cell in function.__closure__)))
+                        guard, method, state = (captured[key] for key in ("guard", "method", "state"))
+                        def ignore(item, called):
+                            guard, method
+                            state["calls"] += 1
+                        function.__code__ = ignore.__code__
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                self.source.write_text(textwrap.dedent(source))
+                try:
+                    with self.assertRaises(EvidenceError): self.run_tiny()
+                    self.assertFalse((self.root / 'evidence/verified.json').exists())
+                finally:
+                    shutil.rmtree(self.root / 'evidence')
+
     def test_python_unittest_refuses_filtered_dynamic_and_failed_work(self):
         outside = self.root / 'outside'
         outside.mkdir()

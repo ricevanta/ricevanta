@@ -1286,7 +1286,8 @@ def python_declarations(cwd, target, *, locations=False):
                         if item.name in ('run', '__call__', 'id'): raise EvidenceError('custom Python test execution forbidden')
                         if item.name.startswith('test_'):
                             if not isinstance(item, ast.FunctionDef): raise EvidenceError('async Python test declaration forbidden')
-                            inherited[item.name] = (path.resolve(), min([item.lineno] + [d.lineno for d in item.decorator_list]))
+                            inherited[item.name] = (path.resolve(), min([item.lineno] + [d.lineno for d in item.decorator_list]),
+                                                    name + '.' + item.name)
                     elif isinstance(item, (ast.Assign, ast.AnnAssign)):
                         for item_target in item.targets if isinstance(item, ast.Assign) else [item.target]:
                             if isinstance(item_target, ast.Name) and item_target.id.startswith('test_'):
@@ -1311,15 +1312,21 @@ class PythonCaseGuard:
         self.inspect, self.types = inspect, types
         self.declarations = python_declarations(cwd, target, locations=True)
         self.codes = {}
+        locations = set(self.declarations.values())
         for path in {location[0] for location in self.declarations.values()}:
-            def collect(code):
-                for value in code.co_consts:
-                    if type(value) is types.CodeType:
-                        self.codes.setdefault((path, value.co_firstlineno), []).append(value)
-                        collect(value)
-            # Compile without executing: filenames and line numbers alone can be
-            # copied onto replacement bytecode with CodeType.replace().
-            collect(compile(path.read_text(encoding='utf-8'), str(path), 'exec', dont_inherit=True))
+            compiled = compile(path.read_text(encoding='utf-8'), str(path), 'exec', dont_inherit=True)
+            # Select the declared method's direct class-body constant. Nested
+            # expressions and decorators can share its first line, but cannot
+            # supply the code for that class and method declaration.
+            for owner in compiled.co_consts:
+                if type(owner) is not types.CodeType: continue
+                for method in owner.co_consts:
+                    if type(method) is not types.CodeType: continue
+                    location = (path, method.co_firstlineno, method.co_qualname)
+                    if location not in locations: continue
+                    if location in self.codes: raise EvidenceError('ambiguous Python test declaration')
+                    self.codes[location] = method
+        if set(self.codes) != locations: raise EvidenceError('missing compiled Python test declaration')
         self.hooks = {key: getattr(unittest.TestCase, key) for key in
                       ('run', '__call__', 'id', '_callSetUp', '_callTestMethod', '_callTearDown', 'doCleanups', '__getattribute__')}
         self.call_method = unittest.TestCase._callTestMethod
@@ -1327,8 +1334,30 @@ class PythonCaseGuard:
         # only that exact standard-library wrapper, never arbitrary __wrapped__.
         self.skip_code = unittest.skip('')(lambda: None).__code__
         self.suite_run, self.suite_call = unittest.TestSuite.run, unittest.TestSuite.__call__
+        self.hook_states = [(function, self.callable_state(function)) for function in
+                            (*self.hooks.values(), self.suite_run, self.suite_call)]
+
+    def callable_state(self, function):
+        if type(function) is not self.types.FunctionType: return None
+        return (function.__code__, function.__defaults__,
+                None if function.__kwdefaults__ is None else dict(function.__kwdefaults__),
+                tuple(cell.cell_contents for cell in function.__closure__ or ()))
+
+    def check_callable(self, function, state):
+        if state is None: return
+        code, defaults, keyword_defaults, closure = state
+        current_closure = tuple(cell.cell_contents for cell in function.__closure__ or ())
+        if (function.__code__ is not code or function.__defaults__ is not defaults
+                or function.__kwdefaults__ != keyword_defaults or len(current_closure) != len(closure)
+                or any(actual is not expected for actual, expected in zip(current_closure, closure))):
+            raise EvidenceError('mutated Python test dispatch callable')
+
+    def check_hooks(self):
+        # Function identity survives __code__ and default-state replacement.
+        for function, state in self.hook_states: self.check_callable(function, state)
 
     def check(self, item, dispatch=None):
+        self.check_hooks()
         static = self.inspect.getattr_static
         for key, expected in self.hooks.items():
             if static(type(item), key) is not expected or (
@@ -1350,8 +1379,9 @@ class PythonCaseGuard:
         if function.__code__ is self.skip_code:
             function = getattr(function, '__wrapped__', None)
         if (type(function) is not self.types.FunctionType
-                or (Path(function.__code__.co_filename).resolve(), function.__code__.co_firstlineno) != self.declarations[name]
-                or function.__code__ not in self.codes[self.declarations[name]]):
+                or (Path(function.__code__.co_filename).resolve(), function.__code__.co_firstlineno,
+                    function.__code__.co_qualname) != self.declarations[name]
+                or function.__code__ != self.codes[self.declarations[name]]):
             raise EvidenceError('replaced Python test declaration: ' + name)
         return method
 
@@ -1367,6 +1397,7 @@ def python_discover(cwd, target, *, guard=None):
     if loader.errors: raise EvidenceError('Python discovery import failed')
     cases = []
     def flatten(item):
+        guard.check_hooks()
         if any(key in vars(item) for key in ('run', '__call__', 'id')):
             raise EvidenceError('custom Python test execution forbidden')
         if type(item) is unittest.TestSuite and type(item).run is guard.suite_run and type(item).__call__ is guard.suite_call:
@@ -1476,12 +1507,14 @@ def python_child(target, events, phase, env):
                     state['calls'] += 1
                     guard.call_method(item, called)
                 state['dispatch'] = guard.types.MethodType(dispatch, test)
+                state['callable'] = guard.callable_state(dispatch)
                 self.executions[test.id()] = state
                 test._callTestMethod = state['dispatch']
                 guard.check(test, state['dispatch'])
                 super().startTest(test); emit({'event': 'start', 'id': test.id()})
             def addSuccess(self, test):
                 state = self.executions[test.id()]
+                guard.check_callable(state['dispatch'].__func__, state['callable'])
                 guard.check(test, state['dispatch'])
                 if state['calls'] != 1: raise EvidenceError('missing Python test method execution')
                 super().addSuccess(test); emit({'event': 'pass', 'id': test.id()})
