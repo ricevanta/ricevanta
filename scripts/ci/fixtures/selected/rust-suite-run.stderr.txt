@@ -1,0 +1,4 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (/tmp/ci4-scratch/tr-target/debug/deps/tiny-368d9a052d7f1d10)
+     Running tests/props.rs (/tmp/ci4-scratch/tr-target/debug/deps/props-1075011cb3d0102d)
+   Doc-tests tiny

@@ -40,10 +40,19 @@ def validate_route(value, *, shape=True):
     for key in ('baseSha', 'headSha', 'testedSha'): routing.sha(value[key])
 
 
-def receipt(value, unit, checks):
+def receipt(value, unit, checks, evidence=None):
+    """Build one leaf receipt; wrapper check IDs need their verified selected run."""
     validate_route(value, shape=False)
     if unit not in value['units'] or sorted(checks) != sorted(inventory.checks(unit)):
         raise ValueError('receipt does not prove required step checks')
+    import run_selected
+    selected = run_selected.inventory()
+    for check in checks:
+        if check in selected:
+            if evidence is None: raise ValueError('selected check needs verified evidence: ' + check)
+            # The record must come from this workflow run, attempt and tested commit, not a planted or earlier one.
+            run_selected.verified(evidence, check, {'GITHUB_RUN_ID': value['runId'], 'GITHUB_RUN_ATTEMPT': value['runAttempt'],
+                                                    'GITHUB_SHA': value['testedSha']})
     return dict(kind='receipt', version=1, testedSha=value['testedSha'], runId=value['runId'],
                 runAttempt=value['runAttempt'], unit=unit, result='success', checks=checks)
 
@@ -96,10 +105,11 @@ def main():
     p.add_argument('--emit-unit')
     p.add_argument('--checks', help='JSON list of completed step check IDs')
     p.add_argument('--out', type=Path)
+    p.add_argument('--evidence', type=Path, help='verified selected-run evidence root')
     args = p.parse_args()
     value = load(args.route)
     if args.emit_unit:
-        item = receipt(value, args.emit_unit, json.loads(args.checks))
+        item = receipt(value, args.emit_unit, json.loads(args.checks), args.evidence)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(item) + '\n')
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:

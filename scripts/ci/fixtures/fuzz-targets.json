@@ -136,5 +136,37 @@
     "target": "FuzzTar",
     "fuzztime": "60s",
     "parallel": 2
+  },
+  {
+    "package": "./internal/extensions/admission",
+    "target": "FuzzDecide",
+    "fuzztime": "60s",
+    "parallel": 2,
+    "fuzzminimizetime": "3s"
+  },
+  {
+    "package": "./internal/extensions/admission",
+    "target": "FuzzParse",
+    "fuzztime": "60s",
+    "parallel": 2,
+    "fuzzminimizetime": "3s"
+  },
+  {
+    "package": "./internal/platform/config",
+    "target": "FuzzLoad",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/transport/console",
+    "target": "FuzzPath",
+    "fuzztime": "60s",
+    "parallel": 2
+  },
+  {
+    "package": "./internal/transport/console",
+    "target": "FuzzAcceptEncoding",
+    "fuzztime": "60s",
+    "parallel": 2
   }
 ]

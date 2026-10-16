@@ -1,0 +1,2 @@
+FuzzThing
+ok  	example.com/tiny	0.002s

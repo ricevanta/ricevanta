@@ -14,10 +14,19 @@ DIRECTORIES = (
     "schemas/events/v1",
     "schemas/cel/v1",
     "schemas/agent/spool/v1",
+    "schemas/agent/config/v1",
+    "schemas/agent/health/v1",
+    "schemas/agent/json/v1",
+    "schemas/agent/footprint/v1",
+    "schemas/server/config/v1",
+    "schemas/server/health/v1",
+    "schemas/server/console-manifest/v1",
     "schemas/extension/v1alpha1",
 )
-# These files describe the event protocol rather than fixture instances.
+# Protocol descriptions and exact generator tooling paths are not fixtures.
 NON_FIXTURES = {
+    "schemas/extension/v1alpha1/generate_admission.py",
+    "schemas/extension/v1alpha1/admission_vector_recipes.py",
     "schemas/events/v1/contract.json",
     "schemas/events/v1/header.abnf",
 }
@@ -39,10 +48,27 @@ CONTRACTS = (
     ("schemas/cel/v1/declarations.schema.json", "schemas/cel/v1/fixtures.json"),
     ("schemas/agent/spool/v1/fixture.schema.json", "schemas/agent/spool/v1/fixtures.json"),
     ("schemas/agent/spool/v1/fixture.schema.json", "schemas/agent/spool/v1/schema-cases.json"),
+    ("schemas/agent/config/v1/config.schema.json", "schemas/agent/config/v1/example.json"),
+    ("schemas/agent/config/v1/config.schema.json", "schemas/agent/config/v1/schema-cases.json"),
+    ("schemas/agent/health/v1/health.schema.json", "schemas/agent/health/v1/example.json"),
+    ("schemas/agent/health/v1/health.schema.json", "schemas/agent/health/v1/schema-cases.json"),
+    ("schemas/agent/json/v1/vectors.schema.json", "schemas/agent/json/v1/vectors.json"),
+    ("schemas/agent/footprint/v1/evidence.schema.json", "schemas/agent/footprint/v1/example.json"),
+    ("schemas/agent/footprint/v1/evidence.schema.json", "schemas/agent/footprint/v1/schema-cases.json"),
+    ("schemas/server/config/v1/config.schema.json", "schemas/server/config/v1/example.json"),
+    ("schemas/server/config/v1/config.schema.json", "schemas/server/config/v1/schema-cases.json"),
+    ("schemas/server/health/v1/readiness.schema.json", "schemas/server/health/v1/example.json"),
+    ("schemas/server/health/v1/readiness.schema.json", "schemas/server/health/v1/schema-cases.json"),
+    ("schemas/server/console-manifest/v1/manifest.schema.json", "schemas/server/console-manifest/v1/example.json"),
+    ("schemas/server/console-manifest/v1/manifest.schema.json", "schemas/server/console-manifest/v1/schema-cases.json"),
     ("schemas/extension/v1alpha1/manifest.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
     ("schemas/extension/v1alpha1/fixtures.schema.json", "schemas/extension/v1alpha1/fixtures.json"),
     ("schemas/extension/v1alpha1/loader-vectors.schema.json", "schemas/extension/v1alpha1/loader-vectors.json"),
     ("schemas/extension/v1alpha1/package-loader-vectors.schema.json", "schemas/extension/v1alpha1/package-loader-vectors.json"),
+    ("schemas/extension/v1alpha1/extension-resource.schema.json", "schemas/extension/v1alpha1/extension-resource/schema-cases.json"),
+    ("schemas/extension/v1alpha1/capability-grant.schema.json", "schemas/extension/v1alpha1/capability-grant/schema-cases.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json", "schemas/extension/v1alpha1/admission-vectors.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json", "schemas/extension/v1alpha1/admission-vectors/schema-cases.json"),
 )
 
 
