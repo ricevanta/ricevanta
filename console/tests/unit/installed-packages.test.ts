@@ -47,12 +47,116 @@ function fixture(extras = false) {
   cleanups.push(result.cleanup)
   return result
 }
+function groupedShared(value: ReturnType<typeof fixture>) {
+  const row = {
+    name: '@intlify/shared',
+    versions: ['10.0.8', '11.4.12', '11.4.13'],
+    paths: ['10.0.8', '11.4.12', '11.4.13'].map((version) =>
+      join(value.root, value.paths.get(`@intlify/shared@${version}`) ?? ''),
+    ),
+    license: 'MIT',
+  }
+  value.catalogue['MIT'] = (value.catalogue['MIT'] ?? []).filter(
+    (item) => !(item && typeof item === 'object' && 'name' in item && item.name === row.name),
+  )
+  value.catalogue['MIT'].push(row)
+  return row
+}
 it('inventories all 342 eligible pairs and peer-qualified physical instances', () => {
   const value = fixture()
   const inventory = installedPackages(value.root)
   expect(new Set(inventory.instances.map((item) => item.pair)).size).toBe(342)
   expect(inventory.instances.some((item) => item.key.includes('('))).toBe(true)
   expect(validateCatalogue(inventory, value.catalogue).length).toBe(342)
+})
+it.each([false, true])(
+  'validates grouped catalogue versions with reordered paths=%s',
+  (reverse) => {
+    const value = fixture()
+    const row = groupedShared(value)
+    if (reverse) row.paths.reverse()
+    const result = validateCatalogue(installedPackages(value.root), value.catalogue)
+    expect(result).toHaveLength(342)
+    expect(result.filter((item) => item.name === '@intlify/shared')).toEqual(
+      ['10.0.8', '11.4.12', '11.4.13'].map((version) => ({
+        name: '@intlify/shared',
+        version,
+        declared: 'MIT',
+        paths: [join(value.root, value.paths.get(`@intlify/shared@${version}`) ?? '')],
+      })),
+    )
+  },
+)
+it.each([false, true])(
+  'validates grouped dependency-alias evidence with missing alias=%s',
+  (missing) => {
+    const value = fixture()
+    value.catalogue['MIT'] = (value.catalogue['MIT'] ?? []).filter(
+      (item) =>
+        !(item && typeof item === 'object' && 'name' in item && item.name === 'string-width'),
+    )
+    const row = {
+      name: 'string-width',
+      versions: ['4.2.3', '5.1.2'],
+      paths: ['string-width', 'string-width-cjs'].map((name) =>
+        join(value.root, 'node_modules/.pnpm/@isaacs+cliui@8.0.2/node_modules', name),
+      ),
+      license: 'MIT',
+    }
+    value.catalogue['MIT'].push(row)
+    if (missing) {
+      row.paths.pop()
+      expect(() => validateCatalogue(installedPackages(value.root), value.catalogue)).toThrow(
+        'Missing physical catalogue path: string-width@4.2.3',
+      )
+      return
+    }
+    expect(
+      validateCatalogue(installedPackages(value.root), value.catalogue).filter(
+        (item) => item.name === 'string-width',
+      ),
+    ).toEqual(
+      ['4.2.3', '5.1.2'].map((version) => ({
+        name: 'string-width',
+        version,
+        declared: 'MIT',
+        paths: [join(value.root, value.paths.get(`string-width@${version}`) ?? '')],
+      })),
+    )
+  },
+)
+it.each([
+  ['missing-oldest-path', 'Missing physical catalogue path: @intlify/shared@10.0.8'],
+  ['missing-middle-path', 'Missing physical catalogue path: @intlify/shared@11.4.12'],
+  ['duplicate-other-version-path', 'Missing physical catalogue path: @intlify/shared@11.4.12'],
+  ['unlisted-version-path', 'Unverified catalogue path: @intlify/shared@10.0.8'],
+  ['omitted-version-evidence', 'Missing eligible license evidence: @intlify/shared@11.4.13'],
+  ['unknown-version', 'Unknown catalogue row: @intlify/shared@99.0.0'],
+  ['other-package-path', 'Unverified catalogue path: @intlify/shared@10.0.8'],
+  ['absent-path', 'Unverified catalogue path: @intlify/shared@10.0.8'],
+  ['relative-path', 'Unverified catalogue path: @intlify/shared@10.0.8'],
+  ['wrong-license', 'Catalogue license mismatch: @intlify/shared@10.0.8'],
+])('rejects incomplete or mismatched grouped catalogue evidence: %s', (kind, cause) => {
+  const value = fixture()
+  const row = groupedShared(value)
+  if (kind === 'missing-oldest-path') row.paths.shift()
+  else if (kind === 'missing-middle-path') row.paths.splice(1, 1)
+  else if (kind === 'duplicate-other-version-path') row.paths[1] = row.paths[0] ?? ''
+  else if (kind === 'unlisted-version-path') row.versions.pop()
+  else if (kind === 'omitted-version-evidence') {
+    row.versions.pop()
+    row.paths.pop()
+  } else if (kind === 'unknown-version') row.versions.push('99.0.0')
+  else if (kind === 'other-package-path')
+    row.paths.push(join(value.root, value.paths.get('@babel/parser@7.29.9') ?? ''))
+  else if (kind === 'absent-path') row.paths.push(join(value.root, 'absent'))
+  else if (kind === 'relative-path') row.paths.push('node_modules/@intlify/shared')
+  else {
+    value.catalogue['MIT'] = (value.catalogue['MIT'] ?? []).filter((item) => item !== row)
+    row.license = 'ISC'
+    value.catalogue['ISC'] = [row]
+  }
+  expect(() => validateCatalogue(installedPackages(value.root), value.catalogue)).toThrow(cause)
 })
 it.each(['forged-root-alias', '@forged/root-alias'])(
   'rejects undeclared root link %s to a declared direct dependency',

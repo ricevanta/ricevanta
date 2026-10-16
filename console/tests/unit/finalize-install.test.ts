@@ -51,6 +51,78 @@ it.each([false, true])(
     ).toEqual([])
   },
 )
+it.each([false, true])(
+  'finalizes grouped multiversion catalogue evidence with extras=%s',
+  async (extras) => {
+    const value = fixture(extras)
+    value.catalogue['MIT'] = (value.catalogue['MIT'] ?? []).filter(
+      (item) =>
+        !(item && typeof item === 'object' && 'name' in item && item.name === '@intlify/shared'),
+    )
+    value.catalogue['MIT'].push({
+      name: '@intlify/shared',
+      versions: ['10.0.8', '11.4.12', '11.4.13'],
+      paths: ['11.4.13', '10.0.8', '11.4.12'].map((version) =>
+        join(value.root, value.paths.get(`@intlify/shared@${version}`) ?? ''),
+      ),
+      license: 'MIT',
+    })
+    const result = await finalizeInstall(value.root, () => Promise.resolve(value.catalogue))
+    expect(result.after.pairs).toHaveLength(342)
+    expect(result.removed.map((item) => item.pair).sort()).toEqual(extras ? removable : [])
+    expect(result.licenses.filter((item) => item.name === '@intlify/shared')).toEqual(
+      ['10.0.8', '11.4.12', '11.4.13'].map((version) => ({
+        name: '@intlify/shared',
+        version,
+        declared: 'MIT',
+        normalized: 'MIT',
+        paths: [join(value.root, value.paths.get(`@intlify/shared@${version}`) ?? '')],
+      })),
+    )
+    expect(
+      (await finalizeInstall(value.root, () => Promise.resolve(value.catalogue))).removed,
+    ).toEqual([])
+  },
+)
+it('rejects missing grouped version evidence before deleting any staged candidate', async () => {
+  const value = fixture(true)
+  value.catalogue['MIT'] = (value.catalogue['MIT'] ?? []).filter(
+    (item) =>
+      !(item && typeof item === 'object' && 'name' in item && item.name === '@intlify/shared'),
+  )
+  value.catalogue['MIT'].push({
+    name: '@intlify/shared',
+    versions: ['10.0.8', '11.4.12', '11.4.13'],
+    paths: ['10.0.8', '11.4.13'].map((version) =>
+      join(value.root, value.paths.get(`@intlify/shared@${version}`) ?? ''),
+    ),
+    license: 'MIT',
+  })
+  const candidates = removable.map((pair) => {
+    const path = value.paths.get(pair) ?? ''
+    const payload = join(value.root, path, 'payload')
+    const incoming = join(
+      value.root,
+      'node_modules/.pnpm',
+      pair.startsWith('lightningcss-') ? 'lightningcss@1.33.0' : 'rolldown@1.2.13',
+      'node_modules',
+      pair.slice(0, pair.lastIndexOf('@')),
+    )
+    return { payload, bytes: readFileSync(payload), incoming, target: readlinkSync(incoming) }
+  })
+  const error = await finalizeInstall(value.root, () => Promise.resolve(value.catalogue)).then(
+    () => undefined,
+    (error: unknown) => error,
+  )
+  expect(error).toBeInstanceOf(Error)
+  expect(error instanceof Error ? String(error.cause) : '').toContain(
+    'Missing physical catalogue path: @intlify/shared@11.4.12',
+  )
+  for (const candidate of candidates) {
+    expect(readFileSync(candidate.payload)).toEqual(candidate.bytes)
+    expect(readlinkSync(candidate.incoming)).toBe(candidate.target)
+  }
+})
 it.each(['forged-root-alias', '@forged/root-alias'])(
   'rejects undeclared root link %s before deleting any staged candidate',
   async (name) => {

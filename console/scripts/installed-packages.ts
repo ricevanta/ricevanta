@@ -627,6 +627,10 @@ export function validateCatalogue(inventory: PhysicalInventory, raw: unknown): P
         throw new Error('Invalid license row')
       if ('license' in row && row['license'] !== declared)
         throw new Error('Catalogue declaration mismatch')
+      // pnpm groups all versions and their paths for one name/license in the same row.
+      const rowInstances = versions.flatMap((version) =>
+        typeof version === 'string' ? (physical.get(`${name}@${version}`) ?? []) : [],
+      )
       for (const version of versions) {
         if (typeof version !== 'string') throw new Error('Invalid catalogue version')
         const pair = `${name}@${version}`
@@ -662,7 +666,7 @@ export function validateCatalogue(inventory: PhysicalInventory, raw: unknown): P
               return (
                 typeof path === 'string' &&
                 isAbsolute(path) &&
-                instances.some(
+                rowInstances.some(
                   (instance) => realpathSync(path) === resolve(inventory.root, instance.path),
                 )
               )
