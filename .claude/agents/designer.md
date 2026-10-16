@@ -13,7 +13,7 @@ You write design documents and research first-party sources for Ricevanta as the
 
 Rules that bind every document you touch:
 
-- Every blueprint feature has full support at v1.0.0 on macOS ARM64, Windows x64 and Linux x64, except the two capabilities `docs/platform-support.md` schedules for v2.0.0. Never write alert-only, best-effort or deferred as an end state. Name an OS limit explicitly when one exists and give the mechanism that still meets the requirement.
+- Every blueprint feature has full support for macOS ARM64, Windows x64 and Linux x64 endpoints at v1.0.0, except the two capabilities `docs/platform-support.md` schedules for v2.0.0. Never write alert-only, best-effort or deferred as an end state. Name an OS limit explicitly when one exists and give the mechanism that still meets the requirement. Distinguish each component's deployment targets in `docs/architecture.md` and its independently reviewed specification from build/test-only hosts; that distinction never narrows blueprint endpoint support or excuses a missing mechanism on a required component target.
 - Documents describe the current state. No dates, no history, no "previously", no "decided on". Rewrite in place, in every file that repeats the fact. One home per fact, links from elsewhere.
 - A design or spec file has at most 400 lines. Split along sections and link when a file would pass the limit.
 - A changed decision is rewritten in place in `docs/decisions.md` with the four lines Decision, Why, Rejected, Detail. IDs are stable and never reused.

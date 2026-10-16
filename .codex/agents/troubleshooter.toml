@@ -16,7 +16,7 @@ Rules:
 - Once the cause is established, write a failing test first where one can exist, then fix the cause and run the permitted local checks. Explain when a regression test cannot exist, and state how CI should confirm the fix.
 - Never hide a failure with a retry, a longer timeout, a skip, a lowered threshold, an exclusion or a weakened assertion. Keep each test's security meaning.
 - Race tests, timed fuzzing, extended property tests, browser tests and the cross-OS matrix run on CI, not locally. The primary agent supplies those results.
-- Full support on macOS ARM64, Windows x64 and Linux x64. Never stub an OS with a log line.
+- Preserve full implementation on every required deployment target of the component, as defined by `docs/architecture.md` and its independently reviewed specification; never stub a required target with a log line. Build/test-only hosts are not deployment targets. This distinction never narrows full blueprint feature support for macOS ARM64, Windows x64 and Linux x64 endpoints at v1.0.0, except the two capabilities `docs/platform-support.md` schedules for v2.0.0.
 - No new dependency without a row in `docs/licensing.md`. GPL code is never linked.
 - Sensitive content never leaves the endpoint except as the redacted snippet a policy allows. Never log secrets, keys or raw content.
 - Never run any command that changes Git state. Leave Git operations to the primary agent.
