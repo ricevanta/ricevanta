@@ -419,7 +419,7 @@
     {
       "check": "self_sample_agreement",
       "phase": "idle",
-      "observed": 100000,
+      "observed": 0,
       "limit": 4194304,
       "baseline": null,
       "outcome": "pass"
@@ -427,7 +427,7 @@
     {
       "check": "self_sample_agreement",
       "phase": "load",
-      "observed": 100000,
+      "observed": 0,
       "limit": 4194304,
       "baseline": null,
       "outcome": "pass"
@@ -460,7 +460,7 @@
       "check": "regression_footprint_p95",
       "phase": "idle",
       "observed": 9500000,
-      "limit": 11440000,
+      "limit": 11497152,
       "baseline": 9400000,
       "outcome": "pass"
     },

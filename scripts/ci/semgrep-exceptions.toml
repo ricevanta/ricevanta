@@ -13,6 +13,6 @@ ecosystem = "npm"
 path = "console/pnpm-lock.yaml"
 line = 870
 consoleFiles = 117
-consoleSha256 = "c4dc4d18e4a167890a3486abec40a543a0df4cada27f5a350317b5c23af7dbf8"
+consoleSha256 = "72a9d16e71a9f481a6a3e0aabebb6ed74c7fb989cc059bc488d5994a5426369b"
 rationale = "CVE-2026-93687 receives only fixed repository-controlled locale build patterns through the reviewed development-only Intlify path. No untrusted pattern input or runtime use is accepted."
 provenance = "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm; console/security/osv-exceptions.json; docs/specs/console-foundation.md#dependency-audit-exceptions; docs/specs/ci-security-scanning.md#exact-build-only-sca-exception. Remove on disappearance, boundary change or the console authority's fixed-release removal condition; refreshed pins require independent review."

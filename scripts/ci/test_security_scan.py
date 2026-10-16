@@ -285,7 +285,7 @@ class SemgrepExceptionTests(unittest.TestCase):
         self.entry=dict(advisoryId='CVE-2026-93687',osvAdvisoryId='GHSA-vfj7-8cjw-p6xm',product='sca',severity='ERROR',
             rule='ssc-dc89f360-8dea-4ff2-92c4-e67670eb22ef',package='braces',packageVersion='3.0.3',ecosystem='npm',
             path='console/pnpm-lock.yaml',line=870,consoleFiles=117,
-            consoleSha256='c4dc4d18e4a167890a3486abec40a543a0df4cada27f5a350317b5c23af7dbf8',
+            consoleSha256='72a9d16e71a9f481a6a3e0aabebb6ed74c7fb989cc059bc488d5994a5426369b',
             rationale='CVE-2026-93687 consumes only reviewed repository build patterns.',
             provenance='console/security/osv-exceptions.json; docs/specs/console-foundation.md')
         self.document=dict(version=1,scanner='1.178.0',exception=[self.entry])
@@ -420,6 +420,11 @@ class SemgrepExceptionTests(unittest.TestCase):
     def report_fixture(self):
         fixture=SemgrepReportTests();fixture.setUp()
         fixture.hashes.update(self.hashes)
+        import shutil
+        for path in fixture.empty_paths:
+            target=self.source/path;target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(inventory.ROOT/path,target)
+        fixture.source=self.source
         fixture.summary['rules']={'synthetic-rule':'sast',self.entry['rule']:'sca'}
         fixture.report['results']=[self.finding]
         return fixture
@@ -443,7 +448,7 @@ class SemgrepExceptionTests(unittest.TestCase):
         with self.assertRaises(ValueError):scan.semgrep_evidence(fixture.report,fixture.summary,fixture.sha,fixture.invocation,
             fixture.hashes,exceptions=[self.entry])
         fixture.report['results']=[]
-        no_exception=scan.semgrep_evidence(fixture.report,fixture.summary,fixture.sha,fixture.invocation,fixture.hashes)
+        no_exception=scan.semgrep_evidence(fixture.report,fixture.summary,fixture.sha,fixture.invocation,fixture.hashes,source=fixture.source)
         self.assertEqual(no_exception['findings'],[]);self.assertNotIn('findingCounts',no_exception)
         with self.assertRaises(ValueError):verify()
 
@@ -478,6 +483,7 @@ class SemgrepExceptionTests(unittest.TestCase):
         admission_dir=self.root/'security-semgrep-admission';admission_dir.mkdir()
         self.source.rename(admission_dir/'source');self.source=admission_dir/'source'
         scan.write_json(admission_dir/'admission.json',dict(route=value,tools=lock,sourceHashes=fixture.hashes,
+            controls={'emptyManifests':synthetic_empty_qualification(lock,fixture.hashes)},
             consoleModes=self.modes,overlay={scan.AUXILIARY_PATH:scan.AUXILIARY_SHA256},pro=dict(version='1.178.0')))
         (self.source/scan.AUXILIARY_PATH).write_bytes(scan.AUXILIARY_BYTES)
         scan.write_json(output/'context.json',dict(invocation=fixture.invocation))
@@ -502,7 +508,8 @@ class SemgrepExceptionTests(unittest.TestCase):
         self.source.rename(admission_dir/'source');self.source=admission_dir/'source'
         (self.source/scan.AUXILIARY_PATH).write_bytes(scan.AUXILIARY_BYTES)
         lock=scan.load_lock(inventory.ROOT);value={'testedSha':fixture.sha}
-        record=dict(route=value,tools=lock,sourceHashes=fixture.hashes,consoleModes=self.modes,
+        record=dict(route=value,tools=lock,sourceHashes=fixture.hashes,
+            controls={'emptyManifests':synthetic_empty_qualification(lock,fixture.hashes)},consoleModes=self.modes,
             overlay={scan.AUXILIARY_PATH:scan.AUXILIARY_SHA256},pro=dict(version='1.178.0'))
         scan.write_json(admission_dir/'admission.json',record)
         path=self.source/'console/vite.config.ts';original=path.read_bytes()
@@ -747,7 +754,7 @@ class ObserverTests(unittest.TestCase):
             path=Path(temp)/'observer.json';observer.publish_summary(summary,path)
             self.assertLess(path.stat().st_size,1000)
             admitted=scan.read_private(path,4_000_000)
-            result=scan.semgrep_evidence(report.report,admitted,report.sha,report.invocation,report.hashes)
+            result=scan.semgrep_evidence(report.report,admitted,report.sha,report.invocation,report.hashes,source=report.source)
         self.assertEqual(result['configuredCodeRules'],1)
         self.assertEqual(result['configuredSupplyChainRules'],8192)
         self.assertEqual(result['codePairs'],1);self.assertEqual(result['dependencies'],{p:1 for p in report.paths})
@@ -959,11 +966,18 @@ class SemgrepReportTests(unittest.TestCase):
             'resolved_stats':{'dependency_count':1,'resolution_method':'LockfileParsing','ecosystem':'Go'}} for p in self.paths])
         self.hashes={p:'b'*64 for p in self.paths+['server/a.go']}
         self.report['subprojects'][-1]['resolved_stats']['ecosystem']='pypi'
+        import hashlib
+        self.source=inventory.ROOT
+        self.empty_paths=['scripts/ci/gotestdecls/go.mod','scripts/ci/fixtures/selected/tiny-go/go.mod']
+        for path in self.empty_paths:
+            self.hashes[path]=hashlib.sha256((self.source/path).read_bytes()).hexdigest()
+            self.report['subprojects'].append(dict(dependency_sources=[path],resolved=True,
+                resolved_stats=dict(dependency_count=0,resolution_method='LockfileParsing',ecosystem='gomod')))
 
     def verify(self):
         import security_scan as scan
         return scan.semgrep_evidence(self.report,self.summary,self.sha,self.invocation,self.hashes,
-                                    auxiliary=getattr(self,'auxiliary',frozenset()))
+                                    auxiliary=getattr(self,'auxiliary',frozenset()),source=self.source)
 
     def test_synthetic_contract_positive_no_claim_of_live_upload(self):
         result=self.verify()
@@ -972,14 +986,14 @@ class SemgrepReportTests(unittest.TestCase):
 
     def test_branding_dependency_input_is_required_and_must_resolve(self):
         import security_scan as scan
-        self.assertEqual(scan.expected_dependencies(self.hashes),sorted(self.paths))
+        self.assertEqual(scan.expected_dependencies(self.hashes),sorted(self.paths+self.empty_paths))
         del self.summary['dependencies']['branding/requirements-build.txt']
         with self.assertRaises(ValueError):self.verify()
         self.summary['dependencies']['branding/requirements-build.txt']=1
-        self.report['subprojects'][-1]['resolved']=False
+        self.report['subprojects'][4]['resolved']=False
         with self.assertRaises(ValueError):self.verify()
-        self.report['subprojects'][-1]['resolved']=True
-        self.report['subprojects'][-1]['resolved_stats']['dependency_count']=0
+        self.report['subprojects'][4]['resolved']=True
+        self.report['subprojects'][4]['resolved_stats']['dependency_count']=0
         with self.assertRaises(ValueError):self.verify()
 
     def test_target_membership_failures_keep_gate_and_report_only_closed_counts(self):
@@ -1209,8 +1223,11 @@ class AuxiliaryInputTests(unittest.TestCase):
                 admission_dir=Path(temp)/'security-semgrep-admission';admission_dir.mkdir();source=self.source(admission_dir)
                 import hashlib
                 fixture.hashes['scripts/ci/semgrep-exceptions.toml']=hashlib.sha256((source/'scripts/ci/semgrep-exceptions.toml').read_bytes()).hexdigest()
+                for path in fixture.empty_paths:
+                    target=source/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes((inventory.ROOT/path).read_bytes())
                 output=Path(temp)/'scan';output.mkdir()
                 scan.write_json(admission_dir/'admission.json',dict(route=value,tools=lock,sourceHashes=fixture.hashes,
+            controls={'emptyManifests':synthetic_empty_qualification(lock,fixture.hashes)},
                     overlay={self.path:self.digest},pro=dict(version='1.178.0')))
                 scan.write_json(output/'context.json',dict(invocation=fixture.invocation))
                 scan.write_json(output/'complete.json',dict(unit='semgrep',route=value,tools=lock,result={}))
@@ -1235,7 +1252,14 @@ class AuxiliaryInputTests(unittest.TestCase):
                 output=Path(temp)/'admission';output.mkdir()
                 hashes={'server/a.go':'b'*64}
                 if case=='collision':hashes[self.path]='b'*64
-                def snapshot(root,value,destination,**kwargs):destination.mkdir();return dict(hashes)
+                def snapshot(root,value,destination,**kwargs):
+                    destination.mkdir()
+                    import hashlib
+                    for path in ('scripts/ci/gotestdecls/go.mod','scripts/ci/fixtures/selected/tiny-go/go.mod'):
+                        target=destination/path;target.parent.mkdir(parents=True,exist_ok=True)
+                        payload=(inventory.ROOT/path).read_bytes();target.write_bytes(payload)
+                        hashes[path]=hashlib.sha256(payload).hexdigest()
+                    return dict(hashes)
                 def controls(*args):
                     if case=='mutated-during-admission':(output/'source'/self.path).write_bytes(self.payload[:-1]+b'x')
                     return {}
@@ -1243,7 +1267,8 @@ class AuxiliaryInputTests(unittest.TestCase):
                 with patch.object(scan,'snapshot',side_effect=snapshot),patch.object(scan,'admitted_image',return_value='admitted'), \
                      patch.object(scan,'load_semgrep_exceptions',return_value=[]), \
                      patch.object(scan,'container_command',return_value=['admitted']),patch.object(scan,'execute'), \
-                     patch.object(scan,'semgrep_controls',side_effect=controls),patch.object(scan,'runner_inputs',return_value={}):
+                     patch.object(scan,'semgrep_controls',side_effect=controls),patch.object(scan,'runner_inputs',return_value={}), \
+                     patch.object(scan,'empty_parser_controls',return_value={}):
                     if case!='valid':
                         with self.subTest(case=case),self.assertRaises(ValueError):scan.admit_semgrep(inventory.ROOT,{},output,lock)
                         self.assertFalse((output/'admission.json').exists())
@@ -1267,10 +1292,13 @@ class AuxiliaryInputTests(unittest.TestCase):
             payload=b'synthetic source'
             fixture.hashes={path:hashlib.sha256(payload).hexdigest() for path in fixture.hashes}
             for path in fixture.hashes:
-                file=source/path;file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(payload)
+                file=source/path;file.parent.mkdir(parents=True,exist_ok=True)
+                contents=(inventory.ROOT/path).read_bytes() if path in fixture.empty_paths else payload
+                file.write_bytes(contents);fixture.hashes[path]=hashlib.sha256(contents).hexdigest()
             fixture.hashes['scripts/ci/semgrep-exceptions.toml']=hashlib.sha256((source/'scripts/ci/semgrep-exceptions.toml').read_bytes()).hexdigest()
             output=Path(temp)/'scan';output.mkdir()
             scan.write_json(admission_dir/'admission.json',dict(route=value,tools=lock,sourceHashes=fixture.hashes,
+            controls={'emptyManifests':synthetic_empty_qualification(lock,fixture.hashes)},
                 overlay={self.path:self.digest},pro=dict(version='1.178.0')))
             def native(*args,**kwargs):
                 scan.write_json(output/'observer.json',fixture.summary);scan.write_json(output/'semgrep.json',fixture.report)
@@ -1754,6 +1782,250 @@ class NegativeControlTests(unittest.TestCase):
         import security_scan as scan
         report=ColdControlTests().report(['control.go','control.py','control.ts','negative.ts'])
         with self.assertRaises(ValueError):scan.verify_code_controls(report)
+
+
+
+
+class EmptyManifestTests(unittest.TestCase):
+    """Constructed native records exercise reconciliation, never image qualification."""
+    profiles = {
+        'scripts/ci/gotestdecls/go.mod': b'module ricevanta.invalid/gotestdecls\n\ngo 1.27.1\n',
+        'scripts/ci/fixtures/selected/tiny-go/go.mod': b'module example.com/tiny\n\ngo 1.22\n',
+    }
+
+    def setUp(self):
+        import tempfile, hashlib
+        from pathlib import Path
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.source=Path(self.temp.name);self.hashes={}
+        for path,payload in self.profiles.items():
+            target=self.source/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(payload)
+            self.hashes[path]=hashlib.sha256(payload).hexdigest()
+
+    def verify(self):
+        import security_scan as scan
+        return scan.verify_empty_manifests(self.source,self.hashes)
+
+    def test_exact_profiles_and_permitted_blank_lines(self):
+        import hashlib
+        for path,payload in self.profiles.items():
+            self.assertEqual(self.verify()[path],hashlib.sha256(payload).hexdigest())
+            payload=payload+b'\n'*(4096-len(payload));(self.source/path).write_bytes(payload)
+            self.hashes[path]=hashlib.sha256(payload).hexdigest()
+        self.assertEqual(set(self.verify()),set(self.profiles))
+
+    def test_full_consumption_and_size_reject_every_extra_directive(self):
+        import hashlib
+        for path,payload in self.profiles.items():
+            bad=[payload[:-1],payload.replace(b'\n',b'\r\n'),payload+b'\0\n',payload+b'\xff\n',
+                 payload+b'// comment\n',payload.replace(b'module ',b'module  '),payload.replace(b'go ',b'go\t'),
+                 payload.replace(b'module ',b'module wrong/'),payload.replace(b'go ',b'go 0'),
+                 payload.split(b'\n',1)[1],payload.split(b'\ngo ')[0]+b'\n',payload+payload,
+                 payload+b'require example.com/added v1.0.0\n',payload.replace(b'\n',b';',1),
+                 payload+b'\n'*4096,payload.replace(b'go ',b'go (')]
+            bad += [payload+directive+b' invalid\n' for directive in
+                    (b'require',b'replace',b'exclude',b'tool',b'toolchain',b'retract',b'godebug',b'unknown')]
+            for value in bad:
+                with self.subTest(path=path,value=value[:80]):
+                    (self.source/path).write_bytes(value);self.hashes[path]=hashlib.sha256(value).hexdigest()
+                    with self.assertRaises(ValueError):self.verify()
+            (self.source/path).write_bytes(payload);self.hashes[path]=hashlib.sha256(payload).hexdigest()
+
+    def test_inventory_digest_links_and_sibling_sum_fail(self):
+        import os
+        for path in self.profiles:
+            target=self.source/path;payload=target.read_bytes();digest=self.hashes[path]
+            del self.hashes[path]
+            with self.assertRaises(ValueError):self.verify()
+            self.hashes[path]='0'*64
+            with self.assertRaises(ValueError):self.verify()
+            self.hashes[path]=digest
+            sibling=path[:-3]+'sum';self.hashes[sibling]='0'*64
+            with self.assertRaises(ValueError):self.verify()
+            del self.hashes[sibling]
+            self.hashes['./'+path]=digest
+            with self.assertRaises(ValueError):self.verify()
+            del self.hashes['./'+path]
+            target.unlink();target.symlink_to(inventory.ROOT/path)
+            with self.assertRaises(ValueError):self.verify()
+            target.unlink();target.write_bytes(payload)
+            linked=target.with_name('linked');os.link(target,linked)
+            with self.assertRaises(ValueError):self.verify()
+            linked.unlink()
+            parent=target.parent;renamed=parent.with_name(parent.name+'-real');parent.rename(renamed);parent.symlink_to(renamed)
+            with self.assertRaises(ValueError):self.verify()
+            parent.unlink();renamed.rename(parent)
+
+    def test_synthetic_seven_input_union_preserves_native_omission_and_zero(self):
+        from copy import deepcopy
+        import security_scan as scan
+        fixture=SemgrepReportTests();fixture.setUp()
+        for explicit in (False,True):
+            for path in self.profiles:
+                if explicit:fixture.summary['dependencies'][path]=0
+            original=deepcopy(fixture.summary['dependencies'])
+            result=fixture.verify()
+            self.assertEqual(result['dependencies'],original)
+            self.assertEqual(result['emptyInputs'],{p:fixture.hashes[p] for p in self.profiles})
+            self.assertEqual(fixture.summary['dependencies'],original)
+            for path in self.profiles:
+                native=result['emptyNativeInputs'][path]
+                self.assertEqual(native,dict(resolved=True,resolutionMethod='LockfileParsing',ecosystem='gomod',
+                    dependencyCount=0,mapPresent=explicit,**({'mapCount':0} if explicit else {})))
+
+    def test_synthetic_empty_native_record_refusals(self):
+        from copy import deepcopy
+        fixture=SemgrepReportTests();fixture.setUp()
+        for path in self.profiles:
+            row=next(r for r in fixture.report['subprojects'] if r['dependency_sources']==[path])
+            original=deepcopy(row)
+            for field,values in (('dependency_count',[True,False,'0',1,-1,None]),
+                                 ('ecosystem',['Go','pypi',None]),('resolution_method',['DynamicResolution',None])):
+                for value in values:
+                    row['resolved_stats'][field]=value
+                    with self.subTest(path=path,field=field,value=value),self.assertRaises(ValueError):fixture.verify()
+                row.clear();row.update(deepcopy(original))
+            for field,value in (('resolved',False),('resolved',1),('unresolved_reason','error'),
+                                ('dependency_sources',[path,'server/go.mod']),('dependency_sources',['./'+path]),
+                                ('dependency_sources',[path,path])):
+                row[field]=value
+                with self.subTest(path=path,field=field),self.assertRaises(ValueError):fixture.verify()
+                row.clear();row.update(deepcopy(original))
+            for count in (True,'0',1,-1,None):
+                fixture.summary['dependencies'][path]=count
+                with self.subTest(path=path,count=count),self.assertRaises(ValueError):fixture.verify()
+            del fixture.summary['dependencies'][path]
+            fixture.report['subprojects'].append(deepcopy(row))
+            with self.assertRaises(ValueError):fixture.verify()
+            fixture.report['subprojects'].pop();fixture.report['subprojects'].remove(row)
+            with self.assertRaises(ValueError):fixture.verify()
+            fixture.report['subprojects'].append(row)
+
+    def test_each_populated_input_still_requires_positive_matching_counts(self):
+        fixture=SemgrepReportTests();fixture.setUp()
+        for path in fixture.paths:
+            for count in (None,0,True,'1',2):
+                if count is None:del fixture.summary['dependencies'][path]
+                else:fixture.summary['dependencies'][path]=count
+                with self.subTest(path=path,count=count),self.assertRaises(ValueError):fixture.verify()
+                fixture.summary['dependencies'][path]=1
+        fixture.hashes['other/go.mod']='0'*64
+        with self.assertRaises(ValueError):fixture.verify()
+
+class EmptyParserQualificationTests(unittest.TestCase):
+    def test_synthetic_qualification_is_image_and_full_input_bound(self):
+        from copy import deepcopy
+        import security_scan as scan
+        hashes={p:__import__('hashlib').sha256((inventory.ROOT/p).read_bytes()).hexdigest() for p in scan.EMPTY_MANIFESTS}
+        lock=scan.load_lock(inventory.ROOT)
+        evidence=synthetic_empty_qualification(lock,hashes)
+        scan.verify_empty_qualification(evidence,lock,hashes,inventory.ROOT)
+        for field,value in (('image','sha256:'+'0'*64),('config','sha256:'+'0'*64),('version','1.0'),('inputs',{})):
+            bad=deepcopy(evidence);bad[field]=value
+            with self.subTest(field=field),self.assertRaises(ValueError):scan.verify_empty_qualification(bad,lock,hashes,inventory.ROOT)
+        for path in hashes:
+            for field,value in (('sha256','0'*64),('dependencies',1),('errors',True),('errors',1),
+                                ('populated',{}),('malformed',{})):
+                bad=deepcopy(evidence);bad['inputs'][path][field]=value
+                with self.subTest(path=path,field=field),self.assertRaises(ValueError):scan.verify_empty_qualification(bad,lock,hashes,inventory.ROOT)
+            for case,field,value in (('populated','errors',1),('populated','dependencies',0),
+                                    ('populated','package','wrong'),('populated','version','1.2.4'),
+                                    ('populated','ecosystem','Go'),('malformed','errors',0),('malformed','errors',True)):
+                bad=deepcopy(evidence);bad['inputs'][path][case][field]=value
+                with self.subTest(case=case,field=field),self.assertRaises(ValueError):scan.verify_empty_qualification(bad,lock,hashes,inventory.ROOT)
+
+    def test_isolated_command_uses_unmodified_parser_without_token_network_or_observer(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import security_scan as scan
+        lock=scan.load_lock(inventory.ROOT)
+        hashes={p:__import__('hashlib').sha256((inventory.ROOT/p).read_bytes()).hexdigest() for p in scan.EMPTY_MANIFESTS}
+        with tempfile.TemporaryDirectory() as temp:
+            output=Path(temp)
+            def execute(command,env,**kwargs):
+                self.assertIn('--network',command);self.assertEqual(command[command.index('--network')+1],'none')
+                self.assertIn('--read-only',command);self.assertNotIn('--scan',command)
+                self.assertNotIn('/control/semgrep_observer.py',command)
+                self.assertEqual(command[-1],'/control/fixtures/security/qualify_empty_manifests.py')
+                self.assertEqual(set(env),{'PATH','HOME'})
+                report=synthetic_empty_qualification(lock,hashes)
+                scan.write_json(output/'empty-parser.json',dict(version=report['version'],inputs=report['inputs']))
+            with patch.object(scan,'execute',side_effect=execute):
+                result=scan.empty_parser_controls('admitted-image',inventory.ROOT,output,inventory.ROOT,hashes,lock)
+            self.assertEqual(result,synthetic_empty_qualification(lock,hashes))
+
+
+def synthetic_empty_qualification(lock,hashes):
+    """Manufactured unit evidence only. Never native parser qualification."""
+    import hashlib
+    import security_scan as scan
+    rows={}
+    for path in scan.EMPTY_MANIFESTS:
+        payload=(inventory.ROOT/path).read_bytes()
+        rows[path]=dict(sha256=hashes[path],dependencies=0,errors=0,
+            populated=dict(sha256=hashlib.sha256(payload+b'require example.com/semgrep-control v1.2.3\n').hexdigest(),
+                dependencies=1,errors=0,package='example.com/semgrep-control',version='1.2.3',ecosystem='gomod'),
+            malformed=dict(sha256=hashlib.sha256(payload+b'not_a_go_directive invalid\n').hexdigest(),dependencies=0,errors=1))
+    return dict(version='1.178.0',image=lock['semgrep']['manifest'],config=lock['semgrep']['config'],inputs=rows)
+
+
+class EmptyManifestLifecycleTests(unittest.TestCase):
+    def test_snapshot_refuses_nonblob_mode_linked_file_and_linked_parent(self):
+        import os
+        from pathlib import Path
+        import security_scan as scan
+        fixture=EmptyManifestTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        for path,payload in fixture.profiles.items():
+            for mode in ('120000','160000','100600'):
+                with self.subTest(mode=mode),self.assertRaises(ValueError):scan.validate_source_entry(fixture.source,mode,path,payload)
+            target=fixture.source/path;linked=target.with_name('linked');os.link(target,linked)
+            with self.assertRaises(ValueError):scan.validate_source_entry(fixture.source,'100644',path,payload)
+            linked.unlink()
+            parent=target.parent;renamed=parent.with_name(parent.name+'-real');parent.rename(renamed);parent.symlink_to(renamed)
+            with self.assertRaises(ValueError):scan.validate_source_entry(fixture.source,'100644',path,payload)
+            parent.unlink();renamed.rename(parent)
+
+    def test_independent_profile_repeats_at_scan_and_completion_and_refuses_mutation(self):
+        import hashlib,tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import security_scan as scan
+        fixture=SemgrepReportTests();fixture.setUp();lock=scan.load_lock(inventory.ROOT)
+        value=dict(testedSha=fixture.sha,runId='1',runAttempt='1')
+        with tempfile.TemporaryDirectory() as temp:
+            admission_dir=Path(temp)/'security-semgrep-admission';source=admission_dir/'source';source.mkdir(parents=True)
+            for path in fixture.hashes:
+                payload=(inventory.ROOT/path).read_bytes() if path in fixture.empty_paths else b'synthetic source'
+                target=source/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(payload)
+                fixture.hashes[path]=hashlib.sha256(payload).hexdigest()
+            table=source/'scripts/ci/semgrep-exceptions.toml';table.write_bytes(b'version=1\nscanner="1.178.0"\nexception=[]\n')
+            fixture.hashes['scripts/ci/semgrep-exceptions.toml']=hashlib.sha256(table.read_bytes()).hexdigest()
+            (source/scan.AUXILIARY_PATH).write_bytes(scan.AUXILIARY_BYTES)
+            admission=dict(route=value,tools=lock,sourceHashes=fixture.hashes,pro=dict(version='1.178.0'),
+                overlay={scan.AUXILIARY_PATH:scan.AUXILIARY_SHA256},
+                controls={'emptyManifests':synthetic_empty_qualification(lock,fixture.hashes)})
+            scan.write_json(admission_dir/'admission.json',admission)
+            output=Path(temp)/'scan';output.mkdir()
+            def native(*args,**kwargs):
+                scan.write_json(output/'observer.json',fixture.summary);scan.write_json(output/'semgrep.json',fixture.report)
+            with patch.object(scan,'admitted_image',return_value='admitted'),patch.object(scan,'container_command',return_value=['admitted']), \
+                 patch.object(scan,'execute',side_effect=native),patch.object(scan.os,'urandom',return_value=bytes.fromhex(fixture.invocation)), \
+                 patch.object(scan,'verify_empty_manifests',wraps=scan.verify_empty_manifests) as profile:
+                result=scan.run_semgrep(inventory.ROOT,value,None,output,lock,'synthetic-token')
+                self.assertGreater(profile.call_count,0)
+            scan.write_json(output/'complete.json',dict(unit='semgrep',route=value,tools=lock,result=result))
+            with patch.object(scan,'verify_empty_manifests',wraps=scan.verify_empty_manifests) as profile:
+                self.assertEqual(scan.verified_completion(inventory.ROOT,value,output,'semgrep',lock),result)
+                self.assertGreater(profile.call_count,0)
+            for path in fixture.empty_paths:
+                target=source/path;original=target.read_bytes();target.write_bytes(original+b'require example.com/added v1.0.0\n')
+                # Isolate the independent proof from the ordinary snapshot digest gate.
+                with patch.object(scan,'verify_snapshot'),self.assertRaises(ValueError):
+                    scan.verified_completion(inventory.ROOT,value,output,'semgrep',lock)
+                target.write_bytes(original)
+            del admission['controls']['emptyManifests'];scan.write_json(admission_dir/'admission.json',admission)
+            with self.assertRaises(ValueError):scan.verified_completion(inventory.ROOT,value,output,'semgrep',lock)
 
 
 if __name__ == '__main__': unittest.main()

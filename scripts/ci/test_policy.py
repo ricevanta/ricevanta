@@ -14,6 +14,20 @@ import python_env
 ROOT = Path(__file__).resolve().parents[2]
 
 class EnvironmentAdmissionTests(unittest.TestCase):
+    def test_composed_proof_steps_use_the_admission_shell(self):
+        selected = {'agent': ('Extended JSON property test', 'Root Linux protection tests', 'Root macOS protection tests'),
+                    'server': ('Test key-file group rules as root', 'Ingest cost model', 'Verify ingest measurement log')}
+        for workflow, names in selected.items():
+            data = yaml.load((ROOT / f'.github/workflows/{workflow}.yml').read_text(), Loader=yaml.BaseLoader)
+            for name in names:
+                with self.subTest(workflow=workflow, step=name):
+                    step = next(s for s in data['jobs']['validate']['steps'] if s.get('name') == name)
+                    self.assertEqual(step.get('shell'), python_env.ADMISSION_SHELL)
+                    changed = deepcopy(data)
+                    next(s for s in changed['jobs']['validate']['steps'] if s.get('name') == name)['shell'] = 'bash'
+                    self.assertTrue(any('requires the admission shell' in error
+                                        for error in check_policy.environment_admission_errors(changed, workflow)))
+
     def test_every_authoritative_job_and_copilot_rejects_startup_and_path_substitution(self):
         names = ('PYTHONPATH', 'PythonStartup', 'BASH_ENV', 'ENV', 'BASH_FUNC_go%%', 'LD_PRELOAD', 'DYLD_LIBRARY_PATH',
                  'PATH', 'GOCACHEPROG', 'gocacheprog')
@@ -132,6 +146,24 @@ class PolicyTests(unittest.TestCase):
                     path.write_text(baseline)
 
     def test_current_policy(self): self.assertEqual(check_policy.check(ROOT), [])
+
+    def test_native_and_ingest_proof_expectations_pin_the_admission_shell(self):
+        selected = (('agent', ('Root Linux protection tests', 'Root macOS protection tests'), check_policy.agent_native_errors),
+                    ('server', ('Ingest cost model', 'Verify ingest measurement log'),
+                     lambda job: check_policy.ingest_evidence_errors(job, self.root)))
+        for workflow, names, errors in selected:
+            data = yaml.load((self.root / f'.github/workflows/{workflow}.yml').read_text(), Loader=yaml.BaseLoader)
+            job = data['jobs']['validate']
+            for step in job['steps']:
+                if step.get('name') in names: step['shell'] = python_env.ADMISSION_SHELL
+            with self.subTest(workflow=workflow): self.assertEqual(errors(job), [])
+            for name in names:
+                for shell in ('bash', None, 'bash --noprofile --norc -e -o pipefail {0}'):
+                    changed = deepcopy(job)
+                    step = next(s for s in changed['steps'] if s.get('name') == name)
+                    if shell is None: step.pop('shell')
+                    else: step['shell'] = shell
+                    with self.subTest(workflow=workflow, step=name, shell=shell): self.assertTrue(errors(changed))
 
     def test_keyfile_root_proof_cannot_be_detached_or_deprivileged(self):
         path = self.root / 'scripts/ci/targets.toml'
