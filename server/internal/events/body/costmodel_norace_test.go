@@ -299,6 +299,9 @@ func readUint64Metric(name string) uint64 {
 // usedMemory is the quantity debug.SetMemoryLimit bounds: total mapped
 // runtime memory minus memory released to the operating system.
 func usedMemory() uint64 {
+	if ingestCostDiagnostics != nil {
+		return ingestCostDiagnostics.capture("cost-sample", "", -1)
+	}
 	sample := []metrics.Sample{{Name: "/memory/classes/total:bytes"}, {Name: "/memory/classes/heap/released:bytes"}}
 	metrics.Read(sample)
 	return sample[0].Value.Uint64() - sample[1].Value.Uint64()
@@ -391,12 +394,15 @@ func costChild(t *testing.T) {
 		repeats = 32
 	}
 	d := costDescriptor(lines)
+	costDiagnosePhase("before-baseline-gc", 0)
 	runtime.GC()
+	costDiagnosePhase("after-baseline-gc", 0)
 	baseline := usedMemory()
 	limit := int64(baseline) + int64(n)*weight
 	if mode == "limited" {
 		debug.SetMemoryLimit(limit)
 	}
+	costDiagnosePhase("after-limit", 0)
 	fmt.Printf("COST_LIMIT case=%s mode=%s baseline=%d limit=%d\n", key, mode, baseline, limit)
 	allocs0 := readUint64Metric("/gc/heap/allocs:objects")
 	gc0 := readUint64Metric("/gc/cycles/total:gc-cycles")
@@ -431,14 +437,16 @@ func costChild(t *testing.T) {
 	results := make([][]Line, n)
 	frames := make([]Frame, n)
 	errs := make([]error, n)
-	for range repeats {
+	for iteration := range repeats {
 		cpu0 := processCPU()
 		var wg sync.WaitGroup
 		for i := range n {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				costDiagnosePhase("before-readframe", iteration+1)
 				frames[i], errs[i] = ReadFrame(&io.LimitedReader{R: bytes.NewReader(frame), N: compressedBudget})
+				costDiagnosePhase("after-readframe", iteration+1)
 			}()
 		}
 		wg.Wait()
@@ -478,7 +486,9 @@ func costChild(t *testing.T) {
 		if repeats > 1 {
 			clear(frames)
 			clear(results)
+			costDiagnosePhase("before-repeat-gc", iteration+1)
 			runtime.GC()
+			costDiagnosePhase("after-repeat-gc", iteration+1)
 		}
 		decodeCPU += processCPU() - cpu0
 	}

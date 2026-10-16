@@ -1,0 +1,63 @@
+name: Diagnose ingest memory (non-authoritative)
+'on':
+  push:
+    branches:
+    - wip/ingest-cost-diagnose
+permissions:
+  contents: read
+jobs:
+  diagnose-ingest-cost-memory:
+    name: Diagnose blocks-4m-over memory
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: ${{ github.sha }}
+    - name: Bootstrap admitted toolchains
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+    - name: Create unused Go build and module caches
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh-diagnose" --env-out "$GITHUB_ENV"
+    - name: Download and verify module sources
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
+    - name: Run one bounded diagnostic child
+      working-directory: server
+      env:
+        RICEVANTA_INGEST_DIAGNOSE: '1'
+        GOGC: '100'
+        GOMEMLIMIT: 'off'
+      run: |
+        mkdir -p "$RUNNER_TEMP/diagnose-ingest"
+        test "$(go version)" = 'go version go1.27.1 linux/amd64'
+        go version | tee "$RUNNER_TEMP/diagnose-ingest/host.log"
+        uname -srm | tee -a "$RUNNER_TEMP/diagnose-ingest/host.log"
+        getconf PAGESIZE | tee -a "$RUNNER_TEMP/diagnose-ingest/host.log"
+        go test -count=1 -timeout=15m ./internal/events/body -run '^TestIngestCostDiagnose$' -v 2>&1 | tee "$RUNNER_TEMP/diagnose-ingest/blocks-4m-over.log"
+    - name: Verify diagnostic log exists
+      if: always()
+      run: test -s "$RUNNER_TEMP/diagnose-ingest/blocks-4m-over.log"
+    - name: Retain diagnostic output
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: diagnose-ingest-memory-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/diagnose-ingest/
+        retention-days: 30
+        if-no-files-found: error
