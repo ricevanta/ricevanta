@@ -322,3 +322,126 @@ jobs:
         path: ${{ runner.temp }}/ci-proof/receipt.json
         retention-days: 30
         if-no-files-found: error
+  footprint-unit:
+    name: footprint unit (${{ matrix.os }})
+    if: ${{ contains(fromJSON(inputs.route).groups, 'agent') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-24.04
+          platform: linux-x64
+        - os: windows-2025
+          platform: windows-x64
+        - os: macos-15
+          platform: macos-arm64
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: 'false'
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - name: Bootstrap admitted toolchains
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: ${{ fromJSON('{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}')[matrix.os]
+          }}
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS"
+        --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: ${{ fromJSON('{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}')[matrix.os]
+          }}
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM"
+        --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+    - name: Create validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -I -S -B scripts/ci/python_env.py --check
+    - name: Assert native receipt host
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import os, platform, sys
+        sys.path.insert(0, 'scripts/ci')
+        from inventory import HOSTS
+        expected = HOSTS[os.environ['HOST_OS']]
+        actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]
+        arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+        assert actual + '-' + arch == expected, (actual, arch, expected)
+        PY
+    - name: Run footprint unit suite
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        FOOTPRINT_PLATFORM: ${{ matrix.platform }}
+      run: |
+        case "$FOOTPRINT_PLATFORM" in
+        linux-x64) python -B scripts/ci/run_selected.py --id footprint-unit-linux-x64 --evidence "$RUNNER_TEMP/evidence" ;;
+        windows-x64) python -B scripts/ci/run_selected.py --id footprint-unit-windows-x64 --evidence "$RUNNER_TEMP/evidence" ;;
+        macos-arm64) python -B scripts/ci/run_selected.py --id footprint-unit-macos-arm64 --evidence "$RUNNER_TEMP/evidence" ;;
+        esac
+    - name: Upload footprint unit diagnostics
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: footprint-unit-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}
+        path: ${{ runner.temp }}/evidence
+        retention-days: '30'
+        if-no-files-found: error
+    - name: Re-verify validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -I -S -B scripts/ci/python_env.py --check
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: footprint-unit
+        CHECKS: '["footprint-unit-${{ matrix.platform }}"]'
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: '30'
+        if-no-files-found: error

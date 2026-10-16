@@ -41,6 +41,27 @@ def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
                           benchmark={'discovery': run_selected.discovery_command(bench), 'command': run_selected.run_command(bench)},
                           summary={'package': run_selected.COST_PACKAGE, 'tests': ['TestDecodeCostModel'], 'measurements': 50, 'case_keys': sorted(target['case_keys']),
                                    'benchmark': {'package': run_selected.COST_PACKAGE, 'operations': 3, 'results': {'BenchmarkDecodeCost/a': {'operations': 3, 'ns_per_op': 10, 'bytes_per_op': 1, 'allocs_per_op': 1}}}})
+        if target['mode'] == 'python-unittest':
+            env = {'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
+            ids = run_selected.python_declarations(inventory.ROOT / 'tests', target)
+            discovery = [run_selected.python_header(target, env, 'discover'), {'event': 'inventory', 'ids': ids},
+                         {'event': 'totals', 'discovered': len(ids)}]
+            execution = [run_selected.python_header(target, env, 'run'), {'event': 'inventory', 'ids': ids}]
+            skipped = 0
+            for test in ids:
+                execution.append({'event': 'start', 'id': test})
+                allowance = run_selected.PYTHON_SKIPS.get(test)
+                if allowance and target['platform'] in allowance['hosts']:
+                    execution.append({'event': 'skip', 'id': test, 'reason': allowance['reason']}); skipped += 1
+                else: execution.append({'event': 'pass', 'id': test})
+            execution.append({'event': 'totals', 'discovered': len(ids), 'testsRun': len(ids), 'passed': len(ids) - skipped,
+                              'skipped': skipped, 'failed': 0, 'errors': 0})
+            for prefix, rows in (('discovery', discovery), ('execution', execution)):
+                (directory / (prefix + '.events.jsonl')).write_text(''.join(json.dumps(row) + '\n' for row in rows))
+                (directory / (prefix + '.status.json')).write_text('{"exit":0}\n')
+            record.update(mode='python-unittest', cwd='tests', discovery=run_selected.python_command(target, 'discover'),
+                          command=run_selected.python_command(target, 'run'),
+                          summary=run_selected.verify_python_events(target, inventory.ROOT / 'tests', directory, env, 0))
         (directory / 'verified.json').write_text(json.dumps(record))
     for check in checks:
         if check in selected:
@@ -117,6 +138,34 @@ class RequiredTests(unittest.TestCase):
                 elif mutation == 'check': design['checks'].remove('openapi-contracts')
                 else: design[mutation] = {'runId': '124', 'runAttempt': '2', 'testedSha': 'c' * 40}[mutation]
                 with self.assertRaises(ValueError): self.verify()
+
+    def test_footprint_receipts_require_native_proofs_and_bound_events(self):
+        import run_selected
+        self.route['groups'] = sorted([*self.route['groups'], 'agent'])
+        self.route['units'] = inventory.units(self.route['groups'])
+        self.needs['agent'] = {'result': 'success'}
+        rows = [self.receipt(unit) for unit in self.route['units']]
+        required.verify(self.route, self.needs, rows)
+        for host in ('linux-x64', 'windows-x64', 'macos-arm64'):
+            unit = 'footprint-unit:' + host
+            check = 'footprint-unit-' + host
+            with self.subTest(host=host):
+                with self.assertRaises(ValueError): required.verify(self.route, self.needs, [r for r in rows if r['unit'] != unit])
+                directory = Path(self.evidence.name) / run_selected.evidence_name(check)
+                proof = directory / 'verified.json'
+                baseline = proof.read_text()
+                proof.unlink()
+                with self.assertRaises(ValueError): self.receipt(unit)
+                for key, value in (('GITHUB_RUN_ID', '124'), ('GITHUB_RUN_ATTEMPT', '2'), ('GITHUB_SHA', 'c' * 40)):
+                    record = json.loads(baseline); record[key] = value; proof.write_text(json.dumps(record))
+                    with self.assertRaises(ValueError): self.receipt(unit)
+                record = json.loads(baseline); record['summary']['passed'] += 1; proof.write_text(json.dumps(record))
+                with self.assertRaises(ValueError): self.receipt(unit)
+                proof.write_text(baseline)
+                events = directory / 'execution.events.jsonl'
+                saved = events.read_text(); events.unlink()
+                with self.assertRaises(ValueError): self.receipt(unit)
+                events.write_text(saved)
 
     def test_design_receipt_requires_release_contracts(self):
         self.assertIn('release-contracts', inventory.checks('design'))

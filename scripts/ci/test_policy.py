@@ -874,6 +874,38 @@ class PolicyTests(unittest.TestCase):
                 self.assertIn('.github/workflows/design.yml: validate: receipt checks mismatch', check_policy.check(self.root))
         path.write_text(baseline)
 
+    def test_footprint_job_and_selected_contracts(self):
+        data = yaml.load((ROOT / '.github/workflows/agent.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertIn('footprint-unit', data['jobs'])
+        self.assertEqual(check_policy.footprint_job_errors(data['jobs']['footprint-unit']), [])
+        self.assertEqual(check_policy.selected_errors(ROOT), [])
+        baseline = data['jobs']['footprint-unit']
+        for mutation in ('matrix', 'condition', 'step', 'receipt', 'admission', 'skip'):
+            with self.subTest(mutation=mutation):
+                job = deepcopy(baseline)
+                if mutation == 'matrix': job['strategy']['matrix']['include'].pop()
+                elif mutation == 'condition': job['if'] = 'always()'
+                elif mutation == 'step': job['steps'][7]['if'] = 'false'
+                elif mutation == 'receipt': next(s for s in job['steps'] if s.get('id') == 'proof')['env']['CHECKS'] = '[]'
+                elif mutation == 'admission': job['steps'].pop(5)
+                else: job['continue-on-error'] = 'true'
+                self.assertEqual(check_policy.footprint_job_errors(job), ['exact footprint-unit native job required'])
+                changed = deepcopy(data); changed['jobs']['footprint-unit'] = job
+                path = self.root / '.github/workflows/agent.yml'
+                path.write_text(yaml.safe_dump(changed, sort_keys=False))
+                self.assertIn('.github/workflows/agent.yml: exact footprint-unit native job required', check_policy.check(self.root))
+        shutil.copyfile(ROOT / '.github/workflows/agent.yml', self.root / '.github/workflows/agent.yml')
+        targets = self.root / 'scripts/ci/targets.toml'
+        baseline = targets.read_text()
+        for old, new in (('directory = "footprint"', 'directory = "other"'),
+                         ('test_samplers.py', 'test_subset.py'),
+                         ('native Windows delete-sharing and atomic replacement', 'any skip')):
+            with self.subTest(target=old):
+                self.assertIn(old, baseline)
+                targets.write_text(baseline.replace(old, new))
+                self.assertTrue(any('Python' in error or 'python' in error for error in check_policy.selected_errors(self.root)))
+        targets.write_text(baseline)
+
     def test_each_design_consumer_is_required(self):
         for command in check_policy.DESIGN_COMMANDS:
             with self.subTest(command=command):
