@@ -44,6 +44,30 @@ def observer_command_valid(root):
         return False
 
 DESIGN_COMMANDS = inventory.DESIGN_COMMANDS
+
+OPENAPI_CONTRACT_COMMAND = """python -B schemas/openapi/v1/validate.py
+python -B - <<'PY'
+import unittest
+suite = unittest.defaultTestLoader.discover('schemas/openapi/v1', pattern='test_validate.py')
+expected = suite.countTestCases()
+if expected == 0:
+    raise SystemExit('OpenAPI test discovery is empty')
+result = unittest.TextTestRunner(verbosity=2).run(suite)
+if not result.wasSuccessful() or result.skipped or result.expectedFailures or result.testsRun != expected:
+    raise SystemExit('OpenAPI tests did not all pass')
+PY
+"""
+
+
+def openapi_contract_errors(job):
+    """Require the full validator and unittest refusal in one fixed root step."""
+    steps = [step for step in job.get('steps', [])
+             if step.get('id') == 'openapi-contracts' or step.get('name') == 'openapi-contracts']
+    expected = {'name': 'openapi-contracts', 'id': 'openapi-contracts',
+                'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
+                'run': OPENAPI_CONTRACT_COMMAND}
+    return [] if steps == [expected] else ['exact blocking openapi-contracts step required']
+
 CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
 UPLOAD = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
 DOWNLOAD = 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093'
@@ -1422,6 +1446,7 @@ def check(root: Path) -> list[str]:
     if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != python_env.ADMISSION_SHELL or 'if' in helper[0]:
         fail('ci', 'ci-contracts: the Go declaration helper must be formatted and vetted in scripts/ci/gotestdecls')
     design_steps = workflows['design']['jobs']['validate']['steps']
+    for error in openapi_contract_errors(workflows['design']['jobs']['validate']): fail('design', error)
     for command in DESIGN_COMMANDS:
         matches = [s for s in design_steps if command in s.get('run', '') and '--check-sources' not in s.get('run', '')]
         if not matches or any('if' in s or 'continue-on-error' in s for s in matches): fail('design', 'missing blocking consumer: ' + command)
