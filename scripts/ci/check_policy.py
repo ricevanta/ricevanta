@@ -77,7 +77,7 @@ LEAVES = {'design': {'validate': 'design'},
           'server': {'validate': 'server-validate', 'race': 'server-race',
                      'fuzz': 'server-fuzz:${{ matrix.package }}:${{ matrix.target }}',
                      'loader-gate-a': 'loader', 'loader-gate-b': 'loader-gate-b', 'ocsf-native': 'ocsf'},
-          'agent': {'validate': 'agent', 'rustinterop': 'interop'},
+          'agent': {'validate': 'agent', 'rustinterop': 'interop', 'footprint-unit': 'footprint-unit'},
           'console': {'validate': 'console', 'webkit': 'console-webkit:macos-arm64'}, 'bootstrap': {'validate': 'bootstrap'},
           'ci': {'ci-contracts': 'ci-contracts'}}
 
@@ -304,6 +304,13 @@ SELECTED_PLACES.update({
 })
 
 
+SELECTED_COMMANDS['footprint-unit-linux-x64'] = ("python -B ../scripts/ci/run_selected.py --python-child discover --python-spec '{spec}' --python-events '{events}'", "python -B ../scripts/ci/run_selected.py --python-child run --python-spec '{spec}' --python-events '{events}'")
+SELECTED_PLACES['footprint-unit-linux-x64'] = ('tests', 'python-unittest')
+SELECTED_COMMANDS['footprint-unit-windows-x64'] = ("python -B ../scripts/ci/run_selected.py --python-child discover --python-spec '{spec}' --python-events '{events}'", "python -B ../scripts/ci/run_selected.py --python-child run --python-spec '{spec}' --python-events '{events}'")
+SELECTED_PLACES['footprint-unit-windows-x64'] = ('tests', 'python-unittest')
+SELECTED_COMMANDS['footprint-unit-macos-arm64'] = ("python -B ../scripts/ci/run_selected.py --python-child discover --python-spec '{spec}' --python-events '{events}'", "python -B ../scripts/ci/run_selected.py --python-child run --python-spec '{spec}' --python-events '{events}'")
+SELECTED_PLACES['footprint-unit-macos-arm64'] = ('tests', 'python-unittest')
+
 def framing_errors(root):
     errors = []
     paths = [p for p in (root / 'server').rglob('*.go') if 'testdata' not in p.relative_to(root).parts]
@@ -357,6 +364,172 @@ def cargo_override_errors(data):
     return errors
 
 
+PYTHON_SKIP_ALLOWANCES = [{'test': 'test_measure.ObserverTests.test_windows_readers_allow_atomic_replacement_and_rotation',
+  'hosts': ['linux-x64', 'macos-arm64'],
+  'reason': 'native Windows delete-sharing and atomic replacement',
+  'proof': 'footprint-unit:windows-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_clk_tck_is_user_hz',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_stat_with_parenthesis_in_comm',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_synthetic_proc_sample',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_pid_reuse_is_detected',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_zombie_is_a_failed_sample',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_missing_pss_is_a_failed_sample',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_preflight_requires_smaps_rollup',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'},
+ {'test': 'test_samplers.LinuxSamplerTests.test_preflight_requires_user_hz',
+  'hosts': ['windows-x64', 'macos-arm64'],
+  'reason': 'Linux /proc parsing',
+  'proof': 'footprint-unit:linux-x64'}]
+
+FOOTPRINT_JOB = yaml.load(r"""
+footprint-unit:
+  name: footprint unit (${{ matrix.os }})
+  if: ${{ contains(fromJSON(inputs.route).groups, 'agent') }}
+  runs-on: ${{ matrix.os }}
+  timeout-minutes: '20'
+  strategy:
+    fail-fast: 'false'
+    matrix:
+      include:
+      - os: ubuntu-24.04
+        platform: linux-x64
+      - os: windows-2025
+        platform: windows-x64
+      - os: macos-15
+        platform: macos-arm64
+  steps:
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    with:
+      persist-credentials: 'false'
+      ref: ${{ fromJSON(inputs.route).testedSha }}
+  - name: Bootstrap admitted toolchains
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    env:
+      CI_PLATFORM: ${{ fromJSON('{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}')[matrix.os]
+        }}
+      CI_TOOLS: python
+    run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS"
+      --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+  - name: Apply admitted toolchain environment
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+  - name: Verify admitted toolchain evidence
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    env:
+      CI_PLATFORM: ${{ fromJSON('{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}')[matrix.os]
+        }}
+      CI_TOOLS: python
+    run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM"
+      --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+  - name: Create validator environment
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+  - name: Install hash-locked validator closure
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    run: |
+      python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+      python -m pip check
+      python -I -S -B scripts/ci/python_env.py --check
+  - name: Assert native receipt host
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    env:
+      HOST_OS: ${{ matrix.os }}
+    run: |
+      python - <<'PY'
+      import os, platform, sys
+      sys.path.insert(0, 'scripts/ci')
+      from inventory import HOSTS
+      expected = HOSTS[os.environ['HOST_OS']]
+      actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]
+      arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+      assert actual + '-' + arch == expected, (actual, arch, expected)
+      PY
+  - name: Run footprint unit suite
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    env:
+      FOOTPRINT_PLATFORM: ${{ matrix.platform }}
+    run: |
+      case "$FOOTPRINT_PLATFORM" in
+      linux-x64) python -B scripts/ci/run_selected.py --id footprint-unit-linux-x64 --evidence "$RUNNER_TEMP/evidence" ;;
+      windows-x64) python -B scripts/ci/run_selected.py --id footprint-unit-windows-x64 --evidence "$RUNNER_TEMP/evidence" ;;
+      macos-arm64) python -B scripts/ci/run_selected.py --id footprint-unit-macos-arm64 --evidence "$RUNNER_TEMP/evidence" ;;
+      esac
+  - name: Upload footprint unit diagnostics
+    if: always()
+    uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    with:
+      name: footprint-unit-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}
+      path: ${{ runner.temp }}/evidence
+      retention-days: '30'
+      if-no-files-found: error
+  - name: Re-verify validator environment
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    run: python -I -S -B scripts/ci/python_env.py --check
+  - name: Write successful leaf receipt
+    id: proof
+    shell: bash --noprofile --norc -p -e -o pipefail {0}
+    working-directory: .
+    env:
+      ROUTE_JSON: ${{ inputs.route }}
+      UNIT: footprint-unit
+      CHECKS: '["footprint-unit-${{ matrix.platform }}"]'
+      HOST_OS: ${{ matrix.os }}
+    run: |
+      python - <<'PY'
+      import json, os, pathlib, sys
+      sys.path.insert(0, 'scripts/ci')
+      import inventory, required
+      route = json.loads(os.environ['ROUTE_JSON'])
+      unit = os.environ['UNIT']
+      if os.environ['HOST_OS']:
+          unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+      item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
+      out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+      out.mkdir()
+      (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+      with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+          output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+      PY
+  - name: Upload leaf receipt
+    uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    with:
+      name: ${{ steps.proof.outputs.artifact }}
+      path: ${{ runner.temp }}/ci-proof/receipt.json
+      retention-days: '30'
+      if-no-files-found: error
+""", Loader=yaml.BaseLoader)["footprint-unit"]
+
+def footprint_job_errors(job):
+    return [] if job == FOOTPRINT_JOB else ["exact footprint-unit native job required"]
+
 def selected_errors(root):
     """targets.toml must resolve every wrapper ID to its exact reviewed command."""
     try:
@@ -370,6 +543,16 @@ def selected_errors(root):
         # No other wrapper ID may exist; console IDs are pinned here when Task 8 adds them.
         if target_id not in SELECTED_COMMANDS and not (target_id.startswith('go-fuzz:') and target['mode'] == 'go-fuzz'):
             errors.append('scripts/ci/targets.toml: unreviewed selected target ' + target_id)
+    expected_python_skips = {row['test']: {key: value for key, value in row.items() if key != 'test'} for row in PYTHON_SKIP_ALLOWANCES}
+    if run_selected.PYTHON_SKIPS != expected_python_skips: errors.append('Python runtime skip allowances differ from the reviewed set')
+    if run_selected.load_targets(root).get('python_skips') != PYTHON_SKIP_ALLOWANCES:
+        errors.append('Python skip allowances differ from the reviewed set')
+    for host in ('linux-x64', 'windows-x64', 'macos-arm64'):
+        target_id = 'footprint-unit-' + host
+        expected = {'id': target_id, 'mode': 'python-unittest', 'cwd': 'tests', 'directory': 'footprint',
+                    'pattern': 'test_*.py', 'files': ['test_check.py', 'test_measure.py', 'test_samplers.py'],
+                    'platform': host, 'skips': {}}
+        if targets.get(target_id) != expected: errors.append('Python selected target differs: ' + target_id)
     project_sets = []
     for target_id, projects in run_selected.CONSOLE_PROJECTS.items():
         target = targets.get(target_id, {})
@@ -575,7 +758,7 @@ PATH_PART = re.compile(r'[^/\\\s"\'$(){};|&<>=:,`]+')
 # CI_PLATFORM and CI_TOOLS are the admitted bootstrap's literal step inputs; bootstrap_errors pins their values and forbids
 # them at job and workflow scope.
 # BASE_SHA and CANDIDATE_SHA carry the validated route's commits to the catalogue compatibility check.
-CONSUMER_ENV = python_env.ALLOWED_PYTHON_ENV | {'ROUTE_JSON', 'NEEDS_JSON', 'UNIT', 'CHECKS', 'HOST_OS', 'CI_PLATFORM', 'CI_TOOLS',
+CONSUMER_ENV = python_env.ALLOWED_PYTHON_ENV | {'ROUTE_JSON', 'NEEDS_JSON', 'UNIT', 'CHECKS', 'FOOTPRINT_PLATFORM', 'HOST_OS', 'CI_PLATFORM', 'CI_TOOLS',
                                                  'BASE_SHA', 'CANDIDATE_SHA'}
 RISKY_NAME = r'(PYTHON\w*|PIP_\w*|BASH_ENV|ENV|BASH_FUNC_[^\s=]*|LD_\w*|DYLD_\w*|PATH|SHELLOPTS|BASHOPTS)'
 SHELL_ASSIGN = re.compile(rf'(?i)(?<![\w$.-]){RISKY_NAME}\+?=')
@@ -600,7 +783,7 @@ def shell_env_names(text):
 CLOSURE_CONSUMERS = tuple(inventory.DESIGN_COMMANDS) + (
     'scripts/ci/check_policy.py', 'unittest discover -s scripts/ci', 'unittest discover -s schemas', 'test_validate.py',
     'test_key_admission_contract.py', 'required.py --route "$RUNNER_TEMP/route.json" --needs',
-    'from jsonschema import', 'import jsonschema', 'import yaml')
+    'from jsonschema import', 'import jsonschema', 'import yaml', 'case "$FOOTPRINT_PLATFORM" in')
 TOKEN = '${{ secrets.SEMGREP_APP_TOKEN }}'
 ROUTE_ENV = {'ROUTE_JSON': '${{ needs.route.outputs.route }}'}
 PREPARE_ROUTE = ("python -B - <<'PY'\n"
@@ -670,6 +853,7 @@ def lock_tools(root):
 LOCK_TOOLS = {}
 # Each consuming job's literal CI_TOOLS (section 8); bootstrap.yml's rows select every lock tool for their host instead.
 JOB_TOOLS = {
+    ('agent', 'footprint-unit'): 'python',
     ('agent', 'validate'): 'python,rust', ('agent', 'rustinterop'): 'python,go,rust',
     ('ci', 'route'): 'python', ('ci', 'ci-contracts'): 'python,go', ('ci', 'gitleaks'): 'python', ('ci', 'semgrep'): 'python',
     ('ci', 'ci-required'): 'python', ('console', 'validate'): 'python,node,pnpm,playwright', ('console', 'webkit'): 'python,node,pnpm,playwright',
@@ -1408,9 +1592,10 @@ def check(root: Path) -> list[str]:
                 if not matches or any('if' in step or 'continue-on-error' in step for step in matches):
                     fail(name, f'{jid}: missing unconditional command: {command}')
             proofs = [s for s in steps if s.get('id') == 'proof']
-            native = unit in ('loader', 'loader-gate-b', 'ocsf', 'agent', 'bootstrap')
+            native = unit in ('loader', 'loader-gate-b', 'ocsf', 'agent', 'bootstrap', 'footprint-unit')
             wanted = (['go-fuzz:${{ matrix.package }}:${{ matrix.target }}'] if jid == 'fuzz' else
                       inventory.checks('agent:windows-x64' if unit == 'agent' else unit + ':linux-x64' if native else unit))
+            if unit == 'footprint-unit': wanted = ['footprint-unit-${{ matrix.platform }}']
             if len(proofs) != 1 or proofs[0].get('env', {}).get('UNIT') != unit:
                 fail(name, f'{jid}: missing leaf proof')
             else:
@@ -1418,7 +1603,7 @@ def check(root: Path) -> list[str]:
                 except ValueError: actual = None
                 if actual != wanted or 'if' in proofs[0] or 'required.receipt(' not in proofs[0].get('run', ''):
                     fail(name, f'{jid}: receipt checks mismatch')
-                elif (any(check in selected_ids or check.startswith('go-fuzz:') for check in actual)
+                elif ((unit == 'footprint-unit' or any(check in selected_ids or check.startswith('go-fuzz:') for check in actual))
                       and (AGENT_RECEIPT if unit == 'agent' else RECEIPT_WITH_EVIDENCE) not in proofs[0]['run']):
                     fail(name, f'{jid}: receipt must bind verified selected-run evidence')
             if not steps or steps[-1].get('uses') != UPLOAD or steps[-1].get('with') != {
@@ -1438,13 +1623,14 @@ def check(root: Path) -> list[str]:
                 if len(host_steps) != 1 or host_steps[0] >= first_check:
                     fail(name, f'{jid}: native host admission must precede checks')
             if name in ('server', 'agent'):
-                group = {'validate': 'server', 'race': 'server', 'fuzz': 'server', 'loader-gate-a': 'loader', 'loader-gate-b': 'loader', 'ocsf-native': 'ocsf'}.get(jid) if name == 'server' else ('agent' if jid == 'validate' else 'interop')
+                group = {'validate': 'server', 'race': 'server', 'fuzz': 'server', 'loader-gate-a': 'loader', 'loader-gate-b': 'loader', 'ocsf-native': 'ocsf'}.get(jid) if name == 'server' else ('agent' if jid in ('validate', 'footprint-unit') else 'interop')
                 if job.get('if') != group_condition([group], 'inputs.route'): fail(name, f'{jid}: route selection mismatch')
             expected_needs = 'validate' if name == 'console' and jid == 'webkit' else 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
             if job.get('needs') != expected_needs: fail(name, f'{jid}: needs mismatch')
     helper = [s for s in jobs.get('ci-contracts', {}).get('steps', []) if 'go vet .' in s.get('run', '')]
     if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != python_env.ADMISSION_SHELL or 'if' in helper[0]:
         fail('ci', 'ci-contracts: the Go declaration helper must be formatted and vetted in scripts/ci/gotestdecls')
+    for error in footprint_job_errors(workflows['agent']['jobs'].get('footprint-unit', {})): fail('agent', error)
     design_steps = workflows['design']['jobs']['validate']['steps']
     for error in openapi_contract_errors(workflows['design']['jobs']['validate']): fail('design', error)
     for command in DESIGN_COMMANDS:

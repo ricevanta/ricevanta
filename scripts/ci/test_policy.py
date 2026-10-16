@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import subprocess
+import sys
 from copy import deepcopy
 import inventory
 import json
@@ -12,6 +13,20 @@ import check_policy
 import python_env
 
 ROOT = Path(__file__).resolve().parents[2]
+
+class PolicyDiscoveryTests(unittest.TestCase):
+    def test_each_policy_case_is_discovered_once(self):
+        seen, duplicates = {}, []
+        def visit(suite):
+            for case in suite:
+                if isinstance(case, unittest.TestSuite):
+                    visit(case)
+                    continue
+                method = getattr(type(case), case._testMethodName)
+                if method in seen: duplicates.append((seen[method], case.id()))
+                else: seen[method] = case.id()
+        visit(unittest.TestLoader().loadTestsFromModule(sys.modules[__name__]))
+        self.assertEqual(duplicates, [])
 
 class EnvironmentAdmissionTests(unittest.TestCase):
     def test_composed_proof_steps_use_the_admission_shell(self):
@@ -110,7 +125,7 @@ class EnvironmentAdmissionTests(unittest.TestCase):
             scope.pop('env')
 
 
-class PolicyTests(unittest.TestCase):
+class PolicyFixture:
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='ci-policy-'); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
@@ -134,6 +149,7 @@ class PolicyTests(unittest.TestCase):
         change(data)
         path.write_text(yaml.safe_dump(data, sort_keys=False))
 
+class PolicyTests(PolicyFixture, unittest.TestCase):
     def test_full_policy_applies_environment_admission_to_every_job_family(self):
         for path in sorted((self.root / '.github/workflows').glob('*.yml')):
             baseline = path.read_text()
@@ -874,6 +890,38 @@ class PolicyTests(unittest.TestCase):
                 self.assertIn('.github/workflows/design.yml: validate: receipt checks mismatch', check_policy.check(self.root))
         path.write_text(baseline)
 
+    def test_footprint_job_and_selected_contracts(self):
+        data = yaml.load((ROOT / '.github/workflows/agent.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertIn('footprint-unit', data['jobs'])
+        self.assertEqual(check_policy.footprint_job_errors(data['jobs']['footprint-unit']), [])
+        self.assertEqual(check_policy.selected_errors(ROOT), [])
+        baseline = data['jobs']['footprint-unit']
+        for mutation in ('matrix', 'condition', 'step', 'receipt', 'admission', 'skip'):
+            with self.subTest(mutation=mutation):
+                job = deepcopy(baseline)
+                if mutation == 'matrix': job['strategy']['matrix']['include'].pop()
+                elif mutation == 'condition': job['if'] = 'always()'
+                elif mutation == 'step': job['steps'][7]['if'] = 'false'
+                elif mutation == 'receipt': next(s for s in job['steps'] if s.get('id') == 'proof')['env']['CHECKS'] = '[]'
+                elif mutation == 'admission': job['steps'].pop(5)
+                else: job['continue-on-error'] = 'true'
+                self.assertEqual(check_policy.footprint_job_errors(job), ['exact footprint-unit native job required'])
+                changed = deepcopy(data); changed['jobs']['footprint-unit'] = job
+                path = self.root / '.github/workflows/agent.yml'
+                path.write_text(yaml.safe_dump(changed, sort_keys=False))
+                self.assertIn('.github/workflows/agent.yml: exact footprint-unit native job required', check_policy.check(self.root))
+        shutil.copyfile(ROOT / '.github/workflows/agent.yml', self.root / '.github/workflows/agent.yml')
+        targets = self.root / 'scripts/ci/targets.toml'
+        baseline = targets.read_text()
+        for old, new in (('directory = "footprint"', 'directory = "other"'),
+                         ('test_samplers.py', 'test_subset.py'),
+                         ('native Windows delete-sharing and atomic replacement', 'any skip')):
+            with self.subTest(target=old):
+                self.assertIn(old, baseline)
+                targets.write_text(baseline.replace(old, new))
+                self.assertTrue(any('Python' in error or 'python' in error for error in check_policy.selected_errors(self.root)))
+        targets.write_text(baseline)
+
     def test_each_design_consumer_is_required(self):
         for command in check_policy.DESIGN_COMMANDS:
             with self.subTest(command=command):
@@ -1429,7 +1477,7 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(check_policy.check(self.root))
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
 
-class SecurityPolicyTests(PolicyTests):
+class SecurityPolicyTests(PolicyFixture, unittest.TestCase):
     def test_scanners_are_direct_unconditional_and_token_is_single_scope(self):
         data = yaml.load((ROOT/'.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertIn('semgrep', data['jobs'])

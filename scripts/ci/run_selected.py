@@ -6,6 +6,7 @@ retained under the evidence root, and a verified run writes one
 verified.json record that the leaf receipt step requires for its check ID.
 """
 import argparse
+import ast
 from collections import Counter
 import json
 import math
@@ -143,6 +144,7 @@ def package_command(target):
 
 def discovery_command(target):
     mode = target['mode']
+    if mode == 'python-unittest': return python_command(target, 'discover')
     if mode in ('go-suite', 'go-selected', 'go-interop', 'go-cost-model'):
         pattern = '.*' if mode == 'go-suite' else target.get('run') or '^(' + '|'.join(map(re.escape, target['tests'])) + ')$'
         return ['go', 'test', *go_build_flags(target), '-list', pattern, *target['packages']]
@@ -161,6 +163,7 @@ def discovery_command(target):
 
 def run_command(target):
     mode = target['mode']
+    if mode == 'python-unittest': return python_command(target, 'run')
     if mode == 'go-suite':
         return ['go', 'test', '-json', *go_build_flags(target), '-count=1', *target.get('test_flags', []), *target['packages']]
     if mode in ('go-selected', 'go-interop', 'go-cost-model'):
@@ -858,7 +861,7 @@ def verify_console(target, evidence_dir, exit_code):
     return verify_playwright_report(report, target['specs'], console_projects(target))
 
 
-MODES = {'go-suite', 'go-selected', 'go-interop', 'go-cost-model', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'rust-root', 'console-vitest', 'console-playwright'}
+MODES = {'python-unittest', 'go-suite', 'go-selected', 'go-interop', 'go-cost-model', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'rust-root', 'console-vitest', 'console-playwright'}
 
 
 def evidence_name(target_id):
@@ -1047,6 +1050,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
     cwd = root / target['cwd']
+    if target['mode'] == 'python-unittest': return run_python_unittest(target, evidence_dir, cwd, env)
     build, executable = build_command(target), None
     if build:
         print('build:', shlex.join(build), flush=True)
@@ -1175,6 +1179,8 @@ def verified(evidence_root, target_id, binding=None, root=ROOT, ancestors=()):
     # leaf. Its receipt still requires that run, bound to this exact invocation.
     for proof in (target or {}).get('requires', []):
         verified(evidence_root, proof, proof_binding, root, (*ancestors, target_id))
+    if target and target['mode'] == 'python-unittest':
+        validate_python_record(record, path.parent, target, root / target['cwd'], proof_binding)
     if target_id == 'ingest-cost-model': validate_cost_record(record)
     return record
 
@@ -1210,6 +1216,376 @@ def validate_cost_record(record):
             if type(row.get(key)) is not int or row[key] < 0: raise ValueError('invalid cost-model benchmark allocation')
 
 
+# This bounded protocol admits only ordinary, statically declared unittest cases.
+PYTHON_EVENT_BYTES = 16 * 1024 * 1024
+PYTHON_LINE_BYTES = 64 * 1024
+PYTHON_MAX_IDS = 10000
+PYTHON_SKIPS = {
+    'test_measure.ObserverTests.test_windows_readers_allow_atomic_replacement_and_rotation':
+        {'hosts': ['linux-x64', 'macos-arm64'], 'reason': 'native Windows delete-sharing and atomic replacement', 'proof': 'footprint-unit:windows-x64'},
+}
+for _name in ('test_clk_tck_is_user_hz', 'test_stat_with_parenthesis_in_comm', 'test_synthetic_proc_sample',
+              'test_pid_reuse_is_detected', 'test_zombie_is_a_failed_sample', 'test_missing_pss_is_a_failed_sample',
+              'test_preflight_requires_smaps_rollup', 'test_preflight_requires_user_hz'):
+    PYTHON_SKIPS['test_samplers.LinuxSamplerTests.' + _name] = {
+        'hosts': ['windows-x64', 'macos-arm64'], 'reason': 'Linux /proc parsing', 'proof': 'footprint-unit:linux-x64'}
+
+
+def python_host():
+    import platform
+    return {'linux': 'linux', 'win32': 'windows', 'darwin': 'macos'}[sys.platform] + '-' + {
+        'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+
+
+def python_skip(test, reason, host):
+    row = PYTHON_SKIPS.get(test)
+    if row is None or host not in row['hosts'] or reason != row['reason']:
+        raise EvidenceError('unauthorized Python skip: ' + test)
+    return row['proof']
+
+
+def python_ids(ids):
+    if (not isinstance(ids, list) or not 0 < len(ids) <= PYTHON_MAX_IDS
+            or any(not isinstance(i, str) or not re.fullmatch(r'[A-Za-z_]\w*\.[A-Za-z_]\w*\.test_\w+', i) for i in ids)
+            or ids != sorted(set(ids))):
+        raise EvidenceError('invalid Python discovery inventory')
+    return ids
+
+
+def python_declarations(cwd, target, *, locations=False):
+    """Resolve local single inheritance without executing imports or test code."""
+    import ast
+    original = cwd / target['directory']
+    tree = original.resolve()
+    paths = sorted(tree.glob(target['pattern']))
+    if (original.is_symlink() or not tree.is_relative_to(cwd.resolve()) or
+            [p.name for p in paths] != sorted(target['files']) or any(p.is_symlink() or not p.is_file() for p in paths)):
+        raise EvidenceError('Python test file inventory changed')
+    declared = {}
+    for path in paths:
+        module = path.stem
+        syntax = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+        if any((isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == 'load_tests')
+               or (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store) and n.id == 'load_tests')
+               or (isinstance(n, ast.alias) and (n.asname or n.name) == 'load_tests') for n in ast.walk(syntax)):
+            raise EvidenceError('Python load_tests hooks forbidden')
+        classes = {n.name: n for n in syntax.body if isinstance(n, ast.ClassDef)}
+        cache, visiting = {}, set()
+        def methods(name):
+            if name in cache: return cache[name]
+            if name in visiting: raise EvidenceError('cyclic Python test inheritance')
+            visiting.add(name)
+            node = classes[name]
+            base = ast.unparse(node.bases[0]) if len(node.bases) == 1 else None
+            inherited = {} if base == 'unittest.TestCase' else methods(base) if base in classes else None
+            if inherited is not None:
+                inherited = dict(inherited)
+                if node.keywords or len(node.bases) != 1: raise EvidenceError('dynamic Python test class forbidden')
+                for item in node.body:
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        if item.name in ('run', '__call__', 'id'): raise EvidenceError('custom Python test execution forbidden')
+                        if item.name.startswith('test_'):
+                            if not isinstance(item, ast.FunctionDef): raise EvidenceError('async Python test declaration forbidden')
+                            inherited[item.name] = (path.resolve(), min([item.lineno] + [d.lineno for d in item.decorator_list]),
+                                                    name + '.' + item.name)
+                    elif isinstance(item, (ast.Assign, ast.AnnAssign)):
+                        for item_target in item.targets if isinstance(item, ast.Assign) else [item.target]:
+                            if isinstance(item_target, ast.Name) and item_target.id.startswith('test_'):
+                                raise EvidenceError('dynamic Python test declaration forbidden')
+            visiting.remove(name)
+            cache[name] = inherited
+            return inherited
+        for name in classes:
+            found = methods(name)
+            if found is not None:
+                for method, location in found.items(): declared[f'{module}.{name}.{method}'] = location
+    python_ids(sorted(declared))
+    return declared if locations else sorted(declared)
+
+
+class PythonCaseGuard:
+    """Bind ordinary unittest dispatch to the declared function, without unwrapping substitutes."""
+    def __init__(self, cwd, target):
+        import inspect
+        import types
+        import unittest
+        self.inspect, self.types = inspect, types
+        self.declarations = python_declarations(cwd, target, locations=True)
+        self.codes = {}
+        locations = set(self.declarations.values())
+        for path in {location[0] for location in self.declarations.values()}:
+            compiled = compile(path.read_text(encoding='utf-8'), str(path), 'exec', dont_inherit=True)
+            # Select the declared method's direct class-body constant. Nested
+            # expressions and decorators can share its first line, but cannot
+            # supply the code for that class and method declaration.
+            for owner in compiled.co_consts:
+                if type(owner) is not types.CodeType: continue
+                for method in owner.co_consts:
+                    if type(method) is not types.CodeType: continue
+                    location = (path, method.co_firstlineno, method.co_qualname)
+                    if location not in locations: continue
+                    if location in self.codes: raise EvidenceError('ambiguous Python test declaration')
+                    self.codes[location] = method
+        if set(self.codes) != locations: raise EvidenceError('missing compiled Python test declaration')
+        self.hooks = {key: getattr(unittest.TestCase, key) for key in
+                      ('run', '__call__', 'id', '_callSetUp', '_callTestMethod', '_callTearDown', 'doCleanups', '__getattribute__')}
+        self.call_method = unittest.TestCase._callTestMethod
+        # unittest marks a skipped method and never dispatches its wrapper. Admit
+        # only that exact standard-library wrapper, never arbitrary __wrapped__.
+        self.skip_code = unittest.skip('')(lambda: None).__code__
+        self.suite_run, self.suite_call = unittest.TestSuite.run, unittest.TestSuite.__call__
+        self.hook_states = [(function, self.callable_state(function)) for function in
+                            (*self.hooks.values(), self.suite_run, self.suite_call)]
+
+    def callable_state(self, function):
+        if type(function) is not self.types.FunctionType: return None
+        return (function.__code__, function.__defaults__,
+                None if function.__kwdefaults__ is None else dict(function.__kwdefaults__),
+                tuple(cell.cell_contents for cell in function.__closure__ or ()))
+
+    def check_callable(self, function, state):
+        if state is None: return
+        code, defaults, keyword_defaults, closure = state
+        current_closure = tuple(cell.cell_contents for cell in function.__closure__ or ())
+        if (function.__code__ is not code or function.__defaults__ is not defaults
+                or function.__kwdefaults__ != keyword_defaults or len(current_closure) != len(closure)
+                or any(actual is not expected for actual, expected in zip(current_closure, closure))):
+            raise EvidenceError('mutated Python test dispatch callable')
+
+    def check_hooks(self):
+        # Function identity survives __code__ and default-state replacement.
+        for function, state in self.hook_states: self.check_callable(function, state)
+
+    def check(self, item, dispatch=None):
+        self.check_hooks()
+        static = self.inspect.getattr_static
+        for key, expected in self.hooks.items():
+            if static(type(item), key) is not expected or (
+                    key in vars(item) and not (key == '_callTestMethod' and dispatch is not None and vars(item)[key] is dispatch)):
+                raise EvidenceError('custom Python test execution forbidden')
+        if static(type(item), '__getattr__', None) is not None:
+            raise EvidenceError('custom Python test attribute lookup forbidden')
+        if dispatch is not None and getattr(item, '_callTestMethod') is not dispatch:
+            raise EvidenceError('replaced Python test dispatch')
+        name = item.id()
+        if name not in self.declarations: raise EvidenceError('unknown Python test declaration: ' + name)
+        method_name = item._testMethodName
+        declared = static(type(item), method_name)
+        method = getattr(item, method_name)
+        if (method_name in vars(item) or type(declared) is not self.types.FunctionType
+                or type(method) is not self.types.MethodType or method.__self__ is not item or method.__func__ is not declared):
+            raise EvidenceError('replaced Python test callable: ' + name)
+        function = declared
+        if function.__code__ is self.skip_code:
+            function = getattr(function, '__wrapped__', None)
+        if (type(function) is not self.types.FunctionType
+                or (Path(function.__code__.co_filename).resolve(), function.__code__.co_firstlineno,
+                    function.__code__.co_qualname) != self.declarations[name]
+                or function.__code__ != self.codes[self.declarations[name]]):
+            raise EvidenceError('replaced Python test declaration: ' + name)
+        return method
+
+
+def python_discover(cwd, target, *, guard=None):
+    import unittest
+    guard = guard or PythonCaseGuard(cwd, target)
+    declarations = guard.declarations
+    tree = (cwd / target['directory']).resolve()
+    sys.path.insert(0, str(tree))
+    loader = unittest.TestLoader()
+    suite = loader.discover(str(tree), pattern=target['pattern'])
+    if loader.errors: raise EvidenceError('Python discovery import failed')
+    cases = []
+    def flatten(item):
+        guard.check_hooks()
+        if any(key in vars(item) for key in ('run', '__call__', 'id')):
+            raise EvidenceError('custom Python test execution forbidden')
+        if type(item) is unittest.TestSuite and type(item).run is guard.suite_run and type(item).__call__ is guard.suite_call:
+            for child in item: flatten(child)
+        elif isinstance(item, unittest.TestCase):
+            guard.check(item)
+            cases.append(item)
+        else: raise EvidenceError('custom Python test suite forbidden')
+    flatten(suite)
+    ids = python_ids(sorted(case.id() for case in cases))
+    if ids != sorted(declarations): raise EvidenceError('Python discovery filtered declared tests')
+    for module in tuple(sys.modules.values()):
+        filename = getattr(module, '__file__', None)
+        if filename and Path(filename).match(target['pattern']):
+            if not Path(filename).resolve().is_relative_to(tree): raise EvidenceError('Python test imported outside its tree')
+            if hasattr(module, 'load_tests'): raise EvidenceError('Python load_tests hooks forbidden')
+    return suite, ids
+
+
+def python_header(target, env, phase):
+    return {'event': 'header', 'id': target['id'], 'mode': 'python-unittest', 'platform': target['platform'],
+            'phase': phase, **{key: env[key] for key in RUN_BINDING}}
+
+
+def read_python_events(path):
+    def pairs(rows):
+        result = {}
+        for key, value in rows:
+            if key in result: raise EvidenceError('duplicate Python event key')
+            result[key] = value
+        return result
+    def constant(value): raise EvidenceError('nonfinite Python event')
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > PYTHON_EVENT_BYTES:
+        raise EvidenceError('missing or oversized Python events')
+    data = path.read_bytes()
+    if len(data) > PYTHON_EVENT_BYTES or not data.endswith(b'\n'): raise EvidenceError('truncated Python events')
+    rows = []
+    for line in data.splitlines(keepends=True):
+        if len(line) > PYTHON_LINE_BYTES: raise EvidenceError('oversized Python event line')
+        try: row = json.loads(line, object_pairs_hook=pairs, parse_constant=constant)
+        except (ValueError, UnicodeError) as error: raise EvidenceError('invalid Python event JSON') from error
+        if not isinstance(row, dict): raise EvidenceError('invalid Python event')
+        rows.append(row)
+    return rows
+
+
+def verify_python_events(target, cwd, evidence, env, exit_code):
+    ids = python_declarations(cwd, target)
+    discovery = read_python_events(evidence / 'discovery.events.jsonl')
+    expected = [python_header(target, env, 'discover'), {'event': 'inventory', 'ids': ids}, {'event': 'totals', 'discovered': len(ids)}]
+    if discovery != expected: raise EvidenceError('Python discovery proof mismatch')
+    rows = read_python_events(evidence / 'execution.events.jsonl')
+    if rows[:2] != [python_header(target, env, 'run'), {'event': 'inventory', 'ids': ids}]:
+        raise EvidenceError('Python execution identity or inventory mismatch')
+    counts = dict(passed=0, skipped=0, failed=0, errors=0)
+    skipped, seen, active = [], set(), None
+    for row in rows[2:-1]:
+        event, test = row.get('event'), row.get('id')
+        if test not in ids: raise EvidenceError('unknown Python test event')
+        if event == 'start' and set(row) == {'event', 'id'} and active is None and test not in seen:
+            active = test
+        elif event in ('pass', 'skip', 'fail', 'error') and active == test:
+            if set(row) != ({'event', 'id', 'reason'} if event == 'skip' else {'event', 'id'}):
+                raise EvidenceError('invalid Python terminal event')
+            if event == 'skip':
+                proof = python_skip(test, row['reason'], target['platform'])
+                skipped.append({'id': test, 'reason': row['reason'], 'proof': proof})
+            counts[{'pass': 'passed', 'skip': 'skipped', 'fail': 'failed', 'error': 'errors'}[event]] += 1
+            seen.add(test); active = None
+        else: raise EvidenceError('duplicate or out-of-order Python event')
+    totals = {'event': 'totals', 'discovered': len(ids), 'testsRun': len(ids), **counts}
+    if (not rows or rows[-1] != totals or any(type(v) is not int for k, v in rows[-1].items() if k != 'event')
+            or seen != set(ids) or active is not None or not counts['passed'] or counts['failed'] or counts['errors']
+            or type(exit_code) is not int or exit_code != 0):
+        raise EvidenceError('incomplete or failed Python test execution')
+    return {'inventory': ids, 'passed': counts['passed'], 'skipped': skipped, 'totals': totals, 'platform': target['platform']}
+
+
+def python_child(target, events, phase, env):
+    import unittest
+    if python_host() != target['platform']: raise EvidenceError('Python test selected for a foreign host')
+    # Retain a private writer; stdout and stderr are never result authority.
+    with events.open('xb') as output:
+        size = 0
+        def emit(row):
+            nonlocal size
+            data = (json.dumps(row, separators=(',', ':'), allow_nan=False) + '\n').encode('utf-8')
+            size += len(data)
+            if len(data) > PYTHON_LINE_BYTES or size > PYTHON_EVENT_BYTES: raise EvidenceError('Python event bound exceeded')
+            output.write(data); output.flush()
+        emit(python_header(target, env, phase))
+        guard = PythonCaseGuard(Path.cwd(), target)
+        suite, ids = python_discover(Path.cwd(), target, guard=guard)
+        emit({'event': 'inventory', 'ids': ids})
+        if phase == 'discover':
+            emit({'event': 'totals', 'discovered': len(ids)})
+            return 0
+        class Result(unittest.TestResult):
+            def startTest(self, test):
+                method = guard.check(test)
+                state = {'calls': 0}
+                def dispatch(item, called):
+                    current = guard.check(item, state['dispatch'])
+                    if (type(called) is not guard.types.MethodType or called.__self__ is not item
+                            or called.__func__ is not method.__func__ or current.__func__ is not method.__func__):
+                        raise EvidenceError('replaced Python test execution')
+                    state['calls'] += 1
+                    guard.call_method(item, called)
+                state['dispatch'] = guard.types.MethodType(dispatch, test)
+                state['callable'] = guard.callable_state(dispatch)
+                self.executions[test.id()] = state
+                test._callTestMethod = state['dispatch']
+                guard.check(test, state['dispatch'])
+                super().startTest(test); emit({'event': 'start', 'id': test.id()})
+            def addSuccess(self, test):
+                state = self.executions[test.id()]
+                guard.check_callable(state['dispatch'].__func__, state['callable'])
+                guard.check(test, state['dispatch'])
+                if state['calls'] != 1: raise EvidenceError('missing Python test method execution')
+                super().addSuccess(test); emit({'event': 'pass', 'id': test.id()})
+            def addSkip(self, test, reason):
+                super().addSkip(test, reason); emit({'event': 'skip', 'id': test.id(), 'reason': reason})
+            def addFailure(self, test, err):
+                super().addFailure(test, err); emit({'event': 'fail', 'id': test.id()})
+            def addError(self, test, err):
+                super().addError(test, err); emit({'event': 'error', 'id': test.id()})
+            def addSubTest(self, test, subtest, err):
+                super().addSubTest(test, subtest, err)
+                if err is not None: emit({'event': 'error', 'id': test.id()})
+            def addExpectedFailure(self, test, err):
+                super().addExpectedFailure(test, err); emit({'event': 'fail', 'id': test.id()})
+            def addUnexpectedSuccess(self, test):
+                super().addUnexpectedSuccess(test); emit({'event': 'fail', 'id': test.id()})
+        result = Result()
+        result.executions = {}
+        suite.run(result)
+        emit({'event': 'totals', 'discovered': len(ids), 'testsRun': result.testsRun,
+              'passed': result.testsRun - len(result.skipped) - len(result.failures) - len(result.errors) - len(result.expectedFailures) - len(result.unexpectedSuccesses),
+              'skipped': len(result.skipped), 'failed': len(result.failures) + len(result.expectedFailures) + len(result.unexpectedSuccesses), 'errors': len(result.errors)})
+        return 0 if result.wasSuccessful() and not result.expectedFailures and not result.unexpectedSuccesses else 1
+
+
+def python_command(target, phase):
+    return ['python', '-B', '../scripts/ci/run_selected.py', '--python-child', phase,
+            '--python-spec', '{spec}', '--python-events', '{events}']
+
+
+def run_python_unittest(target, evidence, cwd, env):
+    if python_host() != target['platform']: raise EvidenceError('Python test selected for a foreign host')
+    for key in RUN_BINDING:
+        if not env.get(key): raise EvidenceError('Python proof requires run identity: ' + key)
+    if not re.fullmatch('[0-9a-f]{40}', env['GITHUB_SHA']) or any(not re.fullmatch('[1-9][0-9]*', env[k]) for k in RUN_BINDING[:2]):
+        raise EvidenceError('invalid Python run identity')
+    python_declarations(cwd, target)
+    spec = evidence / 'python-spec.json'
+    spec.write_text(json.dumps({key: value for key, value in target.items() if key != 'skips'}), encoding='utf-8')
+    commands = {}
+    for phase, prefix in (('discover', 'discovery'), ('run', 'execution')):
+        command = [str(Path(__file__).resolve()) if word == '../scripts/ci/run_selected.py' else
+                   str(spec.resolve()) if word == '{spec}' else str((evidence / (prefix + '.events.jsonl')).resolve()) if word == '{events}' else word
+                   for word in python_command(target, phase)]
+        # Use the running admitted interpreter, including its venv, in both fresh children.
+        command[0] = sys.executable
+        code = execute(command, cwd, env, evidence / (prefix + '.txt'), evidence / (prefix + '.stderr.txt'))
+        (evidence / (prefix + '.status.json')).write_text(json.dumps({'exit': code}) + '\n', encoding='utf-8')
+        commands[prefix] = python_command(target, phase)
+        if code != 0: raise EvidenceError('Python ' + phase + ' child failed')
+    summary = verify_python_events(target, cwd, evidence, env, code)
+    record = {'kind': 'selected-run', 'version': 1, 'id': target['id'], 'mode': target['mode'], 'cwd': target['cwd'],
+              'discovery': commands['discovery'], 'command': commands['execution'], 'exit': code, 'result': 'success',
+              'summary': summary, **{key: env[key] for key in RUN_BINDING}}
+    (evidence / 'verified.json').write_text(json.dumps(record) + '\n', encoding='utf-8')
+    return record
+
+
+def validate_python_record(record, evidence, target, cwd, env):
+    if any(record.get(key) != value for key, value in {'version': 1, 'id': target['id'], 'mode': 'python-unittest',
+           'cwd': target['cwd'], 'discovery': python_command(target, 'discover'), 'command': python_command(target, 'run'), 'exit': 0, 'result': 'success'}.items()):
+        raise EvidenceError('incomplete Python command proof')
+    for prefix in ('discovery', 'execution'):
+        path = evidence / (prefix + '.status.json')
+        if path.is_symlink() or not path.is_file(): raise EvidenceError('missing Python child status')
+        status = json.loads(path.read_text(encoding='utf-8'))
+        if status != {'exit': 0} or type(status['exit']) is not int: raise EvidenceError('Python child did not exit zero')
+    summary = verify_python_events(target, cwd, evidence, env, record['exit'])
+    if record.get('summary') != summary: raise EvidenceError('Python summary differs from execution evidence')
+
+
 def listing(root=ROOT):
     lines = []
     for target_id, target in sorted(inventory(root).items()):
@@ -1221,6 +1597,9 @@ def listing(root=ROOT):
         proof = row['proof'] if 'proof' in row else 'parent ' + row['parent']
         package = row['package'] + (' harness ' + row['target'] if 'target' in row else '')
         lines.append('skip\t%s\t%s\t%s\t%s\t%s' % (package, row['test'], row['reason'], proof, ','.join(row['modes'])))
+    for row in load_targets(root).get('python_skips', []):
+        lines.append('skip\tpython-unittest\t%s\t%s\t%s\t%s' %
+                     (row['test'], row['reason'], row['proof'], ','.join(row['hosts'])))
     return '\n'.join(lines)
 
 
@@ -1229,7 +1608,13 @@ def main():
     parser.add_argument('--id')
     parser.add_argument('--evidence', type=Path)
     parser.add_argument('--list', action='store_true')
+    parser.add_argument('--python-child', choices=('discover', 'run'))
+    parser.add_argument('--python-spec', type=Path)
+    parser.add_argument('--python-events', type=Path)
     args = parser.parse_args()
+    if args.python_child:
+        if not args.python_spec or not args.python_events: parser.error('Python child requires spec and events paths')
+        raise SystemExit(python_child(json.loads(args.python_spec.read_text(encoding='utf-8')), args.python_events, args.python_child, os.environ))
     if args.list:
         print(listing())
         return
