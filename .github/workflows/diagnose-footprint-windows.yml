@@ -1,4 +1,4 @@
-name: Diagnose Windows footprint assertion failures
+name: Diagnose exact Windows writer and readiness failures
 'on':
   push:
     branches:
@@ -6,8 +6,8 @@ name: Diagnose Windows footprint assertion failures
 permissions:
   contents: read
 jobs:
-  diagnose-footprint-windows:
-    name: diagnose-footprint-windows-observe-once
+  diagnose-footprint-windows-focused:
+    name: diagnose-footprint-windows-focused-once
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -61,197 +61,291 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - name: Materialize isolated observation driver
+    - name: Materialize isolated focused observation driver
       shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: |
-        cat > "$RUNNER_TEMP/footprint-windows-observer.py" <<'PY'
-        """Temporary, non-authoritative footprint diagnosis; never emits a leaf receipt."""
+        cat > "$RUNNER_TEMP/footprint-windows-focused-observer.py" <<'PY'
+        """Observe two original Windows test methods once. No qualification or receipt."""
         import argparse
         import hashlib
+        import importlib
         import json
         import os
         from pathlib import Path
+        import re
+        import subprocess
         import sys
+        import time
         import traceback
+        import unittest
 
-        SOURCE_CHECKOUT_SHA = '37988bb6ad7d10bcfca81f856f518f8d329efa97'
+        SOURCE_SHA = '37988bb6ad7d10bcfca81f856f518f8d329efa97'
+        IDS = (
+            'test_measure.ObserverTests.test_windows_readers_allow_atomic_replacement_and_rotation',
+            'test_measure.WorkloadMeasurementTests.test_fake_failure_modes',
+        )
+        SOURCE_HASHES = {
+            'tests/footprint/measure.py': 'c21cb80ccb4f33c4d84ac4a944c4cf25e007656a582bb976b74cc42d0631be51',
+            'tests/footprint/test_measure.py': '48c16051b6b774e20d8a65739ba74910ed979b80eaa082df61cb1be66ee88cb2',
+            'tests/footprint/fake_agent.py': '9b64fdba74c89b2f536aeaec498ba0c252646429364923443010d4b278432412',
+        }
 
 
         def save(path, value):
-            path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+            with path.open('w', encoding='utf-8', newline='\n') as stream:
+                stream.write(json.dumps(value, indent=2, sort_keys=True) + '\n')
 
 
         def identity():
             return {key: os.environ.get(key) for key in ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT')}
 
 
-        def load_runner(root):
-            # Match a direct scripts/ci/run_selected.py invocation's import directory.
-            sys.path[0] = str(root / 'scripts/ci')
-            import run_selected
-            if Path(run_selected.__file__).resolve() != root / 'scripts/ci/run_selected.py':
-                raise RuntimeError('diagnosis imported a foreign selected runner')
-            return run_selected
+        def exception_details(error):
+            return {'type': type(error).__name__, 'message': str(error),
+                    'errno': getattr(error, 'errno', None), 'winerror': getattr(error, 'winerror', None),
+                    'filename': getattr(error, 'filename', None), 'filename2': getattr(error, 'filename2', None),
+                    'traceback': ''.join(traceback.TracebackException.from_exception(error, capture_locals=False).format())}
 
 
-        def call_main(runner, argv):
-            sys.argv = argv
-            runner.main()
+        def load_measure(root):
+            sys.path[0] = str(root / 'tests/footprint')
+            module = importlib.import_module('measure')
+            if Path(module.__file__).resolve() != root / 'tests/footprint/measure.py':
+                raise RuntimeError('foreign measurement module')
+            for relative, expected in SOURCE_HASHES.items():
+                if hashlib.sha256((root / relative).read_bytes()).hexdigest() != expected:
+                    raise RuntimeError('diagnosis source differs: ' + relative)
+            return module
 
 
-        def child(root, diagnostics, argv):
-            import unittest
-            expected = root / 'scripts/ci/run_selected.py'
-            if (len(argv) != 7 or Path(argv[0]).resolve() != expected
-                    or argv[1:3] != ['--python-child', 'run']
-                    or argv[3] != '--python-spec' or argv[5] != '--python-events'):
-                raise RuntimeError('observer accepts only the unchanged execution child arguments')
-            runner = load_runner(root)
-            callbacks, observer_errors, originals = [], [], {}
-            with (diagnostics / 'tracebacks.txt').open('x', encoding='utf-8', newline='\n') as output:
-                output.write('Observation only. No required receipt or qualification claim.\n')
-                output.flush()
-
-                def record(kind, test, err, subtest=None):
-                    # Observation failures cannot change the original result callback.
-                    try:
-                        item = {'callback': kind, 'id': test.id()}
-                        if subtest is not None: item['subtest'] = str(subtest)
-                        callbacks.append(item)
-                        output.write('\n' + json.dumps(item, sort_keys=True) + '\n')
-                        if err is not None:
-                            traceback.print_exception(*err, file=output)
-                        output.flush()
-                    except Exception as error:
-                        observer_errors.append(type(error).__name__)
-
-                def observer(name, original):
-                    def observe(result, test, *args):
-                        returned = original(result, test, *args)
-                        if name == 'addSubTest':
-                            subtest, err = args
-                            if err is not None: record(name, test, err, subtest)
-                        else:
-                            record(name, test, args[0] if args else None)
-                        return returned
-                    return observe
-
-                for name in ('addFailure', 'addError', 'addSubTest', 'addExpectedFailure', 'addUnexpectedSuccess'):
-                    originals[name] = getattr(unittest.TestResult, name)
-                    setattr(unittest.TestResult, name, observer(name, originals[name]))
-                status = 1
-                try:
-                    call_main(runner, argv)
-                    status = 0
-                except SystemExit as error:
-                    status = error.code if isinstance(error.code, int) else int(error.code is not None)
-                    raise
-                finally:
-                    for name, original in originals.items(): setattr(unittest.TestResult, name, original)
-                    try:
-                        save(diagnostics / 'child-observation.json', {
-                            'qualification': 'diagnosis-only', 'wrapper_exit': status,
-                            'source_checkout_sha': SOURCE_CHECKOUT_SHA,
-                            'callbacks': callbacks, 'observer_errors': observer_errors,
-                            'argv': argv, 'cwd': str(Path.cwd()), 'python': sys.version,
-                            'python_executable': sys.executable, 'identity': identity(),
-                        })
-                    except Exception:
-                        print('diagnosis observer could not retain its summary', file=sys.stderr)
-
-
-        def parent(root, diagnostics, argv):
-            expected = root / 'scripts/ci/run_selected.py'
-            if (len(argv) != 5 or Path(argv[0]).resolve() != expected
-                    or argv[1:4] != ['--id', 'footprint-unit-windows-x64', '--evidence']):
-                raise RuntimeError('diagnosis runs exactly the complete Windows selected ID once')
-            if sys.platform != 'win32': raise RuntimeError('parent diagnosis requires native Windows')
+        def measure_child(root, diagnostics, argv):
+            expected = root / 'tests/footprint/measure.py'
+            if not argv or Path(argv[0]).resolve() != expected:
+                raise RuntimeError('only the original measure.py argv is admitted')
+            if os.environ.get('RICEVANTA_FAKE_MODE') != 'null-process':
+                raise RuntimeError('only the original null-process invocation is observed')
             diagnostics.mkdir(exist_ok=False)
-            runner = load_runner(root)
-            target = runner.inventory(root)['footprint-unit-windows-x64']
-            ids = runner.python_declarations(root / 'tests', target)
-            digest = hashlib.sha256(('\n'.join(ids) + '\n').encode()).hexdigest()
-            if len(ids) != 148 or digest != 'f55d1049b896c5b6600fb524d1cadf05a342a37d5d96101720d508936443d50f':
-                raise RuntimeError('diagnosis source inventory differs from the required 148 IDs')
-            source_paths = ['scripts/ci/run_selected.py', 'scripts/ci/targets.toml',
-                            'tests/footprint/test_check.py', 'tests/footprint/test_measure.py',
-                            'tests/footprint/test_samplers.py', 'tests/footprint/measure.py',
-                            'tests/footprint/samplers/windows.py']
-            save(diagnostics / 'inputs.json', {
-                'qualification': 'diagnosis-only', 'identity': identity(), 'argv': argv,
-                'source_checkout_sha': SOURCE_CHECKOUT_SHA,
-                'python': sys.version, 'python_executable': sys.executable,
-                'inventory': ids, 'inventory_sha256': digest,
-                'sha256': {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in source_paths},
-            })
-            original_execute, commands = runner.execute, []
+            measure = load_measure(root)
+            original_popen = subprocess.Popen
+            original_remove = measure._remove_tree
+            original_init = measure.MeasureFailure.__init__
+            init_was_local = '__init__' in measure.MeasureFailure.__dict__
+            phase_child, failures, retained, observer_errors = [], [], [], []
 
-            def execute(command, cwd, env, stdout_path, stderr_path):
-                phase = command[4] if len(command) == 9 and command[3] == '--python-child' else None
-                if (phase not in ('discover', 'run') or command[0] != sys.executable or command[1] != '-B'
-                        or Path(command[2]).resolve() != expected or command[5] != '--python-spec'
-                        or command[7] != '--python-events' or phase in [item['phase'] for item in commands]):
-                    raise RuntimeError('unexpected or repeated selected child invocation')
-                observed = command
-                if phase == 'run':
-                    observed = [sys.executable, '-B', str(Path(__file__).resolve()), 'child',
-                                '--root', str(root), '--diagnostics', str(diagnostics), '--', *command[2:]]
-                item = {'phase': phase, 'original_argv': command, 'observed_argv': observed, 'cwd': str(cwd)}
-                commands.append(item)
-                save(diagnostics / 'commands.json', commands)
-                status = original_execute(observed, cwd, env, stdout_path, stderr_path)
-                item['exit'] = status
-                save(diagnostics / 'commands.json', commands)
-                return status
+            def popen(command, *args, **kwargs):
+                child = original_popen(command, *args, **kwargs)
+                if len(command) > 3 and command[3] == 'run' and Path(command[2]).resolve() == root / 'tests/footprint/fake_agent.py':
+                    phase_child.append({'child': child, 'returned_monotonic': time.monotonic(), 'argv': command})
+                return child
 
-            runner.execute = execute
+            def failure_init(error, *args, **kwargs):
+                original_init(error, *args, **kwargs)
+                try:
+                    if args and str(args[0]).startswith('not_ready phase='):
+                        item = {'message': str(error), 'observed_monotonic': time.monotonic()}
+                        if phase_child:
+                            phase = phase_child[-1]
+                            item.update(pid=phase['child'].pid, returncode_at_failure=phase['child'].poll(),
+                                        since_popen_return_s=time.monotonic() - phase['returned_monotonic'])
+                        failures.append(item)
+                except Exception as observation:
+                    observer_errors.append(type(observation).__name__)
+
+            def copy_file(source, destination):
+                if not source.is_file() or source.is_symlink(): return
+                raw = source.read_bytes() if source.stat().st_size <= 1_048_576 else None
+                if raw is None:
+                    with source.open('rb') as stream: raw = stream.read(1_048_576)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with destination.open('wb') as stream: stream.write(raw)
+                retained.append({'source': str(source), 'retained': str(destination),
+                                 'source_bytes': source.stat().st_size, 'retained_bytes': len(raw),
+                                 'truncated': source.stat().st_size > len(raw),
+                                 'retained_sha256': hashlib.sha256(raw).hexdigest()})
+
+            def remove_tree(tree):
+                try:
+                    # Retain the one null-process phase even if its final semantic assertion fails later.
+                    if phase_child:
+                        tree = Path(tree)
+                        for relative in ('agent.stderr', 'agent.json', 'run/health.json', 'run/health.json.tmp'):
+                            copy_file(tree / relative, diagnostics / 'phase-before-cleanup' / relative)
+                        for index in range(4):
+                            name = 'agent.log' + ('.' + str(index) if index else '')
+                            copy_file(tree / 'logs' / name, diagnostics / 'phase-before-cleanup/logs' / name)
+                        record = Path(os.environ['RICEVANTA_FAKE_RECORD'])
+                        for source in sorted(record.iterdir())[:4]:
+                            if re.fullmatch('[0-9a-f]{64}\\.json', source.name):
+                                copy_file(source, diagnostics / 'fake-record' / source.name)
+                except Exception as observation:
+                    observer_errors.append(type(observation).__name__)
+                return original_remove(tree)
+
+            subprocess.Popen = popen
+            measure.MeasureFailure.__init__ = failure_init
+            measure._remove_tree = remove_tree
             status = 1
             try:
-                call_main(runner, argv)
-                status = 0
-            except SystemExit as error:
-                status = error.code if isinstance(error.code, int) else int(error.code is not None)
-                raise
+                sys.argv = argv
+                status = measure.main()
+                return status
             finally:
-                runner.execute = original_execute
-                save(diagnostics / 'parent-observation.json', {
-                    'qualification': 'diagnosis-only', 'wrapper_exit': status,
-                    'source_checkout_sha': SOURCE_CHECKOUT_SHA,
-                    'phases': [item['phase'] for item in commands], 'identity': identity(),
+                subprocess.Popen = original_popen
+                measure._remove_tree = original_remove
+                if init_was_local: measure.MeasureFailure.__init__ = original_init
+                else: del measure.MeasureFailure.__init__
+                save(diagnostics / 'measurement-observation.json', {
+                    'qualification': 'diagnosis-only', 'source_checkout_sha': SOURCE_SHA,
+                    'identity': identity(), 'argv': argv, 'exit': status, 'not_ready': failures,
+                    'phase_processes': [{key: value for key, value in item.items() if key != 'child'}
+                                        | {'pid': item['child'].pid, 'final_returncode': item['child'].poll()}
+                                        for item in phase_child],
+                    'retained_files': retained, 'observer_errors': observer_errors,
                 })
-                if [item['phase'] for item in commands] == ['discover', 'run']:
-                    summary = json.loads((diagnostics / 'child-observation.json').read_text(encoding='utf-8'))
-                    if summary['observer_errors']:
-                        raise RuntimeError('traceback observation failed; original child statuses remain retained')
+
+
+        def parent(root, diagnostics):
+            if sys.platform != 'win32': raise RuntimeError('native Windows observation only')
+            diagnostics.mkdir(exist_ok=False)
+            measure = load_measure(root)
+            tests = importlib.import_module('test_measure')
+            if Path(tests.__file__).resolve() != root / 'tests/footprint/test_measure.py':
+                raise RuntimeError('foreign test module')
+            save(diagnostics / 'inputs.json', {
+                'qualification': 'diagnosis-only', 'source_checkout_sha': SOURCE_SHA, 'identity': identity(),
+                'test_ids': IDS, 'python': sys.version, 'python_executable': sys.executable,
+                'sha256': {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+                           for name in SOURCE_HASHES},
+            })
+            original_run = subprocess.run
+            original_replace, original_write, original_read = os.replace, Path.write_bytes, measure.read_shared
+            counts = {'replace': 0, 'write_bytes': 0, 'read_shared': 0, 'active_readers': 0}
+            operations, callbacks, commands, observer_errors = [], [], [], []
+
+            def writer_operation(name, original, paths, *args, **kwargs):
+                counts[name] += 1
+                try:
+                    return original(*args, **kwargs)
+                except BaseException as error:
+                    try:
+                        operations.append({'operation': name, 'paths': [str(path) for path in paths],
+                                           'monotonic': time.monotonic(), 'counts': dict(counts),
+                                           'exception': exception_details(error)})
+                    except Exception as observation:
+                        observer_errors.append(type(observation).__name__)
+                    raise
+
+            def replace(source, destination, *args, **kwargs):
+                return writer_operation('replace', original_replace, (source, destination),
+                                        source, destination, *args, **kwargs)
+
+            def write(path, data):
+                return writer_operation('write_bytes', original_write, (path,), path, data)
+
+            def read(path, limit):
+                counts['read_shared'] += 1
+                counts['active_readers'] += 1
+                try: return original_read(path, limit)
+                finally: counts['active_readers'] -= 1
+
+            def run(command, *args, **kwargs):
+                env = kwargs.get('env', {})
+                if env.get('RICEVANTA_FAKE_MODE') != 'null-process':
+                    return original_run(command, *args, **kwargs)
+                if (commands or args or len(command) < 3 or command[:2] != [sys.executable, '-B']
+                        or Path(command[2]).resolve() != root / 'tests/footprint/measure.py'):
+                    raise RuntimeError('unexpected or repeated null-process launch')
+                observed = [sys.executable, '-B', str(Path(__file__).resolve()), 'measure-child',
+                            '--root', str(root), '--diagnostics', str(diagnostics / 'null-process'), '--', *command[2:]]
+                item = {'original_argv': command, 'observed_argv': observed}
+                commands.append(item)
+                returned = original_run(observed, **kwargs)
+                item['exit'] = returned.returncode
+                return returned
+
+            trace = (diagnostics / 'test-tracebacks.txt').open('x', encoding='utf-8', newline='\n')
+            class Result(unittest.TextTestResult):
+                def startTest(self, test):
+                    if test.id() == IDS[0]:
+                        os.replace, Path.write_bytes, measure.read_shared = replace, write, read
+                    super().startTest(test)
+
+                def stopTest(self, test):
+                    if test.id() == IDS[0]:
+                        os.replace, Path.write_bytes, measure.read_shared = original_replace, original_write, original_read
+                    super().stopTest(test)
+
+                def observe(self, kind, test, err, subtest=None):
+                    try:
+                        item = {'callback': kind, 'id': test.id(), 'subtest': str(subtest) if subtest else None}
+                        callbacks.append(item)
+                        trace.write(json.dumps(item, sort_keys=True) + '\n')
+                        # The standard callback may mutate tb_next. Capture before delegating.
+                        trace.write(''.join(traceback.TracebackException(*err, capture_locals=False).format()))
+                        trace.flush()
+                    except Exception as observation:
+                        observer_errors.append(type(observation).__name__)
+
+                def addFailure(self, test, err):
+                    self.observe('addFailure', test, err)
+                    super().addFailure(test, err)
+
+                def addError(self, test, err):
+                    self.observe('addError', test, err)
+                    super().addError(test, err)
+
+                def addSubTest(self, test, subtest, err):
+                    if err is not None: self.observe('addSubTest', test, err, subtest)
+                    super().addSubTest(test, subtest, err)
+
+            suite = unittest.TestSuite([tests.ObserverTests(IDS[0].rsplit('.', 1)[1]),
+                                        tests.WorkloadMeasurementTests(IDS[1].rsplit('.', 1)[1])])
+            assert [test.id() for test in suite] == list(IDS)
+            subprocess.run = run
+            result = None
+            try:
+                result = unittest.TextTestRunner(resultclass=Result, verbosity=2).run(suite)
+                return 0 if result.wasSuccessful() and result.testsRun == 2 and not result.skipped else 1
+            finally:
+                subprocess.run = original_run
+                os.replace, Path.write_bytes, measure.read_shared = original_replace, original_write, original_read
+                trace.close()
+                save(diagnostics / 'observations.json', {
+                    'qualification': 'diagnosis-only', 'source_checkout_sha': SOURCE_SHA, 'identity': identity(),
+                    'test_ids': IDS, 'testsRun': result.testsRun if result else None,
+                    'successful': result.wasSuccessful() if result else False,
+                    'writer_counts': counts, 'writer_failures': operations, 'callbacks': callbacks,
+                    'null_process_commands': commands, 'observer_errors': observer_errors,
+                })
 
 
         def main():
             parser = argparse.ArgumentParser(description=__doc__)
-            parser.add_argument('mode', choices=('parent', 'child'))
+            parser.add_argument('mode', choices=('parent', 'measure-child'))
             parser.add_argument('--root', required=True, type=Path)
             parser.add_argument('--diagnostics', required=True, type=Path)
             command = sys.argv[1:]
-            if '--' not in command: parser.error('an unchanged selected-runner argv must follow --')
-            split = command.index('--')
+            split = command.index('--') if '--' in command else len(command)
             args = parser.parse_args(command[:split])
             argv = command[split + 1:]
-            (parent if args.mode == 'parent' else child)(args.root.resolve(), args.diagnostics.resolve(), argv)
+            if args.mode == 'parent' and argv: parser.error('parent accepts no alternate test selection')
+            return (parent(args.root.resolve(), args.diagnostics.resolve()) if args.mode == 'parent'
+                    else measure_child(args.root.resolve(), args.diagnostics.resolve(), argv))
 
 
-        if __name__ == '__main__': main()
+        if __name__ == '__main__': sys.exit(main())
         PY
-        python - "$RUNNER_TEMP/footprint-windows-observer.py" <<'PY'
+        python - "$RUNNER_TEMP/footprint-windows-focused-observer.py" <<'PY'
         import hashlib, pathlib, sys
-        assert hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() == '4cc80a64bdb058172d3af5458561ac05f5e2e54ce674d45a7c2becc63afc6126'
+        assert hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() == 'd3bf15d67e5d37340eb017d981545442ae73100953c0a32034385567f05fffcd'
         PY
-    - name: Observe the complete Windows selected wrapper once
+    - name: Observe two original Windows test methods once
       shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: |
-        python -B "$RUNNER_TEMP/footprint-windows-observer.py" parent \
-          --root "$PWD" --diagnostics "$RUNNER_TEMP/footprint-windows-diagnosis" -- \
-          "$PWD/scripts/ci/run_selected.py" --id footprint-unit-windows-x64 --evidence "$RUNNER_TEMP/evidence"
+        python -B "$RUNNER_TEMP/footprint-windows-focused-observer.py" parent \
+          --root "$PWD" --diagnostics "$RUNNER_TEMP/footprint-windows-focused-diagnosis"
     - name: Re-verify admitted validator environment after observation
       if: always()
       shell: bash --noprofile --norc -p -e -o pipefail {0}
@@ -261,10 +355,9 @@ jobs:
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: diagnose-footprint-windows-${{ github.run_id }}-${{ github.run_attempt }}
-        path: |-
-          ${{ runner.temp }}/evidence
-          ${{ runner.temp }}/footprint-windows-diagnosis
+        name: diagnose-footprint-windows-focused-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          ${{ runner.temp }}/footprint-windows-focused-diagnosis
           ${{ runner.temp }}/admitted/bootstrap-evidence.json
         retention-days: 30
         if-no-files-found: error
