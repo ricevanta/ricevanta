@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import subprocess
+import sys
 from copy import deepcopy
 import inventory
 import json
@@ -12,6 +13,20 @@ import check_policy
 import python_env
 
 ROOT = Path(__file__).resolve().parents[2]
+
+class PolicyDiscoveryTests(unittest.TestCase):
+    def test_each_policy_case_is_discovered_once(self):
+        seen, duplicates = {}, []
+        def visit(suite):
+            for case in suite:
+                if isinstance(case, unittest.TestSuite):
+                    visit(case)
+                    continue
+                method = getattr(type(case), case._testMethodName)
+                if method in seen: duplicates.append((seen[method], case.id()))
+                else: seen[method] = case.id()
+        visit(unittest.TestLoader().loadTestsFromModule(sys.modules[__name__]))
+        self.assertEqual(duplicates, [])
 
 class EnvironmentAdmissionTests(unittest.TestCase):
     def test_composed_proof_steps_use_the_admission_shell(self):
@@ -110,7 +125,7 @@ class EnvironmentAdmissionTests(unittest.TestCase):
             scope.pop('env')
 
 
-class PolicyTests(unittest.TestCase):
+class PolicyFixture:
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='ci-policy-'); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
@@ -134,6 +149,7 @@ class PolicyTests(unittest.TestCase):
         change(data)
         path.write_text(yaml.safe_dump(data, sort_keys=False))
 
+class PolicyTests(PolicyFixture, unittest.TestCase):
     def test_full_policy_applies_environment_admission_to_every_job_family(self):
         for path in sorted((self.root / '.github/workflows').glob('*.yml')):
             baseline = path.read_text()
@@ -1370,7 +1386,7 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(check_policy.check(self.root))
                 shutil.copyfile(ROOT / f'.github/workflows/{name}.yml', self.root / f'.github/workflows/{name}.yml')
 
-class SecurityPolicyTests(PolicyTests):
+class SecurityPolicyTests(PolicyFixture, unittest.TestCase):
     def test_scanners_are_direct_unconditional_and_token_is_single_scope(self):
         data = yaml.load((ROOT/'.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertIn('semgrep', data['jobs'])
