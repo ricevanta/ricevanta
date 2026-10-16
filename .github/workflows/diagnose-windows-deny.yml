@@ -1,0 +1,82 @@
+name: Diagnose Windows inherited deny mask (non-authoritative)
+'on':
+  push:
+    branches:
+      - wip/windows-deny-diagnose
+permissions:
+  contents: read
+jobs:
+  diagnose-windows-deny-mask:
+    name: Diagnose Windows inherited deny mask
+    runs-on: windows-2025
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: pwsh -NoLogo -NoProfile -NonInteractive -Command ". '{0}'"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Capture two bounded ACL permission controls
+        timeout-minutes: 2
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = Join-Path $env:RUNNER_TEMP 'diagnose-windows-deny'
+          $null = [System.IO.Directory]::CreateDirectory($directory)
+          $log = Join-Path $directory 'masks.log'
+          [System.IO.File]::WriteAllText($log, '', [System.Text.UTF8Encoding]::new($false))
+          function Write-DiagnosticLine([string]$Line) {
+              $text = $Line + [Environment]::NewLine
+              $size = [System.Text.Encoding]::UTF8.GetByteCount($text)
+              if ((Get-Item -LiteralPath $log).Length + $size -gt 65536) {
+                  throw 'Diagnostic exceeded the 64 KiB output bound'
+              }
+              [System.IO.File]::AppendAllText($log, $text, [System.Text.UTF8Encoding]::new($false))
+              Write-Host $Line
+          }
+          try {
+              if ($env:GITHUB_REF -ne 'refs/heads/wip/windows-deny-diagnose') {
+                  throw 'Unexpected diagnosis branch'
+              }
+              if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') {
+                  throw 'Unexpected native host'
+              }
+              Write-DiagnosticLine ('commit={0} run={1} attempt={2}' -f $env:GITHUB_SHA, $env:GITHUB_RUN_ID, $env:GITHUB_RUN_ATTEMPT)
+              Write-DiagnosticLine ('host=windows-x64 powershell={0}' -f $PSVersionTable.PSVersion)
+              $expected = [ordered]@{
+                  'agent/crates/os-windows/src/platform.rs' = '4cc6ecacc8160546c60790bf7495b3f7c144a82180439cbfb32e067399d8169b'
+                  'agent/crates/os-windows/src/sys.rs' = '35c8dadc9b7169bf77b9e10bc11b00bb642f03d1d39c6cbb94d251cc26da8fb4'
+                  'agent/crates/os-windows/tests/protection.rs' = '05e570339bb0fce411adf822c33f0862bf7a4a172a49a673f7576e5aa9631527'
+              }
+              foreach ($entry in $expected.GetEnumerator()) {
+                  $source = Join-Path $env:GITHUB_WORKSPACE $entry.Key
+                  $actual = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+                  Write-DiagnosticLine ('source={0} sha256={1}' -f $entry.Key, $actual)
+                  if ($actual -ne $entry.Value) { throw 'Unexpected Windows source bytes' }
+              }
+              $script = Join-Path $env:GITHUB_WORKSPACE 'agent/tools/diagnose-windows-deny.ps1'
+              $tokens = $null
+              $parseErrors = $null
+              $null = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$parseErrors)
+              if ($parseErrors.Count -ne 0) {
+                  Write-DiagnosticLine ('parser-errors={0}' -f $parseErrors.Count)
+                  throw 'Diagnostic PowerShell parser rejected the script'
+              }
+              Write-DiagnosticLine ('probe-sha256={0}' -f (Get-FileHash -LiteralPath $script -Algorithm SHA256).Hash.ToLowerInvariant())
+              & $script 2>&1 | ForEach-Object { Write-DiagnosticLine ([string]$_) }
+              Write-DiagnosticLine 'diagnostic-complete=true'
+          } catch {
+              $failure = $_.Exception.GetBaseException()
+              Write-DiagnosticLine ('diagnostic-failed: type={0} hresult=0x{1:X8} message={2}' -f $failure.GetType().Name, $failure.HResult, $failure.Message)
+              throw
+          }
+      - name: Retain bounded diagnostic text
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: diagnose-windows-deny-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/diagnose-windows-deny/masks.log
+          retention-days: 30
+          if-no-files-found: error
+
