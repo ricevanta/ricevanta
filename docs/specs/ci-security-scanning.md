@@ -149,7 +149,7 @@ The benefit is explicit coverage of dependency-free tooling without weakening an
 
 ### Implementer handoff for these boundaries
 
-This contract refines SH-06 without changing its decision, scanner version or receipt schema. [Plan Task 4](../plans/ci-security-scanning.md#task-4-complete-the-console-and-empty-manifest-boundaries) owns the remaining file changes, tests and qualification sequence. Both documents require independent approval before that implementation starts. The helper and test digest constants do not yet match section 3, and the helper still rejects these empty manifests; the spec and TOML pins alone do not make the current gate pass.
+This contract refines SH-06 without changing its decision, scanner version or receipt schema. [Plan Task 4](../plans/ci-security-scanning.md#task-4-complete-the-console-and-empty-manifest-boundaries) owns implementation and qualification checks. The helper and test digest constants match section 3, and the helper implements the strict empty-manifest profile, native evidence reconciliation and isolated parser qualification controls. Genuine admitted-image parser execution, authenticated seven-input scanning, the unchanged console OSV gate and same-run receipt proof remain open. Synthetic test results do not establish those guarantees; final independent implementation approval and landing require the missing qualification evidence for the final candidate.
 
 ### Generated scanner input
 

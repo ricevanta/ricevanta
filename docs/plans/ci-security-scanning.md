@@ -101,6 +101,9 @@ Removal follows the spec and the existing console authority. Removing or refresh
 
 ## Task 4. Complete the console and empty-manifest boundaries
 
+- [x] Implement the reviewed pins, host profile, native reconciliation and isolated parser qualification controls with focused rejection tests.
+- [ ] Obtain admitted-image parser and normal seven-input scan evidence, OSV qualification and independent adversarial code review.
+
 A bounded `implementer` owns only `scripts/ci/security_scan.py`, `scripts/ci/test_security_scan.py`, `scripts/ci/semgrep-exceptions.toml` and relevant fixtures or isolated qualification controls under `scripts/ci/fixtures/security/`. Freeze Tasks 1 to 3's overlapping paths first. The designer owns the specification, this plan and the Semgrep TODO entry; the primary agent obtains a separate `design_reviewer` approval of both documents before implementation. Preserve other workers' changes. No production scanner command, observer semantics, workflow, native callback, receipt schema, account policy, console source or dependency change is authorized. The isolated token-free parser controls below are the only added scanner qualification execution.
 
 1. Synchronize the helper identity and duplicate test digest with the [complete reviewed console inventory](../specs/ci-security-scanning.md#exact-build-only-sca-exception) and exception TOML. Recompute membership, Git blob hashes, canonical bytes and the digest independently for verification, never as automatic admission. Retain the existing path fixture and assert both serving files remain members. A mismatch returns for review; it does not authorize a new pin.

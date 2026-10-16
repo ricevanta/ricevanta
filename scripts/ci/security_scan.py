@@ -29,12 +29,16 @@ REPOSITORY = 'ricevanta/ricevanta'
 SEMGREP_EXCEPTION_IDENTITY = dict(advisoryId='CVE-2026-93687',osvAdvisoryId='GHSA-vfj7-8cjw-p6xm',product='sca',severity='ERROR',
     rule='ssc-dc89f360-8dea-4ff2-92c4-e67670eb22ef',package='braces',packageVersion='3.0.3',ecosystem='npm',
     path='console/pnpm-lock.yaml',line=870,consoleFiles=117,
-    consoleSha256='c4dc4d18e4a167890a3486abec40a543a0df4cada27f5a350317b5c23af7dbf8')
+    consoleSha256='72a9d16e71a9f481a6a3e0aabebb6ed74c7fb989cc059bc488d5994a5426369b')
+EMPTY_MANIFESTS = {
+    'scripts/ci/gotestdecls/go.mod': ('ricevanta.invalid/gotestdecls','1.27.1'),
+    'scripts/ci/fixtures/selected/tiny-go/go.mod': ('example.com/tiny','1.22'),
+}
 SEMGREP_COMMAND = ['semgrep', 'ci', '--code', '--supply-chain', '--pro', '--no-suppress-errors',
                    '--verbose', '--disable-nosem', '--disable-version-check', '--metrics=off',
                    '--json-output=/out/semgrep.json']
 SCANNER_STAGES = {'semgrep-image-pull','semgrep-image-inspect','semgrep-pro-admission',
-                  'semgrep-code-controls','semgrep-rust-probe','semgrep-vue-probe','semgrep-scan'}
+                  'semgrep-code-controls','semgrep-empty-parser-controls','semgrep-rust-probe','semgrep-vue-probe','semgrep-scan'}
 OBSERVER_STAGES = {'startup','bundled-pro','code-controls','authenticated-scan'}
 OBSERVER_STAGES.update({'start-scan-request','start-scan-validation','scan-configured','core-invocation',
     'plan-serialization','plan-validation','plan-complete','core-result-validation','core-complete',
@@ -249,6 +253,103 @@ def verify_console_boundary(source,hashes,modes,exceptions):
     return dict(files=len(console),canonicalBytes=size,sha256=rows.hexdigest())
 
 
+def verify_empty_manifests(source,hashes):
+    """Consume the entire reviewed profile independently of native scan counts."""
+    if not isinstance(source,Path) or not isinstance(hashes,dict):
+        raise ValueError('empty manifest boundary mismatch')
+    for path in hashes:
+        if path != safe_path(path):raise ValueError('empty manifest boundary mismatch')
+    verified={}
+    for path,(module,version) in EMPTY_MANIFESTS.items():
+        if path not in hashes or str(PurePosixPath(path).with_name('go.sum')) in hashes:
+            raise ValueError('empty manifest inventory mismatch')
+        candidate=source/path
+        try:
+            if source.is_symlink():raise ValueError('empty manifest boundary mismatch')
+            for parent in candidate.parents:
+                if parent == source:break
+                if parent.is_symlink():raise ValueError('empty manifest boundary mismatch')
+            before=candidate.lstat()
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > 4096:
+                raise ValueError('empty manifest boundary mismatch')
+            with candidate.open('rb') as stream:
+                opened=os.fstat(stream.fileno());payload=stream.read(4097)
+            after=candidate.lstat()
+            if (not stat.S_ISREG(after.st_mode) or after.st_nlink != 1
+                    or (before.st_dev,before.st_ino) != (opened.st_dev,opened.st_ino)
+                    or (after.st_dev,after.st_ino) != (opened.st_dev,opened.st_ino)
+                    or len(payload)>4096 or hashlib.sha256(payload).hexdigest()!=hashes[path]):
+                raise ValueError('empty manifest boundary mismatch')
+            pattern=rb'\n*module '+re.escape(module.encode('ascii'))+rb'\n+go '+re.escape(version.encode('ascii'))+rb'\n+'
+            if re.fullmatch(pattern,payload) is None:raise ValueError('empty manifest profile mismatch')
+            verified[path]=hashes[path]
+        except OSError:
+            raise ValueError('empty manifest boundary mismatch') from None
+    return verified
+
+
+def verify_empty_qualification(evidence,lock,hashes,source):
+    """Check only evidence produced by the isolated admitted-image invocation."""
+    try:
+        verify_empty_manifests(source,hashes)
+        if (set(evidence) != {'version','image','config','inputs'} or evidence['version'] != '1.178.0'
+                or evidence['image'] != lock['semgrep']['manifest'] or evidence['config'] != lock['semgrep']['config']
+                or set(evidence['inputs']) != set(EMPTY_MANIFESTS)):
+            raise ValueError('empty manifest qualification mismatch')
+        for path,row in evidence['inputs'].items():
+            if (set(row) != {'sha256','dependencies','errors','populated','malformed'} or row['sha256'] != hashes[path]
+                    or type(row['dependencies']) is not int or row['dependencies'] != 0
+                    or type(row['errors']) is not int or row['errors'] != 0):
+                raise ValueError('empty manifest qualification mismatch')
+            for case in ('populated','malformed'):
+                control=row[case]
+                fields={'sha256','dependencies','errors'}|({'package','version','ecosystem'} if case=='populated' else set())
+                if (set(control) != fields or not re.fullmatch('[0-9a-f]{64}',control['sha256'])
+                        or type(control['dependencies']) is not int or type(control['errors']) is not int):
+                    raise ValueError('empty manifest qualification mismatch')
+                suffix=(b'require example.com/semgrep-control v1.2.3\n' if case=='populated'
+                        else b'not_a_go_directive invalid\n')
+                payload=(source/path).read_bytes()
+                if hashlib.sha256(payload).hexdigest()!=hashes[path] or hashlib.sha256(payload+suffix).hexdigest()!=control['sha256']:
+                    raise ValueError('empty manifest qualification mismatch')
+                if case=='populated':
+                    if (control['dependencies'] != 1 or control['errors'] != 0 or
+                            (control['package'],control['version'],control['ecosystem']) != ('example.com/semgrep-control','1.2.3','gomod')):
+                        raise ValueError('empty manifest qualification mismatch')
+                elif control['dependencies'] < 0 or control['errors'] <= 0:
+                    raise ValueError('empty manifest qualification mismatch')
+    except (KeyError,TypeError,AttributeError):
+        raise ValueError('empty manifest qualification mismatch') from None
+    return evidence
+
+
+def empty_parser_controls(image,root,output,source,hashes,lock):
+    empty=verify_empty_manifests(source,hashes)
+    staging=output/'empty-parser-source';staging.mkdir()
+    control_hashes={}
+    for path,digest in empty.items():
+        payload=(source/path).read_bytes()
+        if hashlib.sha256(payload).hexdigest()!=digest:raise ValueError('empty manifest boundary mismatch')
+        control_hashes[path]={}
+        for case,suffix in (('empty',b''),('populated',b'require example.com/semgrep-control v1.2.3\n'),
+                            ('malformed',b'not_a_go_directive invalid\n')):
+            target=staging/case/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(payload+suffix)
+            control_hashes[path][case]=hashlib.sha256(payload+suffix).hexdigest()
+    command=container_command(image,staging,output,root/'scripts/ci',scan=False)
+    command[-2:]=['/control/fixtures/security/qualify_empty_manifests.py']
+    execute(command,{'PATH':PATH,'HOME':str(output)},timeout=120,stage='semgrep-empty-parser-controls')
+    native=read_private(output/'empty-parser.json',16384)
+    if not isinstance(native,dict) or set(native) != {'version','inputs'}:raise ValueError('empty manifest qualification mismatch')
+    evidence=dict(native,image=lock['semgrep']['manifest'],config=lock['semgrep']['config'])
+    verify_empty_qualification(evidence,lock,hashes,source)
+    for path,cases in control_hashes.items():
+        for case,digest in cases.items():
+            observed=evidence['inputs'][path] if case=='empty' else evidence['inputs'][path][case]
+            if observed['sha256']!=digest:raise ValueError('empty manifest qualification mismatch')
+    verify_empty_manifests(source,hashes)
+    return evidence
+
+
 def semgrep_exception_matches(result,entry):
     try:
         extra=result['extra'];metadata=extra['metadata'];match=extra['sca_info']['dependency_match'];dependency=match['found_dependency']
@@ -331,8 +432,17 @@ def fresh_output(root, output):
 
 
 def validate_source_entry(root, mode, path, payload):
+    original=path
     path = safe_path(path)
     candidate = root / path
+    if path in EMPTY_MANIFESTS:
+        if original!=path or mode not in ('100644','100755') or root.is_symlink():
+            raise ValueError('empty manifest boundary mismatch')
+        for parent in candidate.parents:
+            if parent==root:break
+            if parent.is_symlink():raise ValueError('empty manifest boundary mismatch')
+        info=candidate.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:raise ValueError('empty manifest boundary mismatch')
     if mode == '160000': raise ValueError('unexpected submodule')
     if mode == '120000':
         if not candidate.is_symlink() or os.readlink(candidate).encode() != payload:
@@ -561,24 +671,40 @@ def semgrep_evidence(report, summary, sha, invocation, hashes,auxiliary=frozense
         code_work = code_work_evidence(summary['codeWork'],rules,targets,hashes,auxiliary)
         source_targets = [p for p in targets if PurePosixPath(p).suffix in ('.go','.rs','.py','.ts','.tsx','.js','.jsx','.vue')]
         if not source_targets: raise ValueError('empty Code source target inventory')
+        empty=verify_empty_manifests(source,hashes)
         dependencies = summary['dependencies']
-        if not isinstance(dependencies,dict) or not all(safe_path(p) in hashes and type(n) is int and n > 0 for p,n in dependencies.items()):
+        if not isinstance(dependencies,dict) or not all(p == safe_path(p) and p in hashes and type(n) is int
+                and (n == 0 if p in empty else n > 0) for p,n in dependencies.items()):
             raise ValueError('invalid parsed dependency inventory')
-        expected = expected_dependencies(hashes)
-        if not expected or not set(expected) <= set(dependencies): raise ValueError('omitted supported dependency input')
-        coverage = {}
+        expected = set(expected_dependencies(hashes))
+        if not expected or not expected-set(empty) <= set(dependencies):raise ValueError('omitted supported dependency input')
+        coverage = {};empty_native={}
         for subproject in report['subprojects']:
-            paths = [safe_path(p) for p in subproject['dependency_sources']]
-            if not set(paths) & set(expected): continue
+            raw_paths=subproject['dependency_sources']
+            if not isinstance(raw_paths,list):raise ValueError('dependency coverage mismatch')
+            paths = [safe_path(p) for p in raw_paths]
+            if paths != raw_paths or len(set(paths)) != len(paths):raise ValueError('dependency coverage mismatch')
+            relevant=set(paths)&expected
+            if not relevant:continue
             stats = subproject['resolved_stats']
             if subproject['resolved'] is not True or subproject.get('unresolved_reason') is not None or stats['resolution_method'] != 'LockfileParsing':
                 raise ValueError('unresolved supported dependency input')
             count = stats['dependency_count']
-            if type(count) is not int or count <= 0: raise ValueError('empty supported dependency inventory')
-            for path in set(paths) & set(expected):
-                if path in coverage or dependencies[path] != count: raise ValueError('dependency coverage mismatch')
+            for path in relevant:
+                if path in coverage:raise ValueError('dependency coverage mismatch')
+                if path in empty:
+                    if paths != [path] or stats['ecosystem'] != 'gomod' or type(count) is not int or count != 0:
+                        raise ValueError('empty manifest native mismatch')
+                    if path in dependencies and (type(dependencies[path]) is not int or dependencies[path] != 0):
+                        raise ValueError('empty manifest native mismatch')
+                    empty_native[path]=dict(resolved=subproject['resolved'],resolutionMethod=stats['resolution_method'],
+                        ecosystem=stats['ecosystem'],dependencyCount=count,mapPresent=path in dependencies)
+                    if path in dependencies:empty_native[path]['mapCount']=dependencies[path]
+                else:
+                    if type(count) is not int or count <= 0:raise ValueError('empty supported dependency inventory')
+                    if dependencies[path] != count:raise ValueError('dependency coverage mismatch')
                 coverage[path] = count
-        if set(coverage) != set(expected): raise ValueError('missing native dependency parser evidence')
+        if set(coverage) != expected:raise ValueError('missing native dependency parser evidence')
         # Native rule.product supplies the product when normal finding metadata
         # omits it. Explicit conflicting metadata still fails closed.
         results = []
@@ -607,7 +733,7 @@ def semgrep_evidence(report, summary, sha, invocation, hashes,auxiliary=frozense
                     configuredCodeRules=configured['sast'],
                     configuredSupplyChainRules=configured['sca'],
                     mixedTargets=len(targets),mixedSourceTargets=len(source_targets),mixedSourceExtensions=language_counts,configuredCodeRuleLanguages=rule_languages,
-                    dependencies=coverage, findings=safe, unsupportedTargets=ignored,
+                    dependencies=dict(dependencies), emptyInputs=empty, emptyNativeInputs=empty_native, findings=safe, unsupportedTargets=ignored,
                     skippedTargets=skipped,skippedTargetCount=len(skipped),
                     coreSkippedTargets=code_work['skippedTargets'],coreSkippedRules=code_work['skippedRules'],
                     proVersion=summary['proVersion'],
@@ -752,6 +878,7 @@ def admit_semgrep(root, value, output, lock):
     hashes = snapshot(root,value,output / 'source',console_modes=console_modes)
     exceptions=load_semgrep_exceptions(output/'source',hashes)
     verify_console_boundary(output/'source',hashes,console_modes,exceptions)
+    verify_empty_manifests(output/'source',hashes)
     # Explicit control overlay disables broad default exclusions. It is outside
     # the unchanged source hash inventory and contains no source code.
     ignore = output/'source'/AUXILIARY_PATH
@@ -763,11 +890,13 @@ def admit_semgrep(root, value, output, lock):
     execute(container_command(image,output/'source',output,root/'scripts/ci',scan=False),
             {'PATH':PATH,'HOME':str(output)},timeout=180,stage='semgrep-pro-admission')
     controls = semgrep_controls(image,root,output)
+    controls['emptyManifests']=empty_parser_controls(image,root,output,output/'source',hashes,lock)
     pro = read_private(output/'pro.json',4096)
     if set(pro) != {'version','sha256'} or pro['sha256'] != lock['pro']['sha256']:
         raise ValueError('invalid admitted Pro result')
     verify_auxiliary(output/'source',hashes,overlay)
     verify_console_boundary(output/'source',hashes,console_modes,exceptions)
+    verify_empty_manifests(output/'source',hashes)
     admission=dict(route=value,sourceHashes=hashes,pro=pro,tools=lock,controls=controls,overlay=overlay)
     if exceptions:admission['consoleModes']=console_modes
     write_json(output/'admission.json',admission)
@@ -785,6 +914,8 @@ def run_semgrep(root, value, number, output, lock, token):
     exceptions=load_semgrep_exceptions(admission_dir/'source',admission['sourceHashes'])
     console_modes=admission.get('consoleModes')
     verify_console_boundary(admission_dir/'source',admission['sourceHashes'],console_modes,exceptions)
+    verify_empty_manifests(admission_dir/'source',admission['sourceHashes'])
+    verify_empty_qualification(admission['controls'].get('emptyManifests'),lock,admission['sourceHashes'],admission_dir/'source')
     image = admitted_image(lock['semgrep'],pull=False)
     invocation = os.urandom(16).hex()
     write_json(output/'context.json',dict(invocation=invocation,testedSha=value['testedSha']))
@@ -820,6 +951,7 @@ def verified_completion(root, value, output, unit, lock):
         admission_dir = output.parent/'security-semgrep-admission'
         admission = read_private(admission_dir/'admission.json',10_000_000)
         context = read_private(output/'context.json',4096)
+        verify_empty_qualification(admission['controls'].get('emptyManifests'),lock,admission['sourceHashes'],admission_dir/'source')
         verify_snapshot(admission_dir/'source',admission['sourceHashes'])
         auxiliary=verify_auxiliary(admission_dir/'source',admission['sourceHashes'],admission['overlay'])
         exceptions=load_semgrep_exceptions(admission_dir/'source',admission['sourceHashes'])
@@ -1157,6 +1289,11 @@ FAILURE_CODES = {
     'dependency coverage mismatch':'dependency-count-mismatch',
     'unresolved supported dependency input':'dependency-input-unresolved',
     'empty supported dependency inventory':'dependency-inventory-empty',
+    'empty manifest boundary mismatch':'empty-manifest-boundary',
+    'empty manifest inventory mismatch':'empty-manifest-inventory',
+    'empty manifest profile mismatch':'empty-manifest-profile',
+    'empty manifest native mismatch':'empty-manifest-native',
+    'empty manifest qualification mismatch':'empty-manifest-qualification',
     'missing or foreign scanned targets':'scanned-targets-missing-or-foreign',
     'Semgrep scan errors or wrong version/engine':'scan-errors-or-engine-version',
     'stale observer summary':'observer-summary-stale',
