@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -179,6 +181,9 @@ func FuzzExtractLine(f *testing.F) {
 			t.Fatal("raw/number changed")
 		}
 		assertReferenceLine(t, got, raw, number, descriptor(first, count), "device-a")
+		if validLineJSON(raw) {
+			assertWalkOracle(t, newLineWalker(uint64(len(raw))), raw)
+		}
 	})
 }
 
@@ -187,4 +192,101 @@ func lineSentinel(name *string) error {
 		return nil
 	}
 	return map[string]error{"body.ErrJSON": ErrJSON, "body.ErrJSONKeys": ErrJSONKeys, "body.ErrFields": ErrFields, "body.ErrEventID": ErrEventID, "body.ErrSequenceRange": ErrSequenceRange, "body.ErrSequencePosition": ErrSequencePosition, "body.ErrDeviceBinding": ErrDeviceBinding}[*name]
+}
+
+func TestWalkCapacity(t *testing.T) {
+	const L = MaxLineBytes
+	lines := []struct {
+		name    string
+		line    []byte
+		ok      bool
+		entries int
+	}{
+		{"dupempty", dupEmptyLine(), false, 209715},
+		{"arrayobjs", firstLine(genArrayObjs(1, L)), true, 0},
+		{"singlechar", firstLine(genSingleChar(1, L)), true, 0},
+		{"prefix", firstLine(genPrefix(1, L)), true, 0},
+		{"flat", firstLine(genFlat(1, L)), true, 0},
+	}
+	for _, c := range lines {
+		t.Run(c.name, func(t *testing.T) {
+			w := newLineWalker(uint64(MaxDecodedBytes))
+			if cap(w.arena) != L || cap(w.entries) != L/5+1 || cap(w.stack) != MaxJSONDepth {
+				t.Fatalf("initial capacity arena %d entries %d stack %d", cap(w.arena), cap(w.entries), cap(w.stack))
+			}
+			arena, entries := &w.arena[:1][0], &w.entries[:1][0]
+			if _, ok := w.walkFields(c.line); ok != c.ok {
+				t.Fatalf("walk ok=%v", ok)
+			}
+			if c.entries != 0 && len(w.entries) != c.entries {
+				t.Fatalf("entries %d, want %d", len(w.entries), c.entries)
+			}
+			if cap(w.arena) != L || cap(w.entries) != L/5+1 || cap(w.stack) != MaxJSONDepth || &w.arena[:1][0] != arena || &w.entries[:1][0] != entries {
+				t.Fatal("walker state grew")
+			}
+			if allocs := testing.AllocsPerRun(3, func() { w.walkFields(c.line) }); allocs != 0 {
+				t.Fatalf("walk allocated %.0f times", allocs)
+			}
+		})
+	}
+	small := newLineWalker(100)
+	if cap(small.arena) != 100 || cap(small.entries) != 21 {
+		t.Fatalf("declared size 100: arena %d entries %d", cap(small.arena), cap(small.entries))
+	}
+}
+
+func TestWalkAllocations(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		line  []byte
+		limit float64
+	}{
+		{"flat-1MiB", firstLine(genFlat(1, MaxLineBytes)), 32},
+		{"realistic", firstLine(genRealistic(1)), 64},
+	} {
+		d := descriptor(0, 1)
+		if got := extractLine(c.line, 1, d, "device-a"); got.Err != nil {
+			t.Fatalf("%s: %v", c.name, got.Err)
+		}
+		allocs := testing.AllocsPerRun(5, func() { extractLine(c.line, 1, d, "device-a") })
+		t.Logf("%s: %.0f allocations", c.name, allocs)
+		if allocs > c.limit {
+			t.Fatalf("%s: %.0f allocations, limit %.0f", c.name, allocs, c.limit)
+		}
+	}
+}
+
+func TestDecodeWalkerNotRetained(t *testing.T) {
+	plain := genFlat(4, MaxLineBytes)
+	frame := encode(t, plain)
+	d := descriptor(0, 4)
+	var walkers []*lineWalker
+	walkerCreated = func(w *lineWalker) { walkers = append(walkers, w) }
+	defer func() { walkerCreated = nil }()
+	for range 2 {
+		lines, e := Decode(&io.LimitedReader{R: bytes.NewReader(frame), N: remainingBudget}, d, "device-a")
+		if e != nil || len(lines) != 4 || lines[0].Err != nil {
+			t.Fatalf("decode: %v", e)
+		}
+	}
+	if len(walkers) != 2 || walkers[0] == walkers[1] || &walkers[0].arena[:1][0] == &walkers[1].arena[:1][0] || &walkers[0].entries[:1][0] == &walkers[1].entries[:1][0] {
+		t.Fatalf("Decode calls shared walker state (%d walkers)", len(walkers))
+	}
+	walkerCreated = nil
+	walkers = nil
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	lines, e := Decode(&io.LimitedReader{R: bytes.NewReader(frame), N: remainingBudget}, d, "device-a")
+	if e != nil || len(lines) != 4 {
+		t.Fatalf("decode: %v", e)
+	}
+	lines = nil
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	retained := int64(after.HeapAlloc) - int64(before.HeapAlloc)
+	t.Logf("retained %d bytes after a 1 MiB-line batch", retained)
+	if retained > 2<<20 {
+		t.Fatalf("retained %d bytes after Decode returned", retained)
+	}
 }
