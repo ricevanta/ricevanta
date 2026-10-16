@@ -232,13 +232,24 @@ fn environment_is_read_by_from_env() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        output.status.success() && stdout.contains("1 passed"),
+        output.status.success()
+            && stdout
+                .lines()
+                .filter(|line| *line == "test from_env_child ... ok")
+                .count()
+                == 1
+            && stdout.lines().any(|line| {
+                line.starts_with("test result: ok. 1 passed; 0 failed; 0 ignored;")
+            }),
         "{stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(listener.receive(), "READY=1");
     assert_eq!(listener.receive(), "WATCHDOG=1");
     listener.assert_empty();
+    eprintln!(
+        "RUST_CHILD {{\"target\":\"notify\",\"parent\":\"environment_is_read_by_from_env\",\"test\":\"from_env_child\",\"result\":\"success\"}}"
+    );
 }
 
 #[test]

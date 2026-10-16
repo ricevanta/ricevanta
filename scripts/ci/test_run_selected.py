@@ -118,7 +118,7 @@ class InventoryTests(unittest.TestCase):
                          'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --list')
         self.assertEqual((TARGETS['spool-extended']['seed'], TARGETS['spool-extended']['cases']), ('0x525653505f763031', 100000))
         self.assertEqual((TARGETS['batch-extended']['seed'], TARGETS['batch-extended']['cases']), ('0x5249564241544348', 20000))
-        self.assertEqual(join(run_selected.run_command(TARGETS['agent-unit'])), 'cargo test --locked --workspace')
+        self.assertEqual(join(run_selected.run_command(TARGETS['agent-unit'])), 'cargo test --locked --workspace -- --nocapture')
         self.assertEqual(join(run_selected.run_command(TARGETS['interop-race'])),
                          'go test -json -race -tags rustinterop -count=1 ./internal/events/body -run ^TestRustWriter')
         self.assertEqual(join(run_selected.discovery_command(TARGETS['interop-race'])),
@@ -151,7 +151,13 @@ class InventoryTests(unittest.TestCase):
                 self.assertNotIn(TARGETS[row['proof']]['mode'], row['modes'], row)
             self.assertEqual(parents, {'TestDecodeVerifiedYAMLInstrumented': 'TestDecodeVerifiedYAMLCallCounts',
                                        'TestAgreementOutcomeChild': 'TestAgreementRejectsOutcomeMismatch'})
-        self.assertEqual({t for _, t in TARGETS['agent-unit']['skips']}, {'fuzz_recover_extended', 'fuzz_seal_extended'})
+        expected = {'fuzz_recover_extended', 'fuzz_seal_extended', 'fuzz_json_extended'}
+        if sys.platform in ('linux', 'darwin'):
+            expected.update({'root_foreign_owner_of_config_and_parent_fails', 'root_directory_parent_owner_and_group_rules',
+                             'root_service_mode_refuses_unprivileged_directory_owner', 'root_foreign_health_file_is_refused_untouched',
+                             'umask_child_narrow', 'umask_child_open'})
+        if sys.platform == 'linux': expected.add('from_env_child')
+        self.assertEqual({t for _, t in TARGETS['agent-unit']['skips']}, expected)
         for target_id in ('loader-extended', 'loader-repeat', 'loader-gate-b-extended', 'ocsf-native', 'spool-extended', 'interop-unit', 'key-admission-bench'):
             self.assertEqual(TARGETS[target_id]['skips'], {}, target_id)
         self.assertIn(('github.com/ricevanta/ricevanta/server/internal/extensions/loader', 'TestParserBudgetExtended'), TARGETS['loader-fuzz']['skips'])
@@ -526,6 +532,34 @@ class RustTests(unittest.TestCase):
         for name, change in controls.items():
             with self.subTest(control=name), self.assertRaises(EvidenceError):
                 self.verify(**change)
+
+    def test_json_property_accepted_count_is_bound_to_its_exact_target(self):
+        target = dict(TARGETS['json-extended'])
+        listing = self.listing.replace('props_extended', target['test'])
+        stdout = self.stdout.replace(b'props_extended', target['test'].encode())
+        record = b'seed=0x52564a534f4e5631 cases=20000 accepted=100 elapsed=100ms\n'
+        def verify(record=record, selected=target):
+            return run_selected.verify(selected, listing, stdout, record, 0, None)
+        summary = verify()
+        self.assertEqual(summary, {'test': 'fuzz_json_extended', 'seed': '0x52564a534f4e5631',
+                                   'cases': 20000, 'accepted': 100, 'elapsed': '100ms'})
+        for changed in [b'', record * 2, record + record.replace(b'accepted=100 ', b''), record.replace(b'accepted=100 ', b''),
+                        record.replace(b'accepted=100', b'accepted=0'),
+                        record.replace(b'accepted=100', b'accepted=20001'),
+                        record.replace(b'accepted=100', b'accepted=-1'),
+                        record.replace(b'accepted=100', b'accepted=1.5'),
+                        record.replace(b'cases=20000', b'cases=19999'),
+                        record.replace(b'52564a534f4e5631', b'52564a534f4e5632'),
+                        record.replace(b'elapsed=', b'extra=1 elapsed=')]:
+            with self.subTest(record=changed), self.assertRaises(EvidenceError):
+                verify(changed)
+        for selected in [{**target, 'id': 'other'}, {**target, 'test': 'other'},
+                         {**target, 'cargo': ['--locked', '-p', 'other', '--test', 'fuzz_json']}]:
+            with self.subTest(target=selected), self.assertRaises(EvidenceError):
+                verify(selected=selected)
+        # An accepted field cannot broaden the established generic format.
+        with self.assertRaises(EvidenceError):
+            self.verify(stderr=self.stderr.replace(b' elapsed=', b' accepted=100 elapsed='))
 
     def test_suite_positive_and_controls(self):
         allowance = {'test': 'props_extended', 'target': 'props', 'reason': 'extended', 'proof': 'props'}

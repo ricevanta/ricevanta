@@ -168,7 +168,7 @@ impl LinuxPlatform {
         let dir = open_dir(&path).map_err(|e| open_failure(&path, e, object))?;
         check_parent(&facts(&dir, object)?, group_write_allowed, mode, self.euid)
             .map_err(|r| ProtectionError::new(object, r))?;
-        Ok(CheckedDir::new(dir, object, path))
+        Ok(CheckedDir::new(dir, object, path, mode))
     }
 }
 
@@ -263,7 +263,7 @@ impl Platform for LinuxPlatform {
             }
         }
         check_dir(&facts(&dir, object)?, kind, mode, self.euid).map_err(fail)?;
-        Ok(CheckedDir::new(dir, object, parent.path().join(name)))
+        Ok(CheckedDir::new(dir, object, parent.path().join(name), mode))
     }
 
     fn create_file(

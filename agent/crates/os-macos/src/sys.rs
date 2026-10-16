@@ -8,7 +8,8 @@ use std::ffi::CStr;
 use std::fs::File;
 use std::io;
 use std::mem::MaybeUninit;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd};
+use std::ptr::NonNull;
 
 pub(crate) use crate::RUSAGE_INFO_V4_BYTES;
 const _: () = assert!(std::mem::size_of::<libc::rusage_info_v4>() == RUSAGE_INFO_V4_BYTES);
@@ -47,6 +48,68 @@ pub(crate) fn openat(dir: &File, name: &CStr, flags: libc::c_int, mode: u16) -> 
     // SAFETY: `fd` was just returned by `openat`, is valid, and no other
     // owner exists, so `OwnedFd` may take sole ownership and close it once.
     Ok(File::from(unsafe { OwnedFd::from_raw_fd(fd) }))
+}
+
+/// Owns the directory stream and the descriptor transferred to fdopendir.
+struct DirectoryStream(NonNull<libc::DIR>);
+
+impl Drop for DirectoryStream {
+    #[expect(
+        unsafe_code,
+        reason = "closedir: the stream is owned by this guard, remains live until drop, and is closed exactly once"
+    )]
+    fn drop(&mut self) {
+        // SAFETY: fdopendir returned this live stream; only this guard owns it.
+        unsafe { libc::closedir(self.0.as_ptr()) };
+    }
+}
+
+#[expect(
+    unsafe_code,
+    reason = "fdopendir and readdir: an independently opened descriptor is transferred once to an owned stream; each dirent is read before the next call; __error returns this thread's live errno cell"
+)]
+pub(crate) fn directory_is_empty(dir: &File) -> io::Result<bool> {
+    // openat(".") gives an independent directory offset. A dup would share
+    // the caller's offset and could report a nonempty directory empty later.
+    let file = openat(
+        dir,
+        c".",
+        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK,
+        0,
+    )?;
+    // SAFETY: file owns a live directory fd. On failure file retains ownership.
+    let stream = unsafe { libc::fdopendir(file.as_raw_fd()) };
+    let Some(stream) = NonNull::new(stream) else {
+        return Err(io::Error::last_os_error());
+    };
+    // fdopendir succeeded and owns this fd; only closedir may now close it.
+    let _ = file.into_raw_fd();
+    let stream = DirectoryStream(stream);
+    loop {
+        // SAFETY: __error returns a valid errno pointer for this thread.
+        // Clearing errno distinguishes the end of a stream from an error.
+        unsafe { *libc::__error() = 0 };
+        // SAFETY: the guard keeps the stream live; no other reader uses it.
+        let entry = unsafe { libc::readdir(stream.0.as_ptr()) };
+        if entry.is_null() {
+            let error = io::Error::last_os_error();
+            return if error.raw_os_error() == Some(0) {
+                Ok(true)
+            } else {
+                Err(error)
+            };
+        }
+        // SAFETY: readdir returned a live dirent, borrowed until its next call.
+        let entry = unsafe { &*entry };
+        let length = usize::from(entry.d_namlen);
+        if length >= entry.d_name.len() {
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
+        }
+        let name = &entry.d_name[..length];
+        if name != [b'.' as libc::c_char] && name != [b'.' as libc::c_char; 2] {
+            return Ok(false);
+        }
+    }
 }
 
 #[expect(

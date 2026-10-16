@@ -93,6 +93,19 @@ def units(groups):
     return sorted(result)
 
 
+def agent_native_checks(host):
+    """Privileged proofs belong only to their native Unix leaf."""
+    if host == 'windows-x64': return []
+    proof = {'linux-x64': 'agent-protection-root-linux', 'macos-arm64': 'agent-protection-root-macos'}[host]
+    tests = ['root_foreign_owner_of_config_and_parent_fails', 'root_directory_parent_owner_and_group_rules',
+             'root_service_mode_refuses_unprivileged_directory_owner', 'root_foreign_health_file_is_refused_untouched']
+    checks = [proof] + [proof + ':protection:' + name for name in tests]
+    checks += ['agent-unit:protection:umask_child_narrow', 'agent-unit:protection:umask_child_open']
+    if host == 'linux-x64':
+        checks += ['agent-unit:notify:from_env_child', 'agent-unit:growth:sampling_does_not_grow_private_memory']
+    return checks
+
+
 def checks(unit):
     if unit in CHECKS: return CHECKS[unit][:]
     if unit.startswith('server-fuzz:') and unit in units(['server']):
@@ -103,7 +116,7 @@ def checks(unit):
     if group == 'loader': return ['loader-extended', 'loader-repeat', 'loader-fuzz']
     if group == 'ocsf': return ['ocsf-native']
     if group == 'agent': return ['agent-host', 'agent-pins', 'agent-fixtures', 'agent-format',
-                                 'agent-clippy', 'agent-unit', 'spool-extended', 'batch-extended']
+                                 'agent-clippy', 'agent-unit', 'spool-extended', 'batch-extended', 'json-extended'] + agent_native_checks(host)
     if group == 'bootstrap': return ['bootstrap-host', 'bootstrap-controls', 'bootstrap-cold-install', 'ci-unit', 'ci-schema']
     raise ValueError('unknown leaf: ' + unit)
 

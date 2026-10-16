@@ -56,6 +56,7 @@ RUST_LIST_TOTAL = re.compile(r'^(\d+) tests?, (\d+) benchmarks?$')
 RUST_TEST = re.compile(r'^test (.+?) \.\.\. (ok|FAILED|ignored(?:, .*)?)$')
 RUST_RESULT = re.compile(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in \S+$')
 RUST_RECORD = re.compile(r'^seed=(0x[0-9a-f]{16}) cases=(\d+) elapsed=(\S+)$')
+RUST_JSON_RECORD = re.compile(r'^seed=(0x[0-9a-f]{16}) cases=(\d+) accepted=(\d+) elapsed=(\S+)$')
 PLAYWRIGHT_PROJECTS = ('chromium', 'firefox', 'webkit')
 
 
@@ -107,11 +108,14 @@ def inventory(root=ROOT):
             proof = targets.get(row['proof'])
             if proof is None or row['proof'] in row['modes'] or proof['mode'] in row['modes']:
                 raise ValueError('skip allowance must name a separate proving unit: ' + row['test'])
-        elif not SKIP_NAME.match(row['parent']) or not row['parent'].startswith('Test') or row['parent'] == row['test']:
+        elif (not SKIP_NAME.match(row['parent']) or row['parent'] == row['test']
+              or (not row['parent'].startswith('Test') and 'target' not in row)):
             raise ValueError('skip allowance parent must be another exact test: ' + row['test'])
     for target in targets.values():
         if target['mode'] not in MODES: raise ValueError('unknown mode: ' + target['id'])
-        target['skips'] = {(s['package'], s['test']): s for s in skips if target['mode'] in s['modes'] or target['id'] in s['modes']}
+        target['skips'] = {(s['package'], s['test']): s for s in skips
+                           if (target['mode'] in s['modes'] or target['id'] in s['modes'])
+                           and s.get('platform', sys.platform) == sys.platform}
     return targets
 
 
@@ -144,6 +148,8 @@ def discovery_command(target):
         return ['cargo', 'test', *target['cargo'], '--', '--list']
     if mode == 'rust-selected':
         return ['cargo', 'test', *target['cargo'], target['test'], '--', '--ignored', '--exact', '--list']
+    if mode == 'rust-root':
+        return ['sudo', '{executable}', 'root_', '--ignored', '--list']
     return None
 
 
@@ -163,10 +169,33 @@ def run_command(target):
         return ['go', 'test', '-json', '-count=1', *target['packages'], '-fuzz=^' + re.escape(target['target']) + '$',
                 '-fuzztime=' + target['fuzztime'], '-parallel=' + str(target['parallel'])]
     if mode == 'rust-suite':
-        return ['cargo', 'test', *target['cargo']]
+        return ['cargo', 'test', *target['cargo'], '--', '--nocapture']
     if mode == 'rust-selected':
         return ['cargo', 'test', *target['cargo'], target['test'], '--', '--ignored', '--exact', '--nocapture', '--test-threads=1']
+    if mode == 'rust-root':
+        return ['sudo', '{executable}', 'root_', '--ignored']
     return list(target['command'])
+
+
+def build_command(target):
+    """Build privileged tests as the runner user, never through sudo."""
+    if target['mode'] == 'rust-root':
+        return ['cargo', 'test', *target['cargo'], '--no-run', '--message-format=json']
+    return None
+
+
+def rust_test_executable(target, text):
+    """Use Cargo's artifact message, never a guessed or globbed binary path."""
+    matches = []
+    for line in text.splitlines():
+        try: item = json.loads(line)
+        except ValueError as error: raise EvidenceError('invalid Cargo artifact JSON') from error
+        if (item.get('reason') == 'compiler-artifact' and item.get('target', {}).get('kind') == ['test']
+                and item['target'].get('name') == target['target'] and item.get('profile', {}).get('test') is True):
+            path = item.get('executable')
+            if isinstance(path, str) and os.path.isabs(path): matches.append(path)
+    if len(matches) != 1: raise EvidenceError('expected one executable artifact for ' + target['target'])
+    return matches[0]
 
 
 def parse_go_list(text, no_tests=None):
@@ -608,19 +637,56 @@ def verify_rust_suite(target, discovery, stdout, stderr, exit_code):
     allowed = {s['test']: s for s in target['skips'].values()}
     ok = sum(o == 'ok' for values in outcomes.values() for o in values)
     skipped = []
+    expected_children = []
+    passed_tests = {(binary, name) for binary, section in zip(binaries, sections)
+                    for name, outcome in section if outcome == 'ok'}
     for binary, section in zip(binaries, sections):
         for name, outcome in section:
             if not outcome.startswith('ignored'): continue
             allowance = allowed.get(name)
             # An allowance names one test in one harness; the name must be unique in the suite.
-            if allowance is None or 'proof' not in allowance or allowance.get('target') != binary or listed[name] != 1:
+            if allowance is None or allowance.get('target') != binary or listed[name] != 1:
                 raise EvidenceError('unexpected ignored Rust test %s in %s' % (name, binary))
+            if 'parent' in allowance:
+                parent = allowance['parent']
+                if (binary, parent) not in passed_tests or listed[parent] != 1:
+                    raise EvidenceError('Rust helper parent did not pass in the same harness: ' + parent)
+                expected_children.append({'target': binary, 'parent': parent, 'test': name, 'result': 'success'})
+            elif 'proof' not in allowance:
+                raise EvidenceError('Rust ignore has no proving run: ' + name)
             skipped.append(name)
     if len(skipped) != len(set(skipped)): raise EvidenceError('a Rust test was ignored more than once')
     if any(o == 'FAILED' for values in outcomes.values() for o in values): raise EvidenceError('failed Rust test')
     if passed != ok or ignored != len(skipped): raise EvidenceError('harness summary disagrees with listed outcomes')
-    ignored = [{'test': name, 'target': allowed[name]['target'], 'reason': allowed[name]['reason'], 'proof': allowed[name]['proof']} for name in sorted(skipped)]
-    return {'tests': sum(listed.values()), 'passed': passed, 'ignored': ignored, 'binaries': len(summaries)}
+    children = []
+    for line in stderr.splitlines():
+        if line.startswith('RUST_CHILD '):
+            try: children.append(json.loads(line.removeprefix('RUST_CHILD ')))
+            except ValueError as error: raise EvidenceError('invalid Rust child record') from error
+    canonical = lambda rows: sorted(json.dumps(row, sort_keys=True) for row in rows)
+    if canonical(children) != canonical(expected_children):
+        raise EvidenceError('Rust child records differ from the required helper executions')
+    required = [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                if row.get('platform', sys.platform) == sys.platform]
+    if any((row['target'], row['test']) not in passed_tests for row in required):
+        raise EvidenceError('required Rust test did not pass in its named harness')
+    ignored = [{k: allowed[name][k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in allowed[name]}
+               for name in sorted(skipped)]
+    return {'tests': sum(listed.values()), 'passed': passed, 'ignored': ignored, 'binaries': len(summaries),
+            'children': children, 'required': required}
+
+
+def verify_rust_root(target, discovery, stdout, exit_code):
+    if exit_code != 0: raise EvidenceError('privileged test binary exited %d' % exit_code)
+    expected = Counter(target['tests'])
+    if parse_rust_list(discovery) != expected: raise EvidenceError('root discovery must name all four exact tests')
+    executed, outcomes, summaries = parse_rust_run(stdout)
+    if executed != expected or any(outcomes[name] != ['ok'] for name in expected):
+        raise EvidenceError('every selected root test must pass exactly once')
+    if (len(summaries) != 1 or summaries[0][1] != 'ok'
+            or tuple(map(int, summaries[0].groups()[1:5])) != (len(expected), 0, 0, 0)):
+        raise EvidenceError('root harness must report only the required passed tests')
+    return {'target': target['target'], 'tests': sorted(expected), 'passed': len(expected)}
 
 
 def verify_rust_selected(target, discovery, stdout, stderr, exit_code):
@@ -632,12 +698,24 @@ def verify_rust_selected(target, discovery, stdout, stderr, exit_code):
         raise EvidenceError('selected property test did not report ok exactly once')
     if len(summaries) != 1 or summaries[0][1] != 'ok' or (int(summaries[0][2]), int(summaries[0][3]), int(summaries[0][4])) != (1, 0, 0):
         raise EvidenceError('harness summary must report one passed, zero failed, zero ignored')
-    records = [RUST_RECORD.match(line.rstrip('\r')) for line in stderr.splitlines()]
+    json_record = target['id'] == 'json-extended'
+    if json_record and (target['test'] != 'fuzz_json_extended' or target['cargo'] !=
+                        ['--locked', '-p', 'ricevanta-json', '--test', 'fuzz_json']):
+        raise EvidenceError('JSON accepted-count evidence belongs only to the exact JSON target')
+    parser = RUST_JSON_RECORD if json_record else RUST_RECORD
+    records = [parser.match(line.rstrip('\r')) for line in stderr.splitlines()]
     records = [m for m in records if m]
     if len(records) != 1: raise EvidenceError('expected exactly one seed/count/duration record')
     seed, cases = records[0][1], int(records[0][2])
     if seed != target['seed'] or cases != target['cases']: raise EvidenceError('seed %s cases %d differ from the required %s/%d' % (seed, cases, target['seed'], target['cases']))
-    return {'test': target['test'], 'seed': seed, 'cases': cases, 'elapsed': records[0][3]}
+    summary = {'test': target['test'], 'seed': seed, 'cases': cases, 'elapsed': records[0][4 if json_record else 3]}
+    if json_record:
+        accepted = int(records[0][3])
+        if not 0 < accepted <= cases: raise EvidenceError('JSON accepted count must be positive and no greater than cases')
+        if any(RUST_RECORD.match(line.rstrip('\r')) for line in stderr.splitlines()):
+            raise EvidenceError('JSON target cannot also emit a generic property record')
+        summary['accepted'] = accepted
+    return summary
 
 
 def verify_vitest_report(report, expected_tests):
@@ -689,7 +767,7 @@ def verify_console(target, evidence_dir, exit_code):
     return verify_playwright_report(report, target['specs'])
 
 
-MODES = {'go-suite', 'go-selected', 'go-interop', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'console-vitest', 'console-playwright'}
+MODES = {'go-suite', 'go-selected', 'go-interop', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'rust-root', 'console-vitest', 'console-playwright'}
 
 
 def evidence_name(target_id):
@@ -722,6 +800,7 @@ def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=
     if mode == 'go-fuzz': return verify_go_fuzz(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'rust-suite': return verify_rust_suite(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
     if mode == 'rust-selected': return verify_rust_selected(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
+    if mode == 'rust-root': return verify_rust_root(target, discovery, stdout.decode('utf-8', 'replace'), exit_code)
     return verify_console(target, evidence_dir, exit_code)
 
 
@@ -773,6 +852,8 @@ def preconditions(target, env, root=ROOT):
     refused = rust_env.c_toolchain_names(env)
     if refused: raise EvidenceError('C toolchain variables in the environment could replace the compiler, archiver or flags: ' + ', '.join(refused))
     cargo_guard(target, env, root)
+    if target['mode'] == 'rust-root' and target['platform'] != sys.platform:
+        raise EvidenceError('privileged test selected for a foreign host')
     if target['mode'] == 'go-interop':
         path = env.get('RICEVANTA_BATCH_VECTOR', '')
         if not os.path.isabs(path) or not os.path.isfile(path): raise EvidenceError('RICEVANTA_BATCH_VECTOR must name an existing absolute writer path')
@@ -789,6 +870,16 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
     cwd = root / target['cwd']
+    build, executable = build_command(target), None
+    if build:
+        print('build:', shlex.join(build), flush=True)
+        code = execute(build, cwd, env, evidence_dir / 'build.txt', evidence_dir / 'build.stderr.txt')
+        if code != 0: raise EvidenceError('test binary build exited %d' % code)
+        executable = rust_test_executable(target, (evidence_dir / 'build.txt').read_text(encoding='utf-8'))
+        target_dir = env.get('CARGO_TARGET_DIR', '')
+        if (not os.path.isabs(target_dir) or not os.path.isfile(executable) or os.path.islink(executable)
+                or os.path.commonpath([os.path.realpath(target_dir), os.path.realpath(executable)]) != os.path.realpath(target_dir)):
+            raise EvidenceError('test executable must be a file in the admitted Cargo target directory')
     packages_command, packages_text = package_command(target), None
     if packages_command:
         print('packages:', shlex.join(packages_command), flush=True)
@@ -807,11 +898,13 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     discovery = discovery_command(target)
     discovery_text = ''
     if discovery:
+        discovery = [executable if part == '{executable}' else part for part in discovery]
         print('discovery:', shlex.join(discovery), flush=True)
         code = execute(discovery, cwd, env, evidence_dir / 'discovery.txt', evidence_dir / 'discovery.stderr.txt')
         discovery_text = (evidence_dir / 'discovery.txt').read_bytes().decode('utf-8', 'replace')
         if code != 0: raise EvidenceError('discovery exited %d' % code)
-    command = [part.replace('{report}', str(evidence_dir / 'report.json')) for part in run_command(target)]
+    command = [executable if part == '{executable}' else part.replace('{report}', str(evidence_dir / 'report.json'))
+               for part in run_command(target)]
     cargo_guard(target, env, root)
     print('command:', shlex.join(command), flush=True)
     exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
@@ -820,6 +913,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'mode': target['mode'], 'cwd': target['cwd'],
               'packages': packages_command, 'discovery': discovery, 'command': command, 'exit': exit_code, 'result': 'success',
               'summary': summary}
+    if build: record.update(build=build, executable=executable)
     for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA'):
         if env.get(key): record[key] = env[key]
     (evidence_dir / 'verified.json').write_text(json.dumps(record, sort_keys=True) + '\n', encoding='utf-8')
@@ -844,6 +938,26 @@ def verified(evidence_root, target_id, binding=None):
     for key, value in (binding or {}).items():
         if key not in RUN_BINDING: raise ValueError('unknown run binding: ' + key)
         if not value or record.get(key) != value: raise ValueError('verified record of %s comes from another invocation (%s)' % (target_id, key))
+    target = inventory().get(target_id)
+    if target and target['mode'] == 'rust-root':
+        summary = record.get('summary', {})
+        if summary.get('tests') != sorted(target['tests']) or summary.get('passed') != len(target['tests']):
+            raise ValueError('root evidence must name every required test: ' + target_id)
+    if target and target['mode'] == 'rust-suite':
+        summary = record.get('summary', {})
+        expected_ignored = [{k: row[k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in row}
+                            for row in target['skips'].values()]
+        canonical = lambda rows: sorted(json.dumps(row, sort_keys=True) for row in rows)
+        if canonical(summary.get('ignored', [])) != canonical(expected_ignored):
+            raise ValueError('missing or unexpected Rust delegated test evidence')
+        for ignored in summary.get('ignored', []):
+            if 'proof' in ignored:
+                verified(evidence_root, ignored['proof'], binding)
+            elif {'target': ignored['target'], 'parent': ignored.get('parent'), 'test': ignored['test'], 'result': 'success'} not in summary.get('children', []):
+                raise ValueError('missing Rust child execution evidence: ' + ignored['test'])
+        expected = [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                    if row.get('platform', sys.platform) == sys.platform]
+        if summary.get('required') != expected: raise ValueError('missing required Rust test evidence')
     return record
 
 

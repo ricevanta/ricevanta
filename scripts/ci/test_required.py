@@ -14,13 +14,29 @@ def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
     """Write verified selected-run records so emission can bind every wrapper check."""
     import run_selected
     selected = run_selected.inventory()
+    def write_record(check):
+        target = selected[check]
+        summary = {}
+        if target['mode'] == 'rust-root':
+            summary = {'tests': sorted(target['tests']), 'passed': len(target['tests'])}
+        if target['mode'] == 'rust-suite':
+            ignored = [{k: row[k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in row}
+                       for row in target['skips'].values()]
+            children = [{'target': row['target'], 'parent': row['parent'], 'test': row['test'], 'result': 'success'}
+                        for row in ignored if 'parent' in row]
+            summary = {'ignored': ignored, 'children': children,
+                       'required': [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                                    if row.get('platform', sys.platform) == sys.platform]}
+            for row in ignored:
+                if 'proof' in row: write_record(row['proof'])
+        directory = root / run_selected.evidence_name(check)
+        directory.mkdir(exist_ok=True)
+        (directory / 'verified.json').write_text(json.dumps(
+            {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
+             'summary': summary, 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}))
     for check in checks:
         if check in selected:
-            directory = root / run_selected.evidence_name(check)
-            directory.mkdir(exist_ok=True)
-            (directory / 'verified.json').write_text(json.dumps(
-                {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
-                 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}))
+            write_record(check)
 
 
 class RequiredTests(unittest.TestCase):
