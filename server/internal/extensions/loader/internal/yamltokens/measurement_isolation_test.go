@@ -44,7 +44,7 @@ func TestParserMeasurementIsolation(t *testing.T) {
 			t.Run(recipe+"/"+mode, func(t *testing.T) {
 				cmd := exec.Command(os.Args[0], "-test.run=^TestParserMeasurementChild$", "-test.v")
 				env := os.Environ()
-				for _, key := range []string{"GOMAXPROCS", "GOMEMLIMIT", "GOGC", "RICEVANTA_PARSER_RECIPE", "RICEVANTA_PARSER_SIZE", "RICEVANTA_PARSER_MODE", "RICEVANTA_PARSER_ACCEPTED", "RICEVANTA_PARSER_ERROR", "RICEVANTA_REFERENCE"} {
+				for _, key := range []string{"GOMAXPROCS", "GOMEMLIMIT", "GOGC", "RICEVANTA_PARSER_RECIPE", "RICEVANTA_PARSER_SIZE", "RICEVANTA_PARSER_MODE", "RICEVANTA_PARSER_ACCEPTED", "RICEVANTA_PARSER_ERROR", "RICEVANTA_PARSER_SAMPLE", "RICEVANTA_REFERENCE"} {
 					for i := 0; i < len(env); {
 						if strings.HasPrefix(env[i], key+"=") {
 							env = append(env[:i], env[i+1:]...)
@@ -57,7 +57,7 @@ func TestParserMeasurementIsolation(t *testing.T) {
 				if recipe == "plain" {
 					accepted, class = "true", ""
 				}
-				cmd.Env = append(env, "GOMAXPROCS=2", "GOMEMLIMIT=1MiB", "GOGC=1", "RICEVANTA_PARSER_RECIPE="+recipe, "RICEVANTA_PARSER_SIZE=64", "RICEVANTA_PARSER_MODE="+mode, "RICEVANTA_PARSER_ACCEPTED="+accepted, "RICEVANTA_PARSER_ERROR="+class, "RICEVANTA_REFERENCE="+referencePath)
+				cmd.Env = append(env, "GOMAXPROCS=2", "GOMEMLIMIT=1MiB", "GOGC=1", "RICEVANTA_PARSER_RECIPE="+recipe, "RICEVANTA_PARSER_SIZE=64", "RICEVANTA_PARSER_MODE="+mode, "RICEVANTA_PARSER_ACCEPTED="+accepted, "RICEVANTA_PARSER_ERROR="+class, "RICEVANTA_PARSER_SAMPLE=7", "RICEVANTA_REFERENCE="+referencePath)
 				out, err := cmd.CombinedOutput()
 				if err != nil {
 					t.Fatalf("child: %v\n%s", err, out)
@@ -65,8 +65,12 @@ func TestParserMeasurementIsolation(t *testing.T) {
 				found := false
 				for _, line := range strings.Split(string(out), "\n") {
 					if data, ok := strings.CutPrefix(line, "PARSER_MEASUREMENT "); ok {
-						if _, err := decodeParserMeasurement([]byte(data)); err != nil {
+						m, err := decodeParserMeasurement([]byte(data))
+						if err != nil {
 							t.Fatal(err)
+						}
+						if m.Input != recipe || m.Size != 64 || m.Mode != mode || m.Sample != 7 {
+							t.Fatalf("child did not echo its sample identity: %+v", m)
 						}
 						found = true
 					}

@@ -1,0 +1,27 @@
+{
+  "footprint_p95_bytes": {
+    "idle": 44000000,
+    "load": 44000000
+  },
+  "aggregate_footprint_p95_bytes": 80000000,
+  "cpu_core_pct_mean": {
+    "idle_target": 1.0,
+    "idle_hosted_gate": 5.0
+  },
+  "threads_max": 12,
+  "descriptors_max": {
+    "fd": 64,
+    "handle": 256
+  },
+  "self_sample_tolerance": {
+    "ratio": 0.2,
+    "bytes": 4194304
+  },
+  "regression": {
+    "footprint_ratio": 0.1,
+    "footprint_bytes": 2097152,
+    "threads": 2,
+    "descriptors_fd": 4,
+    "descriptors_handle": 16
+  }
+}

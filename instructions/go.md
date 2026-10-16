@@ -1,6 +1,6 @@
 # Go development
 
-The Go module is `github.com/ricevanta/ricevanta/server` in `server/`. It requires Go 1.27.1. Keep the version in `server/go.mod` and continuous integration aligned.
+The Go module is `github.com/ricevanta/ricevanta/server` in `server/`. It requires Go 1.27.1. Keep the version in `server/go.mod` and continuous integration aligned. A second, standard-library-only module, `scripts/ci/gotestdecls`, is the CI helper that parses Go test files for `scripts/ci/run_selected.py`; it requires the same Go version, and `ci-contracts` formats and vets it.
 
 - Use the standard library unless the reviewed design requires a dependency. Record every dependency in `docs/licensing.md` before adding it to `go.mod`.
 - Keep packages focused and dependency direction explicit. Code under `internal/` is private to the server module.

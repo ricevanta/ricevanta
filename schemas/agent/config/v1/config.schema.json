@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/agent/config/v1/config.schema.json",
+  "title": "Ricevanta agent runtime configuration v1",
+  "description": "The complete agent.json document of docs/specs/agent-runtime.md section 3. Every key is optional except schema; absent keys take the documented defaults. Unknown keys are errors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema"],
+  "properties": {
+    "schema": { "const": "ricevanta-agent-config-v1" },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["error", "warn", "info", "debug"] },
+        "sink": { "enum": ["file", "stderr"] },
+        "max_file_bytes": { "type": "integer", "minimum": 65536, "maximum": 268435456 },
+        "max_files": { "type": "integer", "minimum": 1, "maximum": 16 }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interval_ms": { "type": "integer", "minimum": 100, "maximum": 3600000 }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_ms": { "type": "integer", "minimum": 1000, "maximum": 60000 }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state_dir": { "$ref": "#/$defs/absolutePath" },
+        "runtime_dir": { "$ref": "#/$defs/absolutePath" },
+        "log_dir": { "$ref": "#/$defs/absolutePath" }
+      }
+    }
+  },
+  "$defs": {
+    "absolutePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 1024,
+      "description": "Absolute path in normal form (agent runtime section 3.1): Unix paths start with /, Windows paths with a drive letter and \\; no empty, . or .. segment and no trailing separator; a Windows segment contains none of < > : \" / \\ | ? * or characters 0 to 31, does not end in a period or space, and is not a device name: its text before the first period, with trailing spaces removed and compared case-insensitively, is none of CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9, their superscript forms, CONIN$ or CONOUT$",
+      "pattern": "^(?:/(?!\\.{1,2}(?:/|$))[^/\\u0000]+(?:/(?!\\.{1,2}(?:/|$))[^/\\u0000]+)*|[A-Za-z]:\\\\(?!(?:[Cc][Oo][Nn][Ii][Nn]\\$|[Cc][Oo][Nn][Oo][Uu][Tt]\\$|[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9\u00b9\u00b2\u00b3]|[Ll][Pp][Tt][1-9\u00b9\u00b2\u00b3]) *(?:\\.[^\\\\]*)?(?:\\\\|$))[^<>:\"/\\\\|?*\\u0000-\\u001f]*[^<>:\"/\\\\|?*\\u0000-\\u001f. ](?:\\\\(?!(?:[Cc][Oo][Nn][Ii][Nn]\\$|[Cc][Oo][Nn][Oo][Uu][Tt]\\$|[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9\u00b9\u00b2\u00b3]|[Ll][Pp][Tt][1-9\u00b9\u00b2\u00b3]) *(?:\\.[^\\\\]*)?(?:\\\\|$))[^<>:\"/\\\\|?*\\u0000-\\u001f]*[^<>:\"/\\\\|?*\\u0000-\\u001f. ])*)$(?![\\s\\S])"
+    }
+  }
+}

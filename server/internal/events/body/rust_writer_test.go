@@ -114,6 +114,27 @@ func writerSuccess(t testing.TB, d batch.Descriptor, ps [][]byte, device string)
 	if !bytes.Equal(input, original) {
 		t.Fatal("input mutated")
 	}
+	// Every live writer success must meet the profile and the output-only
+	// uploader compatibility gate before the decode assertion below.
+	r := &io.LimitedReader{R: bytes.NewReader(b), N: wire.MaxCompressedBytes + 1}
+	if _, err := wire.Decode([]string{h}, r); err != nil {
+		t.Fatal(err)
+	}
+	f, err := ReadFrame(r)
+	if err != nil {
+		t.Fatalf("writer preflight: %v", err)
+	}
+	var visits uint64
+	if _, _, err := inspectFrameCount(f.data, &visits); err != nil {
+		t.Fatal(err)
+	}
+	cap := 1 + (max(f.size, uint64(128<<10))+(128<<10)-1)/(128<<10)
+	if visits > cap {
+		t.Fatalf("writer blocks %d exceed %d", visits, cap)
+	}
+	if max(f.window, f.size, uint64(128<<10)) > max(f.size, uint64(128<<10)) {
+		t.Fatalf("writer window %d raises output-only charge for %d bytes", f.window, f.size)
+	}
 	got, lines, err := writerDecode(h, b, device)
 	if err != nil {
 		t.Fatal(err)
@@ -410,16 +431,32 @@ func TestRustWriterMutations(t *testing.T) {
 		t.Fatal("missing executable accepted")
 	}
 	// Exercise the missing environment precondition in an isolated test child.
+	// The helper's top-level no-op return proves nothing; the parent requires
+	// the named helper to run and fail for the missing path, then records it.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRustWriterPrecondition$")
+	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRustWriterPrecondition$", "-test.v")
 	child.Env = append(os.Environ(), "RICEVANTA_WRITER_PRECONDITION=1", "RICEVANTA_BATCH_VECTOR=")
-	out := &writerCapture{limit: 4096}
+	out := &writerCapture{limit: 8192}
 	child.Stdout = out
 	child.Stderr = out
-	if err := child.Run(); err == nil || !strings.Contains(out.buffer.String(), "RICEVANTA_BATCH_VECTOR") {
-		t.Fatal("missing-path precondition did not fail")
+	err := child.Run()
+	text := out.buffer.String()
+	if err == nil || !strings.Contains(text, "--- FAIL: TestRustWriterPrecondition") || !strings.Contains(text, "RICEVANTA_BATCH_VECTOR") || strings.Contains(text, "--- PASS: TestRustWriterPrecondition") {
+		t.Fatalf("missing-path precondition did not fail in the helper: %v\n%s", err, text)
 	}
+	logWriterChild(t, "TestRustWriterPrecondition", "", "rejected")
+}
+
+// logWriterChild records one proven helper child for the selected-output
+// verifier, attributed to the parent test that proved it.
+func logWriterChild(t *testing.T, helper, pipe, outcome string) {
+	t.Helper()
+	record, err := json.Marshal(struct{ Helper, Pipe, Outcome string }{helper, pipe, outcome})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("RUST_WRITER_CHILD %s", record)
 }
 func TestRustWriterPrecondition(t *testing.T) {
 	if os.Getenv("RICEVANTA_WRITER_PRECONDITION") == "1" {
@@ -440,11 +477,24 @@ func TestRustWriterCaptureOverflow(t *testing.T) {
 			cmd.Stderr = stderr
 			err := cmd.Run()
 			if err == nil || !strings.Contains(err.Error(), "child output bound") {
-				t.Errorf("capture overflow: got %v, want child output bound", err)
+				t.Fatalf("capture overflow: got %v, want child output bound", err)
 			}
 			if out.buffer.Len() > out.limit || stderr.buffer.Len() > stderr.limit {
-				t.Errorf("capture limit bypassed: stdout=%d stderr=%d limit=256", out.buffer.Len(), stderr.buffer.Len())
+				t.Fatalf("capture limit bypassed: stdout=%d stderr=%d limit=256", out.buffer.Len(), stderr.buffer.Len())
 			}
+			// The overflow must come from the selected pipe alone; the helper
+			// suppresses the runner's own output, so the other pipe stays empty.
+			// os/exec copies the pipe in whatever chunks a read returns, so the
+			// selected capture may hold up to its limit before the overflowing
+			// chunk arrives; only the bound is fixed.
+			selected, other := out, stderr
+			if pipe == "stderr" {
+				selected, other = stderr, out
+			}
+			if selected.buffer.Len() > selected.limit || other.buffer.Len() != 0 {
+				t.Fatalf("bounded capture retained bytes: stdout=%d stderr=%d", out.buffer.Len(), stderr.buffer.Len())
+			}
+			logWriterChild(t, "TestRustWriterCaptureChild", pipe, "overflow")
 		})
 	}
 }

@@ -1,0 +1,305 @@
+{
+  "schema": "config.schema.json",
+  "cases": [
+    {
+      "id": "loopback-plaintext-development",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "127.0.0.1:8080",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ipv6-literal-address",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "[::1]:8080",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "all-roles-shape-valid-admission-separate",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api",
+          "agent",
+          "device",
+          "radius",
+          "jobs"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443",
+            "tls": {
+              "mode": "file",
+              "certificate_file": "/etc/ricevanta/tls/api.crt",
+              "key_file": "/etc/ricevanta/tls/api.key"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "api-without-listener",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ]
+      }
+    },
+    {
+      "id": "empty-roles",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": []
+      }
+    },
+    {
+      "id": "duplicate-roles",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api",
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "unknown-role",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "console"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "listener-without-tls",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443"
+          }
+        }
+      }
+    },
+    {
+      "id": "tls-file-without-key",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443",
+            "tls": {
+              "mode": "file",
+              "certificate_file": "/etc/ricevanta/tls/api.crt"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "tls-none-with-key-file",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "127.0.0.1:8080",
+            "tls": {
+              "mode": "none",
+              "key_file": "/etc/ricevanta/tls/api.key"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "hostname-in-address",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "console.example.invalid:8443",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "port-zero",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":0",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "unknown-section",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        },
+        "database": {
+          "url": "postgres://localhost/ricevanta"
+        }
+      }
+    },
+    {
+      "id": "shutdown-above-maximum",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": ":8443",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        },
+        "shutdown": {
+          "timeout_ms": 120001
+        }
+      }
+    },
+    {
+      "id": "port-65535",
+      "valid": true,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "127.0.0.1:65535",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "port-65536",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "127.0.0.1:65536",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "octet-999",
+      "valid": false,
+      "instance": {
+        "schema": "ricevanta-server-config-v1",
+        "roles": [
+          "api"
+        ],
+        "listen": {
+          "api": {
+            "address": "127.0.0.999:8443",
+            "tls": {
+              "mode": "none"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

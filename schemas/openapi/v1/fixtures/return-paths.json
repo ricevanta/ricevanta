@@ -1,0 +1,185 @@
+{
+ "description": "Return-path validation of docs/specs/identity-login.md section 2.2: invalid or reserved input becomes the console root.",
+ "cases": [
+  {
+   "id": "root",
+   "input": "/",
+   "expect": "/"
+  },
+  {
+   "id": "absent",
+   "input": null,
+   "expect": "/"
+  },
+  {
+   "id": "device-detail",
+   "input": "/devices/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+   "expect": "/devices/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+  },
+  {
+   "id": "approvals",
+   "input": "/approvals",
+   "expect": "/approvals"
+  },
+  {
+   "id": "nested",
+   "input": "/policies/edit/v2",
+   "expect": "/policies/edit/v2"
+  },
+  {
+   "id": "tilde-dot",
+   "input": "/a.b~c_d-e",
+   "expect": "/a.b~c_d-e"
+  },
+  {
+   "id": "empty",
+   "input": "",
+   "expect": "/"
+  },
+  {
+   "id": "relative",
+   "input": "devices",
+   "expect": "/"
+  },
+  {
+   "id": "scheme",
+   "input": "https://evil.example/",
+   "expect": "/"
+  },
+  {
+   "id": "protocol-relative",
+   "input": "//evil.example/x",
+   "expect": "/"
+  },
+  {
+   "id": "backslash",
+   "input": "/\\evil.example",
+   "expect": "/"
+  },
+  {
+   "id": "encoded-slash",
+   "input": "/a%2Fb",
+   "expect": "/"
+  },
+  {
+   "id": "query",
+   "input": "/devices?x=1",
+   "expect": "/"
+  },
+  {
+   "id": "fragment",
+   "input": "/devices#top",
+   "expect": "/"
+  },
+  {
+   "id": "dot-segment",
+   "input": "/devices/./x",
+   "expect": "/"
+  },
+  {
+   "id": "dotdot-segment",
+   "input": "/devices/../api/v1/session",
+   "expect": "/"
+  },
+  {
+   "id": "trailing-slash",
+   "input": "/devices/",
+   "expect": "/"
+  },
+  {
+   "id": "double-slash-inside",
+   "input": "/devices//x",
+   "expect": "/"
+  },
+  {
+   "id": "api-prefix",
+   "input": "/api/v1/session",
+   "expect": "/"
+  },
+  {
+   "id": "api-exact",
+   "input": "/api",
+   "expect": "/"
+  },
+  {
+   "id": "apiary-allowed",
+   "input": "/apiary",
+   "expect": "/apiary"
+  },
+  {
+   "id": "assets",
+   "input": "/assets/index.js",
+   "expect": "/"
+  },
+  {
+   "id": "ext",
+   "input": "/ext/x",
+   "expect": "/"
+  },
+  {
+   "id": "login-loop",
+   "input": "/login",
+   "expect": "/"
+  },
+  {
+   "id": "login-sub",
+   "input": "/login/local",
+   "expect": "/"
+  },
+  {
+   "id": "healthz",
+   "input": "/healthz",
+   "expect": "/"
+  },
+  {
+   "id": "test-harness",
+   "input": "/__test__/probe",
+   "expect": "/"
+  },
+  {
+   "id": "non-ascii",
+   "input": "/apı",
+   "expect": "/"
+  },
+  {
+   "id": "space",
+   "input": "/a b",
+   "expect": "/"
+  },
+  {
+   "id": "tab",
+   "input": "/a\tb",
+   "expect": "/"
+  },
+  {
+   "id": "newline",
+   "input": "/a\nb",
+   "expect": "/"
+  },
+  {
+   "id": "nul",
+   "input": "/a\u0000b",
+   "expect": "/"
+  },
+  {
+   "id": "too-long",
+   "input": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expect": "/"
+  },
+  {
+   "id": "max-length",
+   "input": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expect": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "id": "metrics-reserved",
+   "input": "/metrics",
+   "expect": "/"
+  },
+  {
+   "id": "metrics-child-reserved",
+   "input": "/metrics/private",
+   "expect": "/"
+  }
+ ]
+}

@@ -84,3 +84,44 @@ class BuildContractTests(unittest.TestCase):
         with patch.object(checker, 'load', side_effect=lambda p: data if p == path else original_load(p)):
             with self.assertRaises(ValueError), redirect_stdout(io.StringIO()):
                 checker.main()
+
+
+ADMISSION_PAIRS = (
+    ("schemas/extension/v1alpha1/extension-resource.schema.json",
+     "schemas/extension/v1alpha1/extension-resource/schema-cases.json"),
+    ("schemas/extension/v1alpha1/capability-grant.schema.json",
+     "schemas/extension/v1alpha1/capability-grant/schema-cases.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json",
+     "schemas/extension/v1alpha1/admission-vectors.json"),
+    ("schemas/extension/v1alpha1/admission-vectors.schema.json",
+     "schemas/extension/v1alpha1/admission-vectors/schema-cases.json"),
+)
+
+
+class AdmissionContractTests(unittest.TestCase):
+    def test_admission_pairs_registered(self):
+        admission = tuple(pair for pair in checker.CONTRACTS if any(
+            pair[0].endswith(name) for name in (
+                "/extension-resource.schema.json",
+                "/capability-grant.schema.json",
+                "/admission-vectors.schema.json",
+            )))
+        self.assertEqual(admission, ADMISSION_PAIRS)
+        with redirect_stdout(io.StringIO()) as output:
+            checker.main()
+        self.assertIn("24 schemas, 37 pairs, 458 instances", output.getvalue())
+
+    def test_unregistered_file_still_rejected(self):
+        path_class = type(checker.ROOT)
+        original = path_class.rglob
+        extra = checker.ROOT / "schemas/extension/v1alpha1/unregistered.py"
+        def with_extra(path, pattern):
+            yield from original(path, pattern)
+            if path == checker.ROOT / "schemas/extension/v1alpha1" and pattern == "*":
+                yield extra
+        original_is_file = path_class.is_file
+        with patch.object(path_class, "rglob", with_extra), patch.object(
+            path_class, "is_file", lambda path: path == extra or original_is_file(path)
+        ):
+            with self.assertRaisesRegex(ValueError, "Fixture inventory mismatch.*unregistered.py"):
+                checker.main()

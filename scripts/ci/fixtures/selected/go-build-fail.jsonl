@@ -1,0 +1,18 @@
+{"ImportPath":"example.com/tiny [example.com/tiny.test]","Action":"build-output","Output":"# example.com/tiny\n"}
+{"ImportPath":"example.com/tiny [example.com/tiny.test]","Action":"build-output","Output":"# [example.com/tiny]\n"}
+{"ImportPath":"example.com/tiny [example.com/tiny.test]","Action":"build-output","Output":"./tiny_test.go:25:1: ExampleHello refers to unknown identifier: Hello\n"}
+{"ImportPath":"example.com/tiny [example.com/tiny.test]","Action":"build-fail"}
+{"Time":"2026-10-15T06:42:35.812533949Z","Action":"start","Package":"example.com/tiny"}
+{"Time":"2026-10-15T06:42:35.81265853Z","Action":"output","Package":"example.com/tiny","Output":"FAIL\texample.com/tiny [build failed]\n"}
+{"Time":"2026-10-15T06:42:35.81266845Z","Action":"fail","Package":"example.com/tiny","Elapsed":0,"FailedBuild":"example.com/tiny [example.com/tiny.test]"}
+{"Time":"2026-10-15T06:42:35.812795697Z","Action":"start","Package":"example.com/tiny/notest"}
+{"Time":"2026-10-15T06:42:35.812837636Z","Action":"output","Package":"example.com/tiny/notest","Output":"?   \texample.com/tiny/notest\t[no test files]\n"}
+{"Time":"2026-10-15T06:42:35.812850907Z","Action":"skip","Package":"example.com/tiny/notest","Elapsed":0}
+{"Time":"2026-10-15T06:42:35.81286393Z","Action":"start","Package":"example.com/tiny/sub"}
+{"Time":"2026-10-15T06:42:35.815160438Z","Action":"run","Package":"example.com/tiny/sub","Test":"TestGamma"}
+{"Time":"2026-10-15T06:42:35.81518778Z","Action":"output","Package":"example.com/tiny/sub","Test":"TestGamma","Output":"=== RUN   TestGamma\n"}
+{"Time":"2026-10-15T06:42:35.815234085Z","Action":"output","Package":"example.com/tiny/sub","Test":"TestGamma","Output":"--- PASS: TestGamma (0.00s)\n"}
+{"Time":"2026-10-15T06:42:35.815239392Z","Action":"pass","Package":"example.com/tiny/sub","Test":"TestGamma","Elapsed":0}
+{"Time":"2026-10-15T06:42:35.815244977Z","Action":"output","Package":"example.com/tiny/sub","Output":"PASS\n"}
+{"Time":"2026-10-15T06:42:35.815606939Z","Action":"output","Package":"example.com/tiny/sub","Output":"ok  \texample.com/tiny/sub\t0.003s\n"}
+{"Time":"2026-10-15T06:42:35.81563324Z","Action":"pass","Package":"example.com/tiny/sub","Elapsed":0.003}

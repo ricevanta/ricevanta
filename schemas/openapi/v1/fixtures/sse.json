@@ -1,0 +1,558 @@
+{
+ "description": "Change-stream framing (encoder bytes), WHATWG event-stream parsing over chunk boundaries and topic subscription decisions of docs/specs/change-stream.md.",
+ "cases": [
+  {
+   "id": "encode-open",
+   "kind": "encode",
+   "items": [
+    {
+     "kind": "retry",
+     "ms": 5000
+    },
+    {
+     "kind": "event",
+     "event": "snapshot",
+     "data": {
+      "stream_uid": "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e71",
+      "topics": [
+       {
+        "topic": "devices",
+        "token": "AAAAAAAAAAAAAAAAAAAAAA"
+       },
+       {
+        "topic": "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
+        "token": "AAAAAAAAAAAAAAAAAAAAAA"
+       }
+      ]
+     }
+    }
+   ],
+   "expect": "retry: 5000\n\nevent: snapshot\ndata: {\"stream_uid\":\"01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e71\",\"topics\":[{\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"devices\"},{\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f\"}]}\n\n"
+  },
+  {
+   "id": "encode-change",
+   "kind": "encode",
+   "items": [
+    {
+     "kind": "event",
+     "event": "change",
+     "data": {
+      "topic": "alerts",
+      "token": "AAAAAAAAAAAAAAAAAAAAAA"
+     }
+    }
+   ],
+   "expect": "event: change\ndata: {\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"alerts\"}\n\n"
+  },
+  {
+   "id": "encode-heartbeat",
+   "kind": "encode",
+   "items": [
+    {
+     "kind": "comment",
+     "text": "keepalive"
+    }
+   ],
+   "expect": ": keepalive\n\n"
+  },
+  {
+   "id": "encode-session-ended",
+   "kind": "encode",
+   "items": [
+    {
+     "kind": "event",
+     "event": "session",
+     "data": {
+      "state": "ended"
+     }
+    }
+   ],
+   "expect": "event: session\ndata: {\"state\":\"ended\"}\n\n"
+  },
+  {
+   "id": "encode-reconnect",
+   "kind": "encode",
+   "items": [
+    {
+     "kind": "event",
+     "event": "reconnect",
+     "data": {
+      "reason": "shutdown"
+     }
+    }
+   ],
+   "expect": "event: reconnect\ndata: {\"reason\":\"shutdown\"}\n\n"
+  },
+  {
+   "id": "parse-basic",
+   "kind": "parse",
+   "chunks": [
+    "event: change\ndata: {\"a\":1}\n\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "change",
+      "data": "{\"a\":1}",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-split-crlf",
+   "kind": "parse",
+   "chunks": [
+    "event: change\r",
+    "\ndata: x\r\n\r\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "change",
+      "data": "x",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-cr-only",
+   "kind": "parse",
+   "chunks": [
+    "data: a\rdata: b\r\r"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "message",
+      "data": "a\nb",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-comment-retry",
+   "kind": "parse",
+   "chunks": [
+    ": keepalive\n\nretry: 5000\n\n",
+    "retry: 50x\n\n"
+   ],
+   "expect": {
+    "events": [],
+    "retry": 5000
+   }
+  },
+  {
+   "id": "parse-bom-no-space",
+   "kind": "parse",
+   "chunks": [
+    "﻿event:session\ndata:{\"state\":\"ended\"}\n\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "session",
+      "data": "{\"state\":\"ended\"}",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-unterminated-dropped",
+   "kind": "parse",
+   "chunks": [
+    "event: change\ndata: x\n\n",
+    "event: change\ndata: y\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "change",
+      "data": "x",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-empty-event-skipped",
+   "kind": "parse",
+   "chunks": [
+    "event: change\n\ndata:\n\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "message",
+      "data": "",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-id-with-nul-ignored",
+   "kind": "parse",
+   "chunks": [
+    "id: 7\ndata: a\n\nid: 8\u0000\ndata: b\n\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "message",
+      "data": "a",
+      "last_event_id": "7"
+     },
+     {
+      "event": "message",
+      "data": "b",
+      "last_event_id": "7"
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "parse-unknown-field",
+   "kind": "parse",
+   "chunks": [
+    "foo: bar\ndata: a\n\n"
+   ],
+   "expect": {
+    "events": [
+     {
+      "event": "message",
+      "data": "a",
+      "last_event_id": ""
+     }
+    ],
+    "retry": null
+   }
+  },
+  {
+   "id": "subscribe-aggregate",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "devices",
+     "approvals"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "accepted": [
+     "devices",
+     "approvals"
+    ]
+   }
+  },
+  {
+   "id": "subscribe-entity-visible",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f": true
+    }
+   },
+   "expect": {
+    "accepted": [
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+    ]
+   }
+  },
+  {
+   "id": "subscribe-entity-hidden",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f": false
+    }
+   },
+   "expect": {
+    "problem": "not_found"
+   }
+  },
+  {
+   "id": "subscribe-entity-unknown",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "alert/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e60"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "not_found"
+   }
+  },
+  {
+   "id": "subscribe-missing-permission",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "dlp.findings"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "permission_denied"
+   }
+  },
+  {
+   "id": "subscribe-permission-before-scope",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "dlp.findings",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f": false
+    }
+   },
+   "expect": {
+    "problem": "permission_denied"
+   }
+  },
+  {
+   "id": "subscribe-empty",
+   "kind": "subscribe",
+   "request": {
+    "topics": [],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "validation_failed"
+   }
+  },
+  {
+   "id": "subscribe-duplicate",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "devices",
+     "devices"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "validation_failed"
+   }
+  },
+  {
+   "id": "subscribe-unknown-topic",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "session"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "validation_failed"
+   }
+  },
+  {
+   "id": "subscribe-uppercase-uid",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "device/01928F3E-7A4B-7C3D-8E9F-0A1B2C3D4E5F"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "validation_failed"
+   }
+  },
+  {
+   "id": "subscribe-uuid-v4",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "device/01928f3e-7a4b-4c3d-8e9f-0a1b2c3d4e5f"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "validation_failed"
+   }
+  },
+  {
+   "id": "subscribe-seventeen",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e00",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e01",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e02",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e03",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e04",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e05",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e06",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e07",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e08",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e09",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0a",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0b",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0c",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0d",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0e",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0f",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e10"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "problem": "validation_failed"
+   }
+  },
+  {
+   "id": "subscribe-sixteen",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e00",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e01",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e02",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e03",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e04",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e05",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e06",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e07",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e08",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e09",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0a",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0b",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0c",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0d",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0e",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0f"
+    ],
+    "permissions": [
+     "mdm.devices.read",
+     "edr.alerts.read"
+    ],
+    "visible": {
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e00": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e01": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e02": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e03": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e04": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e05": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e06": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e07": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e08": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e09": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0a": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0b": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0c": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0d": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0e": true,
+     "01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0f": true
+    }
+   },
+   "expect": {
+    "accepted": [
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e00",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e01",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e02",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e03",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e04",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e05",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e06",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e07",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e08",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e09",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0a",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0b",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0c",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0d",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0e",
+     "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e0f"
+    ]
+   }
+  },
+  {
+   "id": "subscribe-infrastructure-certificates",
+   "kind": "subscribe",
+   "request": {
+    "topics": [
+     "certificates.infrastructure"
+    ],
+    "permissions": [
+     "pki.infrastructure.read"
+    ],
+    "visible": {}
+   },
+   "expect": {
+    "accepted": [
+     "certificates.infrastructure"
+    ]
+   }
+  }
+ ]
+}

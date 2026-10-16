@@ -295,3 +295,33 @@ it.each(['module', 'copy', 'output'])(
     }
   },
 )
+
+it.each(['module', 'copy', 'output-source', 'output-path'])(
+  'rejects shipping generated cache provenance via %s',
+  async (kind) => {
+    const { auditOutput } = await import('../../scripts/audit-dist.ts')
+    const source = '/console/.vite/cache/deps/vue.js'
+    const files = new Map([
+      ['index.html', '<script src="/app.js"></script>'],
+      ['app.js', 'export {}'],
+    ])
+    const graph = {
+      modules: kind === 'module' ? [source] : [],
+      copies: kind === 'copy' ? [{ source, target: 'app.js' }] : [],
+      outputs: [
+        {
+          file: 'app.js',
+          sha256: createHash('sha256').update('export {}').digest('hex'),
+          sources: [kind === 'output-source' ? source : '/console/src/app/main.ts'],
+        },
+      ],
+      manifest: {},
+    }
+    if (kind === 'output-path') files.set('.vite/cache/deps/vue.js', 'export {}')
+    expect(auditOutput(files, graph, [])).toContain(
+      kind === 'output-path'
+        ? 'cache-output:.vite/cache/deps/vue.js'
+        : `cache-provenance:${source}`,
+    )
+  },
+)

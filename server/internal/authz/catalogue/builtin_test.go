@@ -33,8 +33,10 @@ func TestBuiltin(t *testing.T) {
 	if !bytes.Equal(c.JSON(), []byte(embeddedCatalogue)) {
 		t.Fatal("builtin bytes changed")
 	}
-	// The first catalogue has no earlier catalogue baseline. The name fixture
-	// independently keeps the retirement API contract exercised.
+	// Lifecycle compatibility with the reviewed base commit's catalogue is
+	// checked by scripts/ci/catalogue_compat.py in design CI, not by this
+	// package. The name fixture independently keeps the retirement API
+	// contract exercised.
 	for _, name := range []string{"dlp.evidence.read", "identity.tokens.manage", "identity.authority.approve", "authz.approvals.read", "audit.events.read", "policy.ownership.override", "events.reports.run"} {
 		checkLookup(t, c, name, nil)
 	}

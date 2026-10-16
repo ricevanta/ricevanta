@@ -85,6 +85,31 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(inventory.select_groups([]), ['ci-contracts', 'design', 'gitleaks', 'semgrep'])
         self.assertEqual(inventory.select_groups([b'\xff']), sorted(inventory.GROUPS))
 
+    def test_openapi_and_catalogue_inputs_require_contracts(self):
+        for path in ('schemas/openapi/v1/openapi.yaml', 'schemas/openapi/v1/fixtures/security.json',
+                     'schemas/permissions/v1/catalogue.json', 'server/internal/authz/catalogue/catalogue.json'):
+            with self.subTest(path=path):
+                groups = inventory.select_groups([path])
+                self.assertIn('design', groups)
+                self.assertIn('openapi-contracts', inventory.checks('design'))
+                if not path.startswith('schemas/openapi/'):
+                    self.assertTrue({'server', 'loader', 'ocsf', 'interop'} <= set(groups))
+                route_units = inventory.units(groups)
+                self.assertIn('design', route_units)
+
+    def test_footprint_input_families_select_every_native_leaf(self):
+        leaves = {'footprint-unit:linux-x64', 'footprint-unit:windows-x64', 'footprint-unit:macos-arm64'}
+        for path in ('tests/footprint/budgets.json', 'tests/footprint/profiles/idle.json', 'tests/footprint/baselines/linux.json',
+                     'schemas/agent/footprint/v1/evidence.schema.json', 'schemas/agent/config/v1/config.schema.json',
+                     'schemas/agent/health/v1/health.schema.json', 'docs/specs/agent-runtime.md', 'docs/design/agent.md',
+                     '.github/python-version', '.github/requirements-design.txt', 'scripts/ci/toolchains.lock.json',
+                     'docs/specs/ci-hardening.md', 'docs/specs/ci-toolchain-refresh.md', 'docs/specs/ci-toolchain-migration.md',
+                     'docs/plans/agent-runtime.md', 'docs/plans/ci-hardening.md', '.github/workflows/agent.yml'):
+            with self.subTest(path=path):
+                self.assertTrue(leaves <= set(inventory.units(inventory.select_groups([path]))))
+        for host in ('linux-x64', 'windows-x64', 'macos-arm64'):
+            self.assertEqual(inventory.checks('footprint-unit:' + host), ['footprint-unit-' + host])
+
     def test_unicode_newline_git_path(self):
         path = 'unicode-雪\nfile'
         blob = subprocess.run(['git', '-C', str(self.root), 'hash-object', '-w', '--stdin'],
@@ -218,6 +243,11 @@ class RouteTests(unittest.TestCase):
             ('./internal/extensions/loader', 'FuzzTar'),
             ('./internal/extensions/loader', 'FuzzVerifiedYAML'),
             ('./internal/extensions/manifest', 'FuzzValidate'),
+            ('./internal/extensions/admission', 'FuzzDecide'),
+            ('./internal/extensions/admission', 'FuzzParse'),
+            ('./internal/platform/config', 'FuzzLoad'),
+            ('./internal/transport/console', 'FuzzPath'),
+            ('./internal/transport/console', 'FuzzAcceptEncoding'),
             ('./internal/mdm/resourcevalidate', 'FuzzBudget'),
             ('./internal/mdm/resourcevalidate', 'FuzzValidate'),
             ('./internal/policy/celdecl', 'FuzzLoad'),
@@ -229,9 +259,10 @@ class RouteTests(unittest.TestCase):
         self.assertEqual({(r['package'], r['target']) for r in rows}, expected)
         self.assertTrue(all(r['fuzztime'] == '60s' and r['parallel'] == 2 for r in rows))
         leaves = {
-            'design', 'ci-contracts', 'gitleaks', 'semgrep', 'interop', 'console',
+            'design', 'ci-contracts', 'gitleaks', 'semgrep', 'interop', 'console', 'console-webkit:macos-arm64',
             'server-validate', 'server-race',
             'agent:linux-x64', 'agent:windows-x64', 'agent:macos-arm64',
+            'footprint-unit:linux-x64', 'footprint-unit:windows-x64', 'footprint-unit:macos-arm64',
             'bootstrap:linux-x64', 'bootstrap:windows-x64', 'bootstrap:macos-arm64',
             'ocsf:linux-x64', 'ocsf:windows-x64', 'ocsf:macos-arm64',
             'loader:linux-x64', 'loader:windows-x64', 'loader:macos-arm64',
@@ -243,8 +274,21 @@ class RouteTests(unittest.TestCase):
     def test_inventory_checks_and_fuzz(self):
         expected = json.loads((Path(__file__).parent / 'fixtures/fuzz-targets.json').read_text())
         self.assertEqual(inventory.fuzz_targets(), expected)
-        self.assertEqual(len(inventory.fuzz_targets()), 23)
-        self.assertEqual(len(inventory.units(inventory.GROUPS)), 46)
+        self.assertEqual(len(inventory.fuzz_targets()), 28)
+        self.assertEqual(len(inventory.units(inventory.GROUPS)), 55)
         for unit in inventory.units(inventory.GROUPS): self.assertTrue(inventory.checks(unit))
+        self.assertEqual(inventory.checks('server-validate'),
+                         ['server-format', 'server-unit', 'key-admission-bench', 'ingest-cost-model', 'server-vet'])
+
+    def test_every_fuzz_corpus_path_is_artifact_safe(self):
+        rows = inventory.fuzz_matrix()
+        self.assertEqual(len(rows), 28)
+        output = subprocess.check_output([sys.executable, '-B', str(Path(inventory.__file__)), '--fuzz-matrix'])
+        self.assertEqual(json.loads(output), rows)
+        for row in rows:
+            with self.subTest(target=row['target'], package=row['package']):
+                self.assertNotIn('.', row['corpus'].split('/'))
+                self.assertNotIn('..', row['corpus'].split('/'))
+                self.assertEqual(row['corpus'], 'server/' + row['package'][2:] + '/testdata/fuzz/' + row['target'] + '/**')
 
 if __name__ == '__main__': unittest.main()

@@ -1,0 +1,22 @@
+{
+  "schema": "ricevanta-server-config-v1",
+  "roles": ["api"],
+  "listen": {
+    "api": {
+      "address": ":8443",
+      "tls": {
+        "mode": "file",
+        "certificate_file": "/etc/ricevanta/tls/api.crt",
+        "key_file": "/etc/ricevanta/tls/api.key"
+      }
+    }
+  },
+  "console": { "enabled": true },
+  "log": { "level": "info" },
+  "http": {
+    "read_header_timeout_ms": 10000,
+    "idle_timeout_ms": 60000,
+    "max_header_bytes": 65536
+  },
+  "shutdown": { "timeout_ms": 20000 }
+}

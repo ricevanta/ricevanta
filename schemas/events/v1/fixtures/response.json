@@ -170,6 +170,17 @@
       "retry_after": "60"
     },
     {
+      "name": "retry-upper-bound-429",
+      "status": 429,
+      "body": {
+        "error": "rate_limited"
+      },
+      "schema_valid": true,
+      "semantic_valid": true,
+      "expected_error": null,
+      "retry_after": "60"
+    },
+    {
       "name": "negative",
       "status": 200,
       "body": {

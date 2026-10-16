@@ -15,7 +15,7 @@ jobs:
     defaults:
       run:
         working-directory: agent
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
     strategy:
       fail-fast: false
       matrix:
@@ -34,11 +34,26 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.13.7
+    - name: Bootstrap admitted toolchains
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,rust
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: '${{ fromJSON(''{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}'')[matrix.os] }}'
+        CI_TOOLS: python,rust
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Assert native receipt host
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         HOST_OS: ${{ matrix.os }}
@@ -52,13 +67,12 @@ jobs:
         arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
         assert actual + '-' + arch == expected, (actual, arch, expected)
         PY
-    - name: Install Rust
-      run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
     - name: Check native host and toolchain
       env:
         ACTUAL_ARCH: ${{ runner.arch }}
         EXPECTED_ARCH: ${{ matrix.arch }}
         EXPECTED_HOST: ${{ matrix.host }}
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         test "$ACTUAL_ARCH" = "$EXPECTED_ARCH"
         release="$(rustc -vV | sed -n 's/^release: //p' | tr -d '\r')"
@@ -68,78 +82,110 @@ jobs:
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
+          ${{ runner.temp }}/admitted/cargo-home/registry/index
+          ${{ runner.temp }}/admitted/cargo-home/registry/cache
         key: agent-cargo-registry-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
     - name: Admit Cargo downloads and fresh target
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
-      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Check locked dependency pins
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         cargo metadata --locked --format-version 1 | python -c '
         import json, sys
         data = json.load(sys.stdin)
-        expected = {("cc", "1.4.5"), ("cfg-if", "1.0.4"), ("crc32c", "0.6.8"), ("find-msvc-tools", "0.1.12"), ("getrandom", "0.4.3"), ("jobserver", "0.1.35"), ("libc", "0.2.189"), ("pkg-config", "0.3.34"), ("r-efi", "6.0.0"), ("ricevanta-batch", "0.1.0"), ("ricevanta-spool", "0.1.0"), ("rustc_version", "0.4.1"), ("semver", "1.0.27"), ("shlex", "2.0.1"), ("zstd", "0.13.3"), ("zstd-safe", "7.2.2"), ("zstd-sys", "2.0.16+zstd.1.5.7")}
+        expected = {("cc", "1.4.5"), ("cfg-if", "1.0.4"), ("crc32c", "0.6.8"), ("find-msvc-tools", "0.1.12"), ("getrandom", "0.4.3"), ("jobserver", "0.1.35"), ("libc", "0.2.189"), ("pkg-config", "0.3.34"), ("r-efi", "6.0.0"), ("ricevanta-batch", "0.1.0"), ("ricevanta-config", "0.1.0"), ("ricevanta-json", "0.1.0"), ("ricevanta-os", "0.1.0"), ("ricevanta-os-linux", "0.1.0"), ("ricevanta-os-macos", "0.1.0"), ("ricevanta-os-windows", "0.1.0"), ("ricevanta-spool", "0.1.0"), ("rustc_version", "0.4.1"), ("semver", "1.0.27"), ("shlex", "2.0.1"), ("windows-link", "0.2.1"), ("windows-sys", "0.61.2"), ("zstd", "0.13.3"), ("zstd-safe", "7.2.2"), ("zstd-sys", "2.0.16+zstd.1.5.7")}
         actual = {(p["name"], p["version"]) for p in data["packages"]}
-        assert actual == expected and len(data["packages"]) == 17, "unexpected dependency closure"
+        assert actual == expected and len(data["packages"]) == 25, "unexpected dependency closure"
         print("Locked dependency pins verified")
         '
     - name: Check fixture drift
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: python tools/generate-spool-fixtures.py --check
     - name: Check formatting
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         cargo fmt --all -- --check
     - name: Record Unix C compiler
       if: runner.os != 'Windows'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: ${CC:-cc} --version
     - name: Record MSVC compiler
       if: runner.os == 'Windows'
-      shell: pwsh
+      shell: pwsh -NoLogo -NoProfile -NonInteractive -Command ". '{0}'"
+      working-directory: agent
       run: ./tools/check-msvc.ps1
     - name: Clippy
       env:
         CARGO_NET_OFFLINE: 'true'
         CC_ENABLE_DEBUG_OUTPUT: '1'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         cargo clippy --locked --workspace --all-targets -vv -- -D warnings
     - name: Test
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
         CC_ENABLE_DEBUG_OUTPUT: '1'
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
-        cargo test --locked --workspace
+        python -B scripts/ci/run_selected.py --id agent-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Extended recovery property test
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
-        cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact
+        python -B scripts/ci/run_selected.py --id spool-extended --evidence "$RUNNER_TEMP/evidence"
     - name: Extended seal property test
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
       env:
         CARGO_NET_OFFLINE: 'true'
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
-        cargo test --locked -p ricevanta-batch --test fuzz_seal fuzz_seal_extended -- --ignored --exact
+        python -B scripts/ci/run_selected.py --id batch-extended --evidence "$RUNNER_TEMP/evidence"
+    - name: Extended JSON property test
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CARGO_NET_OFFLINE: 'true'
+      run: python -B scripts/ci/run_selected.py --id json-extended --evidence "$RUNNER_TEMP/evidence"
+    - name: Root Linux protection tests
+      if: runner.os == 'Linux'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CARGO_NET_OFFLINE: 'true'
+      run: python -B scripts/ci/run_selected.py --id agent-protection-root-linux --evidence "$RUNNER_TEMP/evidence"
+    - name: Root macOS protection tests
+      if: runner.os == 'macOS'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CARGO_NET_OFFLINE: 'true'
+      run: python -B scripts/ci/run_selected.py --id agent-protection-root-macos --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: agent
         CHECKS: '["agent-host", "agent-pins", "agent-fixtures", "agent-format", "agent-clippy", "agent-unit", "spool-extended",
-          "batch-extended"]'
+          "batch-extended", "json-extended"]'
         HOST_OS: ${{ matrix.os }}
       run: |
         python - <<'PY'
@@ -150,7 +196,8 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        checks = json.loads(os.environ['CHECKS']) + inventory.agent_native_checks(inventory.HOSTS[os.environ['HOST_OS']])
+        item = required.receipt(route, unit, checks, pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -170,25 +217,36 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
         ref: ${{ fromJSON(inputs.route).testedSha }}
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: 3.14.8
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-      with:
-        go-version-file: server/go.mod
-        cache: false
+    - name: Bootstrap admitted toolchains
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: linux-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
     - name: Create fresh Go caches
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
     - name: Download and verify Go modules
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: server
       run: |
         go mod download
@@ -196,25 +254,26 @@ jobs:
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
+          ${{ runner.temp }}/admitted/cargo-home/registry/index
+          ${{ runner.temp }}/admitted/cargo-home/registry/cache
         key: agent-cargo-${{ runner.os }}-${{ runner.arch }}-1.99.0-${{ hashFiles('agent/Cargo.lock') }}
-    - name: Install Rust and check native host
+    - name: Check admitted Rust and native host
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
-        rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
-        test "$(rustc +1.99.0 -vV | sed -n 's/^release: //p')" = '1.99.0'
-        host="$(rustc +1.99.0 -vV | sed -n 's/^host: //p')"
+        test "$(rustc -vV | sed -n 's/^release: //p')" = '1.99.0'
+        host="$(rustc -vV | sed -n 's/^host: //p')"
         test "$host" = 'x86_64-unknown-linux-gnu'
         test "$RUNNER_ARCH" = 'X64'
         cc --version
     - name: Admit Cargo downloads and fresh target
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
-      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$HOME/.cargo" --cargo-lock "$PWD/agent/Cargo.lock"
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/cargo-fresh" --env-out "$GITHUB_ENV" --cargo-home "$CARGO_HOME" --cargo-lock "$PWD/agent/Cargo.lock"
     - name: Build live writer
       working-directory: agent
       env:
         CC_ENABLE_DEBUG_OUTPUT: '1'
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       run: |
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
@@ -224,14 +283,16 @@ jobs:
         test -x "$vector"
         echo "RICEVANTA_BATCH_VECTOR=$vector" >> "$GITHUB_ENV"
     - name: Live Go decoder conformance
-      working-directory: server
-      run: go test -v -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id interop-unit --evidence "$RUNNER_TEMP/evidence"
     - name: Live Go decoder conformance with race detector
-      working-directory: server
-      run: go test -v -race -tags rustinterop ./internal/events/body -run '^TestRustWriter' -count=1
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id interop-race --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
-      shell: bash
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .
       env:
         ROUTE_JSON: ${{ inputs.route }}
@@ -247,7 +308,7 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']))
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')
@@ -260,4 +321,127 @@ jobs:
         name: ${{ steps.proof.outputs.artifact }}
         path: ${{ runner.temp }}/ci-proof/receipt.json
         retention-days: 30
+        if-no-files-found: error
+  footprint-unit:
+    name: footprint unit (${{ matrix.os }})
+    if: ${{ contains(fromJSON(inputs.route).groups, 'agent') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-24.04
+          platform: linux-x64
+        - os: windows-2025
+          platform: windows-x64
+        - os: macos-15
+          platform: macos-arm64
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: 'false'
+        ref: ${{ fromJSON(inputs.route).testedSha }}
+    - name: Bootstrap admitted toolchains
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: ${{ fromJSON('{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}')[matrix.os]
+          }}
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS"
+        --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: ${{ fromJSON('{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}')[matrix.os]
+          }}
+        CI_TOOLS: python
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM"
+        --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+    - name: Create validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -I -S -B scripts/ci/python_env.py --check
+    - name: Assert native receipt host
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import os, platform, sys
+        sys.path.insert(0, 'scripts/ci')
+        from inventory import HOSTS
+        expected = HOSTS[os.environ['HOST_OS']]
+        actual = {'Linux': 'linux', 'Windows': 'windows', 'Darwin': 'macos'}[platform.system()]
+        arch = {'x86_64': 'x64', 'AMD64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}[platform.machine()]
+        assert actual + '-' + arch == expected, (actual, arch, expected)
+        PY
+    - name: Run footprint unit suite
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        FOOTPRINT_PLATFORM: ${{ matrix.platform }}
+      run: |
+        case "$FOOTPRINT_PLATFORM" in
+        linux-x64) python -B scripts/ci/run_selected.py --id footprint-unit-linux-x64 --evidence "$RUNNER_TEMP/evidence" ;;
+        windows-x64) python -B scripts/ci/run_selected.py --id footprint-unit-windows-x64 --evidence "$RUNNER_TEMP/evidence" ;;
+        macos-arm64) python -B scripts/ci/run_selected.py --id footprint-unit-macos-arm64 --evidence "$RUNNER_TEMP/evidence" ;;
+        esac
+    - name: Upload footprint unit diagnostics
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: footprint-unit-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}
+        path: ${{ runner.temp }}/evidence
+        retention-days: '30'
+        if-no-files-found: error
+    - name: Re-verify validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -I -S -B scripts/ci/python_env.py --check
+    - name: Write successful leaf receipt
+      id: proof
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        ROUTE_JSON: ${{ inputs.route }}
+        UNIT: footprint-unit
+        CHECKS: '["footprint-unit-${{ matrix.platform }}"]'
+        HOST_OS: ${{ matrix.os }}
+      run: |
+        python - <<'PY'
+        import json, os, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import inventory, required
+        route = json.loads(os.environ['ROUTE_JSON'])
+        unit = os.environ['UNIT']
+        if os.environ['HOST_OS']:
+            unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
+        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
+        out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
+        out.mkdir()
+        (out / 'receipt.json').write_text(json.dumps(item) + '\n')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('artifact=' + required.artifact_name(route, unit) + '\n')
+        PY
+    - name: Upload leaf receipt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.proof.outputs.artifact }}
+        path: ${{ runner.temp }}/ci-proof/receipt.json
+        retention-days: '30'
         if-no-files-found: error

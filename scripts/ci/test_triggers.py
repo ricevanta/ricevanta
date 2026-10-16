@@ -15,7 +15,7 @@ WORKFLOWS = ("ci",)
 REUSABLES = ("design", "server", "agent", "console", "bootstrap")
 PR_TYPES = {"opened", "synchronize", "reopened", "ready_for_review", "edited"}
 PR_CANCEL = "${{ github.event_name == 'pull_request' }}"
-RACE_COMMAND = "go test -race -count=1 -timeout=15m ./..."
+RACE_COMMAND = 'python -B scripts/ci/run_selected.py --id server-race --evidence "$RUNNER_TEMP/evidence"'
 
 
 def load_workflow(path):
@@ -210,13 +210,15 @@ class TriggerTests(unittest.TestCase):
             self.assertNotIn("continue-on-error", step)
         validate_runs = [step.get("run", "") for step in validate["steps"]]
         self.assertFalse(any("-race" in run for run in validate_runs))
-        for command in ("go test -count=1 ./...", "go vet ./...",
-                        "go test -run '^$' -bench '^BenchmarkValidate$' "
-                        "-benchmem -benchtime=100x ./internal/signing/ed25519key"):
+        for command in ('python -B scripts/ci/run_selected.py --id server-unit --evidence "$RUNNER_TEMP/evidence"', "go vet ./...",
+                        'python -B scripts/ci/run_selected.py --id key-admission-bench --evidence "$RUNNER_TEMP/evidence"'):
             self.assertIn(command, validate_runs)
         self.assertTrue(any("gofmt -l ." in run for run in validate_runs))
-        self.assertTrue(any(step.get("uses", "").startswith("actions/setup-go@")
-                            for step in race["steps"]))
+        self.assertTrue(any("scripts/ci/bootstrap.py" in step.get("run", "")
+                            and "go" in step.get("env", {}).get("CI_TOOLS", "").split(",")
+                            for step in race["steps"]), "race installs Go through the admitted bootstrap")
+        self.assertFalse(any(step.get("uses", "").startswith("actions/setup-")
+                             for step in race["steps"]), "setup actions download unchecked payloads")
 
     def test_workflows_keep_read_only_tokens_and_pinned_checkouts(self):
         for name in WORKFLOWS + REUSABLES:

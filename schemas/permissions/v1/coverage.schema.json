@@ -92,6 +92,7 @@
             "enum": [
               "none",
               "always",
+              "identity_authority",
               "policy_change",
               "extension_dependency",
               "destination_change",

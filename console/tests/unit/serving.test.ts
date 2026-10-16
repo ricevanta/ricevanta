@@ -222,3 +222,41 @@ it('keeps every hashed asset from a real console build immutable', async () => {
     rmSync(root, { recursive: true, force: true })
   }
 }, 30000)
+
+it('refuses decoded sidecar URLs before lookup and fallback', async () => {
+  const { serveFile } = await import('../../scripts/serve-dist.ts')
+  const root = mkdtempSync(join(tmpdir(), 'rv-sidecars-'))
+  try {
+    writeFileSync(join(root, 'index.html'), 'shell')
+    for (const prefix of ['', 'assets/', 'brand/']) {
+      if (prefix) mkdirSync(join(root, prefix))
+      writeFileSync(join(root, prefix, 'present.js'), 'original')
+      for (const suffix of ['.br', '.gz'])
+        writeFileSync(join(root, prefix, `present.js${suffix}`), 'compressed')
+      for (const name of ['present.js', 'missing.js'])
+        for (const suffix of ['.br', '.gz', '%2ebr', '.%67z', '.%62%72', '%2e%67%7a'])
+          for (const method of ['GET', 'HEAD'])
+            for (const accept of ['', 'text/html']) {
+              const url = `/${prefix}${name}${suffix}`
+              const result = serveFile(root, { ...assetRequest, url, method, accept })
+              expect(result.status, `${method} ${url} ${accept}`).toBe(404)
+              expect(result.body.length).toBe(0)
+            }
+      for (const encoding of ['br', 'gzip'])
+        for (const method of ['GET', 'HEAD']) {
+          const result = serveFile(root, {
+            ...assetRequest,
+            url: `/${prefix}present.js`,
+            method,
+            encoding,
+          })
+          expect(result.status).toBe(200)
+          expect(result.headers['Content-Encoding']).toBe(encoding)
+          expect(result.headers['Content-Type']).toBe('text/javascript; charset=utf-8')
+          expect(result.body.toString()).toBe(method === 'HEAD' ? '' : 'compressed')
+        }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

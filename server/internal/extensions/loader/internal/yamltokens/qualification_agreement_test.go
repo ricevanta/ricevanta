@@ -34,7 +34,7 @@ func TestMeasurementRejectsTreeMismatch(t *testing.T) {
 	for _, mode := range []string{"node", "combined"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestParserMeasurementChild$", "-test.v")
-			cmd.Env = append(os.Environ(), "RICEVANTA_REFERENCE="+path, "RICEVANTA_PARSER_RECIPE=plain", "RICEVANTA_PARSER_SIZE=64", "RICEVANTA_PARSER_ACCEPTED=true", "RICEVANTA_PARSER_MODE="+mode)
+			cmd.Env = append(os.Environ(), "RICEVANTA_REFERENCE="+path, "RICEVANTA_PARSER_RECIPE=plain", "RICEVANTA_PARSER_SIZE=64", "RICEVANTA_PARSER_ACCEPTED=true", "RICEVANTA_PARSER_MODE="+mode, "RICEVANTA_PARSER_SAMPLE=1")
 			out, err := cmd.CombinedOutput()
 			if err == nil || !strings.Contains(string(out), "complete-tree disagreement") {
 				t.Fatalf("child must reject scalar mismatch: err=%v\n%s", err, out)

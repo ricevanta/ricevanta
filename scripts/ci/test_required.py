@@ -10,15 +10,169 @@ import tempfile
 import inventory
 import required
 
+def verified_evidence(root, checks, run_id='123', attempt='1', sha='b' * 40):
+    """Write verified selected-run records so emission can bind every wrapper check."""
+    import run_selected
+    selected = run_selected.inventory()
+    def write_record(check):
+        target = selected[check]
+        for proof in target.get('requires', []):
+            write_record(proof)
+        summary = {}
+        if target['mode'] == 'rust-root':
+            summary = {'tests': sorted(target['tests']), 'passed': len(target['tests'])}
+        if target['mode'] == 'rust-suite':
+            ignored = [{k: row[k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in row}
+                       for row in target['skips'].values()]
+            children = [{'target': row['target'], 'parent': row['parent'], 'test': row['test'], 'result': 'success'}
+                        for row in ignored if 'parent' in row]
+            summary = {'ignored': ignored, 'children': children,
+                       'required': [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                                    if row.get('platform', sys.platform) == sys.platform]}
+            for row in ignored:
+                if 'proof' in row: write_record(row['proof'])
+        directory = root / run_selected.evidence_name(check)
+        directory.mkdir(exist_ok=True)
+        record = {'kind': 'selected-run', 'version': 1, 'id': check, 'result': 'success', 'exit': 0,
+                  'summary': summary, 'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
+        if check == 'ingest-cost-model':
+            bench = run_selected.cost_model_benchmark(target)
+            record.update(mode='go-cost-model', cwd='server', discovery=run_selected.discovery_command(target), command=run_selected.run_command(target),
+                          benchmark={'discovery': run_selected.discovery_command(bench), 'command': run_selected.run_command(bench)},
+                          summary={'run_identity': {'run': {'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha},
+                                   'host': {'system': 'Linux', 'release': '6.17-test', 'version': '#1-test', 'machine': 'x86_64', 'page_size': 4096, 'cpu_count': 2, 'kernel_config': {'status': 'unavailable'}},
+                                   'toolchain': {'go': 'go1.27.1', 'arch': 'amd64', 'compiler': 'gc', 'executable_sha256': 'b'*64, 'bootstrap_sha256': 'c'*64},
+                                   'sources': {name: 'd'*64 for name in ('server/go.mod', 'server/go.sum', 'scripts/ci/run_selected.py', 'scripts/ci/targets.toml', 'scripts/ci/toolchains.lock.json', 'server/internal/events/body/costmodel_norace_test.go')}},
+                                   'toolchain': {'go': 'go1.27.1', 'arch': 'amd64', 'compiler': 'gc'},
+                                   'fixtures': {key: {'case': key, 'sha256': 'e'*64, 'compressed': '123'} for key in target['case_keys']},
+                                   'cpu_protocol': 'linux-getrusage-v1', 'package': run_selected.COST_PACKAGE, 'tests': ['TestDecodeCostModel'], 'measurements': 50, 'case_keys': sorted(target['case_keys']),
+                                   'benchmark': {'package': run_selected.COST_PACKAGE, 'operations': 3, 'results': {'BenchmarkDecodeCost/a': {'operations': 3, 'ns_per_op': 10, 'bytes_per_op': 1, 'allocs_per_op': 1}}}})
+        if target['mode'] == 'python-unittest':
+            env = {'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt, 'GITHUB_SHA': sha}
+            ids = run_selected.python_declarations(inventory.ROOT / 'tests', target)
+            discovery = [run_selected.python_header(target, env, 'discover'), {'event': 'inventory', 'ids': ids},
+                         {'event': 'totals', 'discovered': len(ids)}]
+            execution = [run_selected.python_header(target, env, 'run'), {'event': 'inventory', 'ids': ids}]
+            skipped = 0
+            for test in ids:
+                execution.append({'event': 'start', 'id': test})
+                allowance = run_selected.PYTHON_SKIPS.get(test)
+                if allowance and target['platform'] in allowance['hosts']:
+                    execution.append({'event': 'skip', 'id': test, 'reason': allowance['reason']}); skipped += 1
+                else: execution.append({'event': 'pass', 'id': test})
+            execution.append({'event': 'totals', 'discovered': len(ids), 'testsRun': len(ids), 'passed': len(ids) - skipped,
+                              'skipped': skipped, 'failed': 0, 'errors': 0})
+            for prefix, rows in (('discovery', discovery), ('execution', execution)):
+                (directory / (prefix + '.events.jsonl')).write_text(''.join(json.dumps(row) + '\n' for row in rows))
+                (directory / (prefix + '.status.json')).write_text('{"exit":0}\n')
+            record.update(mode='python-unittest', cwd='tests', discovery=run_selected.python_command(target, 'discover'),
+                          command=run_selected.python_command(target, 'run'),
+                          summary=run_selected.verify_python_events(target, inventory.ROOT / 'tests', directory, env, 0))
+        (directory / 'verified.json').write_text(json.dumps(record))
+    for check in checks:
+        if check in selected:
+            write_record(check)
+
+
 class RequiredTests(unittest.TestCase):
     def setUp(self):
         self.route = dict(kind='route', version=1, event='push', baseSha='a'*40, headSha='b'*40,
                           testedSha='b'*40, runId='123', runAttempt='1', groups=['ci-contracts', 'design', 'gitleaks', 'semgrep'],
                           units=['ci-contracts', 'design', 'gitleaks', 'semgrep'])
         self.needs = {n: {'result': 'success' if n in ('route', 'ci-contracts', 'design', 'gitleaks', 'semgrep') else 'skipped'} for n in required.NEEDS}
-        self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        self.evidence = tempfile.TemporaryDirectory(prefix='ci-evidence-')
+        self.addCleanup(self.evidence.cleanup)
+        for unit in inventory.units(sorted(inventory.GROUPS)):
+            verified_evidence(Path(self.evidence.name), inventory.checks(unit))
+        self.receipts = [self.receipt(u) for u in self.route['units']]
+
+    def receipt(self, unit):
+        return required.receipt(self.route, unit, inventory.checks(unit), Path(self.evidence.name))
 
     def verify(self): required.verify(self.route, self.needs, self.receipts)
+
+    def test_server_receipt_requires_root_test_proof(self):
+        import run_selected
+        self.route['groups'] = sorted([*self.route['groups'], 'server'])
+        self.route['units'] = inventory.units(self.route['groups'])
+        self.receipt('server-validate')
+        proof = Path(self.evidence.name) / run_selected.evidence_name('server-keyfile-root') / 'verified.json'
+        record = json.loads(proof.read_text())
+        proof.unlink()
+        with self.assertRaises(ValueError): self.receipt('server-validate')
+        for changes in ({'exit': 1}, {'GITHUB_RUN_ID': '124'}, {'GITHUB_RUN_ATTEMPT': '2'}, {'GITHUB_SHA': 'c' * 40}):
+            proof.write_text(json.dumps({**record, **changes}))
+            with self.subTest(changes=changes), self.assertRaises(ValueError): self.receipt('server-validate')
+    def test_ingest_receipt_needs_complete_same_run_composite(self):
+        import run_selected
+        self.route['groups']=sorted(inventory.GROUPS)
+        self.route['units']=inventory.units(self.route['groups'])
+        root=Path(self.evidence.name)
+        path=root/run_selected.evidence_name('ingest-cost-model')/'verified.json'
+        complete=json.loads(path.read_text())
+        self.receipt('server-validate')
+        mutations=[]
+        for key in ('benchmark','mode','command','discovery','summary'):
+            row=deepcopy(complete);row.pop(key);mutations.append((key,row))
+        for key,value in (('result','failure'),('exit',1),('GITHUB_SHA','c'*40),('GITHUB_RUN_ID','124'),('GITHUB_RUN_ATTEMPT','2')):
+            row=deepcopy(complete);row[key]=value;mutations.append((key,row))
+        for field,value in (('run_identity',None),('toolchain',{}),('fixtures',{}),('cpu_protocol',None),('cpu_protocol','old-protocol'),('measurements',49),('case_keys',complete['summary']['case_keys'][:-1]),('benchmark',{})):
+            row=deepcopy(complete);row['summary'][field]=value;mutations.append((field,row))
+        row=deepcopy(complete);row['summary'].pop('cpu_protocol');mutations.append(('missing CPU protocol',row))
+        row=deepcopy(complete);row['summary']['benchmark']['results']['BenchmarkDecodeCost/a']['operations']=1;mutations.append(('iterations',row))
+        row=deepcopy(complete);row['summary']['benchmark']['results']['BenchmarkDecodeCost/a']['ns_per_op']=float('inf');mutations.append(('infinite time',row))
+        for label,row in mutations:
+            with self.subTest(label=label):
+                path.write_text(json.dumps(row))
+                with self.assertRaises(ValueError): self.receipt('server-validate')
+        path.unlink()
+        with self.assertRaises(ValueError): self.receipt('server-validate')
+        # Ordinary-suite skip evidence exists, but never supplies the missing ID.
+        unit=root/run_selected.evidence_name('server-unit')/'verified.json'
+        ordinary=json.loads(unit.read_text());ordinary['summary']={'skipped':[{'test':'TestDecodeCostModel','proof':'ingest-cost-model'}]};unit.write_text(json.dumps(ordinary))
+        with self.assertRaises(ValueError): self.receipt('server-validate')
+        path.write_text(json.dumps(complete));self.receipt('server-validate')
+
+    def test_design_receipt_requires_same_run_openapi_contracts(self):
+        self.assertIn('openapi-contracts', inventory.checks('design'))
+        self.verify()
+        baseline = deepcopy(self.receipts)
+        for mutation in ('missing', 'check', 'runId', 'runAttempt', 'testedSha'):
+            with self.subTest(mutation=mutation):
+                self.receipts = deepcopy(baseline)
+                design = next(row for row in self.receipts if row['unit'] == 'design')
+                if mutation == 'missing': self.receipts.remove(design)
+                elif mutation == 'check': design['checks'].remove('openapi-contracts')
+                else: design[mutation] = {'runId': '124', 'runAttempt': '2', 'testedSha': 'c' * 40}[mutation]
+                with self.assertRaises(ValueError): self.verify()
+
+    def test_footprint_receipts_require_native_proofs_and_bound_events(self):
+        import run_selected
+        self.route['groups'] = sorted([*self.route['groups'], 'agent'])
+        self.route['units'] = inventory.units(self.route['groups'])
+        self.needs['agent'] = {'result': 'success'}
+        rows = [self.receipt(unit) for unit in self.route['units']]
+        required.verify(self.route, self.needs, rows)
+        for host in ('linux-x64', 'windows-x64', 'macos-arm64'):
+            unit = 'footprint-unit:' + host
+            check = 'footprint-unit-' + host
+            with self.subTest(host=host):
+                with self.assertRaises(ValueError): required.verify(self.route, self.needs, [r for r in rows if r['unit'] != unit])
+                directory = Path(self.evidence.name) / run_selected.evidence_name(check)
+                proof = directory / 'verified.json'
+                baseline = proof.read_text()
+                proof.unlink()
+                with self.assertRaises(ValueError): self.receipt(unit)
+                for key, value in (('GITHUB_RUN_ID', '124'), ('GITHUB_RUN_ATTEMPT', '2'), ('GITHUB_SHA', 'c' * 40)):
+                    record = json.loads(baseline); record[key] = value; proof.write_text(json.dumps(record))
+                    with self.assertRaises(ValueError): self.receipt(unit)
+                record = json.loads(baseline); record['summary']['passed'] += 1; proof.write_text(json.dumps(record))
+                with self.assertRaises(ValueError): self.receipt(unit)
+                proof.write_text(baseline)
+                events = directory / 'execution.events.jsonl'
+                saved = events.read_text(); events.unlink()
+                with self.assertRaises(ValueError): self.receipt(unit)
+                events.write_text(saved)
 
     def test_design_receipt_requires_release_contracts(self):
         self.assertIn('release-contracts', inventory.checks('design'))
@@ -32,7 +186,7 @@ class RequiredTests(unittest.TestCase):
         self.route['groups'] = sorted(inventory.GROUPS)
         self.route['units'] = inventory.units(self.route['groups'])
         self.needs = {n: {'result': 'success'} for n in required.NEEDS}
-        self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        self.receipts = [self.receipt(u) for u in self.route['units']]
         self.verify()
 
     def test_expanded_route_schema_and_omissions(self):
@@ -40,13 +194,17 @@ class RequiredTests(unittest.TestCase):
         self.route['groups'] = sorted(inventory.GROUPS)
         self.route['units'] = inventory.units(self.route['groups'])
         self.needs = {n: {'result': 'success'} for n in required.NEEDS}
-        rows = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']]
+        rows = [self.receipt(u) for u in self.route['units']]
         validator = Draft202012Validator(json.loads((Path(inventory.ROOT) / 'schemas/ci/v1/contracts.schema.json').read_text()))
         validator.validate(self.route)
         for row in rows: validator.validate(row)
         required.verify(self.route, self.needs, rows)
         new_units = ['loader-gate-b:' + h for h in ('linux-x64', 'windows-x64', 'macos-arm64')]
         new_units += ['server-fuzz:./internal/extensions/loader:' + t for t in ('FuzzLoad', 'FuzzVerifiedYAML', 'FuzzTar')]
+        new_units += ['server-fuzz:./internal/extensions/admission:' + t for t in ('FuzzDecide', 'FuzzParse')]
+        new_units += ['server-fuzz:./internal/platform/config:FuzzLoad',
+                      'server-fuzz:./internal/transport/console:FuzzPath',
+                      'server-fuzz:./internal/transport/console:FuzzAcceptEncoding']
         for unit in new_units:
             with self.subTest(unit=unit):
                 self.assertIn(unit, self.route['units'])
@@ -60,7 +218,7 @@ class RequiredTests(unittest.TestCase):
                 changed = deepcopy(rows)
                 index = next(i for i, row in enumerate(changed) if row['unit'] == unit)
                 if substitute:
-                    changed[index] = required.receipt(self.route, 'loader:' + host, inventory.checks('loader:' + host))
+                    changed[index] = self.receipt('loader:' + host)
                 else:
                     changed[index]['checks'] = []
                 with self.subTest(host=host, substitute=substitute), self.assertRaises(ValueError):
@@ -94,7 +252,7 @@ class RequiredTests(unittest.TestCase):
         self.route['groups'] = sorted(inventory.GROUPS)
         self.route['units'] = inventory.units(self.route['groups'])
         self.needs = {n: {'result': 'success'} for n in required.NEEDS}
-        self.receipts = [required.receipt(self.route, u, inventory.checks(u)) for u in self.route['units']][:-1]
+        self.receipts = [self.receipt(u) for u in self.route['units']][:-1]
         with self.assertRaises(ValueError): self.verify()
 
     def test_artifact_directory_and_strict_json(self):
@@ -128,6 +286,40 @@ class RequiredTests(unittest.TestCase):
             row = required.load(root / 'proof/receipt.json')
             self.assertEqual(row, self.receipts[1])
             self.assertEqual(output.read_text().strip(), 'artifact=' + required.artifact_name(self.route, 'design'))
+
+    def test_selected_checks_require_verified_evidence(self):
+        import run_selected
+        self.route['groups'] = sorted(inventory.GROUPS)
+        self.route['units'] = inventory.units(self.route['groups'])
+        selected = run_selected.inventory()
+        wrapped = [u for u in self.route['units'] if any(c in selected for c in inventory.checks(u))]
+        self.assertTrue({'server-validate', 'server-race', 'interop', 'loader:linux-x64', 'loader-gate-b:macos-arm64',
+                         'ocsf:windows-x64', 'agent:linux-x64', 'server-fuzz:./internal/extensions/loader:FuzzTar',
+                         'console', 'console-webkit:macos-arm64'} <= set(wrapped))
+        for unit in ('design', 'ci-contracts', 'bootstrap:linux-x64', 'gitleaks'):
+            self.assertNotIn(unit, wrapped)
+            required.receipt(self.route, unit, inventory.checks(unit))
+        for unit in wrapped:
+            checks = inventory.checks(unit)
+            with self.subTest(unit=unit), tempfile.TemporaryDirectory(prefix='ci-evidence-') as tmp:
+                root = Path(tmp)
+                with self.assertRaises(ValueError): required.receipt(self.route, unit, checks)
+                with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, root)
+                verified_evidence(root, checks)
+                self.assertEqual(required.receipt(self.route, unit, checks, root)['checks'], checks)
+                victim = next(c for c in checks if c in selected)
+                (root / run_selected.evidence_name(victim) / 'verified.json').write_text(json.dumps(
+                    {'kind': 'selected-run', 'version': 1, 'id': victim, 'result': 'success', 'exit': 1,
+                     'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}))
+                with self.assertRaises(ValueError): required.receipt(self.route, unit, checks, root)
+                # Evidence from another run, attempt or tested commit, or without a run binding, proves nothing here.
+                for run_id, attempt, sha in (('124', '1', 'b' * 40), ('123', '2', 'b' * 40), (None, None, 'b' * 40),
+                                             ('123', '1', 'c' * 40), ('123', '1', None)):
+                    other = root / ('other-%s-%s-%s' % (run_id, attempt, sha and sha[0]))
+                    other.mkdir()
+                    verified_evidence(other, checks, run_id, attempt, sha)
+                    with self.subTest(run_id=run_id, attempt=attempt, sha=sha), self.assertRaises(ValueError):
+                        required.receipt(self.route, unit, checks, other)
 
     def test_artifact_names_are_collision_free(self):
         self.assertNotEqual(required.artifact_name(self.route, 'a:b'), required.artifact_name(self.route, 'a/b'))

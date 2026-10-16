@@ -220,3 +220,174 @@ func TestReferenceLineFixtures(t *testing.T) {
 		})
 	}
 }
+
+// referenceFields derives the walker's identity fields from the reference tree.
+// The line must already pass validLineJSON.
+func referenceFields(t testing.TB, raw []byte) (identityFields, bool) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	badKeys := false
+	value, err := referenceValue(decoder, 1, "root", &badKeys)
+	if err != nil {
+		t.Fatalf("reference rejected a valid line: %v", err)
+	}
+	var fields identityFields
+	if badKeys {
+		return fields, false
+	}
+	root := value.(map[string]any)
+	capture := func(object map[string]any, name string) referenceValueKind {
+		v, ok := object[name]
+		switch {
+		case !ok:
+			return referenceValueKind{kind: valueAbsent}
+		default:
+			switch x := v.(type) {
+			case string:
+				return referenceValueKind{kind: valueString, text: x}
+			case json.Number:
+				return referenceValueKind{kind: valueNumber, text: string(x)}
+			}
+		}
+		return referenceValueKind{kind: valueOther}
+	}
+	metadata, metadataOK := root["metadata"].(map[string]any)
+	device, deviceOK := root["device"].(map[string]any)
+	fields.metadata, fields.device = metadataOK, deviceOK
+	if metadataOK {
+		fields.uid = capture(metadata, "uid").value()
+		fields.sequence = capture(metadata, "sequence").value()
+	}
+	if deviceOK {
+		fields.deviceUID = capture(device, "uid").value()
+	}
+	return fields, true
+}
+
+type referenceValueKind struct {
+	kind valueKind
+	text string
+}
+
+// value encodes the reference result as a walker value whose decoded text is
+// text; string tokens are re-quoted so decoding them yields text exactly.
+func (r referenceValueKind) value() identityValue {
+	switch r.kind {
+	case valueString:
+		quoted, _ := json.Marshal(r.text)
+		return identityValue{kind: valueString, token: quoted[1 : len(quoted)-1]}
+	case valueNumber:
+		return identityValue{kind: valueNumber, token: []byte(r.text)}
+	}
+	return identityValue{kind: r.kind}
+}
+
+func sameIdentity(a, b identityFields) bool {
+	same := func(x, y identityValue) bool {
+		return x.kind == y.kind && x.text() == y.text()
+	}
+	return a.metadata == b.metadata && a.device == b.device && same(a.uid, b.uid) && same(a.sequence, b.sequence) && same(a.deviceUID, b.deviceUID)
+}
+
+func assertWalkOracle(t testing.TB, w *lineWalker, line []byte) {
+	t.Helper()
+	want, wantOK := referenceFields(t, line)
+	got, gotOK := w.walkFields(line)
+	if gotOK != wantOK || wantOK && !sameIdentity(got, want) {
+		shown := line
+		if len(shown) > 200 {
+			shown = shown[:200]
+		}
+		t.Fatalf("walker %v %+v, reference %v %+v for %q", gotOK, got, wantOK, want, shown)
+	}
+}
+
+var walkParityLines = []string{
+	`{"metadata":{"u\u0069d":"a","uid":"b","sequence":1},"device":{"uid":"x"}}`,
+	`{"metadata":{"\u0075id":"a","sequence":1},"device":{"uid":"x"}}`,
+	`{"m\u0065tadata":{"uid":"a","sequence":1},"device":{"uid":"x"}}`,
+	`{"metadata":{"uid":"a","sequence":1},"d\u0065vice":{"\u0075\u0069\u0064":"x"}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"\u006d\u0065\u0074\u0061\u0064\u0061\u0074\u0061":{}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"Z":1,"z":1}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"ſequence":1,"SEQUENCE":2}`,
+	`{"metadata":{"uid":"a","ſequence":1,"sequence":1},"device":{"uid":"x"}}`,
+	`{"metadata":{"uid":"a","ſequence":1},"device":{"uid":"x"}}`,
+	`{"metadata":{"uid":"a","sequence":1,"UID":"c"},"device":{"uid":"x"}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x","\u212Aey":1,"Kelvin":2}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"DEVİCE":1}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"z":[{"a":1},{"a":2}]}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"z":[{"a":1,"a":2}]}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"z":[[{"q":1,"r":2,"q":3}]]}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"z":{"a":1,"a":2}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"z":{"a":{"a":1},"b":{"a":1}}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"z":{"a":{"a":{"a":{}}}}}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"a":1,"a":2}`,
+	`{"metadata":{"uid":"a","sequence":1},"device":{"uid":"x"},"metadata":{}}`,
+	`{"metadata":{"uid":"\ud83d\ude00","sequence":1},"device":{"uid":"\u00e9\ud834\udd1e"}}`,
+	`{"metadata":{"uid":"😀","sequence":1},"device":{"uid":"é"}}`,
+	`{"metadata":{"uid":"a\"b\\c\/d\b\f\n\r\t","sequence":1},"device":{"uid":"\u0000"}}`,
+	`{"metadata":{"uid":null,"sequence":"1"},"device":{"uid":true}}`,
+	`{"metadata":{"uid":false,"sequence":-0},"device":{"uid":1e5}}`,
+	`{"metadata":{"uid":{"a":1},"sequence":[1]},"device":{"uid":[1]}}`,
+	`{"metadata":{"uid":"a","sequence":1.5e+10},"device":{"uid":{}}}`,
+	`{"metadata":[],"device":{"uid":"x"}}`,
+	`{"metadata":"x","device":null}`,
+	`{"metadata":[{"uid":"a","sequence":1}],"device":[{"uid":"x"}]}`,
+	`{"z":{"metadata":{"uid":"a"}},"device":{"uid":"x","metadata":{"uid":"q"}}}`,
+	`{"metadata":{"uid":"a","sequence":1,"device":{"uid":"y"}},"device":{"uid":"x"}}`,
+	` { "metadata" : { "uid" : "a" , "sequence" : 1 } , "device" : { "uid" : "x" } } `,
+	"{\t\"metadata\":{\"uid\":\"a\",\"sequence\":1},\"device\":{\"uid\":\"x\"}}",
+	`{"":0,"":1}`,
+	`{"":0,"\u0000":1,"\\":2,"\"":3}`,
+	`{"a\\":1,"a\\\\":2,"a\"":3,"a\\\"":4}`,
+	`{}`,
+	`{"metadata":{}}`,
+}
+
+func TestWalkFieldsOracle(t *testing.T) {
+	shared := newLineWalker(MaxLineBytes)
+	checked := 0
+	check := func(line []byte) {
+		t.Helper()
+		if !validLineJSON(line) {
+			return
+		}
+		assertWalkOracle(t, shared, line)
+		assertWalkOracle(t, newLineWalker(uint64(len(line))), line)
+		checked++
+	}
+	f := loadFixtures(t)
+	for _, c := range f.Cases {
+		plain, err := c.plain(f.Template)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range bytes.Split(plain, []byte{'\n'}) {
+			check(line)
+		}
+	}
+	fixtureLines := checked
+	for _, shape := range walkShapes {
+		for _, size := range []int{256, 4096, 65536, MaxLineBytes} {
+			line := firstLine(shape.gen(1, size))
+			if !validLineJSON(line) {
+				t.Fatalf("%s/%d: generated line invalid", shape.name, size)
+			}
+			check(line)
+		}
+	}
+	for _, plain := range [][]byte{genRealistic(3), genBadID(2), genMinOK(2), genFlat(2, 32770), genFlat(2, 5378)} {
+		for _, line := range bytes.Split(bytes.TrimSuffix(plain, []byte{'\n'}), []byte{'\n'}) {
+			check(line)
+		}
+	}
+	check(dupEmptyLine())
+	for _, line := range walkParityLines {
+		if !validLineJSON([]byte(line)) {
+			t.Fatalf("parity line invalid: %s", line)
+		}
+		check([]byte(line))
+	}
+	t.Logf("checked %d lines, %d from fixtures", checked, fixtureLines)
+}

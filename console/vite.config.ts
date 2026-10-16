@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 export default defineConfig({
   base: '/',
+  cacheDir: fileURLToPath(new URL('./.vite/cache', import.meta.url)),
   plugins: [
     vue(),
     buildGraph(),

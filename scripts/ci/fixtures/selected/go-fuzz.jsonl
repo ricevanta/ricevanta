@@ -1,0 +1,33 @@
+{"Time":"2026-10-15T06:42:38.368806361Z","Action":"start","Package":"example.com/tiny"}
+{"Time":"2026-10-15T06:42:38.37107725Z","Action":"run","Package":"example.com/tiny","Test":"TestAlpha"}
+{"Time":"2026-10-15T06:42:38.371103431Z","Action":"output","Package":"example.com/tiny","Test":"TestAlpha","Output":"=== RUN   TestAlpha\n"}
+{"Time":"2026-10-15T06:42:38.371112685Z","Action":"run","Package":"example.com/tiny","Test":"TestAlpha/sub"}
+{"Time":"2026-10-15T06:42:38.371114913Z","Action":"output","Package":"example.com/tiny","Test":"TestAlpha/sub","Output":"=== RUN   TestAlpha/sub\n"}
+{"Time":"2026-10-15T06:42:38.371613064Z","Action":"output","Package":"example.com/tiny","Test":"TestAlpha/sub","Output":"--- PASS: TestAlpha/sub (0.00s)\n"}
+{"Time":"2026-10-15T06:42:38.371617377Z","Action":"pass","Package":"example.com/tiny","Test":"TestAlpha/sub","Elapsed":0}
+{"Time":"2026-10-15T06:42:38.371621951Z","Action":"output","Package":"example.com/tiny","Test":"TestAlpha","Output":"--- PASS: TestAlpha (0.00s)\n"}
+{"Time":"2026-10-15T06:42:38.371624696Z","Action":"pass","Package":"example.com/tiny","Test":"TestAlpha","Elapsed":0}
+{"Time":"2026-10-15T06:42:38.371627016Z","Action":"run","Package":"example.com/tiny","Test":"TestBeta"}
+{"Time":"2026-10-15T06:42:38.371629244Z","Action":"output","Package":"example.com/tiny","Test":"TestBeta","Output":"=== RUN   TestBeta\n"}
+{"Time":"2026-10-15T06:42:38.371653889Z","Action":"output","Package":"example.com/tiny","Test":"TestBeta","Output":"    tiny_test.go:9: beta runs\n"}
+{"Time":"2026-10-15T06:42:38.371657343Z","Action":"output","Package":"example.com/tiny","Test":"TestBeta","Output":"--- PASS: TestBeta (0.00s)\n"}
+{"Time":"2026-10-15T06:42:38.371660515Z","Action":"pass","Package":"example.com/tiny","Test":"TestBeta","Elapsed":0}
+{"Time":"2026-10-15T06:42:38.371663148Z","Action":"run","Package":"example.com/tiny","Test":"TestSkipped"}
+{"Time":"2026-10-15T06:42:38.371665364Z","Action":"output","Package":"example.com/tiny","Test":"TestSkipped","Output":"=== RUN   TestSkipped\n"}
+{"Time":"2026-10-15T06:42:38.371676193Z","Action":"output","Package":"example.com/tiny","Test":"TestSkipped","Output":"    tiny_test.go:10: helper only\n"}
+{"Time":"2026-10-15T06:42:38.371710951Z","Action":"output","Package":"example.com/tiny","Test":"TestSkipped","Output":"--- SKIP: TestSkipped (0.00s)\n"}
+{"Time":"2026-10-15T06:42:38.371713849Z","Action":"skip","Package":"example.com/tiny","Test":"TestSkipped","Elapsed":0}
+{"Time":"2026-10-15T06:42:38.371824753Z","Action":"run","Package":"example.com/tiny","Test":"ExampleHello"}
+{"Time":"2026-10-15T06:42:38.371827487Z","Action":"output","Package":"example.com/tiny","Test":"ExampleHello","Output":"=== RUN   ExampleHello\n"}
+{"Time":"2026-10-15T06:42:38.372060691Z","Action":"output","Package":"example.com/tiny","Test":"ExampleHello","Output":"--- PASS: ExampleHello (0.00s)\n"}
+{"Time":"2026-10-15T06:42:38.372064622Z","Action":"pass","Package":"example.com/tiny","Test":"ExampleHello","Elapsed":0}
+{"Time":"2026-10-15T06:42:38.372120388Z","Action":"run","Package":"example.com/tiny","Test":"FuzzThing"}
+{"Time":"2026-10-15T06:42:38.372123184Z","Action":"output","Package":"example.com/tiny","Test":"FuzzThing","Output":"=== RUN   FuzzThing\n"}
+{"Time":"2026-10-15T06:42:38.372863396Z","Action":"output","Package":"example.com/tiny","Test":"FuzzThing","Output":"fuzz: elapsed: 0s, gathering baseline coverage: 0/1 completed\n"}
+{"Time":"2026-10-15T06:42:38.376176157Z","Action":"output","Package":"example.com/tiny","Test":"FuzzThing","Output":"fuzz: elapsed: 0s, gathering baseline coverage: 1/1 completed, now fuzzing with 2 workers\n"}
+{"Time":"2026-10-15T06:42:39.391675538Z","Action":"output","Package":"example.com/tiny","Test":"FuzzThing","Output":"fuzz: elapsed: 1s, execs: 49529 (48608/sec), new interesting: 0 (total: 1)\n"}
+{"Time":"2026-10-15T06:42:39.391855539Z","Action":"output","Package":"example.com/tiny","Test":"FuzzThing","Output":"--- PASS: FuzzThing (1.02s)\n"}
+{"Time":"2026-10-15T06:42:39.391889897Z","Action":"pass","Package":"example.com/tiny","Test":"FuzzThing","Elapsed":1.02}
+{"Time":"2026-10-15T06:42:39.392069023Z","Action":"output","Package":"example.com/tiny","Output":"PASS\n"}
+{"Time":"2026-10-15T06:42:39.392691415Z","Action":"output","Package":"example.com/tiny","Output":"ok  \texample.com/tiny\t1.023s\n"}
+{"Time":"2026-10-15T06:42:39.392713265Z","Action":"pass","Package":"example.com/tiny","Elapsed":1.024}

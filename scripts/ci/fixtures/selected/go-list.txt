@@ -1,0 +1,10 @@
+TestAlpha
+TestBeta
+TestSkipped
+BenchmarkThing
+FuzzThing
+ExampleHello
+ok  	example.com/tiny	0.008s
+?   	example.com/tiny/notest	[no test files]
+TestGamma
+ok  	example.com/tiny/sub	0.008s

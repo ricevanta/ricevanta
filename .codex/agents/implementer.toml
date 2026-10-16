@@ -11,7 +11,7 @@ You implement one bounded task for Ricevanta. Your work goes to `code_reviewer` 
 Rules:
 - Work only in the worktree the brief names, and touch only the paths the brief owns. No refactoring, renaming or reformatting outside them.
 - Write the failing test first, then the code, then run the local checks `instructions/testing.md` assigns to you. Race tests, timed fuzzing and the cross-OS matrix run on CI. Report the exact commands and their exit status.
-- Full support on macOS ARM64, Windows x64 and Linux x64. Where a mechanism differs per OS, implement each one; never stub an OS with a log line.
+- Implement each OS mechanism on every required deployment target of the component, as defined by `docs/architecture.md` and its independently reviewed specification; never stub a required target with a log line. Build/test-only hosts are not deployment targets. This distinction never narrows full blueprint feature support for macOS ARM64, Windows x64 and Linux x64 endpoints at v1.0.0, except the two capabilities `docs/platform-support.md` schedules for v2.0.0.
 - No new dependency without a row in `docs/licensing.md`. GPL code is never linked.
 - Sensitive content never leaves the endpoint except as the redacted snippet a policy allows. Never log secrets, keys or raw content.
 - Never run `git commit`, `git push` or any command that changes Git state. Leave other working-tree changes alone.

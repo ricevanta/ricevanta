@@ -28,7 +28,7 @@ EXEMPTIONS = {'subject-session', 'protocol-enrollment', 'automatic-workers', 'of
               'endpoint-local', 'deployment-settings', 'gateway-cutover', 'external-portals',
               'qualification', 'automatic-policy', 'external-ca', 'spool-codec',
               'spool-manager-recovery', 'spool-pipeline-recovery', 'cel-declaration-loader',
-              'cel-compiler-environment'}
+              'cel-compiler-environment', 'server-public-reads'}
 
 
 def require(ok, defect):
@@ -157,13 +157,19 @@ def console_check(root, cat):
         require(op in uses, 'console operation: ' + op)
 
 
+def exemption_check(coverage):
+    ids = [e['id'] for e in coverage['exemptions']]
+    require(len(ids) == len(EXEMPTIONS) and set(ids) == EXEMPTIONS, 'exemption inventory')
+    for e in coverage['exemptions']:
+        require(bool(e['authority'].strip()), 'exemption authority: ' + e['id'])
+
+
 def sources(root, cat, coverage):
     console_check(root, cat)
     for a in coverage['actions']:
         require(a['anchor'] in section(root, a['source']), 'source anchor: ' + a['id'])
-    require({e['id'] for e in coverage['exemptions']} == EXEMPTIONS, 'exemption inventory')
+    exemption_check(coverage)
     for e in coverage['exemptions']:
-        require(bool(e['authority'].strip()), 'exemption authority: ' + e['id'])
         section(root, e['source'])
     for p in cat['permissions']:
         section(root, p['source'])
@@ -289,6 +295,15 @@ def self_tests(root, cat, coverage, v, check_sources):
             changed['exemptions'] = [r for r in changed['exemptions'] if r['id'] != e['id']]
             expect_failure(lambda: sources(root, cat, changed), 'exemption inventory')
             count += 1
+            for mutation in ('rename', 'duplicate', 'authority'):
+                changed = copy.deepcopy(coverage)
+                row = next(r for r in changed['exemptions'] if r['id'] == e['id'])
+                if mutation == 'rename': row['id'] += '-unknown'
+                elif mutation == 'duplicate': changed['exemptions'].append(dict(row))
+                else: row['authority'] = ' '
+                defect = 'exemption authority' if mutation == 'authority' else 'exemption inventory'
+                expect_failure(lambda: exemption_check(changed), defect)
+                count += 1
         with tempfile.TemporaryDirectory(prefix='permission-sources-') as tmp:
             tree = Path(tmp)
             shutil.copytree(root / ASSETS, tree / ASSETS)
