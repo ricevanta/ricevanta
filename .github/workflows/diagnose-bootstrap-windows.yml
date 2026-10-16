@@ -1,0 +1,204 @@
+name: Diagnose Windows bootstrap helper failures
+'on':
+  push:
+    branches:
+    - wip/bootstrap-windows-diagnose
+permissions:
+  contents: read
+jobs:
+  diagnose-bootstrap-windows:
+    name: diagnose-bootstrap-windows-observe-once
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        ref: 37988bb6ad7d10bcfca81f856f518f8d329efa97
+    - name: Reject corrupted payloads before any extraction or execution
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: windows-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap/controls.py corrupt --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --work "$RUNNER_TEMP/bootstrap-controls"
+    - name: Bootstrap admitted toolchains
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: windows-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap.py --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --dest "$RUNNER_TEMP/admitted" --cache-mode none --env-out "$RUNNER_TEMP/tools.env"
+    - name: Apply admitted toolchain environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: cat "$RUNNER_TEMP/tools.env" >> "$GITHUB_ENV"
+    - name: Verify admitted toolchain evidence
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      env:
+        CI_PLATFORM: windows-x64
+        CI_TOOLS: python,go,rust
+      run: python3 -B scripts/ci/bootstrap/controls.py evidence --lock scripts/ci/toolchains.lock.json --platform "$CI_PLATFORM" --tools "$CI_TOOLS" --evidence "$RUNNER_TEMP/admitted/bootstrap-evidence.json"
+    - name: Create fresh Go caches
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/fresh_go.py --root "$RUNNER_TEMP/go-fresh" --env-out "$GITHUB_ENV"
+    - name: Download and verify Go modules
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: server
+      run: |
+        go mod download
+        go mod verify
+    - name: Create validator environment
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -B scripts/ci/python_env.py --venv "$RUNNER_TEMP/validator" --path-out "$GITHUB_PATH"
+    - name: Install hash-locked validator closure
+      id: closure
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes --only-binary=:all: -r .github/requirements-design.txt
+        python -m pip check
+        python -I -S -B scripts/ci/python_env.py --check
+    - name: Observe exact failures and one policy profile
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: |
+        python -B - <<'PY'
+        """Observation only: unchanged assertions, one execution per selected case, no receipts."""
+        import hashlib
+        import json
+        import os
+        from pathlib import Path
+        import platform
+        import pstats
+        import subprocess
+        import sys
+        import time
+
+        SOURCE = '37988bb6ad7d10bcfca81f856f518f8d329efa97'
+        ROOT = Path.cwd().resolve()
+        OUT = Path(os.environ['RUNNER_TEMP']) / 'bootstrap-windows-diagnosis'
+        OUT.mkdir(exist_ok=False)
+        actual = (ROOT / '.git/HEAD').read_text(encoding='utf-8').strip()
+        assert actual == SOURCE, actual
+        assert platform.system() == 'Windows' and platform.machine().lower() in ('amd64', 'x86_64')
+        assert 'BOOTSTRAP_TEST_HOST' not in os.environ
+        assert sys.version_info[:3] == (3, 14, 8)
+
+        def save(name, value):
+            (OUT / name).write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+        sources = ['scripts/ci/bootstrap.py', 'scripts/ci/test_bootstrap.py', 'scripts/ci/check_policy.py',
+                   'scripts/ci/test_policy.py', 'scripts/ci/python_env.py', 'scripts/ci/toolchains.lock.json',
+                   '.github/python-version', '.github/requirements-design.txt']
+        save('identity.json', {'purpose': 'diagnosis-only', 'source_checkout_sha': actual,
+             'original_run_id': '38855265281', 'original_job_id': '116825636625',
+             'original_tested_sha': '7f40c7f441dc904e148b18d74056c8aaa77deb8f',
+             'workflow_identity': {key: os.environ.get(key) for key in
+                                   ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT')},
+             'python': sys.version, 'python_executable': sys.executable, 'cwd': str(ROOT),
+             'sources': {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in sources}})
+
+        # Preserve all nested foreign-identity stdout/stderr before the unchanged outer assertion truncates its message.
+        observer = OUT / 'observe-host-identity.py'
+        observer.write_text('''import json
+        import os
+        from pathlib import Path
+        import runpy
+        import subprocess
+        import sys
+        OUT = Path(__file__).parent
+        sys.path[0] = os.getcwd()
+        original = subprocess.run
+        errors = []
+        def observe(argv, *args, **kwargs):
+            result = original(argv, *args, **kwargs)
+            identity = kwargs.get('env', {}).get('BOOTSTRAP_TEST_HOST')
+            if argv == [sys.executable, '-B', '-m', 'unittest', 'test_bootstrap'] and identity in ('linux-x64', 'macos-arm64'):
+                try:
+                    (OUT / ('identity-' + identity + '.stdout.log')).write_text(result.stdout, encoding='utf-8')
+                    (OUT / ('identity-' + identity + '.stderr.log')).write_text(result.stderr, encoding='utf-8')
+                    (OUT / ('identity-' + identity + '.status.json')).write_text(json.dumps({'identity': identity, 'exit': result.returncode}) + '\\n', encoding='utf-8')
+                except Exception as error:
+                    errors.append(type(error).__name__)
+            return result
+        subprocess.run = observe
+        sys.argv = ['unittest', '-v', 'test_bootstrap.HostIdentityTests.test_suite_passes_under_every_platform_identity']
+        try:
+            runpy.run_module('unittest', run_name='__main__')
+        finally:
+            subprocess.run = original
+            try:
+                (OUT / 'observer-errors.json').write_text(json.dumps(errors) + '\\n', encoding='utf-8')
+            except Exception as error:
+                errors.append(type(error).__name__)
+            print('diagnosis observer errors: ' + json.dumps(errors), file=sys.stderr, flush=True)
+        ''', encoding='utf-8')
+
+        commands = [
+            ('macho-load-resolution', [sys.executable, '-B', '-m', 'unittest', '-v',
+                                      'test_bootstrap.BrowserMigrationTests.test_macho_load_resolution']),
+            ('foreign-host-identities', [sys.executable, '-B', str(observer)]),
+            ('policy-profile', [sys.executable, '-B', '-m', 'cProfile', '-o', str(OUT / 'policy.prof'),
+                                '-m', 'unittest', '-v',
+                                'test_policy.PolicyTests.test_c_toolchain_runner_and_path_settings_are_rejected']),
+        ]
+        statuses = []
+        for name, argv in commands:
+            started = time.monotonic()
+            row = {'name': name, 'argv': argv, 'cwd': str(ROOT / 'scripts/ci'), 'state': 'running'}
+            statuses.append(row)
+            save('children.json', statuses)
+            with (OUT / (name + '.log')).open('wb') as output:
+                try:
+                    child = subprocess.run(argv, cwd=ROOT / 'scripts/ci', stdout=output,
+                                           stderr=subprocess.STDOUT, timeout=600, check=False)
+                    row.update(state='finished', exit=child.returncode)
+                except subprocess.TimeoutExpired:
+                    row.update(state='timeout', exit=None)
+                except OSError as error:
+                    row.update(state='launch-error', exit=None, error_type=type(error).__name__)
+            row['seconds'] = time.monotonic() - started
+            if name == 'foreign-host-identities':
+                observation = OUT / 'observer-errors.json'
+                try:
+                    errors = json.loads(observation.read_text(encoding='utf-8'))
+                    if not isinstance(errors, list) or not all(isinstance(error, str) for error in errors):
+                        raise TypeError('observer report must be a list of strings')
+                except Exception as error:
+                    errors = ['invalid observer report: ' + type(error).__name__]
+                row['observer_errors'] = errors
+                expected = [OUT / ('identity-' + host + suffix) for host in ('linux-x64', 'macos-arm64')
+                            for suffix in ('.stdout.log', '.stderr.log', '.status.json')]
+                if not all(path.is_file() for path in expected):
+                    row['observer_errors'].append('missing nested child artifacts')
+            save('children.json', statuses)
+            print(json.dumps(row, sort_keys=True), flush=True)
+        profile = OUT / 'policy.prof'
+        if profile.is_file():
+            with (OUT / 'policy-profile-stats.txt').open('w', encoding='utf-8') as output:
+                stats = pstats.Stats(str(profile), stream=output)
+                stats.sort_stats('cumulative').print_stats(80)
+                stats.sort_stats('tottime').print_stats(80)
+                stats.sort_stats('calls').print_stats(80)
+                stats.print_callers('check_policy.py')
+        raise SystemExit(int(any(row.get('exit') != 0 or row.get('observer_errors') for row in statuses)))
+        PY
+    - name: Re-verify validator environment
+      if: ${{ always() && steps.closure.outcome == 'success' }}
+      shell: bash --noprofile --norc -p -e -o pipefail {0}
+      working-directory: .
+      run: python -I -S -B scripts/ci/python_env.py --check
+    - name: Upload observation and profiler artifacts
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: bootstrap-windows-diagnosis-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          ${{ runner.temp }}/bootstrap-windows-diagnosis/
+          ${{ runner.temp }}/admitted/bootstrap-evidence.json
+        retention-days: 30
+        if-no-files-found: error
