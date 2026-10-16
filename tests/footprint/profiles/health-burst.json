@@ -1,0 +1,15 @@
+{
+  "schema": "ricevanta-agent-config-v1",
+  "log": {
+    "level": "debug",
+    "sink": "file",
+    "max_file_bytes": 65536,
+    "max_files": 4
+  },
+  "health": {
+    "interval_ms": 100
+  },
+  "shutdown": {
+    "timeout_ms": 10000
+  }
+}
