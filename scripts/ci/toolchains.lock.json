@@ -244,6 +244,87 @@
       "url": "https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip",
       "size": 2376500,
       "sha256": "ebc74fc5b94830176a3c2914ae96bd8bc7f6a91f4f33890230f84a172ee61ccc"
+    },
+    {
+      "id": "go-1.27.1-linux-x64-ubuntu26.04",
+      "tool": "go",
+      "version": "1.27.1",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://go.dev/dl/go1.27.1.linux-amd64.tar.gz",
+      "size": 70553950,
+      "sha256": "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
+    },
+    {
+      "id": "python-3.14.8-linux-x64-ubuntu26.04",
+      "tool": "python",
+      "version": "3.14.8",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://github.com/actions/python-versions/releases/download/3.14.8-36806082737/python-3.14.8-linux-26.04-x64.tar.gz",
+      "size": 110477772,
+      "sha256": "53eb0aed7bfb9a3d28b0842ada81dc7b1432fd697cb35653b79156b1efd0d3fa"
+    },
+    {
+      "id": "rustc-1.99.0-linux-x64-ubuntu26.04",
+      "tool": "rustc",
+      "version": "1.99.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 84044652,
+      "sha256": "77171ba2a0345fdf2abc4fedda55d6de078dae7a68527c28be8c77dcc9604bd5"
+    },
+    {
+      "id": "rust-std-1.99.0-linux-x64-ubuntu26.04",
+      "tool": "rust-std",
+      "version": "1.99.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 31598812,
+      "sha256": "3e58dff2d0b72196b5ea4e90536e174d400de88564a52694686b81e091169933"
+    },
+    {
+      "id": "cargo-1.99.0-linux-x64-ubuntu26.04",
+      "tool": "cargo",
+      "version": "1.99.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 10954432,
+      "sha256": "d7674918d28093097614cd9728b6ca60db9ea3038f640f0bd1e9a4188c7568ce"
+    },
+    {
+      "id": "rustfmt-1.99.0-linux-x64-ubuntu26.04",
+      "tool": "rustfmt",
+      "version": "1.99.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 2484024,
+      "sha256": "b22c09ab9e258ec5571da170d88bd1624a4ea602e6d70d95720c5b47494cadce"
+    },
+    {
+      "id": "clippy-1.99.0-linux-x64-ubuntu26.04",
+      "tool": "clippy",
+      "version": "1.99.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+      "size": 5232532,
+      "sha256": "982442e32ad8dd3f0bb3a30db74038da5f71fd9bf1a865cc71da8ea5d4ec71ec"
+    },
+    {
+      "id": "node-24.21.0-linux-x64-ubuntu26.04",
+      "tool": "node",
+      "version": "24.21.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz",
+      "size": 31890184,
+      "sha256": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
+    },
+    {
+      "id": "pnpm-11.18.0-linux-x64-ubuntu26.04",
+      "tool": "pnpm",
+      "version": "11.18.0",
+      "platform": "linux-x64-ubuntu26.04",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.18.0.tgz",
+      "size": 8771179,
+      "sha256": "29c35ca8d2a287988fdee3e0f36e07d9b93783f567b579b7fd5b798a4563dd81"
     }
   ]
 }
