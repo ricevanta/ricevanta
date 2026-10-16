@@ -306,7 +306,11 @@ jobs:
                       raise RuntimeError('admitted Chromium evidence/path required for Linux component consumer')
                   for name in ('test:unit', 'test:component'):
                       label = 'consumer-' + name.replace(':', '-')
-                      command(label, ['pnpm', name])
+                      argv = ['pnpm', name]
+                      if name == 'test:unit':
+                          argv.extend(['--reporter=default', '--reporter=json',
+                                       '--outputFile.json=' + str(EVIDENCE / 'consumer-test-unit.json')])
+                      command(label, argv)
                       post_consumer_audit(label, baseline, immutable)
               post_consumer_audit('terminal-independent', baseline, immutable)
               status = 0
