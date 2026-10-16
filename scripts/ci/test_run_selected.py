@@ -993,6 +993,35 @@ class InteropTests(unittest.TestCase):
 
 
 class ConsoleReportTests(unittest.TestCase):
+    def test_console_leaf_project_sets(self):
+        targets = run_selected.inventory()
+        self.assertEqual(targets['console-csp']['projects'], ['chromium', 'firefox'])
+        self.assertEqual(targets['console-csp-webkit']['projects'], ['webkit'])
+        for target_id in ('console-csp', 'console-csp-webkit'):
+            target = targets[target_id]
+            self.assertEqual(run_selected.child_environment(target, {'RICEVANTA_CSP_PROJECTS': 'wrong'})['RICEVANTA_CSP_PROJECTS'],
+                             ','.join(target['projects']))
+            self.assertEqual(run_selected.run_command(target)[2:], ['--project=' + name for name in target['projects']])
+        for target_id, projects in [('console-csp', ['chromium']), ('console-csp-webkit', ['firefox']),
+                                    ('console-csp', ['chromium', 'firefox', 'webkit'])]:
+            with self.subTest(target=target_id, projects=projects), self.assertRaises(EvidenceError):
+                run_selected.console_projects({**targets[target_id], 'projects': projects})
+        specs = ['enforcing CSP > serves the exact header', 'enforcing CSP > blocks inline scripts']
+        for fixture_name, projects in [('playwright-linux-report.json', ['chromium', 'firefox']),
+                                       ('playwright-webkit-report.json', ['webkit'])]:
+            report = json.loads(fixture(fixture_name))
+            self.assertEqual(run_selected.verify_playwright_report(report, specs, projects)['tests'], 2 * len(projects))
+            for other in ([], ['unknown'], ['chromium', 'firefox', 'webkit']):
+                with self.subTest(fixture=fixture_name, other=other), self.assertRaises(EvidenceError):
+                    run_selected.verify_playwright_report(report, specs, other)
+            empty = deepcopy(report)
+            empty['suites'] = []
+            with self.assertRaises(EvidenceError): run_selected.verify_playwright_report(empty, specs, projects)
+            skipped = deepcopy(report)
+            skipped['stats']['skipped'] = 1
+            with self.assertRaises(EvidenceError): run_selected.verify_playwright_report(skipped, specs, projects)
+
+
     def test_vitest_report(self):
         report = json.loads(fixture('vitest-report.json'))
         expected = [['fuzz.test.ts', 'terminates deterministically for seeded catalogue, preference and locale mutations'],
@@ -1027,7 +1056,7 @@ class ConsoleReportTests(unittest.TestCase):
             'skipped test': mutated(lambda d: d['stats'].update(skipped=1)),
             'skipped status': mutated(lambda d: d['suites'][0]['suites'][0]['specs'][1]['tests'][0].update(status='skipped')),
             'flaky retry': mutated(lambda d: d['stats'].update(flaky=1)),
-            'unexpected failure': mutated(lambda d: d['suites'][0]['suites'][0]['specs'][1]['tests'][2]['results'][0].update(status='failed')),
+            'unexpected failure': mutated(lambda d: d['suites'][0]['suites'][0]['specs'][1]['tests'][0]['results'][0].update(status='failed')),
             'renamed spec': mutated(lambda d: d['suites'][0]['suites'][0]['specs'][1].update(title='blocks scripts')),
             'extra spec': mutated(lambda d: d['suites'][0]['suites'][0]['specs'].append(deepcopy(d['suites'][0]['suites'][0]['specs'][0]) | {'title': 'extra'})),
             'totals disagree': mutated(lambda d: d['stats'].update(expected=5)),

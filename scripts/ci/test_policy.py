@@ -1418,4 +1418,47 @@ class SecurityPolicyTests(PolicyTests):
         path.write_text('COMMAND = ' + repr(command) + '\n')
         self.assertFalse(check_policy.observer_command_valid(self.root))
 
+
+
+class ConsoleMigrationPolicyTests(unittest.TestCase):
+    def test_console_contract_controls(self):
+        import yaml
+        root = Path(__file__).resolve().parents[2]
+        original = yaml.load((root / '.github/workflows/console.yml').read_text(), Loader=check_policy.WorkflowLoader)
+        self.assertEqual(check_policy.console_errors(original), [])
+        from copy import deepcopy
+        for change in ('hidden', 'digest', 'needs', 'webkit', 'report'):
+            data = deepcopy(original)
+            if change == 'hidden':
+                next(s for s in data['jobs']['validate']['steps'] if s.get('name') == 'Upload console dist')['with']['include-hidden-files'] = 'false'
+            elif change == 'digest':
+                next(s for s in data['jobs']['webkit']['steps'] if s.get('name') == 'Verify console dist')['env']['EXPECTED_DIST_DIGEST'] = 'wrong'
+            elif change == 'needs': data['jobs']['webkit'].pop('needs')
+            elif change == 'webkit': data['jobs'].pop('webkit')
+            else:
+                next(s for s in data['jobs']['validate']['steps'] if s.get('name') == 'Upload console reports')['with']['retention-days'] = '1'
+            with self.subTest(change=change): self.assertTrue(check_policy.console_errors(data))
+
+    def test_no_os_package_installation_for_browsers(self):
+        for command in ('apt-get --yes install libx264-dev', 'apt install libavif16', 'dpkg --install library.deb',
+                        'brew install webkitgtk', 'choco install browser', 'winget install browser', 'pnpm exec playwright install --with-deps'):
+            with self.subTest(command=command): self.assertRegex(command, check_policy.UNCHECKED_DOWNLOAD)
+
+    def test_missing_webkit_receipt_fails_aggregate(self):
+        import required
+        groups = sorted(['ci-contracts', 'design', 'gitleaks', 'semgrep', 'console'])
+        units = inventory.units(groups)
+        self.assertIn('console-webkit:macos-arm64', units)
+        route = dict(kind='route', version=1, event='push', baseSha='a'*40, headSha='b'*40,
+                     testedSha='b'*40, runId='123', runAttempt='1', groups=groups, units=units)
+        needs = {name: {'result': 'success' if name in ('route', 'ci-contracts', 'gitleaks', 'semgrep', 'design', 'console') else 'skipped'}
+                 for name in required.NEEDS}
+        # Shape-only aggregate control. These rows are deliberately not execution evidence.
+        receipts = [dict(kind='receipt', version=1, testedSha='b'*40, runId='123', runAttempt='1',
+                         unit=unit, result='success', checks=inventory.checks(unit)) for unit in units]
+        required.verify(route, needs, receipts)
+        with self.assertRaisesRegex(ValueError, 'console-webkit:macos-arm64'):
+            required.verify(route, needs, [r for r in receipts if r['unit'] != 'console-webkit:macos-arm64'])
+
+
 if __name__ == '__main__': unittest.main()

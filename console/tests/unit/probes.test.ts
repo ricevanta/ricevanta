@@ -14,14 +14,34 @@ import {
 import type { ProbeObservation } from '../browser/verify-probe.ts'
 import { csp, serveFile } from '../../scripts/serve-dist.ts'
 import { expect, it } from 'vitest'
-import { existsSync } from 'node:fs'
-it('fails the CSP gate when a test is skipped or an engine is missing', async () => {
-  expect(existsSync('scripts/csp-reporter.ts')).toBe(true)
-  if (!existsSync('scripts/csp-reporter.ts')) return
+it('requires an exact pinned CSP leaf, with every test passed', async () => {
   const { acceptedResults } = await import('../../scripts/csp-reporter.ts')
-  expect(acceptedResults(['chromium', 'firefox', 'webkit'], ['passed', 'passed'])).toBe(true)
-  expect(acceptedResults(['chromium', 'firefox'], ['passed'])).toBe(false)
-  expect(acceptedResults(['chromium', 'firefox', 'webkit'], ['skipped'])).toBe(false)
+  const config = (await import('../../vitest.config.ts')).default
+  expect(config.test?.projects?.[1]).toMatchObject({
+    test: {
+      browser: {
+        screenshotFailures: true,
+        screenshotDirectory: 'test-results/vitest',
+        trace: { mode: 'retain-on-failure', tracesDir: 'test-results/vitest-traces' },
+      },
+    },
+  })
+  for (const projects of [['chromium', 'firefox'], ['webkit']]) {
+    expect(acceptedResults(projects, ['passed'], projects)).toBe(true)
+    expect(acceptedResults(projects, ['skipped'], projects)).toBe(false)
+    expect(acceptedResults(projects, [], projects)).toBe(false)
+    expect(acceptedResults([], ['passed'], projects)).toBe(false)
+    expect(acceptedResults([...projects, 'extra'], ['passed'], projects)).toBe(false)
+  }
+  expect(acceptedResults(['chromium'], ['passed'], ['chromium'])).toBe(false)
+  expect(
+    acceptedResults(
+      ['chromium', 'firefox', 'webkit'],
+      ['passed'],
+      ['chromium', 'firefox', 'webkit'],
+    ),
+  ).toBe(false)
+  expect(acceptedResults(['webkit'], ['passed'], [])).toBe(false)
 })
 
 const fileHeader = readFileSync('security/csp.txt', 'utf8').replace(/\n$/, '')

@@ -107,7 +107,7 @@ Keep test helpers out of production imports. Use `vitest.config.ts` projects wit
 **Consumes:** immutable `dist/` bytes and the spec's complete header. **Produces:** passing behavior evidence for the pinned engines and precise failures for missing enforcement.
 
 - [x] Write serving tests for traversal, encoded separators, external symlinks, bad Host, MIME, methods, compression, reserved-prefix refusal and HTML fallback. Run `pnpm test:unit -- tests/unit/serving.test.ts`; observe the intended missing-server failure, then implement only a loopback test server.
-- [x] Install engine binaries explicitly with `pnpm exec playwright install --with-deps chromium firefox webkit`. No browser installation runs as a dependency hook.
+- [x] Admit digest-locked browser payloads through the shared bootstrap: Chromium and Firefox on Linux x64, WebKit on macOS ARM64. No browser installation runs as a dependency hook.
 - [x] Implement normal-run observers and isolated negative-control pairs using the per-engine expectation table and engine-selection rule in [spec section 7](../specs/console-foundation.md#7-required-tests-and-error-precedence). Implement its protected-header checks in the shared verifier.
 - [x] Separate header-integrity and behavior checks in the shared verifier and browser mutation tests according to section 7's mutation requirements. Add unit coverage for completion and each named rejection independently of header failure. Keep source-directive and missing-header checks distinct from executable mutation evidence.
 - [x] Wire external probe scripts and passive pre-navigation event capture as required by section 7. Keep the probe mount and mutation routes confined to the test harness.
@@ -116,27 +116,19 @@ Keep test helpers out of production imports. Use `vitest.config.ts` projects wit
 
 ### Task 6: Console CI
 
-**Create:** `.github/workflows/console.yml`. **Consumes:** all checks above. **Produces:** CI scoped like [server.yml](../../.github/workflows/server.yml).
+**Create:** `.github/workflows/console.yml`. **Consumes:** all checks above and the shared admitted toolchains. **Produces:** two reusable console leaves under the [CI hardening contract](../specs/ci-hardening.md#payloads-and-browser-hosts).
 
-- [x] Name the workflow `Console checks`. Use `push` to `master`, `pull_request` and `workflow_dispatch`. Both path filters contain `console/**`, `branding/BRAND_SPEC.md`, `branding/dist/**`, `docs/design/console.md`, `docs/specs/console-foundation.md`, `docs/plans/console-foundation.md`, `instructions/vue.md`, `instructions/testing.md`, `docs/licensing.md` and `.github/workflows/console.yml`.
-- [x] Set `permissions: { contents: read }`, concurrency group `console-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}` and `cancel-in-progress: true`. Use one `validate` job on `ubuntu-24.04`, timeout 20 minutes, `defaults.run.working-directory: console`, and `CI: true`.
-- [x] Use only these action pins, in order. The checkout SHA matches the server workflow; the other SHAs resolve to commits, not annotated tag objects.
-
-| Action | Full commit pin | Inputs |
-|---|---|---|
-| `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | `persist-credentials: false` |
-| `pnpm/action-setup` | `ea17c68df8912ef543352723c149a84f56e3d413` | `version: 11.18.0`, `run_install: false`, `package_json_file: console/package.json` |
-| `actions/setup-node` | `949feb2413d6458794dcd2491c4babbbce0c15c1` | `node-version-file: console/.node-version`, `cache: pnpm`, `cache-dependency-path: console/pnpm-lock.yaml` |
-
-Sources: latest releases [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1), [pnpm/action-setup v6.1.0](https://github.com/pnpm/action-setup/releases/tag/v6.1.0) and [setup-node v7.1.0](https://github.com/actions/setup-node/releases/tag/v7.1.0), each linking to the full commit above. [Licensing](../licensing.md#brand-assets-and-build-tools) records both setup actions as MIT CI tools. Verify action operation with pnpm 11.18.0 during the first CI run; package installation must remain an explicit later step.
-
-- [x] Run separate named steps for `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm audit:deps`, `pnpm test:unit`, engine installation, `pnpm test:component`, `pnpm build`, `pnpm check:reproducible` and `pnpm test:csp`, in that order. An unavailable engine is a failed job. Do not use `continue-on-error`.
-- [x] Cache the pnpm store through setup-node, not `node_modules`, `dist/` or browser binaries. Reinstall browsers from the pinned Playwright package. Log the bundle manifest and measured engine revisions; do not upload storage dumps or page contents.
-- [x] Have the primary agent inspect the workflow structure, action pins, paths, cache inputs and command order against this task. Do not add a parser solely to compare a workflow to itself.
+- [x] Name the reusable workflow `Console checks`, accept the required route input, and retain read-only permissions. The shared CI entry selects the full diff and controls concurrency; console leaves have no independent triggers or path filters.
+- [x] Run `validate` on `ubuntu-24.04` and `webkit` on `macos-15`, each with a 20-minute timeout, `defaults.run.working-directory: console` and `CI: true`. WebKit needs the Linux job. The reviewed runner upgrade owns later label changes.
+- [x] Use the shared pinned checkout and artifact actions, checking out the route's tested commit with persisted credentials disabled. Bootstrap Python, Node, pnpm and the host's locked browser payloads before running consumers; package installation is a separate frozen install. No setup action, compiled-output cache or operating-system package installation supplies tools.
+- [x] Keep Linux type checking, lint, formatting, dependency audit, both clean builds, reproducibility and bundle manifest output. Run unit, component, bounded property and Chromium/Firefox CSP checks through their exact selected-run IDs, retaining the existing CSP negative controls.
+- [x] Compute the Linux `dist/` tree digest before CSP and recheck it before upload, including `.vite/manifest.json`. Transfer `console-dist-<runId>-<runAttempt>` with hidden files included and one-day retention. The macOS leaf freezes and audits its own install, downloads into a fresh directory, verifies the expected digest from step environment, and runs only `console-csp-webkit` against those same bytes.
+- [x] Require both same-run leaf receipts and the exact, disjoint project sets whose union is Chromium, Firefox and WebKit. Upload reports, traces and screenshots from both leaves with `always()` and 30-day retention.
+- [ ] Require independently reviewed implementation and passing native CI, including cold browser admission, equal tree digests, all component and CSP checks, and rejection of an omitted WebKit receipt, a corrupted artifact and an upload without hidden files. Local parser controls do not satisfy these gates.
 
 ## Final verification and handoff
 
-- [x] Run the full command block in [testing instructions](../../instructions/testing.md) from a frozen install; retain results and byte budgets. Ordinary CI runs property seeds through unit tests; the bounded 10,000-case run is required locally before review.
+- [ ] Run the required CI checks from the admitted frozen installs; retain results and byte budgets. Local verification covers type checking, lint, formatting and ordinary unit seeds. The bounded 10,000-case run, component tests, browser tests and native matrix run only in CI.
 - [x] Run `git diff --check`, inspect the full diff and verify the worker changed only the owned code paths. The primary agent performs Git operations and verifies final CI after the workflow is available.
 - [x] Obtain independent Sol xhigh code review and the adversarial pass. Resolve findings with the implementer and obtain separate Sol xhigh fix confirmation. Run only the checks justified by the fixes, then complete primary verification.
 - [x] Report the actual install, license/OSV review, type, lint, format, unit, component, build, reproducibility and three-engine CSP results. Failed or unavailable checks remain failed. Identify follow-on backend and browser/OS qualification gates explicitly.

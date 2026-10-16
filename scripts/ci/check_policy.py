@@ -54,7 +54,7 @@ LEAVES = {'design': {'validate': 'design'},
                      'fuzz': 'server-fuzz:${{ matrix.package }}:${{ matrix.target }}',
                      'loader-gate-a': 'loader', 'loader-gate-b': 'loader-gate-b', 'ocsf-native': 'ocsf'},
           'agent': {'validate': 'agent', 'rustinterop': 'interop'},
-          'console': {'validate': 'console'}, 'bootstrap': {'validate': 'bootstrap'},
+          'console': {'validate': 'console', 'webkit': 'console-webkit:macos-arm64'}, 'bootstrap': {'validate': 'bootstrap'},
           'ci': {'ci-contracts': 'ci-contracts'}}
 
 # Selected tests, benchmarks, fuzzing and property runs execute only through the
@@ -263,6 +263,23 @@ SKIP_ALLOWANCES.append({
 FRAMING_BYTE = re.compile(rb'\x16|\\x16|\\u0016|\\U00000016|\\026')
 
 
+# Console commands are exact and retain the pinned reporters.
+SELECTED_COMMANDS.update({
+    'console-unit': (None, "pnpm test:unit --reporter=default --reporter=json '--outputFile={report}'"),
+    'console-component': (None, "pnpm test:component --reporter=default --reporter=json '--outputFile={report}'"),
+    'console-fuzz': (None, "pnpm test:fuzz --reporter=default --reporter=json '--outputFile={report}'"),
+    'console-csp': (None, 'pnpm test:csp --project=chromium --project=firefox'),
+    'console-csp-webkit': (None, 'pnpm test:csp --project=webkit'),
+})
+SELECTED_PLACES.update({
+    'console-unit': ('console', 'console-vitest'),
+    'console-component': ('console', 'console-vitest'),
+    'console-fuzz': ('console', 'console-vitest'),
+    'console-csp': ('console', 'console-playwright'),
+    'console-csp-webkit': ('console', 'console-playwright'),
+})
+
+
 def framing_errors(root):
     errors = []
     paths = [p for p in (root / 'server').rglob('*.go') if 'testdata' not in p.relative_to(root).parts]
@@ -329,6 +346,13 @@ def selected_errors(root):
         # No other wrapper ID may exist; console IDs are pinned here when Task 8 adds them.
         if target_id not in SELECTED_COMMANDS and not (target_id.startswith('go-fuzz:') and target['mode'] == 'go-fuzz'):
             errors.append('scripts/ci/targets.toml: unreviewed selected target ' + target_id)
+    project_sets = []
+    for target_id, projects in run_selected.CONSOLE_PROJECTS.items():
+        target = targets.get(target_id, {})
+        if target.get('projects') != projects: errors.append('console project set differs: ' + target_id)
+        project_sets.append(set(target.get('projects', [])))
+    if len(project_sets) != 2 or project_sets[0] & project_sets[1] or set.union(*project_sets) != set(run_selected.PLAYWRIGHT_PROJECTS):
+        errors.append('console project sets must be disjoint and cover all three engines')
     fuzz_pairs = sorted(map(list, inventory.FUZZ_PAIRS | {LOADER_FUZZ}))
     for target_id, target in targets.items():
         expected = fuzz_pairs if target_id in FUZZ_INVENTORY_SUITES else None
@@ -343,7 +367,7 @@ def selected_errors(root):
         target = targets.get(target_id)
         if target is None:
             errors.append('scripts/ci/targets.toml: missing selected target ' + target_id); continue
-        if shlex.join(run_selected.discovery_command(target)) != discovery or shlex.join(run_selected.run_command(target)) != command:
+        if (shlex.join(run_selected.discovery_command(target)) if run_selected.discovery_command(target) else None) != discovery or shlex.join(run_selected.run_command(target)) != command:
             errors.append('scripts/ci/targets.toml: selected command mismatch: ' + target_id)
         if (target['cwd'], target['mode']) != SELECTED_PLACES[target_id]:
             errors.append('scripts/ci/targets.toml: selected directory or mode mismatch: ' + target_id)
@@ -403,8 +427,9 @@ COMMANDS = {
     ('agent', 'rustinterop'): ('cargo build --locked -p ricevanta-batch --example seal-vector -vv',
         wrapper('interop-unit'), wrapper('interop-race')),
     ('console', 'validate'): ('pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm lint',
-        'pnpm format:check', 'pnpm audit:deps', 'pnpm test:unit', 'pnpm test:component',
-        'pnpm build', 'pnpm check:reproducible', 'pnpm test:csp', 'pnpm test:fuzz'),
+        'pnpm format:check', 'pnpm audit:deps', wrapper('console-unit'), wrapper('console-component'),
+        'pnpm build', 'pnpm check:reproducible', wrapper('console-csp'), wrapper('console-fuzz')),
+    ('console', 'webkit'): ('pnpm install --frozen-lockfile', 'pnpm audit:deps', wrapper('console-csp-webkit')),
     ('ci', 'ci-contracts'): ('gofmt -l .', 'go vet .', "python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
         'python -B scripts/ci/check_policy.py --root .'),
     ('bootstrap', 'validate'): ("python -B -m unittest discover -s scripts/ci -p 'test_*.py' -v",
@@ -426,7 +451,7 @@ CONTROLS_COMMAND = ('python3 -B scripts/ci/bootstrap/controls.py corrupt --lock 
                     '--tools "$CI_TOOLS" --work "$RUNNER_TEMP/bootstrap-controls"')
 PLATFORM_EXPRESSION = '${{ fromJSON(\'{"ubuntu-24.04":"linux-x64","windows-2025":"windows-x64","macos-15":"macos-arm64"}\')[matrix.os] }}'
 ALLOWED_ACTIONS = (CHECKOUT, UPLOAD, DOWNLOAD, CACHE)
-UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b|\bapt(?:-get)?\s+install\b|\bbrew\s+install\b|\bchoco\b|'
+UNCHECKED_DOWNLOAD = re.compile(r'\brustup\b|\bplaywright install\b|\bcorepack\b|\bapt(?:-get)?\s+(?:-[\w=-]+\s+)*install\b|\bdpkg\s+(?:-[\w=-]+\s+)*(?:--install|-i)\b|\bbrew\s+install\b|\bchoco\b|'
                                 r'\bwinget\b|\bcurl\b|\bwget\b|Invoke-WebRequest|Invoke-RestMethod|\biwr\b|\birm\b|Start-BitsTransfer|'
                                 r'\bbitsadmin\b|\bcertutil\b|\bnpm\s+(?:i|install|exec|x)\b|\bnpx\b|\bpnpx\b|\bpnpm\s+(?:dlx|create|env|self-update)\b|'
                                 r'\bpnpm\s+(?:add|install|i)\s+(?:-g|--global)\b|--pm-on-fail|\bgh\s+(?:release|run|attestation)\s+download\b|'
@@ -623,7 +648,7 @@ LOCK_TOOLS = {}
 JOB_TOOLS = {
     ('agent', 'validate'): 'python,rust', ('agent', 'rustinterop'): 'python,go,rust',
     ('ci', 'route'): 'python', ('ci', 'ci-contracts'): 'python,go', ('ci', 'gitleaks'): 'python', ('ci', 'semgrep'): 'python',
-    ('ci', 'ci-required'): 'python', ('console', 'validate'): 'python,node,pnpm,playwright',
+    ('ci', 'ci-required'): 'python', ('console', 'validate'): 'python,node,pnpm,playwright', ('console', 'webkit'): 'python,node,pnpm,playwright',
     ('copilot-code-review', 'copilot-setup-steps'): 'python,go,rust,node,pnpm', ('design', 'validate'): 'python',
     ('server', 'validate'): 'python,go', ('server', 'race'): 'python,go', ('server', 'fuzz-targets'): 'python',
     ('server', 'fuzz'): 'python,go', ('server', 'loader-gate-a'): 'python,go', ('server', 'loader-gate-b'): 'python,go',
@@ -708,7 +733,7 @@ def bootstrap_errors(data, name):
             fail('CI_TOOLS must be a literal tool list from the workflow'); selected = set()
         expanded = set(bootstrap.expand_tools(','.join(sorted(selected)))) if selected else set()
         for tool in sorted(required):
-            if {'rust': 'rustc', 'playwright': 'chromium-headless-shell'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
+            if tool not in selected and {'rust': 'rustc'}.get(tool, tool) not in expanded: fail('bootstrap tools omit ' + tool)
         apply = {'name': APPLY_NAME, 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': APPLY_COMMAND}
         if not (index + 1 < len(steps) and steps[index + 1] == apply) or sum(s.get('run') == APPLY_COMMAND for s in steps) != 1:
             fail('the exact admitted environment step must directly follow the bootstrap step')
@@ -719,7 +744,7 @@ def bootstrap_errors(data, name):
             for row in job.get('strategy', {}).get('matrix', {}).get('include', []) or []:
                 platform = inventory.HOSTS.get(row.get('os')) if isinstance(row, dict) else None
                 try:
-                    chosen = set(bootstrap.expand_tools(row.get('tools', ''))) if platform else None
+                    chosen = set(bootstrap.expand_tools(row.get('tools', ''), platform)) if platform else None
                 except bootstrap.BootstrapError:
                     chosen = None
                 if chosen != LOCK_TOOLS.get(platform): fail(f'bootstrap matrix row {row.get("os")!r} must select every lock tool for its host')
@@ -1180,6 +1205,59 @@ def ingest_evidence_errors(job, root):
     return errors
 
 
+def console_errors(data):
+    """Pin the same-run artifact transfer and complete disjoint browser leaves."""
+    errors = []
+    jobs = data.get('jobs', {})
+    if set(jobs) != {'validate', 'webkit'}: return ['console requires both Linux and WebKit leaves']
+    linux, mac = jobs['validate'], jobs['webkit']
+    if linux.get('runs-on') != 'ubuntu-24.04' or mac.get('runs-on') != 'macos-15': errors.append('console browser hosts differ from reviewed mapping')
+    if mac.get('needs') != 'validate': errors.append('WebKit must need the Linux build')
+    if linux.get('outputs') != {'dist-digest': '${{ steps.dist.outputs.digest }}'}: errors.append('missing Linux digest output')
+    name = 'console-dist-${{ github.run_id }}-${{ github.run_attempt }}'
+    digest = 'python -B scripts/ci/tree_digest.py --root console/dist'
+    shell = python_env.ADMISSION_SHELL
+    expected = {
+        'Compute console dist digest': {'name': 'Compute console dist digest', 'id': 'dist', 'shell': shell, 'working-directory': '.',
+            'run': 'digest=$(python -B scripts/ci/tree_digest.py --root console/dist)\nprintf \'digest=%s\\n\' "$digest" >> "$GITHUB_OUTPUT"\n'},
+        'Recheck console dist': {'name': 'Recheck console dist', 'shell': shell, 'working-directory': '.',
+            'env': {'EXPECTED_DIST_DIGEST': '${{ steps.dist.outputs.digest }}'}, 'run': digest + ' --expect-env EXPECTED_DIST_DIGEST'},
+        'Upload console dist': {'name': 'Upload console dist', 'uses': UPLOAD, 'with': {'name': name, 'path': 'console/dist',
+            'include-hidden-files': 'true', 'if-no-files-found': 'error', 'overwrite': 'false', 'retention-days': '1'}},
+        'Prepare fresh console dist': {'name': 'Prepare fresh console dist', 'shell': shell, 'working-directory': '.',
+            'run': 'test ! -e console/dist\nmkdir console/dist\n'},
+        'Download console dist': {'name': 'Download console dist', 'uses': DOWNLOAD, 'with': {'name': name, 'path': 'console/dist'}},
+        'Verify console dist': {'name': 'Verify console dist', 'shell': shell, 'working-directory': '.',
+            'env': {'EXPECTED_DIST_DIGEST': '${{ needs.validate.outputs.dist-digest }}'}, 'run': digest + ' --expect-env EXPECTED_DIST_DIGEST'},
+    }
+    for jid, host, order in [('validate', 'linux-x64', ['Compute console dist digest', 'console-csp', 'Recheck console dist', 'Upload console dist', 'proof']),
+                             ('webkit', 'macos-arm64', ['Prepare fresh console dist', 'Download console dist', 'Verify console dist', 'console-csp-webkit', 'proof'])]:
+        steps = jobs[jid].get('steps', [])
+        indices = []
+        for item in order:
+            found = [(i, step) for i, step in enumerate(steps) if
+                     step.get('name') == item or (item == 'proof' and step.get('id') == item)
+                     or (item.startswith('console-csp') and step.get('run') == wrapper(item))]
+            if len(found) != 1:
+                errors.append(jid + ': missing or duplicate ' + item); continue
+            index, step = found[0]
+            indices.append(index)
+            if item in expected and step != expected[item]: errors.append(jid + ': altered ' + item)
+            if item.startswith('console-csp') and (step.get('shell') != shell or step.get('working-directory') != '.'
+                                                  or 'env' in step or 'if' in step or 'continue-on-error' in step):
+                errors.append(jid + ': CSP wrapper must run unconditionally from root')
+        if len(indices) != len(order) or indices != sorted(indices): errors.append(jid + ': console transfer order differs')
+        reports = [s for s in steps if s.get('name') == 'Upload console reports']
+        expected_report = {'name': 'Upload console reports', 'if': 'always()', 'uses': UPLOAD,
+            'with': {'name': 'console-reports-${{ github.run_id }}-${{ github.run_attempt }}-' + host,
+                     'path': '${{ runner.temp }}/evidence\nconsole/test-results\nconsole/playwright-report\n',
+                     'include-hidden-files': 'false', 'retention-days': '30', 'if-no-files-found': 'warn'}}
+        if reports != [expected_report]: errors.append(jid + ': mandatory 30-day failure reports differ')
+    if any('pnpm build' in step.get('run', '') or 'check:reproducible' in step.get('run', '') for step in mac.get('steps', [])):
+        errors.append('WebKit leaf must test the Linux artifact without rebuilding')
+    return errors
+
+
 def check(root: Path) -> list[str]:
     errors = []
     LOCK_TOOLS.clear(); LOCK_TOOLS.update(lock_tools(root))
@@ -1337,7 +1415,7 @@ def check(root: Path) -> list[str]:
             if name in ('server', 'agent'):
                 group = {'validate': 'server', 'race': 'server', 'fuzz': 'server', 'loader-gate-a': 'loader', 'loader-gate-b': 'loader', 'ocsf-native': 'ocsf'}.get(jid) if name == 'server' else ('agent' if jid == 'validate' else 'interop')
                 if job.get('if') != group_condition([group], 'inputs.route'): fail(name, f'{jid}: route selection mismatch')
-            expected_needs = 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
+            expected_needs = 'validate' if name == 'console' and jid == 'webkit' else 'fuzz-targets' if name == 'server' and jid == 'fuzz' else (['route'] if name == 'ci' else None)
             if job.get('needs') != expected_needs: fail(name, f'{jid}: needs mismatch')
     helper = [s for s in jobs.get('ci-contracts', {}).get('steps', []) if 'go vet .' in s.get('run', '')]
     if len(helper) != 1 or helper[0].get('working-directory') != 'scripts/ci/gotestdecls' or helper[0].get('shell') != python_env.ADMISSION_SHELL or 'if' in helper[0]:
@@ -1383,7 +1461,7 @@ def check(root: Path) -> list[str]:
         fail('server', 'fuzz matrix expression mismatch')
     for job in server.values():
         if 'permission-schema-venv' in str(job) or 'schemas/export/v1alpha1/validate.py' in str(job): fail('server', 'duplicate Python validator')
-    if 'pnpm test:fuzz' not in str(workflows['console']): fail('console', 'missing bounded properties')
+    for error in console_errors(workflows['console']): fail('console', error)
     # Payload admission is checked per job in bootstrap_errors; Task 3 admits compiler caches above.
     for name, data in workflows.items():
         if name not in required_names: continue

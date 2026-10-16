@@ -56,16 +56,13 @@ for _arch in ('x64', 'arm64'):
     PLATFORMS[f'linux-{_arch}-ubuntu22.04'] = {**PLATFORMS[f'linux-{_arch}'], 'release': '22.04'}
 TOOL_GROUPS = {'rust': ('rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy'),
                'playwright': ('chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg')}
-# Reviewed Playwright 1.59.1 browser builds: install directory prefix, Linux x64 executable, ldd directories and version evidence.
+# Reviewed Playwright 1.59.1 browser builds: native executable, install prefix and version evidence.
 # Headless launches use chromium-headless-shell; the full Chrome for Testing bundle is never consumed and is not admitted.
 PLAYWRIGHT_BUILDS = {
     'chromium-headless-shell': dict(revision='1217', directory='chromium_headless_shell', executable=('chrome-headless-shell-linux64', 'chrome-headless-shell'),
                                     ldd=('chrome-headless-shell-linux64',), version_argv=('--version',), version='147.0.7727.15'),
     'firefox': dict(revision='1511', directory='firefox', executable=('firefox', 'firefox'), ldd=('firefox',), version_argv=('--version',), version='148.0.2'),
-    'webkit': dict(revision='2272', directory='webkit', executable=('pw_run.sh',),
-                   ldd=('minibrowser-gtk', 'minibrowser-gtk/bin', 'minibrowser-gtk/lib', 'minibrowser-gtk/sys/lib',
-                        'minibrowser-wpe', 'minibrowser-wpe/bin', 'minibrowser-wpe/lib', 'minibrowser-wpe/sys/lib'),
-                   dlopen=('libGLESv2.so.2', 'libx264.so'), version_argv=None, version='26.4'),
+    'webkit': dict(revision='2272', directory='webkit', executable=('pw_run.sh',), ldd=(), version_argv=None, version='26.4'),
     'ffmpeg': dict(revision='1011', directory='ffmpeg', executable=('ffmpeg-linux',), ldd=(), version_argv=('-version',), version='playwright-build-1011'),
 }
 INSTALL_ORDER = ('python', 'go', 'rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy', 'node', 'pnpm', *TOOL_GROUPS['playwright'])
@@ -336,12 +333,15 @@ def load_lock(path):
     return validate_lock(strict_json(text))
 
 
-def expand_tools(text):
+def expand_tools(text, platform_name=None):
     names = [part.strip() for part in text.split(',')]
     if any(not name for name in names): raise BootstrapError('empty tool selection')
     expanded = []
     for name in names:
         members = TOOL_GROUPS.get(name, (name,) if name in KNOWN_TOOLS else None)
+        if name == 'playwright' and platform_name:
+            members = {'linux-x64': ('chromium-headless-shell', 'firefox', 'ffmpeg'), 'macos-arm64': ('webkit',)}.get(platform_name)
+            if members is None: raise BootstrapError('playwright is unsupported on ' + platform_name)
         if members is None: raise BootstrapError('unknown tool: ' + name)
         for member in members:
             if member in expanded: raise BootstrapError('duplicate selection: ' + member)
@@ -352,7 +352,7 @@ def expand_tools(text):
 def select(lock, platform_name, tools):
     """Resolve the selected tools to exactly one lock entry each for the platform, in install order."""
     if platform_name not in PLATFORMS: raise BootstrapError('unknown platform: ' + str(platform_name))
-    selected = expand_tools(tools)
+    selected = expand_tools(tools, platform_name)
     rust = [t for t in selected if t in TOOL_GROUPS['rust']]
     if rust and len(rust) != len(TOOL_GROUPS['rust']):
         raise BootstrapError(f'{rust[0]} requires the complete rust group ({",".join(TOOL_GROUPS["rust"])})')
@@ -378,6 +378,14 @@ def lock_errors(root):
         licensing = (root / LICENSING).read_text(encoding='utf-8')
     except OSError as exc:
         return [f'{LICENSING}: {exc}']
+    for entry in lock['entries']:
+        if entry['tool'] in TOOL_GROUPS['playwright']:
+            try: allowed = expand_tools('playwright', entry['platform'])
+            except BootstrapError: allowed = ()
+            if entry['tool'] not in allowed: errors.append(f'{LOCK}: browser row on unsupported host: {entry["id"]}')
+    for platform_name in ('linux-x64', 'macos-arm64'):
+        try: select(lock, platform_name, 'node,pnpm,playwright')
+        except BootstrapError as error: errors.append(f'{LOCK}: {error}')
     versions = {}
     for entry in lock['entries']:
         # macOS may re-exec into Apple's /usr/bin/python3, whose lzma support is not guaranteed.
@@ -1008,9 +1016,11 @@ def check_pnpm(ctx, entry):
 
 def layout_browser(members, entry, host):
     build = PLAYWRIGHT_BUILDS[entry['tool']]
-    if host.platform != 'linux-x64': raise BootstrapError(f'{entry["id"]}: browser payloads are reviewed for linux-x64 only')
+    if entry['tool'] not in expand_tools('playwright', host.platform): raise BootstrapError(f'{entry["id"]}: browser payload not reviewed for {host.platform}')
     if entry['version'] != build['revision']: raise BootstrapError(f'{entry["id"]}: lock version {entry["version"]} differs from the reviewed Playwright {PLAYWRIGHT_VERSION} build {build["revision"]}')
-    require_members(members, entry, ['/'.join(build['executable'])])
+    required = ['/'.join(build['executable'])]
+    if entry['tool'] == 'webkit': required += ['Playwright.app/Contents/MacOS/Playwright']
+    require_members(members, entry, required)
 
 
 def install_browser(ctx, entry, members, staging):
@@ -1044,21 +1054,78 @@ def missing_libraries(ctx, directory, library_path):
     return missing
 
 
+def validate_macho_loads(binary, root, loads, rpaths):
+    """Resolve bundled loads inside the payload; system libraries may live in dyld's shared cache."""
+    root = root.resolve()
+    executable = root / 'Playwright.app/Contents/MacOS'
+    def resolve(value):
+        if value.startswith('@loader_path/'):
+            return binary.parent / value.removeprefix('@loader_path/')
+        if value.startswith('@executable_path/'):
+            return executable / value.removeprefix('@executable_path/')
+        if value.startswith('/usr/lib/') or value.startswith('/System/Library/'):
+            return Path(value)
+        raise BootstrapError('unsupported Mach-O load path: ' + value)
+    def bundled(path):
+        resolved = path.resolve()
+        return resolved.is_relative_to(root) and resolved.is_file()
+    paths = [resolve(value) for value in rpaths]
+    for path in paths:
+        if not str(path).startswith(('/usr/lib/', '/System/Library/')) and not path.resolve().is_relative_to(root):
+            raise BootstrapError('Mach-O rpath escapes payload: ' + str(path))
+    for value in loads:
+        if value.startswith(('/usr/lib/', '/System/Library/')):
+            if '..' in Path(value).parts: raise BootstrapError('noncanonical Mach-O system load: ' + value)
+            continue
+        if value.startswith('@rpath/'):
+            # The pinned pw_run.sh sets DYLD_LIBRARY_PATH to the bundle root.
+            # XPC launchers also inherit their executable's root rpath.
+            candidates = [root / value.removeprefix('@rpath/')] + [path / value.removeprefix('@rpath/') for path in paths]
+            if not any(bundled(path) for path in candidates):
+                raise BootstrapError('missing bundled Mach-O rpath load: ' + value)
+        elif not bundled(resolve(value)):
+            raise BootstrapError('missing or escaping bundled Mach-O load: ' + value)
+
+
+def check_macho_browser(ctx, entry, root):
+    count = 0
+    for binary in sorted(root.rglob('*')):
+        if not binary.is_file() or binary.is_symlink(): continue
+        with binary.open('rb') as stream: magic = stream.read(4)
+        if magic != b'\xcf\xfa\xed\xfe': continue
+        count += 1
+        _, output = ctx.execute(['/usr/bin/otool', '-l', str(binary)])
+        blocks = re.split(r'Load command \d+\n', output)[1:]
+        if not blocks: raise BootstrapError('Mach-O load commands are absent')
+        loads, rpaths = [], []
+        for block in blocks:
+            command = re.search(r'^\s*cmd (\S+)', block, re.M)
+            if not command: raise BootstrapError('malformed Mach-O load command')
+            command = command[1]
+            if command in ('LC_LOAD_DYLIB', 'LC_LOAD_WEAK_DYLIB', 'LC_REEXPORT_DYLIB', 'LC_LOAD_UPWARD_DYLIB', 'LC_LAZY_LOAD_DYLIB', 'LC_LOAD_DYLINKER', 'LC_RPATH'):
+                value = re.search(r'^\s*(?:name|path) (.+) \(offset \d+\)', block, re.M)
+                if not value: raise BootstrapError('malformed Mach-O load path')
+                (rpaths if command == 'LC_RPATH' else loads).append(value[1])
+            elif command == 'LC_DYLD_ENVIRONMENT': raise BootstrapError('Mach-O loader environment forbidden')
+        validate_macho_loads(binary, root, loads, rpaths)
+    if not count: raise BootstrapError(f'{entry["id"]}: missing Mach-O browser binaries')
+    log('verified Mach-O load commands', entry['id'], count)
+
+
 def check_browser(ctx, entry):
     build = PLAYWRIGHT_BUILDS[entry['tool']]
     target = ctx.installed[entry['tool']]
     browser_dir = ctx.dest / 'ms-playwright' / f'{build["directory"]}-{build["revision"]}'
+    if entry['tool'] == 'webkit':
+        check_macho_browser(ctx, entry, browser_dir)
     directories = [browser_dir / relative for relative in build['ldd']]
     library_path = ':'.join(str(d) for d in directories)
     missing = set()
     for directory in directories:
         if directory.is_dir(): missing |= missing_libraries(ctx, directory, library_path)
-    if build.get('dlopen'):
-        code, cache = ctx.execute(['/sbin/ldconfig', '-p'], check=False)
-        if code: raise BootstrapError(f'{entry["id"]}: cannot read the loader cache to find {", ".join(build["dlopen"])}')
-        missing |= {name for name in build['dlopen'] if name.lower() not in cache.lower()}
     if missing:
         raise BootstrapError(f'{entry["id"]}: {entry["tool"]} is missing system libraries on the runner image: {", ".join(sorted(missing))}')
+    log('browser build', entry['tool'], build['version'], 'revision', build['revision'])
     if build['version_argv'] is not None:
         output = ctx.run(entry, [target, *build['version_argv']], env={'HOME': str(ctx.dest)}).strip()
         if build['version'] not in output:

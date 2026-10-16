@@ -7,13 +7,21 @@ export default defineConfig({
   forbidOnly: true,
   timeout: 30000,
   expect: { timeout: 5000 },
-  reporter: [['list'], ['./scripts/csp-reporter.ts']],
-  use: { baseURL: 'http://127.0.0.1:4173', headless: true, bypassCSP: false },
+  reporter: [['list'], ['./scripts/csp-reporter.ts'], ['json']],
+  use: {
+    baseURL: 'http://127.0.0.1:4173',
+    headless: true,
+    bypassCSP: false,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-  ],
+  ].filter((project) =>
+    (process.env.RICEVANTA_CSP_PROJECTS ?? '').split(',').includes(project.name),
+  ),
   webServer: {
     command: 'node scripts/serve-dist.ts --probes',
     url: 'http://127.0.0.1:4173',

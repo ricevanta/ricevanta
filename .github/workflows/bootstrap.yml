@@ -23,7 +23,7 @@ jobs:
         - os: windows-2025
           tools: python,go,rust
         - os: macos-15
-          tools: python,go,rust
+          tools: python,go,rust,node,pnpm,playwright
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
