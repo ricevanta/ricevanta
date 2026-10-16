@@ -377,7 +377,7 @@ def agent_native_errors(job):
         command = wrapper('agent-protection-root-' + suffix)
         matches = [step for step in steps if command in step.get('run', '')]
         expected = {'name': 'Root ' + ('Linux' if suffix == 'linux' else 'macOS') + ' protection tests',
-                    'if': "runner.os == '" + host + "'", 'shell': 'bash', 'working-directory': '.',
+                    'if': "runner.os == '" + host + "'", 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.',
                     'env': {'CARGO_NET_OFFLINE': 'true'}, 'run': command}
         if matches != [expected]: errors.append('exact host-guarded root protection step required: ' + suffix)
     proof = next((step for step in steps if step.get('id') == 'proof'), {})
@@ -1154,8 +1154,9 @@ def ingest_evidence_errors(job, root):
     """Pin the composite proof, both required inventories and retained diagnostics."""
     errors = []
     expected = [
-        {'name': 'Ingest cost model', 'shell': 'bash', 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
+        {'name': 'Ingest cost model', 'shell': python_env.ADMISSION_SHELL, 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
         {'name': 'Verify ingest measurement log', 'if': 'always()',
+         'shell': python_env.ADMISSION_SHELL,
          'run': 'set -euo pipefail\ntest -s "$RUNNER_TEMP/ingest-measurements/cost-model.log"\n'},
         {'name': 'Upload ingest measurements', 'if': 'always()', 'uses': UPLOAD,
          'with': {'name': 'ingest-measurements-${{ github.run_id }}-${{ github.run_attempt }}',
