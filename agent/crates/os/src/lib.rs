@@ -125,7 +125,8 @@ pub enum SampleError {
         code: i32,
     },
     /// The OS does not provide the metric (for example a zero
-    /// `PrivateWorkingSetSize` on an old Windows build).
+    /// `PrivateWorkingSetSize` on an old Windows build), or a fixed buffer
+    /// cannot hold the complete source or descriptor list.
     Unsupported,
 }
 
@@ -496,16 +497,22 @@ pub struct CheckedDir {
     file: File,
     object: Object,
     path: PathBuf,
+    mode: Mode,
 }
 
 impl CheckedDir {
-    /// Wraps a directory that `object`'s rule accepted. For [`Platform`]
+    /// Wraps a directory that `object`'s rule accepted under `mode`. For [`Platform`]
     /// implementations only: the type is evidence of a check only because
     /// nothing else constructs it, so the workspace policy test
     /// (`crates/os/tests/policy.rs`, review N-04) refuses any call outside
     /// `agent/crates/os-*`.
-    pub fn new(file: File, object: Object, path: PathBuf) -> CheckedDir {
-        CheckedDir { file, object, path }
+    pub fn new(file: File, object: Object, path: PathBuf, mode: Mode) -> CheckedDir {
+        CheckedDir {
+            file,
+            object,
+            path,
+            mode,
+        }
     }
 
     /// The open directory.
@@ -522,6 +529,13 @@ impl CheckedDir {
     /// anything below it.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// The mode whose protection rules were applied to this directory.
+    /// Windows output files preserve the distinction between service
+    /// protection and development files with inherited permissions.
+    pub fn mode(&self) -> Mode {
+        self.mode
     }
 }
 

@@ -114,6 +114,27 @@ func writerSuccess(t testing.TB, d batch.Descriptor, ps [][]byte, device string)
 	if !bytes.Equal(input, original) {
 		t.Fatal("input mutated")
 	}
+	// Every live writer success must meet the profile and the output-only
+	// uploader compatibility gate before the decode assertion below.
+	r := &io.LimitedReader{R: bytes.NewReader(b), N: wire.MaxCompressedBytes + 1}
+	if _, err := wire.Decode([]string{h}, r); err != nil {
+		t.Fatal(err)
+	}
+	f, err := ReadFrame(r)
+	if err != nil {
+		t.Fatalf("writer preflight: %v", err)
+	}
+	var visits uint64
+	if _, _, err := inspectFrameCount(f.data, &visits); err != nil {
+		t.Fatal(err)
+	}
+	cap := 1 + (max(f.size, uint64(128<<10))+(128<<10)-1)/(128<<10)
+	if visits > cap {
+		t.Fatalf("writer blocks %d exceed %d", visits, cap)
+	}
+	if max(f.window, f.size, uint64(128<<10)) > max(f.size, uint64(128<<10)) {
+		t.Fatalf("writer window %d raises output-only charge for %d bytes", f.window, f.size)
+	}
 	got, lines, err := writerDecode(h, b, device)
 	if err != nil {
 		t.Fatal(err)

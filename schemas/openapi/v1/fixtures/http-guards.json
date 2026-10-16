@@ -936,6 +936,44 @@
     "csrf_header": "absent"
    },
    "expect": "allow"
+  },
+  {
+   "id": "json-empty-parameter",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json;",
+    "csrf_header": "match"
+   },
+   "expect": "unsupported_media_type"
+  },
+  {
+   "id": "json-duplicate-charset",
+   "request": {
+    "csrf": "synchronizer",
+    "credentials": [
+     "session",
+     "token"
+    ],
+    "method": "POST",
+    "body": true,
+    "session_cookie": "valid",
+    "bearer": "absent",
+    "origin": "https://console.example.test",
+    "sec_fetch_site": "same-origin",
+    "content_type": "application/json;charset=utf-8;charset=utf-8",
+    "csrf_header": "match"
+   },
+   "expect": "unsupported_media_type"
   }
  ]
 }

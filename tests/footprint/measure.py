@@ -12,6 +12,7 @@ not_ready or a preflight failure, 2 on usage error.
 """
 
 import argparse
+import datetime
 import hashlib
 import json
 import math
@@ -38,9 +39,9 @@ PROFILES_DIR = HERE / "profiles"
 BUDGETS_PATH = HERE / "budgets.json"
 
 # Phase name -> (profile, full duration in ms), spec section 3.
-PHASES = {"idle": ("idle", 120_000), "load": ("health-burst", 60_000)}
-WARMUP_MS = 10_000
-SAMPLE_INTERVAL_MS = 1_000
+PHASES = check.PHASE_PROFILES
+WARMUP_MS = check.WARMUP_MS
+SAMPLE_INTERVAL_MS = check.SAMPLE_INTERVAL_MS
 READY_TIMEOUT_MS = 30_000
 STOP_GRACE_MS = 5_000
 VERSION_TIMEOUT_S = 30
@@ -88,7 +89,7 @@ def nearest_rank(values, pct):
     return ordered[rank - 1]
 
 
-def summarize(samples, reference):
+def summarize(samples, reference, *, metric=None, descriptor_kind=None):
     """Summaries over the given post-warm-up samples; failed samples are skipped.
 
     CPU is 100 x delta(cpu time) / delta(wall time) from the reference taken at
@@ -96,7 +97,14 @@ def summarize(samples, reference):
     """
     ok = [t for t in samples if t.sample is not None]
     if not ok:
-        raise MeasureFailure("no_samples")
+        if metric is None or descriptor_kind is None:
+            raise MeasureFailure("no_samples")
+        return {
+            "footprint_bytes": dict(metric=metric, min=0, max=0, mean=0, p50=0, p95=0),
+            "cpu_core_pct": dict(mean=0, max=0),
+            "threads": dict(min=1, max=1),
+            "descriptors": dict(kind=descriptor_kind, min=0, max=0),
+        }
     fp = [t.sample.footprint_bytes for t in ok]
     points = sorted(([reference] if reference is not None and reference.sample is not None else []) + ok,
                     key=lambda t: t.mono_ns)
@@ -133,7 +141,7 @@ def self_sample_difference(self_sample, samples):
     ok = [t for t in samples if t.sample is not None]
     if self_sample is None or not ok:
         return None
-    nearest = min(ok, key=lambda t: (abs(t.unix_ms - self_sample["written_unix_ms"]), t.unix_ms))
+    nearest = min(ok, key=lambda t: (abs(t.unix_ms - self_sample["sampled_unix_ms"]), t.unix_ms))
     return self_sample["footprint_bytes"] - nearest.sample.footprint_bytes
 
 
@@ -145,7 +153,7 @@ def load_budgets(path=BUDGETS_PATH):
     return check.load_budgets(path)
 
 
-def build_evidence(*, identity, smoke, target, environment, binary, phases, self_diffs, budgets,
+def build_evidence(*, identity, smoke, target, environment, binary, phases, budgets,
                    started_unix_ms, finished_unix_ms):
     """Assemble the evidence document and judge the absolute checks; check.py later adds the baseline."""
     doc = {
@@ -158,10 +166,7 @@ def build_evidence(*, identity, smoke, target, environment, binary, phases, self
         "processes": [{"name": binary["name"], "role": "core"}],
         "phases": phases,
         "budgets": budgets,
-        # The self-sample row carries the signed difference to the nearest external
-        # sample; check.py re-judges it with the budget tolerance.
-        "results": [check._row("self_sample_agreement", p["name"], self_diffs.get(p["name"]), None, None, "recorded")
-                    for p in phases],
+        "results": [],
         "baseline": {"kind": "none", "identity": None, "environment_match": None},
         "outcome": "fail",
         "started_unix_ms": started_unix_ms,
@@ -248,16 +253,59 @@ def binary_record(path):
     return {"name": expected, "size": size, "sha256": digest.hexdigest()}, prefix, stand_in
 
 
+def _version_output(prefix):
+    """Read both pipes without buffering more than the identity limit per stream."""
+    proc = subprocess.Popen(prefix + ["version", "--json"], stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+    try:
+        deadline = time.monotonic() + VERSION_TIMEOUT_S
+        streams = {proc.stdout: ('stdout', 0), proc.stderr: ('stderr', 0)}
+        output = bytearray()
+        for stream in streams:
+            # Python 3.14 supports nonblocking pipe descriptors on Unix and Windows.
+            os.set_blocking(stream.fileno(), False)
+        while streams:
+            if time.monotonic() >= deadline:
+                raise MeasureFailure('version_failed: timed out')
+            progressed = False
+            for stream, (name, count) in list(streams.items()):
+                raw = stream.read(min(4096, MAX_IDENTITY_BYTES + 1 - count))
+                if raw is None:
+                    continue
+                progressed = True
+                if not raw:
+                    del streams[stream]
+                    continue
+                count += len(raw)
+                if count > MAX_IDENTITY_BYTES:
+                    raise MeasureFailure(f'version_failed: {name} larger than {MAX_IDENTITY_BYTES} bytes')
+                streams[stream] = name, count
+                if name == 'stdout':
+                    output.extend(raw)
+            if not progressed:
+                time.sleep(min(0.01, max(0, deadline - time.monotonic())))
+        proc.wait(timeout=max(0, deadline - time.monotonic()))
+        if proc.returncode != 0:
+            raise MeasureFailure(f"version_failed: exit {proc.returncode}")
+        return bytes(output)
+    finally:
+        try:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=VERSION_TIMEOUT_S)
+        finally:
+            proc.stdout.close()
+            proc.stderr.close()
+
+
 def reported_identity(prefix, validator):
     try:
-        proc = subprocess.run(prefix + ["version", "--json"], stdin=subprocess.DEVNULL, capture_output=True,
-                              timeout=VERSION_TIMEOUT_S)
+        raw = _version_output(prefix)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise MeasureFailure(f"version_failed: {exc}") from exc
-    if proc.returncode != 0:
-        raise MeasureFailure(f"version_failed: exit {proc.returncode}")
+        reason = 'timed out' if isinstance(exc, subprocess.TimeoutExpired) else (exc.strerror or 'process I/O error')
+        raise MeasureFailure(f"version_failed: {reason}") from exc
     try:
-        doc = check.loads_strict(proc.stdout, MAX_IDENTITY_BYTES)
+        doc = check.loads_strict(raw, MAX_IDENTITY_BYTES)
     except check.InputError as exc:
         raise MeasureFailure(f"version_failed: {exc}") from exc
     errs = validator.errors(doc, "#/$defs/reportedIdentity")
@@ -288,35 +336,191 @@ def _write_private(path, data):
         os.chmod(path, 0o600)
 
 
+def read_shared(path, limit):
+    """Copy bounded bytes, permitting concurrent rename and deletion on Windows."""
+    if sys.platform != 'win32':
+        with open(path, 'rb') as stream:
+            return stream.read(limit + 1)
+    import ctypes
+    from ctypes import wintypes
+    k = ctypes.WinDLL('kernel32', use_last_error=True)
+    k.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                             wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    k.CreateFileW.restype = wintypes.HANDLE
+    k.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+                          ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+    k.ReadFile.restype = wintypes.BOOL
+    k.CloseHandle.argtypes = [wintypes.HANDLE]
+    k.CloseHandle.restype = wintypes.BOOL
+    handle = k.CreateFileW(str(path), 0x80000000, 1 | 2 | 4, None, 3, 0, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        buf = ctypes.create_string_buffer(limit + 1)
+        count = wintypes.DWORD()
+        if not k.ReadFile(handle, buf, limit + 1, ctypes.byref(count), None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return buf.raw[:count.value]
+    finally:
+        k.CloseHandle(handle)
+
+
 def _read_health(path):
     try:
-        with open(path, "rb") as f:
-            raw = f.read(MAX_HEALTH_BYTES + 1)
-        doc = check.loads_strict(raw, MAX_HEALTH_BYTES)
+        doc = check.loads_strict(read_shared(path, MAX_HEALTH_BYTES), MAX_HEALTH_BYTES)
+        validator = check.Validator(check.load_json_file(check.ROOT / 'schemas/agent/health/v1/health.schema.json'))
+        return None if validator.errors(doc) else doc
     except (OSError, check.InputError):
         return None
-    return doc if isinstance(doc, dict) else None
 
 
 def _self_sample(doc, pid):
-    if not doc or doc.get("pid") != pid or doc.get("state") != "ready":
+    if not doc or not isinstance(doc.get('process'), dict):
         return None
-    proc = doc.get("process")
-    if not isinstance(proc, dict):
-        return None
-    fields = {
-        "footprint_bytes": proc.get("footprint_bytes"),
-        "footprint_metric": proc.get("footprint_metric"),
-        "threads": proc.get("threads"),
-        "written_unix_ms": doc.get("written_unix_ms"),
-    }
-    for key in ("footprint_bytes", "threads", "written_unix_ms"):
-        if not isinstance(fields[key], int) or isinstance(fields[key], bool) or fields[key] < 0:
-            return None
-    if fields["footprint_metric"] not in ("phys_footprint", "private_working_set", "pss") or fields["threads"] < 1:
-        return None
-    return fields
+    proc = doc['process']
+    return {**{key: proc[key] for key in ('footprint_bytes', 'footprint_metric', 'threads',
+                                          'sampled_unix_ms', 'sampled_uptime_ms')},
+            'written_unix_ms': doc['written_unix_ms']}
 
+
+class HealthProgress:
+    """Accumulate all reads, including invalid reads, without retaining health text."""
+
+    def __init__(self, pid, interval):
+        self.interval = interval
+        self.summary = dict(pid=pid, start=None, end=None, observations=0, invalid_observations=0,
+                            counter_regressions=0, max_write_age_ms=0, max_sample_age_ms=0,
+                            max_observation_gap_ms=0)
+        self.first = self.previous = None
+        self.previous_read = None
+
+    def observe(self, doc, wall, elapsed):
+        snapshot = None
+        if doc and isinstance(doc.get('process'), dict):
+            snapshot = {key: doc[key] for key in ('pid', 'state', 'interval_ms', 'written_unix_ms', 'uptime_ms')}
+            snapshot.update({key: doc['process'][key] for key in ('sampled_unix_ms', 'sampled_uptime_ms')})
+            snapshot.update({key: doc['counters'][key] for key in check.COUNTERS})
+            snapshot.update(observed_unix_ms=wall, observed_elapsed_ms=elapsed)
+        self.observe_snapshot(snapshot, wall, elapsed)
+        return snapshot
+
+    def observe_snapshot(self, s, wall=None, elapsed=None):
+        g = self.summary
+        if s is not None:
+            wall, elapsed = s['observed_unix_ms'], s['observed_elapsed_ms']
+        if self.previous_read is not None:
+            old_wall, old_elapsed = self.previous_read
+            gap = elapsed - old_elapsed
+            g['max_observation_gap_ms'] = max(g['max_observation_gap_ms'], gap)
+            clock_bad = wall < old_wall or gap < 0 or abs(wall - old_wall - gap) > 2000
+        else:
+            clock_bad = False
+        self.previous_read = wall, elapsed
+        if g['observations'] == 0:
+            g['start'] = s
+        g['end'] = s
+        g['observations'] += 1
+        invalid = clock_bad or not check.snapshot_valid(s, g['pid'], self.interval)
+        if s:
+            if self.first is None:
+                self.first = s
+            if self.previous:
+                invalid |= not check.snapshots_consistent(self.previous, s)
+                if any(s[k] < self.previous[k] for k in check.COUNTERS):
+                    g['counter_regressions'] += 1
+            for key, age in zip(('max_write_age_ms', 'max_sample_age_ms'), check.snapshot_ages(s, self.first)):
+                g[key] = max(g[key], age)
+            self.previous = s
+        if invalid:
+            g['invalid_observations'] += 1
+
+
+class LogActivity:
+    """Bounded event sets across active and retained files, filtered at the endpoints."""
+
+    def __init__(self, profile, duration_ms, pid):
+        self.profile, self.pid = profile, pid
+        self.limit = (duration_ms + WARMUP_MS) // profile['health']['interval_ms'] + 10
+        self.samples, self.rotations, self.invalid = {}, set(), set()
+
+    def bad(self, raw):
+        if len(self.invalid) < self.limit:
+            self.invalid.add(hashlib.sha256(raw).digest())
+
+    def read(self, directory):
+        log = self.profile['log']
+        paths = [directory / 'agent.log'] + [directory / f'agent.log.{i}' for i in range(1, log['max_files'])]
+        for path in paths:
+            try:
+                raw = read_shared(path, log['max_file_bytes'])
+            except FileNotFoundError:
+                continue
+            except OSError:
+                self.bad(b'read_failed')
+                continue
+            if len(raw) > log['max_file_bytes']:
+                self.bad(b'oversize_file')
+                continue
+            # A concurrent append can leave the last line incomplete. Revisit it on the next read.
+            for index, line in enumerate(raw.split(b'\n')[:-1]):
+                try:
+                    item = check.loads_strict(line, 8192)
+                    if (not isinstance(item, dict) or item.get('pid') != self.pid
+                            or item.get('level') not in ('error', 'warn', 'info', 'debug')
+                            or not isinstance(item.get('event'), str)
+                            or not isinstance(item.get('ts'), str)):
+                        raise ValueError()
+                    if (not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z', item['ts'])
+                            or not re.fullmatch(r'[a-z][a-z0-9_]*', item['event'])):
+                        raise ValueError()
+                    datetime.datetime.fromisoformat(item['ts'].replace('Z', '+00:00'))
+                    if 'detail' in item and (not isinstance(item['detail'], str) or len(item['detail'].encode()) > 2048):
+                        raise ValueError()
+                    event = item['event']
+                    if event == 'sample_completed':
+                        keys = ('sample', 'sampled_uptime_ms', 'footprint_bytes', 'cpu_user_ms',
+                                'cpu_system_ms', 'threads', 'descriptor_count')
+                        if (len(line) >= 1024 or 'detail' in item or item['level'] != 'debug'
+                                or any(type(item.get(k)) is not int or not 0 <= item[k] <= 2**63-1 for k in keys)
+                                or item.get('footprint_metric') not in ('pss', 'phys_footprint', 'private_working_set')
+                                or item.get('descriptor_kind') not in ('fd', 'handle')):
+                            raise ValueError()
+                        seq, uptime = item['sample'], item['sampled_uptime_ms']
+                        if seq in self.samples and self.samples[seq] != uptime:
+                            raise ValueError()
+                        if len(self.samples) >= self.limit and seq not in self.samples:
+                            raise ValueError()
+                        self.samples[seq] = uptime
+                    elif event == 'log_rotated':
+                        seq = item.get('rotation')
+                        if index != 0 or type(seq) is not int or not 1 <= seq <= 2**63-1:
+                            raise ValueError()
+                        if len(self.rotations) >= self.limit and seq not in self.rotations:
+                            raise ValueError()
+                        self.rotations.add(seq)
+                except (check.InputError, ValueError):
+                    self.bad(line)
+
+    def finish(self, progress):
+        a, b = progress['start'], progress['end']
+        if a and b:
+            low = a['uptime_ms'] + (a['observed_unix_ms'] - a['written_unix_ms']) - a['observed_elapsed_ms']
+            high = b['uptime_ms'] + (b['observed_unix_ms'] - b['written_unix_ms'])
+            samples = sum(a['samples'] < seq <= b['samples'] and low <= uptime <= high
+                          for seq, uptime in self.samples.items())
+            rotations = sum(a['log_rotations'] < seq <= b['log_rotations'] for seq in self.rotations)
+        else:
+            samples = rotations = 0
+        return dict(sample_events=samples, rotations_observed=rotations, invalid_lines=len(self.invalid))
+
+
+def external_pair(own, samples):
+    ok = [t for t in samples if t.sample is not None]
+    if own is None or not ok:
+        return None
+    nearest = min(ok, key=lambda t: (abs(t.unix_ms - own['sampled_unix_ms']), t.unix_ms))
+    return dict(unix_ms=nearest.unix_ms, footprint_bytes=nearest.sample.footprint_bytes,
+                footprint_metric=nearest.sample.footprint_metric)
 
 def _exit_code(returncode):
     if returncode < 0:
@@ -326,7 +530,12 @@ def _exit_code(returncode):
 
 def _send_stop(proc):
     if sys.platform == "win32":
-        proc.send_signal(signal.CTRL_BREAK_EVENT)
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GenerateConsoleCtrlEvent.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+        kernel.GenerateConsoleCtrlEvent.restype = ctypes.c_int32
+        if not kernel.GenerateConsoleCtrlEvent(1, proc.pid):  # CTRL_BREAK_EVENT, child process group
+            raise MeasureFailure("stop_delivery_failed")
     else:
         proc.send_signal(signal.SIGTERM)
 
@@ -362,6 +571,7 @@ def run_phase(name, prefix, scale, sampler_mod):
     warmup_ms = round(WARMUP_MS * scale)
     ready_ms = max(SAMPLE_INTERVAL_MS, round(READY_TIMEOUT_MS * scale))
     count = duration_ms // SAMPLE_INTERVAL_MS
+    profile = check.loads_strict(raw)
 
     tree = Path(tempfile.mkdtemp(prefix="rv-footprint-"))
     try:
@@ -384,23 +594,43 @@ def run_phase(name, prefix, scale, sampler_mod):
                     if doc and doc.get("pid") == proc.pid and doc.get("state") == "ready":
                         break
                 if proc.poll() is not None or time.monotonic() >= deadline:
-                    tail = (tree / "agent.stderr").read_bytes()[-2048:].decode("utf-8", "replace")
-                    raise MeasureFailure(f"not_ready phase={name}" + (f"\n{tail}" if tail else ""))
+                    raise MeasureFailure(f"not_ready phase={name}")
                 time.sleep(HEALTH_POLL_S)
             try:
                 sampler = sampler_mod.Sampler(proc.pid)
             except samplers.SamplerError:
                 sampler = None
             time.sleep(warmup_ms / 1000)
+            window_mono = time.monotonic_ns()
+            window_wall = unix_ms()
+            progress = HealthProgress(proc.pid, profile['health']['interval_ms'])
+            logs = LogActivity(profile, duration_ms, proc.pid)
+
+            def observe():
+                doc = _read_health(runtime / 'health.json')
+                progress.observe(doc, unix_ms(), (time.monotonic_ns() - window_mono) // 1_000_000)
+                logs.read(tree / 'logs')
+                return doc
+
+            observe()
             reference = _take(sampler, proc)
             samples = []
             for k in range(1, count + 1):
-                target = reference.mono_ns + k * SAMPLE_INTERVAL_MS * 1_000_000
+                target = window_mono + k * SAMPLE_INTERVAL_MS * 1_000_000
                 time.sleep(max(0, target - time.monotonic_ns()) / 1e9)
                 samples.append(_take(sampler, proc))
-            own = _self_sample(_read_health(runtime / "health.json"), proc.pid)
-            metrics = summarize(samples, reference)
-            diff = self_sample_difference(own, [reference] + samples)
+                observe()
+            end_target = window_mono + duration_ms * 1_000_000
+            time.sleep(max(0, end_target - time.monotonic_ns()) / 1e9)
+            # A distinct final boundary read is required even if the last external
+            # observation occurred at this boundary. Capture everything before stop.
+            doc = observe()
+            finished_wall = unix_ms()
+            actual_duration = (time.monotonic_ns() - window_mono) // 1_000_000
+            own = _self_sample(doc, proc.pid)
+            metrics = summarize(samples, reference, metric=sampler_mod.METRIC,
+                                descriptor_kind=sampler_mod.DESCRIPTOR_KIND)
+            pair = external_pair(own, [reference] + samples)
 
             stop_started = time.monotonic_ns()
             if proc.poll() is None:
@@ -424,7 +654,12 @@ def run_phase(name, prefix, scale, sampler_mod):
         "name": name,
         "profile": {"name": profile_name, "sha256": hashlib.sha256(raw).hexdigest()},
         "warmup_ms": warmup_ms,
-        "duration_ms": duration_ms,
+        "duration_ms": actual_duration,
+        "started_unix_ms": window_wall,
+        "finished_unix_ms": finished_wall,
+        "health_progress": progress.summary,
+        "log_activity": logs.finish(progress.summary),
+        "self_sample_external": pair,
         "sample_interval_ms": SAMPLE_INTERVAL_MS,
         "samples": count,
         "failed_samples": sum(1 for t in samples if t.sample is None),
@@ -433,7 +668,7 @@ def run_phase(name, prefix, scale, sampler_mod):
         "metrics": metrics,
         "self_sample": own,
     }
-    return phase, diff
+    return phase
 
 
 # -------------------------------------------------------------------- CLI
@@ -487,15 +722,14 @@ def main(argv=None):
         smoke = is_smoke(identity, args.duration_scale, stand_in)
 
         started = unix_ms()
-        phases, diffs = [], {}
+        phases = []
         for name in args.phases:
-            phase, diff = run_phase(name, prefix, args.duration_scale, sampler_mod)
+            phase = run_phase(name, prefix, args.duration_scale, sampler_mod)
             phases.append(phase)
-            diffs[name] = diff
             print(f"phase={name} samples={phase['samples']} failed={phase['failed_samples']} "
                   f"footprint_p95={phase['metrics']['footprint_bytes']['p95']} exit_code={phase['exit_code']}")
         doc = build_evidence(identity=identity, smoke=smoke, target=args.target, environment=environment,
-                             binary=binary, phases=phases, self_diffs=diffs, budgets=budgets,
+                             binary=binary, phases=phases, budgets=budgets,
                              started_unix_ms=started, finished_unix_ms=unix_ms())
         errs = validator.errors(doc)
         if errs:

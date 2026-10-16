@@ -29,7 +29,7 @@ func corpusCases(t testing.TB) []corpusCase {
 	if err := json.Unmarshal(b, &corpus); err != nil {
 		t.Fatal(err)
 	}
-	if corpus.Profile != "extension-admission-v1alpha1" || len(corpus.Cases) != 140 {
+	if corpus.Profile != "extension-admission-v1alpha1" || len(corpus.Cases) != 170 {
 		t.Fatalf("unexpected corpus header: %q, %d cases", corpus.Profile, len(corpus.Cases))
 	}
 	return corpus.Cases
@@ -96,6 +96,13 @@ func checkDecision(t *testing.T, d Decision, x expectation) {
 		return
 	}
 	in, w := d.Intent, x.Intent
+	floor := ""
+	if w.ReleaseFloorRaise != nil {
+		floor = *w.ReleaseFloorRaise
+	}
+	if in.ReleaseFloorRaise != floor {
+		t.Errorf("release floor raise %q, want %q", in.ReleaseFloorRaise, floor)
+	}
 	consume := ""
 	if w.ApprovalConsume != nil {
 		consume = *w.ApprovalConsume
@@ -139,7 +146,7 @@ func TestVectors(t *testing.T) {
 			outcomes[x.Outcome]++
 		})
 	}
-	want := map[string]int{"approval_required": 27, "admit": 22, "identical_retry": 3, "reject": 88}
+	want := map[string]int{"approval_required": 38, "admit": 29, "identical_retry": 4, "reject": 99}
 	if !reflect.DeepEqual(outcomes, want) {
 		t.Errorf("outcomes %v, want %v", outcomes, want)
 	}

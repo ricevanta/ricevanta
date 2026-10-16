@@ -39,4 +39,6 @@ pub use platform::WindowsPlatform;
 #[cfg(windows)]
 pub use sampler::{WindowsSampler, private_usage_bytes};
 #[cfg(windows)]
-pub use service::{DispatchError, EventLog, ServiceBody, dispatch};
+pub use service::{
+    DispatchError, EventLog, ServiceBody, ServiceFinalizer, dispatch, dispatch_with_finalizer,
+};

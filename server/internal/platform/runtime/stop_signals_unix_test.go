@@ -14,7 +14,7 @@ import (
 )
 
 func TestRepeatedSignalsDoNotMoveProcessDeadline(t *testing.T) {
-	cmd := exec.Command(os.Args[0], "-test.run=^TestStopProcessHelper$")
+	cmd := exec.Command(buildStopProcessHelper(t), "-test.run=^TestStopProcessHelper$")
 	cmd.Env = append(os.Environ(), "RICEVANTA_TEST_STOP_HELPER=tls")
 	input, err := cmd.StdinPipe()
 	if err != nil {

@@ -1,7 +1,7 @@
 // Package admission bounds how many event batch bodies one agent replica
 // decodes at once. It charges each request a byte weight computed from the
 // frame header before decompression, keeps a reserve for findings and audit
-// batches, and limits each device's concurrency and declared decoded bytes.
+// batches, and limits each device's concurrency and declared work bytes.
 package admission
 
 import (

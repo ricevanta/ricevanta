@@ -55,6 +55,10 @@ jobs:
           printf '%s\n' "$unformatted"
           exit 1
         fi
+    - name: Test key-file group rules as root
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id server-keyfile-root --evidence "$RUNNER_TEMP/evidence"
     - name: Test
       shell: bash --noprofile --norc -p -e -o pipefail {0}
       working-directory: .

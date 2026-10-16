@@ -45,7 +45,7 @@ func TestSchemaCases(t *testing.T) {
 	}{
 		{"extension-resource/schema-cases.json", "extension-resource.schema.json", 33, func(b []byte) error { _, e := ParseResource(b); return e }},
 		{"capability-grant/schema-cases.json", "capability-grant.schema.json", 20, func(b []byte) error { _, e := ParseGrantRecord(b); return e }},
-		{"admission-vectors/schema-cases.json", "admission-vectors.schema.json", 30, vectorsEnvelope},
+		{"admission-vectors/schema-cases.json", "admission-vectors.schema.json", 40, vectorsEnvelope},
 	}
 	for _, s := range suites {
 		cases := schemaCases(t, s.path, s.schema)
@@ -257,8 +257,13 @@ func expectedShape(raw json.RawMessage) error {
 	}
 	if v, ok := e["intent"]; ok {
 		var in map[string]json.RawMessage
-		if err := strictObject(v, &in, []string{"operation", "approval_kind", "tombstone_create", "ownership_create", "enabled", "grants", "targets", "registration_bind", "approval_consume"}, nil); err != nil {
+		if err := strictObject(v, &in, []string{"operation", "approval_kind", "tombstone_create", "release_floor_raise", "ownership_create", "enabled", "grants", "targets", "registration_bind", "approval_consume"}, nil); err != nil {
 			return err
+		}
+		if raw := in["release_floor_raise"]; !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := stringField(raw, 1, 128, versionPattern); err != nil {
+				return err
+			}
 		}
 		if err := enumField(in["operation"], operations...); err != nil {
 			return err

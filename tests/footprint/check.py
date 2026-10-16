@@ -314,6 +314,10 @@ def read_baseline(path, validator):
         return Baseline("invalid", problem="identity_null")
     if doc["identity"]["channel"] not in BASELINE_CHANNELS:
         return Baseline("invalid", problem=f"channel_{doc['identity']['channel']}")
+    try:
+        check_protocol(doc, require_full_duration=True)
+    except InputError as exc:
+        return Baseline("invalid", problem=f"protocol: {exc}")
     return Baseline("valid", doc=doc)
 
 
@@ -324,26 +328,181 @@ def _check_processes(evidence):
         raise InputError("the v1 evidence carries metrics for the core process only; processes must list exactly it")
 
 
-def _self_sample_row(evidence, p, budgets):
-    name = p["name"]
-    own = p["self_sample"]
-    if own is None:
-        return _row("self_sample_agreement", name, "no_self_sample", None, None, "fail")
-    if own["footprint_metric"] != p["metrics"]["footprint_bytes"]["metric"]:
-        return _row("self_sample_agreement", name, "metric_mismatch", None, None, "fail")
-    prior = [r for r in evidence["results"] if r["check"] == "self_sample_agreement" and r["phase"] == name]
-    diff = prior[0]["observed"] if len(prior) == 1 else None
-    if not isinstance(diff, (int, float)) or isinstance(diff, bool):
-        return _row("self_sample_agreement", name, "no_external_sample", None, None, "fail")
-    external = own["footprint_bytes"] - diff
-    if external <= 0:
-        return _row("self_sample_agreement", name, "no_external_sample", None, None, "fail")
-    tolerance = budgets["self_sample_tolerance"]
-    ratio_allowance = tolerance["ratio"] * external
-    exceeded = abs(diff) > ratio_allowance and abs(diff) > tolerance["bytes"]
-    limit = _num(max(ratio_allowance, tolerance["bytes"]))
-    return _row("self_sample_agreement", name, _num(diff), limit, None, "fail" if exceeded else "pass")
+# Protocol rules from spec section 3.1, shared by measurement and checking.
+COUNTERS = ('samples', 'sample_failures', 'log_errors', 'health_write_failures', 'log_rotations')
+PHASE_PROFILES = {'idle': ('idle', 120000), 'load': ('health-burst', 60000)}
+WARMUP_MS = 10000
+SAMPLE_INTERVAL_MS = 1000
 
+
+def check_protocol(evidence, *, require_full_duration=False):
+    """Admit complete full runs; smoke may use a unique subset and reduced windows."""
+    phases = evidence['phases']
+    names = [p['name'] for p in phases]
+    if len(names) != len(set(names)):
+        raise InputError('duplicate phase')
+    if evidence['smoke']:
+        return
+    if set(names) != set(PHASE_PROFILES):
+        raise InputError('full evidence requires exactly one idle phase and one load phase')
+    for p in phases:
+        profile, duration = PHASE_PROFILES[p['name']]
+        if p['profile']['name'] != profile:
+            raise InputError(f"phase {p['name']}: wrong profile")
+        if p['sample_interval_ms'] != SAMPLE_INTERVAL_MS:
+            raise InputError(f"phase {p['name']}: external sample interval must be {SAMPLE_INTERVAL_MS} ms")
+        if p['warmup_ms'] != WARMUP_MS:
+            raise InputError(f"phase {p['name']}: full warm-up must be {WARMUP_MS} ms")
+        if p['samples'] != p['duration_ms'] // SAMPLE_INTERVAL_MS:
+            raise InputError(f"phase {p['name']}: external sample count does not cover the measured window")
+        if require_full_duration and p['duration_ms'] < duration:
+            raise InputError(f"phase {p['name']}: shortened full run")
+
+
+def phase_profile(p):
+    name, duration = PHASE_PROFILES[p['name']]
+    if p['profile']['name'] != name:
+        raise InputError(f"phase {p['name']}: wrong profile")
+    return load_json_file(PROFILES_DIR / (name + '.json')), duration
+
+
+def snapshot_valid(s, pid, interval):
+    return (s is not None and s['pid'] == pid and s['state'] == 'ready'
+            and s['interval_ms'] == interval
+            and s['sampled_unix_ms'] <= s['written_unix_ms'] <= s['observed_unix_ms']
+            and s['sampled_uptime_ms'] <= s['uptime_ms'])
+
+
+def snapshot_ages(s, first):
+    elapsed = s['observed_elapsed_ms'] - first['observed_elapsed_ms']
+    return tuple(max(0, s['observed_unix_ms'] - s[wall],
+                     elapsed - (s[uptime] - first[uptime]))
+                 for wall, uptime in (('written_unix_ms', 'uptime_ms'),
+                                      ('sampled_unix_ms', 'sampled_uptime_ms')))
+
+
+def snapshots_consistent(a, b):
+    elapsed = b['observed_elapsed_ms'] - a['observed_elapsed_ms']
+    wall = b['observed_unix_ms'] - a['observed_unix_ms']
+    if elapsed < 0 or wall < 0 or abs(wall - elapsed) > 2000:
+        return False
+    for key in ('written_unix_ms', 'uptime_ms', 'sampled_unix_ms', 'sampled_uptime_ms'):
+        if b[key] < a[key]:
+            return False
+    if b['samples'] > a['samples']:
+        if b['sampled_unix_ms'] <= a['sampled_unix_ms'] or b['sampled_uptime_ms'] <= a['sampled_uptime_ms']:
+            return False
+    return True
+
+
+def cadence(p, interval):
+    g = p['health_progress']
+    a, b = g['start'], g['end']
+    d = b['observed_elapsed_ms'] - a['observed_elapsed_ms'] if a and b else p['duration_ms']
+    n = d // interval
+    return max(1, n - n // 100), (d + interval - 1) // interval + 1
+
+
+def freshness_valid(p, smoke, interval, full_duration):
+    g = p['health_progress']
+    a, b = g['start'], g['end']
+    d = p['duration_ms']
+    if not (snapshot_valid(a, g['pid'], interval) and snapshot_valid(b, g['pid'], interval)):
+        return False
+    if g['invalid_observations'] or not snapshots_consistent(a, b):
+        return False
+    if (p['finished_unix_ms'] < p['started_unix_ms']
+            or abs(p['finished_unix_ms'] - p['started_unix_ms'] - d) > 2000
+            or (not smoke and d < full_duration)):
+        return False
+    for s, left in ((a, True), (b, False)):
+        wall = s['observed_unix_ms'] - p['started_unix_ms']
+        mono = s['observed_elapsed_ms']
+        if not (0 <= wall <= p['finished_unix_ms'] - p['started_unix_ms'] and 0 <= mono <= d):
+            return False
+        if (left and (wall > 1000 or mono > 1000)) or (not left and
+                (p['finished_unix_ms'] - s['observed_unix_ms'] > 1000 or d - mono > 1000)):
+            return False
+        if abs(wall - mono) > 2000:
+            return False
+        ages = snapshot_ages(s, a)
+        if g['max_write_age_ms'] < ages[0] or g['max_sample_age_ms'] < ages[1]:
+            return False
+    return (g['max_write_age_ms'] <= interval + 2000
+            and g['max_sample_age_ms'] <= interval + 2000
+            and g['max_observation_gap_ms'] <= 2000
+            and g['observations'] >= d // 1000 + 2)
+
+
+def final_in_phase(p):
+    b = p['health_progress']['end']
+    return (b is not None
+            and p['started_unix_ms'] <= b['sampled_unix_ms'] <= p['finished_unix_ms']
+            and 0 <= b['observed_elapsed_ms'] - (b['uptime_ms'] - b['sampled_uptime_ms']) <= p['duration_ms'])
+
+
+def progress_outcome(p, smoke, interval):
+    g = p['health_progress']
+    a, b = g['start'], g['end']
+    if not (snapshot_valid(a, g['pid'], interval) and snapshot_valid(b, g['pid'], interval)):
+        return 'fail'
+    if (g['counter_regressions'] or not snapshots_consistent(a, b)
+            or any(b[k] < a[k] for k in COUNTERS)
+            or any(b[k] != a[k] for k in ('sample_failures', 'health_write_failures'))):
+        return 'fail'
+    if smoke and p['duration_ms'] < interval:
+        return 'recorded'
+    low, high = cadence(p, interval)
+    return 'pass' if final_in_phase(p) and low <= b['samples'] - a['samples'] <= high else 'fail'
+
+
+def workload_rows(evidence, p):
+    profile, duration = phase_profile(p)
+    interval = profile['health']['interval_ms']
+    smoke = evidence['smoke']
+    fresh = freshness_valid(p, smoke, interval, duration)
+    rows = [_row('health_freshness', p['name'], 'valid' if fresh else 'invalid', interval + 2000,
+                 None, 'pass' if fresh else 'fail'),
+            _row('sampler_progress', p['name'],
+                 p['health_progress']['end']['samples'] - p['health_progress']['start']['samples']
+                 if p['health_progress']['end'] and p['health_progress']['start'] else None,
+                 cadence(p, interval)[0], None, progress_outcome(p, smoke, interval))]
+    if p['name'] == 'load':
+        g, log = p['health_progress'], p['log_activity']
+        a, b = g['start'], g['end']
+        rotations = b['log_rotations'] - a['log_rotations'] if a and b else -1
+        delta = b['samples'] - a['samples'] if a and b else -1
+        valid = (a and b and log['sample_events'] >= cadence(p, interval)[0]
+                 and log['sample_events'] <= delta and log['rotations_observed'] >= 1
+                 and rotations == log['rotations_observed'] and not log['invalid_lines']
+                 and b['log_errors'] == a['log_errors'])
+        outcome = 'recorded' if smoke and p['duration_ms'] < duration else ('pass' if valid else 'fail')
+        rows.append(_row('load_log_activity', 'load', log['sample_events'], cadence(p, interval)[0], None, outcome))
+    return rows
+
+
+def _self_sample_row(evidence, p, budgets):
+    own, pair = p['self_sample'], p['self_sample_external']
+    profile, duration = phase_profile(p)
+    interval = profile['health']['interval_ms']
+    b = p['health_progress']['end']
+    valid = (own is not None and b is not None
+             and own['footprint_metric'] == p['metrics']['footprint_bytes']['metric']
+             and freshness_valid(p, evidence['smoke'], interval, duration)
+             and all(own[k] == b[k] for k in ('written_unix_ms', 'sampled_unix_ms', 'sampled_uptime_ms')))
+    if valid and evidence['smoke'] and p['duration_ms'] < interval and not final_in_phase(p):
+        return _row('self_sample_agreement', p['name'], 'short_smoke', None, None, 'recorded')
+    valid = (valid and final_in_phase(p) and pair is not None and pair['footprint_bytes'] > 0
+             and own['footprint_metric'] == pair['footprint_metric'] == p['metrics']['footprint_bytes']['metric']
+             and p['started_unix_ms'] <= pair['unix_ms'] <= p['finished_unix_ms']
+             and abs(pair['unix_ms'] - own['sampled_unix_ms']) <= 2000)
+    if not valid:
+        return _row('self_sample_agreement', p['name'], 'invalid_pair', None, None, 'fail')
+    diff = own['footprint_bytes'] - pair['footprint_bytes']
+    tolerance = budgets['self_sample_tolerance']
+    limit = max(tolerance['ratio'] * pair['footprint_bytes'], tolerance['bytes'])
+    return _row('self_sample_agreement', p['name'], diff, _num(limit), None,
+                'fail' if abs(diff) > limit else 'pass')
 
 def _absolute(evidence, budgets, shutdown_limits):
     rows = []
@@ -381,7 +540,7 @@ def _absolute(evidence, budgets, shutdown_limits):
         mean = p["metrics"]["cpu_core_pct"]["mean"]
         if p["name"] == "idle":
             gate = cpu_budget["idle_hosted_gate"]
-            rows.append(_row("cpu_mean", "idle", mean, gate, None, "fail" if mean > gate else "pass"))
+            rows.append(_row("cpu_mean", "idle", mean, gate, None, "fail" if mean > gate else "recorded"))
             rows.append(_row("cpu_mean", "idle", mean, cpu_budget["idle_target"], None, "recorded"))
         else:
             rows.append(_row("cpu_mean", p["name"], mean, None, None, "recorded"))
@@ -408,6 +567,7 @@ def _absolute(evidence, budgets, shutdown_limits):
         rows.append(_row("failed_samples", p["name"], p["failed_samples"], limit, None,
                          "fail" if p["failed_samples"] > limit else "pass"))
     for p in phases:
+        rows.extend(workload_rows(evidence, p))
         rows.append(_self_sample_row(evidence, p, budgets))
     return rows
 
@@ -423,11 +583,10 @@ def _regression(evidence, base_doc, budgets):
         return "recorded" if observed < base_value else "pass"
 
     pairs = [(p, base_phases.get(p["name"])) for p in evidence["phases"]]
+    if any(b is None for _, b in pairs):
+        raise InputError('baseline is missing a measured phase')
     for p, b in pairs:
         o = p["metrics"]["footprint_bytes"]["p95"]
-        if b is None:
-            rows.append(_row("regression_footprint_p95", p["name"], _num(o), None, None, "recorded"))
-            continue
         base = b["metrics"]["footprint_bytes"]["p95"]
         delta = o - base
         exceeded = delta > tol["footprint_ratio"] * base and delta > tol["footprint_bytes"]
@@ -435,18 +594,12 @@ def _regression(evidence, base_doc, budgets):
         rows.append(_row("regression_footprint_p95", p["name"], _num(o), limit, _num(base), judge(o, base, exceeded)))
     for p, b in pairs:
         o = p["metrics"]["threads"]["max"]
-        if b is None:
-            rows.append(_row("regression_threads_max", p["name"], o, None, None, "recorded"))
-            continue
         base = b["metrics"]["threads"]["max"]
         limit = base + tol["threads"]
         rows.append(_row("regression_threads_max", p["name"], o, limit, base, judge(o, base, o > limit)))
     for p, b in pairs:
         desc = p["metrics"]["descriptors"]
         o = desc["max"]
-        if b is None:
-            rows.append(_row("regression_descriptors_max", p["name"], o, None, None, "recorded"))
-            continue
         base = b["metrics"]["descriptors"]["max"]
         limit = base + tol["descriptors_" + desc["kind"]]
         rows.append(_row("regression_descriptors_max", p["name"], o, limit, base, judge(o, base, o > limit)))
@@ -488,6 +641,7 @@ def _baseline_rows(evidence, budgets, baseline):
 
 def evaluate(evidence, budgets, shutdown_limits, baseline=SKIP):
     """Return (results, baseline object, outcome) for a schema-valid evidence document."""
+    check_protocol(evidence)
     rows = _absolute(evidence, budgets, shutdown_limits)
     base_obj = {"kind": "none", "identity": None, "environment_match": None}
     if baseline.status != "skip":
@@ -509,12 +663,19 @@ def complete(evidence, budgets, shutdown_limits, baseline=SKIP):
 
 
 def qualifies_as_candidate(doc):
-    return (
+    eligible = (
         doc["outcome"] == "pass"
         and doc["smoke"] is False
         and doc["identity"] is not None
         and doc["identity"]["channel"] in BASELINE_CHANNELS
     )
+    if not eligible:
+        return False
+    try:
+        check_protocol(doc, require_full_duration=True)
+    except InputError:
+        return False
+    return True
 
 
 def _fmt(value):

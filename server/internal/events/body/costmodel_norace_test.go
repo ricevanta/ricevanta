@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,18 +25,18 @@ import (
 )
 
 // costMeasurementKeys are the fields every COST_MEASUREMENT line carries.
-var costMeasurementKeys = []string{"case", "mode", "shape", "n", "window", "size", "weight", "baseline", "limit", "lines", "allocs", "cpu_ms", "wall_ms", "peak", "peak_ratio", "vmhwm", "gc_cycles", "limiter_cycle"}
+var costMeasurementKeys = []string{"case", "mode", "shape", "n", "window", "size", "weight", "baseline", "limit", "lines", "allocs", "cpu_ms", "wall_ms", "peak", "peak_ratio", "vmhwm", "gc_cycles", "limiter_cycle", "preflight_cpu_ns", "decode_cpu_ns", "cpu_ns", "blocks", "codecs", "paid", "repeats"}
 
 // TestDecodeCostModel proves the admission weight model of ingest admission
 // section 2 against the decoder that ships (section 9). The parent generates
 // every frame, then runs one child per case under a memory limit the child
 // sets itself, and one without a limit for the wall-time reference.
 //
-// The test runs only with RICEVANTA_COST_MODEL=full, and then runs all 34
+// The test runs only with RICEVANTA_COST_MODEL=full, and then runs all 50
 // cases of the fixed table whatever -run selects; ordinary go test runs skip
 // it. The limited child of each case logs one COST_MEASUREMENT line, the
 // reference child one COST_REFERENCE line, and the parent ends with
-// COST_MODEL_CASES n=34, which the CI step counts.
+// COST_MODEL_CASES n=50, which the CI wrapper verifies.
 func TestDecodeCostModel(t *testing.T) {
 	if os.Getenv(costChildEnv) != "" {
 		costChild(t)
@@ -57,6 +58,7 @@ func TestDecodeCostModel(t *testing.T) {
 		lines                int
 		window, size         uint64
 		badID, hostile, flat bool
+		input                *costInput
 	}
 	dir := t.TempDir()
 	frames := map[string]generated{}
@@ -78,8 +80,17 @@ func TestDecodeCostModel(t *testing.T) {
 		if err := os.WriteFile(path, frame, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		frames[s.name] = generated{path, bytes.Count(plain, []byte{'\n'}), f.Window(), f.ContentSize(), s.badID, s.hostile, s.flat}
+		frames[s.name] = generated{path, bytes.Count(plain, []byte{'\n'}), f.Window(), f.ContentSize(), s.badID, s.hostile, s.flat, nil}
 		t.Logf("COST_FRAME shape=%s size=%d lines=%d compressed=%d window=%d", s.name, len(plain), frames[s.name].lines, len(frame), f.Window())
+	}
+	for _, key := range adversarialCostKeys {
+		c := adversarialCostInput(t, key)
+		path := filepath.Join(dir, key+".zst")
+		if err := os.WriteFile(path, c.frame, 0600); err != nil {
+			t.Fatal(err)
+		}
+		c.frame = nil // Only the child needs compressed bytes after the file is written.
+		frames[key] = generated{path: path, lines: c.lines, window: c.window, size: c.size, input: &c}
 	}
 	var hostileCPU, flatCPU int64
 	for _, c := range cases {
@@ -92,6 +103,10 @@ func TestDecodeCostModel(t *testing.T) {
 				"RICEVANTA_COST_N="+strconv.Itoa(c.n), "RICEVANTA_COST_LINES="+strconv.Itoa(g.lines),
 				"RICEVANTA_COST_WINDOW="+strconv.FormatUint(g.window, 10), "RICEVANTA_COST_SIZE="+strconv.FormatUint(g.size, 10),
 				"RICEVANTA_COST_BADID="+strconv.FormatBool(g.badID))
+			if g.input != nil {
+				c := g.input
+				cmd.Env = append(cmd.Env, "RICEVANTA_COST_ERROR="+errorName(c.want), "RICEVANTA_COST_BLOCKS="+strconv.Itoa(c.blocks), "RICEVANTA_COST_CODECS="+strconv.Itoa(c.codecs), "RICEVANTA_COST_RATE="+strconv.FormatBool(c.rateDeficit))
+			}
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("%s %s child failed: %v\n%s", c.key(), mode, err, output)
@@ -99,6 +114,21 @@ func TestDecodeCostModel(t *testing.T) {
 			fields, err := parseCostMeasurement(output, costTag(mode), c.key(), mode)
 			if err != nil {
 				t.Fatalf("%s %s: %v\n%s", c.key(), mode, err, output)
+			}
+			if fields["shape"] != c.shape || fields["lines"] != strconv.Itoa(g.lines) {
+				t.Fatalf("%s: wrong measurement shape or line count", c.key())
+			}
+			if g.input != nil && (fields["blocks"] != strconv.Itoa(g.input.blocks) || fields["codecs"] != strconv.Itoa(g.input.codecs)) {
+				t.Fatalf("%s: wrong preflight or codec stage", c.key())
+			}
+			weight, _ := admission.Weight(g.window, g.size)
+			paid := max(g.window, g.size, admission.MinCharge)
+			if g.input != nil && g.input.codecs == 0 {
+				weight = admission.CompressedWeight
+				paid = admission.MinCharge
+			}
+			if err := validateCostValues(fields, c.n, g.window, g.size, weight, paid); err != nil {
+				t.Fatalf("%s %s: %v", c.key(), mode, err)
 			}
 			t.Log(fields["line"])
 			results[mode] = fields
@@ -108,7 +138,9 @@ func TestDecodeCostModel(t *testing.T) {
 			t.Errorf("%s: the GC CPU limiter engaged at cycle %s", c.key(), limited["limiter_cycle"])
 		}
 		peak, _ := strconv.ParseFloat(limited["peak_ratio"], 64)
-		if peak > 1.1 {
+		peakBytes, _ := strconv.ParseUint(limited["peak"], 10, 64)
+		limitBytes, _ := strconv.ParseUint(limited["limit"], 10, 64)
+		if float64(peakBytes) > 1.1*float64(limitBytes) {
 			t.Errorf("%s: peak %s is %.3f of the limit %s", c.key(), limited["peak"], peak, limited["limit"])
 		}
 		wall, _ := strconv.ParseInt(limited["wall_ms"], 10, 64)
@@ -134,13 +166,10 @@ func TestDecodeCostModel(t *testing.T) {
 	if hostileCPU > 0 && flatCPU > 0 {
 		ratio := float64(hostileCPU) / float64(flatCPU)
 		t.Logf("COST_CPU_RATIO hostile_cpu_ms=%d flat_cpu_ms=%d ratio=%.3f", hostileCPU, flatCPU, ratio)
-		if ratio > 1.5 {
-			t.Logf("COST_CPU_RATIO above 1.5: the 5.0 s planning maximum returns to design (report only)")
-		}
 	}
 }
 
-const costModelCases = 34
+const costModelCases = 50
 
 // costWallBound is the most wall time in milliseconds the limited child may
 // take: twice a reference of at least 500 ms, else the reference plus 500 ms.
@@ -196,11 +225,11 @@ func parseCostMeasurement(output []byte, tag, key, mode string) (map[string]stri
 		switch k {
 		case "case", "mode", "shape":
 		case "peak_ratio":
-			if _, err := strconv.ParseFloat(v, 64); err != nil {
+			if n, err := strconv.ParseFloat(v, 64); err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 {
 				return nil, errorString("malformed " + k)
 			}
 		default:
-			if _, err := strconv.ParseInt(v, 10, 64); err != nil {
+			if n, err := strconv.ParseInt(v, 10, 64); err != nil || n < 0 {
 				return nil, errorString("malformed " + k)
 			}
 		}
@@ -209,6 +238,38 @@ func parseCostMeasurement(output []byte, tag, key, mode string) (map[string]stri
 		return nil, errorString("measurement for another case")
 	}
 	return found, nil
+}
+
+// validateCostValues binds measured numbers to the generated input and checks
+// relationships that could otherwise hide a stale or misreported measurement.
+func validateCostValues(f map[string]string, n int, window, size uint64, weight int64, paid uint64) error {
+	expected := map[string]uint64{"n": uint64(n), "window": window, "size": size, "weight": uint64(weight), "paid": paid}
+	for k, want := range expected {
+		got, err := strconv.ParseUint(f[k], 10, 64)
+		if err != nil || got != want {
+			return errorString("wrong measurement " + k)
+		}
+	}
+	read := func(k string) int64 { v, _ := strconv.ParseInt(f[k], 10, 64); return v }
+	baseline, limit, peak := read("baseline"), read("limit"), read("peak")
+	if baseline <= 0 || limit != baseline+int64(n)*weight || peak < baseline || read("repeats") <= 0 {
+		return errorString("invalid measurement memory or repetitions")
+	}
+	ratio, err := strconv.ParseFloat(f["peak_ratio"], 64)
+	if err != nil || math.Abs(ratio-float64(peak)/float64(limit)) > .00051 {
+		return errorString("inconsistent peak ratio")
+	}
+	if (size <= 128<<10 || paid == admission.MinCharge) && read("repeats") < 2 {
+		return errorString("short measurement was not repeated")
+	}
+	cpu := read("cpu_ns")
+	if cpu <= 0 || cpu != read("preflight_cpu_ns")+read("decode_cpu_ns") || read("cpu_ms") != cpu/int64(time.Millisecond) {
+		return errorString("inconsistent CPU measurement")
+	}
+	if cpu > int64(5*time.Second)*int64(paid)/(64<<20) {
+		return errorString("CPU exceeds paid-charge bound")
+	}
+	return nil
 }
 
 type errorString string
@@ -300,6 +361,35 @@ func costChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var want error
+	for _, e := range []error{ErrFrame, ErrChecksum, ErrContentSize} {
+		if errorName(e) == os.Getenv("RICEVANTA_COST_ERROR") {
+			want = e
+		}
+	}
+	codecs := 1
+	blocks := uint64(0)
+	if os.Getenv("RICEVANTA_COST_CODECS") != "" {
+		codecs = int(costEnvInt(t, "RICEVANTA_COST_CODECS"))
+	}
+	_, _, preflightErr := inspectFrameCount(frame, &blocks)
+	if os.Getenv("RICEVANTA_COST_BLOCKS") != "" && blocks != uint64(costEnvInt(t, "RICEVANTA_COST_BLOCKS")) {
+		t.Fatalf("header visits %d", blocks)
+	}
+	if codecs == 0 {
+		weight = admission.CompressedWeight
+	}
+	paid := max(window, size, admission.MinCharge)
+	if codecs == 0 {
+		paid = admission.MinCharge
+	}
+	if codecs == 0 && os.Getenv("RICEVANTA_COST_RATE") == "true" && preflightErr != nil {
+		t.Fatalf("rate case preflight: %v", preflightErr)
+	}
+	repeats := 1
+	if size <= 128<<10 || codecs == 0 {
+		repeats = 32
+	}
 	d := costDescriptor(lines)
 	runtime.GC()
 	baseline := usedMemory()
@@ -335,21 +425,70 @@ func costChild(t *testing.T) {
 			}
 		}
 	}()
-	cpu0 := processCPU()
 	start := time.Now()
+	var preflightCPU, decodeCPU time.Duration
+	var codecCalls atomic.Int64
 	results := make([][]Line, n)
+	frames := make([]Frame, n)
 	errs := make([]error, n)
-	var wg sync.WaitGroup
-	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			results[i], errs[i] = Decode(&io.LimitedReader{R: bytes.NewReader(frame), N: compressedBudget}, d, "device-a")
-		}()
+	for range repeats {
+		cpu0 := processCPU()
+		var wg sync.WaitGroup
+		for i := range n {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				frames[i], errs[i] = ReadFrame(&io.LimitedReader{R: bytes.NewReader(frame), N: compressedBudget})
+			}()
+		}
+		wg.Wait()
+		preflightCPU += processCPU() - cpu0
+		cpu0 = processCPU()
+		for i := range n {
+			if codecs == 0 {
+				if os.Getenv("RICEVANTA_COST_RATE") == "true" {
+					costRateRefusal(t, window, size)
+				} else if !errors.Is(errs[i], want) {
+					t.Fatalf("preflight: %v want %v", errs[i], want)
+				}
+				continue
+			}
+			if errs[i] != nil {
+				t.Fatalf("preflight: %v", errs[i])
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				codecCalls.Add(1)
+				results[i], errs[i] = DecodeFrame(frames[i], d, "device-a")
+			}()
+		}
+		wg.Wait()
+		for i := range n {
+			if codecs != 0 && (!errors.Is(errs[i], want) || want != nil && results[i] != nil || want == nil && len(results[i]) != lines) {
+				t.Fatalf("decode: %v lines=%d want=%v", errs[i], len(results[i]), want)
+			}
+			for _, line := range results[i] {
+				if badID && !errors.Is(line.Err, ErrEventID) || !badID && line.Err != nil {
+					t.Fatalf("line: %v", line.Err)
+				}
+			}
+		}
+		sample()
+		if repeats > 1 {
+			clear(frames)
+			clear(results)
+			runtime.GC()
+		}
+		decodeCPU += processCPU() - cpu0
 	}
-	wg.Wait()
-	wall := time.Since(start)
-	cpu := processCPU() - cpu0
+	if codecCalls.Load() != int64(codecs*n*repeats) {
+		t.Fatalf("codec entries=%d", codecCalls.Load())
+	}
+	wall := time.Since(start) / time.Duration(repeats)
+	preflightCPU /= time.Duration(n * repeats)
+	decodeCPU /= time.Duration(n * repeats)
+	cpu := preflightCPU + decodeCPU
 	sample()
 	close(done)
 	<-sampled
@@ -357,23 +496,13 @@ func costChild(t *testing.T) {
 	cycles := readUint64Metric("/gc/cycles/total:gc-cycles") - gc0
 	limiterCycle := readUint64Metric("/gc/limiter/last-enabled:gc-cycle")
 	hwm := vmHWM()
-	for i := range n {
-		if errs[i] != nil || len(results[i]) != lines {
-			t.Fatalf("decode %d: %v, %d lines, want %d", i, errs[i], len(results[i]), lines)
-		}
-		for _, line := range results[i] {
-			if badID && !errors.Is(line.Err, ErrEventID) || !badID && line.Err != nil {
-				t.Fatalf("decode %d line %d: %v", i, line.Number, line.Err)
-			}
-		}
-	}
 	runtime.KeepAlive(results)
-	fmt.Printf("%s case=%s mode=%s shape=%s n=%d window=%d size=%d weight=%d baseline=%d limit=%d lines=%d allocs=%d cpu_ms=%d wall_ms=%d peak=%d peak_ratio=%.3f vmhwm=%d gc_cycles=%d limiter_cycle=%d\n",
-		costTag(mode), key, mode, shape, n, window, size, weight, baseline, limit, lines, allocs, cpu.Milliseconds(), wall.Milliseconds(), peak.Load(), float64(peak.Load())/float64(limit), hwm, cycles, limiterCycle)
+	fmt.Printf("%s case=%s mode=%s shape=%s n=%d window=%d size=%d weight=%d baseline=%d limit=%d lines=%d allocs=%d cpu_ms=%d wall_ms=%d peak=%d peak_ratio=%.3f vmhwm=%d gc_cycles=%d limiter_cycle=%d preflight_cpu_ns=%d decode_cpu_ns=%d cpu_ns=%d blocks=%d codecs=%d paid=%d repeats=%d\n",
+		costTag(mode), key, mode, shape, n, window, size, weight, baseline, limit, lines, allocs, cpu.Milliseconds(), wall.Milliseconds(), peak.Load(), float64(peak.Load())/float64(limit), hwm, cycles, limiterCycle, preflightCPU.Nanoseconds(), decodeCPU.Nanoseconds(), cpu.Nanoseconds(), blocks, codecs, paid, repeats)
 }
 
 func TestCostModelHarness(t *testing.T) {
-	if n := len(costCases()); n != costModelCases {
+	if n := len(costCases()); n != 50 {
 		t.Fatalf("%d cases", n)
 	}
 	for _, c := range []struct{ reference, bound int64 }{{0, 500}, {31, 531}, {499, 999}, {500, 1000}, {3128, 6256}} {
@@ -381,7 +510,7 @@ func TestCostModelHarness(t *testing.T) {
 			t.Fatalf("reference %d: bound %d, want %d", c.reference, got, c.bound)
 		}
 	}
-	line := "COST_MEASUREMENT case=a/1 mode=limited shape=a n=1 window=1 size=1 weight=1 baseline=1 limit=1 lines=1 allocs=1 cpu_ms=1 wall_ms=1 peak=1 peak_ratio=0.5 vmhwm=1 gc_cycles=1 limiter_cycle=0"
+	line := "COST_MEASUREMENT case=a/1 mode=limited shape=a n=1 window=1 size=1 weight=1 baseline=1 limit=1 lines=1 allocs=1 cpu_ms=1 wall_ms=1 peak=1 peak_ratio=0.5 vmhwm=1 gc_cycles=1 limiter_cycle=0 preflight_cpu_ns=1 decode_cpu_ns=1 cpu_ns=2 blocks=1 codecs=1 paid=131072 repeats=1"
 	if _, err := parseCostMeasurement([]byte("x\n"+line+"\n"), "COST_MEASUREMENT", "a/1", "limited"); err != nil {
 		t.Fatal(err)
 	}
@@ -389,11 +518,42 @@ func TestCostModelHarness(t *testing.T) {
 		"missing":   "nothing\n",
 		"duplicate": line + "\n" + line + "\n",
 		"malformed": strings.Replace(line, "wall_ms=1", "wall_ms=x", 1),
-		"short":     strings.Replace(line, " limiter_cycle=0", "", 1),
+		"short":     strings.Replace(line, " limiter_cycle=0 preflight_cpu_ns=1 decode_cpu_ns=1 cpu_ns=2 blocks=1 codecs=1 paid=131072 repeats=1", "", 1),
 		"other":     strings.Replace(line, "case=a/1", "case=b/1", 1),
 	} {
 		if _, err := parseCostMeasurement([]byte(output), "COST_MEASUREMENT", "a/1", "limited"); err == nil {
 			t.Fatalf("%s accepted", name)
 		}
+	}
+}
+
+func TestCostMeasurementValues(t *testing.T) {
+	fields := map[string]string{"n": "1", "window": "103", "size": "103", "weight": "9197000", "paid": "131072", "baseline": "1000000", "limit": "10197000", "peak": "10000000", "peak_ratio": "0.981", "preflight_cpu_ns": "1000000", "decode_cpu_ns": "2000000", "cpu_ns": "3000000", "cpu_ms": "3", "repeats": "32"}
+	if err := validateCostValues(fields, 1, 103, 103, 9197000, 131072); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{"n": "2", "window": "104", "size": "102", "weight": "1", "paid": "67108864", "baseline": "0", "limit": "999999999", "peak": "1", "peak_ratio": "0.1", "cpu_ns": "3000001", "cpu_ms": "4", "repeats": "1"} {
+		t.Run(key, func(t *testing.T) {
+			copy := make(map[string]string)
+			for k, v := range fields {
+				copy[k] = v
+			}
+			copy[key] = value
+			if err := validateCostValues(copy, 1, 103, 103, 9197000, 131072); err == nil {
+				t.Fatalf("accepted invalid %s", key)
+			}
+		})
+	}
+}
+
+func TestCostCPUBoundary(t *testing.T) {
+	fields := map[string]string{"n": "1", "window": "103", "size": "103", "weight": "9197000", "paid": "131072", "baseline": "1000000", "limit": "10197000", "peak": "10000000", "peak_ratio": "0.981", "preflight_cpu_ns": "9765625", "decode_cpu_ns": "0", "cpu_ns": "9765625", "cpu_ms": "9", "repeats": "32"}
+	if err := validateCostValues(fields, 1, 103, 103, 9197000, 131072); err != nil {
+		t.Fatal(err)
+	}
+	fields["preflight_cpu_ns"] = "9765626"
+	fields["cpu_ns"] = "9765626"
+	if err := validateCostValues(fields, 1, 103, 103, 9197000, 131072); err == nil {
+		t.Fatal("accepted work above CPU-per-charge bound")
 	}
 }

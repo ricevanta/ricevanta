@@ -16,20 +16,23 @@ const FD_DIR: &str = "/proc/self/fd";
 ///
 /// - Every reader uses a fixed stack buffer of [`BUFFER_BYTES`] (4 KiB):
 ///   `smaps_rollup` and `stat` are read whole into one, a source that does
-///   not fit is a format error, and `status` is scanned line by line through
+///   not fit is unsupported, and `status` is scanned line by line through
 ///   another.
 /// - No collection is kept or grown: nothing scales with the number of
 ///   mappings, descriptors or threads; the descriptor count is a counter.
 /// - At most one directory enumeration is open at a time, `/proc/self/fd`;
-///   its buffer is allocated and freed by the C library within the call, and
-///   each entry's name is freed before the next is read.
+///   its native storage remains a qualification gate;
+///   each entry is dropped before the next is read.
 /// - Each source file is opened and closed within the call; nothing is
 ///   cached between calls.
 ///
-/// The steady-state proof is the `growth` test binary: after 1,000 warm-up
+/// The steady-state evidence is the `growth` test binary: after 1,000 warm-up
 /// samples, 10,000 more raise `Anonymous` in `/proc/self/smaps_rollup` by at
-/// most 64 KiB. The transient peak inside one call is bounded by this review,
-/// not measured.
+/// most 64 KiB, including high descriptor counts and injected failures.
+/// This does not prove a transient native allocation bound. Section 7 still
+/// requires qualified Rust/libc source evidence for directory-stream storage,
+/// entry allocations, allocator overhead and retention. RAII drops the
+/// ReadDir and each DirEntry on success and early error; no PathBuf is made.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LinuxSampler {
     _private: (),
@@ -66,13 +69,34 @@ impl ProcessSampler for LinuxSampler {
 /// The process's open descriptors: the entries of `/proc/self/fd` minus the
 /// one descriptor the listing itself holds open while it runs.
 fn count_fds() -> Result<u64, SampleError> {
-    let mut entries = 0u64;
-    for entry in std::fs::read_dir(FD_DIR).map_err(SampleError::io)? {
-        entry.map_err(SampleError::io)?;
-        entries = entries.saturating_add(1);
+    crate::fd_count::count_entries(std::fs::read_dir(FD_DIR))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::fd_count::count_entries;
+    use ricevanta_os::SampleError;
+    use std::io;
+
+    #[test]
+    fn enumeration_errors_are_not_partial_counts_and_release_the_stream() {
+        let before = std::fs::read_dir("/proc/self/fd").unwrap().count();
+        let opened = std::fs::read_dir("/proc/self/fd").unwrap();
+        let entries = opened.enumerate().map(|(i, entry)| {
+            if i == 1 {
+                Err(io::Error::from(io::ErrorKind::PermissionDenied))
+            } else {
+                entry
+            }
+        });
+        let result = count_entries(Ok(entries));
+        assert!(
+            matches!(result, Err(SampleError::Io(ref cause)) if cause.kind() == io::ErrorKind::PermissionDenied)
+        );
+        assert_eq!(std::fs::read_dir("/proc/self/fd").unwrap().count(), before);
+        let result = count_entries(Err::<std::fs::ReadDir, _>(io::Error::from(
+            io::ErrorKind::PermissionDenied,
+        )));
+        assert!(matches!(result, Err(SampleError::Io(_))));
     }
-    // The listing's own descriptor is always among the entries.
-    entries
-        .checked_sub(1)
-        .ok_or(SampleError::Format { source: FD_DIR })
 }

@@ -519,7 +519,7 @@
       "plain_bytes": 67108865,
       "plain_sha256": "831f8f9318f08b931787b676786281a2d0b66183f27146eb5a6fa0d8c8551af4",
       "expected": {
-        "batch_error": "body.ErrContentSize",
+        "batch_error": "body.ErrFrame",
         "status": 400,
         "lines": []
       }

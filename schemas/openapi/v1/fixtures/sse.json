@@ -21,13 +21,13 @@
        },
        {
         "topic": "device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f",
-        "token": "q2Zb-x_9Lk0aQ1w2E3r4T5"
+        "token": "AAAAAAAAAAAAAAAAAAAAAA"
        }
       ]
      }
     }
    ],
-   "expect": "retry: 5000\n\nevent: snapshot\ndata: {\"stream_uid\":\"01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e71\",\"topics\":[{\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"devices\"},{\"token\":\"q2Zb-x_9Lk0aQ1w2E3r4T5\",\"topic\":\"device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f\"}]}\n\n"
+   "expect": "retry: 5000\n\nevent: snapshot\ndata: {\"stream_uid\":\"01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e71\",\"topics\":[{\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"devices\"},{\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"device/01928f3e-7a4b-7c3d-8e9f-0a1b2c3d4e5f\"}]}\n\n"
   },
   {
    "id": "encode-change",
@@ -38,11 +38,11 @@
      "event": "change",
      "data": {
       "topic": "alerts",
-      "token": "q2Zb-x_9Lk0aQ1w2E3r4T5"
+      "token": "AAAAAAAAAAAAAAAAAAAAAA"
      }
     }
    ],
-   "expect": "event: change\ndata: {\"token\":\"q2Zb-x_9Lk0aQ1w2E3r4T5\",\"topic\":\"alerts\"}\n\n"
+   "expect": "event: change\ndata: {\"token\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"topic\":\"alerts\"}\n\n"
   },
   {
    "id": "encode-heartbeat",
@@ -151,7 +151,7 @@
    "id": "parse-bom-no-space",
    "kind": "parse",
    "chunks": [
-    "\ufeffevent:session\ndata:{\"state\":\"ended\"}\n\n"
+    "﻿event:session\ndata:{\"state\":\"ended\"}\n\n"
    ],
    "expect": {
     "events": [

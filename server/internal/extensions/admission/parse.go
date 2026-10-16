@@ -589,7 +589,7 @@ func ParseRequest(data []byte) (Request, error) {
 
 func (c *checker) snapshot(n *node) (Snapshot, bool) {
 	var s Snapshot
-	if !fields(n, []string{"recovery_epoch", "approval_policy_disabled", "approval_policy_generation", "first_start", "release_version", "project_key", "served_interfaces", "trust_list", "revocations", "revocation_generation", "ownership", "tombstones", "install", "registrations", "disclosure_profiles", "device_groups", "consumed_approvals"}) {
+	if !fields(n, []string{"recovery_epoch", "approval_policy_disabled", "approval_policy_generation", "first_start", "automatic_release_floor", "release_version", "project_key", "served_interfaces", "trust_list", "revocations", "revocation_generation", "ownership", "tombstones", "install", "registrations", "disclosure_profiles", "device_groups", "consumed_approvals"}) {
 		return s, false
 	}
 	ok := true
@@ -608,6 +608,11 @@ func (c *checker) snapshot(n *node) (Snapshot, bool) {
 		step(b)
 		// An empty string is not a version; null is the absent release.
 		c.check(s.ReleaseVersion != "")
+	}
+	if floor := n.member("automatic_release_floor"); floor.kind != nodeNull {
+		s.AutomaticReleaseFloor, b = asString(floor)
+		step(b)
+		c.check(s.AutomaticReleaseFloor != "")
 	}
 	s.ProjectKey, b = asString(n.member("project_key"))
 	step(b)
@@ -791,7 +796,7 @@ func (c *checker) install(n *node) (Install, bool) {
 
 func (c *checker) registration(n *node) (Registration, bool) {
 	var r Registration
-	if !fields(n, []string{"id", "browser", "registration_generation", "os"}, "bound") {
+	if !fields(n, []string{"id", "browser", "recovery_epoch", "registration_generation", "os"}, "bound") {
 		return r, false
 	}
 	ok := true
@@ -800,6 +805,8 @@ func (c *checker) registration(n *node) (Registration, bool) {
 	r.ID, b = asString(n.member("id"))
 	step(b)
 	r.Browser, b = asString(n.member("browser"))
+	step(b)
+	r.RecoveryEpoch, b = c.uint64Lexeme(n.member("recovery_epoch"))
 	step(b)
 	r.RegistrationGeneration, b = c.uint64Lexeme(n.member("registration_generation"))
 	step(b)
@@ -924,6 +931,7 @@ func (c *checker) request(n *node) (Request, bool) {
 func (c *checker) validSnapshot(s *Snapshot) {
 	c.check(stringSet(s.ServedInterfaces, 0, 11, knownInterface))
 	c.check(s.ReleaseVersion == "" || validVersion(s.ReleaseVersion))
+	c.check(s.AutomaticReleaseFloor == "" || validVersion(s.AutomaticReleaseFloor))
 	c.check(validFingerprint(s.ProjectKey))
 	// Once an array's count fails, the result is ErrField whatever its items
 	// hold, so its item and uniqueness passes are skipped; the remaining
@@ -1049,6 +1057,7 @@ func registrationKey(r *Registration) string {
 	var k equalityKey
 	k.str(r.ID)
 	k.str(r.Browser)
+	k.u64(r.RecoveryEpoch)
 	k.u64(r.RegistrationGeneration)
 	k.osPolicies(&r.OS, false)
 	k.flags(r.Bound != nil)

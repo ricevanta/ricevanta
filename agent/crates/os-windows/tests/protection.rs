@@ -10,9 +10,16 @@ use ricevanta_os_windows::WindowsPlatform;
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
+use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use windows_sys::Win32::Foundation::{ERROR_SUCCESS, LocalFree};
+use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
+use windows_sys::Win32::Security::{
+    DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, IsWellKnownSid,
+    OWNER_SECURITY_INFORMATION, WinBuiltinAdministratorsSid,
+};
 
 const USERS: &str = "S-1-5-32-545";
 const CREATOR_OWNER: &str = "S-1-3-0";
@@ -33,6 +40,20 @@ fn icacls(path: &Path, args: &[&str]) {
     let mut all = vec![path.to_str().unwrap()];
     all.extend_from_slice(args);
     run("icacls", &all);
+}
+
+fn prepare_root(root: &Path) {
+    // Replace the whole DACL, including explicit entries. Combining icacls
+    // /inheritance:r with /grant retained the runner's individual allow ACE.
+    powershell(&format!(
+        "$acl = [System.Security.AccessControl.DirectorySecurity]::new(); \
+         $acl.SetSecurityDescriptorSddlForm(\
+             'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)', \
+             [System.Security.AccessControl.AccessControlSections]::Access); \
+         [System.IO.FileSystemAclExtensions]::SetAccessControl(\
+             [System.IO.DirectoryInfo]::new({}), $acl)",
+        literal(root)
+    ));
 }
 
 fn junction(link: &Path, target: &Path) {
@@ -63,16 +84,7 @@ impl Tree {
         let root = outer.join(format!("rv-os-windows-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir(&root).unwrap();
-        icacls(
-            &root,
-            &[
-                "/inheritance:r",
-                "/grant",
-                "*S-1-5-18:(OI)(CI)F",
-                "/grant",
-                "*S-1-5-32-544:(OI)(CI)F",
-            ],
-        );
+        prepare_root(&root);
         for dir in ["state", "run", "logs"] {
             fs::create_dir(root.join(dir)).unwrap();
         }
@@ -123,6 +135,7 @@ fn insecure(sid: &str) -> Reason {
 fn prepared_tree_passes() {
     let p = platform();
     let tree = Tree::new();
+    assert_installer_root_acl(&tree.0);
     let mut config = p
         .open_config(&tree.join("agent.json"), Mode::Service)
         .unwrap()
@@ -137,6 +150,26 @@ fn prepared_tree_passes() {
     ] {
         checked(&p, &tree.join(name), kind).unwrap();
     }
+}
+
+#[test]
+fn fixture_preparation_replaces_explicit_and_inherited_grants() {
+    let p = platform();
+    let outer = Tree::new();
+    icacls(&outer.0, &["/grant", "*S-1-5-32-545:(OI)(CI)R"]);
+    // A new data root must discard its parent's Users grant.
+    let tree = Tree::new_in(&outer.0);
+    assert_installer_root_acl(&tree.0);
+    p.open_config(&tree.join("agent.json"), Mode::Service)
+        .unwrap()
+        .unwrap();
+    // Repreparing a pre-existing root must also discard explicit grants.
+    icacls(&tree.0, &["/grant", "*S-1-5-32-545:(OI)(CI)R"]);
+    prepare_root(&tree.0);
+    assert_installer_root_acl(&tree.0);
+    p.open_config(&tree.join("agent.json"), Mode::Service)
+        .unwrap()
+        .unwrap();
 }
 
 #[test]
@@ -336,6 +369,90 @@ fn files_are_created_renamed_and_removed_in_the_checked_directory() {
     assert!(!tree.join("run").join("agent.log").exists());
 }
 
+fn rejected_outputs_stay_unchanged(tamper: impl Fn(&Path), check_reason: impl Fn(Reason)) {
+    let p = platform();
+    for (directory, kind, name, file_kind) in [
+        (
+            "run",
+            DirKind::Runtime,
+            "health.json.tmp",
+            FileKind::HealthDocument,
+        ),
+        ("logs", DirKind::Log, "agent.log", FileKind::Log),
+    ] {
+        let tree = Tree::new();
+        let dir = checked(&p, &tree.join(directory), kind).unwrap();
+        let path = tree.join(directory).join(name);
+        fs::write(&path, b"planted output").unwrap();
+        icacls(&path, &["/setowner", "*S-1-5-32-544"]);
+        tamper(&path);
+        let got = reason(
+            p.create_file(&dir, OsStr::new(name), file_kind),
+            file_kind.object(),
+        );
+        check_reason(got);
+        assert_eq!(fs::read(&path).unwrap(), b"planted output", "{name}");
+    }
+}
+
+#[test]
+fn foreign_owned_outputs_are_refused_before_mutation() {
+    rejected_outputs_stay_unchanged(
+        |path| icacls(path, &["/setowner", &std::env::var("USERNAME").unwrap()]),
+        |got| match got {
+            Reason::OwnerSid { sid } => assert!(sid.starts_with("S-1-5-21-"), "{sid}"),
+            other => panic!("{other:?}"),
+        },
+    );
+}
+
+#[test]
+fn foreign_allow_outputs_are_refused_before_mutation() {
+    rejected_outputs_stay_unchanged(
+        |path| icacls(path, &["/grant", "*S-1-5-32-545:M"]),
+        |got| assert_eq!(got, insecure(USERS)),
+    );
+}
+
+#[test]
+fn null_dacl_outputs_are_refused_before_mutation() {
+    rejected_outputs_stay_unchanged(set_null_dacl, |got| {
+        assert_eq!(got, Reason::InsecureAcl { sid: None })
+    });
+}
+
+#[test]
+fn trusted_existing_outputs_are_checked_and_written_by_kind() {
+    let p = platform();
+    let tree = Tree::new();
+    for (directory, kind, name, file_kind, expected) in [
+        (
+            "run",
+            DirKind::Runtime,
+            "health.json.tmp",
+            FileKind::HealthDocument,
+            b"new".as_slice(),
+        ),
+        (
+            "logs",
+            DirKind::Log,
+            "agent.log",
+            FileKind::Log,
+            b"planted outputnew".as_slice(),
+        ),
+    ] {
+        let dir = checked(&p, &tree.join(directory), kind).unwrap();
+        let path = tree.join(directory).join(name);
+        fs::write(&path, b"planted output").unwrap();
+        icacls(&path, &["/setowner", "*S-1-5-32-544"]);
+        p.create_file(&dir, OsStr::new(name), file_kind)
+            .unwrap()
+            .write_all(b"new")
+            .unwrap();
+        assert_eq!(fs::read(path).unwrap(), expected);
+    }
+}
+
 #[test]
 fn run_mode_creates_directories_and_checks_nothing() {
     let p = platform();
@@ -358,9 +475,45 @@ fn run_mode_creates_directories_and_checks_nothing() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+#[test]
+fn run_outputs_keep_developer_ownership_and_permissions() {
+    let p = platform();
+    let tree = Tree::new();
+    let (parent, name) = p
+        .open_parent(&tree.join("state"), DirKind::State, Mode::Run)
+        .unwrap();
+    let dir = p
+        .open_or_create_dir(&parent, &name, DirKind::State, Mode::Run)
+        .unwrap();
+    for (name, kind) in [
+        ("health.json.tmp", FileKind::HealthDocument),
+        ("agent.log", FileKind::Log),
+    ] {
+        let path = tree.join("state").join(name);
+        fs::write(&path, b"developer output").unwrap();
+        icacls(&path, &["/setowner", &std::env::var("USERNAME").unwrap()]);
+        icacls(&path, &["/grant", "*S-1-5-32-545:R"]);
+        p.create_file(&dir, OsStr::new(name), kind)
+            .unwrap()
+            .write_all(b"new")
+            .unwrap();
+        let expected = if kind == FileKind::HealthDocument {
+            b"new".as_slice()
+        } else {
+            b"developer outputnew".as_slice()
+        };
+        assert_eq!(fs::read(path).unwrap(), expected);
+    }
+}
+
 fn powershell(script: &str) -> String {
-    let output = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+    let output = Command::new("pwsh.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!("$ErrorActionPreference = 'Stop'; {script}"),
+        ])
         .output()
         .unwrap();
     assert!(
@@ -371,6 +524,94 @@ fn powershell(script: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
+fn literal(path: &Path) -> String {
+    format!("'{}'", path.to_str().unwrap().replace('\'', "''"))
+}
+
+fn assert_installer_root_acl(path: &Path) {
+    // Inspect the raw descriptor independently of the production decoder.
+    let facts = powershell(&format!(
+        "$acl = [System.IO.FileSystemAclExtensions]::GetAccessControl(\
+             [System.IO.DirectoryInfo]::new({})); \
+         $raw = [System.Security.AccessControl.RawSecurityDescriptor]::new(\
+             $acl.GetSecurityDescriptorBinaryForm(), 0); \
+         $raw.Owner.Value; \
+         [bool]($raw.ControlFlags -band \
+             [System.Security.AccessControl.ControlFlags]::DiscretionaryAclPresent); \
+         [bool]($raw.ControlFlags -band \
+             [System.Security.AccessControl.ControlFlags]::DiscretionaryAclProtected); \
+         foreach ($ace in $raw.DiscretionaryAcl) {{ \
+             '{{0}}|{{1}}|{{2}}|{{3}}' -f [int]$ace.AceType, [int]$ace.AceFlags, \
+                 $ace.AccessMask, $ace.SecurityIdentifier.Value \
+         }}",
+        literal(path)
+    ));
+    let mut facts: Vec<_> = facts.lines().map(str::trim).collect();
+    facts.sort_unstable();
+    let mut expected = vec![
+        "S-1-5-32-544",
+        "True",
+        "True",
+        "0|3|2032127|S-1-5-18",
+        "0|3|2032127|S-1-5-32-544",
+    ];
+    expected.sort_unstable();
+    assert_eq!(facts, expected, "fixture root: {}", path.display());
+}
+
+#[expect(
+    unsafe_code,
+    reason = "GetSecurityInfo and GetSecurityDescriptorDacl: the file stays open, output pointers refer to live local values, and the returned descriptor owns the owner SID until LocalFree"
+)]
+fn assert_null_dacl(path: &Path) {
+    let file = fs::File::open(path).unwrap();
+    let mut owner = std::ptr::null_mut();
+    let mut descriptor = std::ptr::null_mut();
+    // SAFETY: file owns a live handle with READ_CONTROL; both requested
+    // output pointers are writable for this call. No other outputs are requested.
+    let code = unsafe {
+        GetSecurityInfo(
+            file.as_raw_handle(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            &raw mut owner,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &raw mut descriptor,
+        )
+    };
+    let mut present = 0;
+    let mut dacl = std::ptr::null_mut();
+    let mut defaulted = 0;
+    let mut queried = 0;
+    let mut administrator = 0;
+    if code == ERROR_SUCCESS && !descriptor.is_null() {
+        // SAFETY: descriptor is the live security descriptor just returned;
+        // the three outputs are writable local values. No ACL is dereferenced.
+        queried = unsafe {
+            GetSecurityDescriptorDacl(
+                descriptor,
+                &raw mut present,
+                &raw mut dacl,
+                &raw mut defaulted,
+            )
+        };
+        if !owner.is_null() {
+            // SAFETY: owner is the SID returned inside the live descriptor.
+            administrator = unsafe { IsWellKnownSid(owner, WinBuiltinAdministratorsSid) };
+        }
+    }
+    // SAFETY: descriptor is null or the allocation from GetSecurityInfo;
+    // this is its sole release, after the last use of the owner and DACL.
+    unsafe { LocalFree(descriptor) };
+    assert_eq!(code, ERROR_SUCCESS, "GetSecurityInfo");
+    assert_ne!(queried, 0, "GetSecurityDescriptorDacl");
+    assert_ne!(administrator, 0, "fixture owner must remain Administrators");
+    assert_ne!(present, 0, "fixture must have a present DACL");
+    assert!(dacl.is_null(), "fixture must have a NULL DACL");
+}
+
 #[test]
 fn null_dacl_on_a_real_file_fails() {
     let p = platform();
@@ -378,16 +619,23 @@ fn null_dacl_on_a_real_file_fails() {
     let config = tree.join("agent.json");
     // SDDL `D:NO_ACCESS_CONTROL` is a NULL DACL; the owner stays
     // Administrators so only the DACL rule can fail.
-    let path = config.to_str().unwrap();
-    powershell(&format!(
-        "$a = Get-Acl -LiteralPath '{path}'; \
-         $a.SetSecurityDescriptorSddlForm('O:BAD:NO_ACCESS_CONTROL'); \
-         Set-Acl -LiteralPath '{path}' -AclObject $a"
-    ));
-    let sddl = powershell(&format!("(Get-Acl -LiteralPath '{path}').Sddl"));
-    assert!(sddl.contains("D:NO_ACCESS_CONTROL"), "precondition: {sddl}");
+    set_null_dacl(&config);
     let got = reason(p.open_config(&config, Mode::Service), Object::ConfigFile);
     assert_eq!(got, Reason::InsecureAcl { sid: None });
+}
+
+fn set_null_dacl(path: &Path) {
+    powershell(&format!(
+        "$file = [System.IO.FileInfo]::new({}); \
+         $acl = [System.IO.FileSystemAclExtensions]::GetAccessControl($file); \
+         $acl.SetSecurityDescriptorSddlForm('D:NO_ACCESS_CONTROL', \
+             [System.Security.AccessControl.AccessControlSections]::Access); \
+         [System.IO.FileSystemAclExtensions]::SetAccessControl($file, $acl)",
+        literal(path)
+    ));
+    // SDDL serialization can omit the D: section for a NULL DACL. Check the
+    // native presence bit and null ACL, with the trusted owner unchanged.
+    assert_null_dacl(path);
 }
 
 #[test]
@@ -450,18 +698,8 @@ fn program_data_like_parent_is_never_checked() {
     fs::create_dir(&outer).unwrap();
     // Only SYSTEM, Administrators and the Users create grant, owned by
     // Administrators, so the Users entry is the one thing the rule refuses.
-    icacls(
-        &outer,
-        &[
-            "/inheritance:r",
-            "/grant",
-            "*S-1-5-18:(OI)(CI)F",
-            "/grant",
-            "*S-1-5-32-544:(OI)(CI)F",
-            "/grant",
-            "*S-1-5-32-545:(CI)(WD,AD,WEA,WA)",
-        ],
-    );
+    prepare_root(&outer);
+    icacls(&outer, &["/grant", "*S-1-5-32-545:(CI)(WD,AD,WEA,WA)"]);
     icacls(&outer, &["/setowner", "*S-1-5-32-544"]);
     let tree = Tree::new_in(&outer);
     // The default service sequence: agent.json, then each directory.

@@ -8,7 +8,8 @@ use std::ffi::CStr;
 use std::fs::File;
 use std::io;
 use std::mem::MaybeUninit;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd};
+use std::ptr::NonNull;
 
 pub(crate) use crate::RUSAGE_INFO_V4_BYTES;
 const _: () = assert!(std::mem::size_of::<libc::rusage_info_v4>() == RUSAGE_INFO_V4_BYTES);
@@ -47,6 +48,68 @@ pub(crate) fn openat(dir: &File, name: &CStr, flags: libc::c_int, mode: u16) -> 
     // SAFETY: `fd` was just returned by `openat`, is valid, and no other
     // owner exists, so `OwnedFd` may take sole ownership and close it once.
     Ok(File::from(unsafe { OwnedFd::from_raw_fd(fd) }))
+}
+
+/// Owns the directory stream and the descriptor transferred to fdopendir.
+struct DirectoryStream(NonNull<libc::DIR>);
+
+impl Drop for DirectoryStream {
+    #[expect(
+        unsafe_code,
+        reason = "closedir: the stream is owned by this guard, remains live until drop, and is closed exactly once"
+    )]
+    fn drop(&mut self) {
+        // SAFETY: fdopendir returned this live stream; only this guard owns it.
+        unsafe { libc::closedir(self.0.as_ptr()) };
+    }
+}
+
+#[expect(
+    unsafe_code,
+    reason = "fdopendir and readdir: an independently opened descriptor is transferred once to an owned stream; each dirent is read before the next call; __error returns this thread's live errno cell"
+)]
+pub(crate) fn directory_is_empty(dir: &File) -> io::Result<bool> {
+    // openat(".") gives an independent directory offset. A dup would share
+    // the caller's offset and could report a nonempty directory empty later.
+    let file = openat(
+        dir,
+        c".",
+        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK,
+        0,
+    )?;
+    // SAFETY: file owns a live directory fd. On failure file retains ownership.
+    let stream = unsafe { libc::fdopendir(file.as_raw_fd()) };
+    let Some(stream) = NonNull::new(stream) else {
+        return Err(io::Error::last_os_error());
+    };
+    // fdopendir succeeded and owns this fd; only closedir may now close it.
+    let _ = file.into_raw_fd();
+    let stream = DirectoryStream(stream);
+    loop {
+        // SAFETY: __error returns a valid errno pointer for this thread.
+        // Clearing errno distinguishes the end of a stream from an error.
+        unsafe { *libc::__error() = 0 };
+        // SAFETY: the guard keeps the stream live; no other reader uses it.
+        let entry = unsafe { libc::readdir(stream.0.as_ptr()) };
+        if entry.is_null() {
+            let error = io::Error::last_os_error();
+            return if error.raw_os_error() == Some(0) {
+                Ok(true)
+            } else {
+                Err(error)
+            };
+        }
+        // SAFETY: readdir returned a live dirent, borrowed until its next call.
+        let entry = unsafe { &*entry };
+        let length = usize::from(entry.d_namlen);
+        if length >= entry.d_name.len() {
+            return Err(io::Error::from(io::ErrorKind::InvalidData));
+        }
+        let name = &entry.d_name[..length];
+        if name != [b'.' as libc::c_char] && name != [b'.' as libc::c_char; 2] {
+            return Ok(false);
+        }
+    }
 }
 
 #[expect(
@@ -135,14 +198,14 @@ pub(crate) fn task_info(pid: i32) -> io::Result<libc::proc_taskinfo> {
     unsafe_code,
     reason = "proc_pidinfo(PROC_PIDLISTFDS): the buffer is a fixed stack array whose byte length is passed; only the returned byte count is used"
 )]
-pub(crate) fn listed_fd_bytes(pid: i32) -> io::Result<usize> {
+pub(crate) fn listed_fd_bytes(pid: i32) -> Result<usize, ricevanta_os::SampleError> {
     let mut entries = [libc::proc_fdinfo {
         proc_fd: 0,
         proc_fdtype: 0,
     }; FD_ENTRIES];
     let bytes = std::mem::size_of_val(&entries);
     let bytes_c =
-        libc::c_int::try_from(bytes).map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+        libc::c_int::try_from(bytes).map_err(|_| ricevanta_os::SampleError::Unsupported)?;
     // SAFETY: the pointer and length describe `entries` exactly; the kernel
     // writes at most `bytes` bytes.
     let written = unsafe {
@@ -155,20 +218,14 @@ pub(crate) fn listed_fd_bytes(pid: i32) -> io::Result<usize> {
         )
     };
     if written < 0 {
-        return Err(io::Error::last_os_error());
+        return Err(crate::sampler::os_error(io::Error::last_os_error()));
     }
-    let written =
-        usize::try_from(written).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+    let written = usize::try_from(written).map_err(|_| ricevanta_os::SampleError::Unsupported)?;
     if written == 0 {
         // proc_pidinfo reports failure as 0 with errno set.
-        return Err(io::Error::last_os_error());
+        return Err(crate::sampler::os_error(io::Error::last_os_error()));
     }
-    if written >= bytes {
-        // The fixed buffer is full: the count could be cut, so report no
-        // count rather than a wrong one.
-        return Err(io::Error::from(io::ErrorKind::OutOfMemory));
-    }
-    Ok(written)
+    crate::fd_list::validate_fd_bytes(written, bytes, std::mem::size_of::<libc::proc_fdinfo>())
 }
 
 #[expect(

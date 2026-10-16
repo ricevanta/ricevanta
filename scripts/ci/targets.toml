@@ -189,6 +189,15 @@ mode = "go-suite"
 cwd = "server"
 packages = ["./..."]
 fuzz_inventory = true
+requires = ["server-keyfile-root"]
+
+[[selected]]
+id = "server-keyfile-root"
+mode = "go-selected"
+cwd = "server"
+packages = ["./internal/platform/config"]
+tests = ["TestReadKeyFileGroupRules"]
+test_flags = ["-exec", "sudo -n --"]
 
 [[selected]]
 id = "server-race"
@@ -215,7 +224,59 @@ cwd = "server"
 packages = ["./internal/events/body"]
 tests = ["TestDecodeCostModel"]
 test_flags = ["-timeout=15m"]
-cases = 34
+cases = 50
+case_keys = [
+  "arrayobjs-64x1MiB-single/1",
+  "arrayobjs-64x1MiB-single/4",
+  "badid-10000-single/1",
+  "badid-10000-single/8",
+  "blocks-4m-at",
+  "blocks-4m-over",
+  "blocks-64m-at",
+  "blocks-64m-over",
+  "blocks-min-at",
+  "blocks-min-ceiling",
+  "blocks-min-over",
+  "concurrent-blocks64",
+  "concurrent-small-window64",
+  "dense-4x1MiB-win4/1",
+  "dense-4x1MiB-win4/16",
+  "dense-64x1MiB-single/1",
+  "densenested-64x1MiB-single/1",
+  "flat-10000x6710-single/1",
+  "flat-16x1MiB-single/1",
+  "flat-16x1MiB-win4/1",
+  "flat-1x1MiB-single/1",
+  "flat-1x1MiB-win4/1",
+  "flat-4x1MiB-single/1",
+  "flat-4x1MiB-win4/1",
+  "flat-64x1MiB-single/1",
+  "flat-64x1MiB-single/4",
+  "flat-64x1MiB-win4/1",
+  "late-checksum64",
+  "malformed-entropy",
+  "minok-10000-single/1",
+  "nested-64x1MiB-single/1",
+  "numbers-64x1MiB-single/1",
+  "prefix-64x1MiB-single/1",
+  "preflight-ceiling",
+  "preflight-rate-deficit",
+  "random3-64x1MiB-single/1",
+  "random3-64x1MiB-single/4",
+  "realistic-10000-win4/1",
+  "realistic-2000-win4/1",
+  "realistic-5000-win4/1",
+  "realistic-5000-win4/8",
+  "round-10000x5377-single/1",
+  "round-2047x32769-single/1",
+  "round-2047x32769-single/4",
+  "singlechar-64x1MiB-single/1",
+  "singlechar-64x1MiB-single/4",
+  "size-lie-small",
+  "small-window64",
+  "small-window64-checksum",
+  "strings-64x1MiB-single/1",
+]
 benchmark = "BenchmarkDecodeCost"
 benchmark_flags = ["-benchmem", "-benchtime=3x", "-timeout=15m"]
 operations = 3
@@ -260,6 +321,35 @@ id = "agent-unit"
 mode = "rust-suite"
 cwd = "agent"
 cargo = ["--locked", "--workspace"]
+required = [{ platform = "linux", target = "growth", test = "sampling_does_not_grow_private_memory" }]
+
+
+[[selected]]
+id = "json-extended"
+mode = "rust-selected"
+cwd = "agent"
+cargo = ["--locked", "-p", "ricevanta-json", "--test", "fuzz_json"]
+test = "fuzz_json_extended"
+seed = "0x52564a534f4e5631"
+cases = 20000
+
+[[selected]]
+id = "agent-protection-root-linux"
+mode = "rust-root"
+cwd = "agent"
+platform = "linux"
+cargo = ["--locked", "-p", "ricevanta-os-linux", "--test", "protection"]
+target = "protection"
+tests = ["root_foreign_owner_of_config_and_parent_fails", "root_directory_parent_owner_and_group_rules", "root_service_mode_refuses_unprivileged_directory_owner", "root_foreign_health_file_is_refused_untouched"]
+
+[[selected]]
+id = "agent-protection-root-macos"
+mode = "rust-root"
+cwd = "agent"
+platform = "darwin"
+cargo = ["--locked", "-p", "ricevanta-os-macos", "--test", "protection"]
+target = "protection"
+tests = ["root_foreign_owner_of_config_and_parent_fails", "root_directory_parent_owner_and_group_rules", "root_service_mode_refuses_unprivileged_directory_owner", "root_foreign_health_file_is_refused_untouched"]
 
 [[selected]]
 id = "spool-extended"
@@ -316,6 +406,13 @@ children = [
 # Exact ordinary-suite skips: helper entry points that run only as children of a
 # named parent test and tests that a separate selected unit proves. No wildcard
 # allowance exists; check_policy.py pins every row.
+[[skips]]
+package = "github.com/ricevanta/ricevanta/server/internal/platform/config"
+test = "TestReadKeyFileGroupRules"
+reason = "foreign file group requires root; selected root binary proves the live check"
+proof = "server-keyfile-root"
+modes = ["server-unit", "server-race", "go-fuzz"]
+
 [[skips]]
 package = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"
 test = "TestParserBudgetExtended"
@@ -387,3 +484,128 @@ reason = "extended 20,000-case native property budget"
 target = "fuzz_seal"
 proof = "batch-extended"
 modes = ["agent-unit"]
+
+[[skips]]
+package = "ricevanta-json"
+test = "fuzz_json_extended"
+reason = "extended 20,000-case native JSON property budget"
+target = "fuzz_json"
+proof = "json-extended"
+modes = ["agent-unit"]
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "root_foreign_owner_of_config_and_parent_fails"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-linux"
+modes = ["agent-unit"]
+platform = "linux"
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "root_directory_parent_owner_and_group_rules"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-linux"
+modes = ["agent-unit"]
+platform = "linux"
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "root_service_mode_refuses_unprivileged_directory_owner"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-linux"
+modes = ["agent-unit"]
+platform = "linux"
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "root_foreign_health_file_is_refused_untouched"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-linux"
+modes = ["agent-unit"]
+platform = "linux"
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "umask_child_narrow"
+reason = "isolated umask child of created_modes_do_not_depend_on_umask"
+target = "protection"
+parent = "created_modes_do_not_depend_on_umask"
+modes = ["agent-unit"]
+platform = "linux"
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "umask_child_open"
+reason = "isolated umask child of created_modes_do_not_depend_on_umask"
+target = "protection"
+parent = "created_modes_do_not_depend_on_umask"
+modes = ["agent-unit"]
+platform = "linux"
+
+[[skips]]
+package = "ricevanta-os-macos"
+test = "root_foreign_owner_of_config_and_parent_fails"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-macos"
+modes = ["agent-unit"]
+platform = "darwin"
+
+[[skips]]
+package = "ricevanta-os-macos"
+test = "root_directory_parent_owner_and_group_rules"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-macos"
+modes = ["agent-unit"]
+platform = "darwin"
+
+[[skips]]
+package = "ricevanta-os-macos"
+test = "root_service_mode_refuses_unprivileged_directory_owner"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-macos"
+modes = ["agent-unit"]
+platform = "darwin"
+
+[[skips]]
+package = "ricevanta-os-macos"
+test = "root_foreign_health_file_is_refused_untouched"
+reason = "privileged native ownership and protection assertions"
+target = "protection"
+proof = "agent-protection-root-macos"
+modes = ["agent-unit"]
+platform = "darwin"
+
+[[skips]]
+package = "ricevanta-os-macos"
+test = "umask_child_narrow"
+reason = "isolated umask child of created_modes_do_not_depend_on_umask"
+target = "protection"
+parent = "created_modes_do_not_depend_on_umask"
+modes = ["agent-unit"]
+platform = "darwin"
+
+[[skips]]
+package = "ricevanta-os-macos"
+test = "umask_child_open"
+reason = "isolated umask child of created_modes_do_not_depend_on_umask"
+target = "protection"
+parent = "created_modes_do_not_depend_on_umask"
+modes = ["agent-unit"]
+platform = "darwin"
+
+[[skips]]
+package = "ricevanta-os-linux"
+test = "from_env_child"
+reason = "isolated notification environment child"
+target = "notify"
+parent = "environment_is_read_by_from_env"
+modes = ["agent-unit"]
+platform = "linux"

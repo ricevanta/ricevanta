@@ -8,7 +8,7 @@
   "required": ["principal", "reauth", "csrf"],
   "properties": {
     "principal": {"enum": ["public", "protocol", "subject", "permission"]},
-    "protocol": {"enum": ["oidc_callback", "saml_acs", "local_login", "enrollment_code", "setup_token"]},
+    "protocol": {"enum": ["oidc_callback", "saml_acs", "local_login", "enrollment_code", "enrollment_challenge", "setup_token"]},
     "credentials": {
       "type": "array",
       "minItems": 1,

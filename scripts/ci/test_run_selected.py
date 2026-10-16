@@ -235,7 +235,7 @@ class InventoryTests(unittest.TestCase):
                          'cargo test --locked -p ricevanta-spool --test fuzz_recover fuzz_recover_extended -- --ignored --exact --list')
         self.assertEqual((TARGETS['spool-extended']['seed'], TARGETS['spool-extended']['cases']), ('0x525653505f763031', 100000))
         self.assertEqual((TARGETS['batch-extended']['seed'], TARGETS['batch-extended']['cases']), ('0x5249564241544348', 20000))
-        self.assertEqual(join(run_selected.run_command(TARGETS['agent-unit'])), 'cargo test --locked --workspace')
+        self.assertEqual(join(run_selected.run_command(TARGETS['agent-unit'])), 'cargo test --locked --workspace -- --nocapture')
         self.assertEqual(join(run_selected.run_command(TARGETS['interop-race'])),
                          'go test -json -race -tags rustinterop -count=1 ./internal/events/body -run ^TestRustWriter')
         self.assertEqual(join(run_selected.discovery_command(TARGETS['interop-race'])),
@@ -255,7 +255,8 @@ class InventoryTests(unittest.TestCase):
             skips = TARGETS[target_id]['skips']
             self.assertEqual({t for _, t in skips}, {'TestParserBudgetExtended', 'TestLoaderBudgetExtended', 'TestLoaderMeasurementChild',
                                                     'TestDecodeVerifiedYAMLInstrumented', 'TestAgreementOutcomeChild',
-                                                    'TestParserBudgetHarness', 'TestParserMeasurementChild', 'TestDecodeCostModel'})
+                                                    'TestParserBudgetHarness', 'TestParserMeasurementChild', 'TestDecodeCostModel',
+                                                    'TestReadKeyFileGroupRules'})
             parents = {}
             for (package, test), row in skips.items():
                 self.assertTrue(row['reason'], row)
@@ -268,7 +269,13 @@ class InventoryTests(unittest.TestCase):
                 self.assertNotIn(TARGETS[row['proof']]['mode'], row['modes'], row)
             self.assertEqual(parents, {'TestDecodeVerifiedYAMLInstrumented': 'TestDecodeVerifiedYAMLCallCounts',
                                        'TestAgreementOutcomeChild': 'TestAgreementRejectsOutcomeMismatch'})
-        self.assertEqual({t for _, t in TARGETS['agent-unit']['skips']}, {'fuzz_recover_extended', 'fuzz_seal_extended'})
+        expected = {'fuzz_recover_extended', 'fuzz_seal_extended', 'fuzz_json_extended'}
+        if sys.platform in ('linux', 'darwin'):
+            expected.update({'root_foreign_owner_of_config_and_parent_fails', 'root_directory_parent_owner_and_group_rules',
+                             'root_service_mode_refuses_unprivileged_directory_owner', 'root_foreign_health_file_is_refused_untouched',
+                             'umask_child_narrow', 'umask_child_open'})
+        if sys.platform == 'linux': expected.add('from_env_child')
+        self.assertEqual({t for _, t in TARGETS['agent-unit']['skips']}, expected)
         for target_id in ('loader-extended', 'loader-repeat', 'loader-gate-b-extended', 'ocsf-native', 'spool-extended', 'interop-unit', 'key-admission-bench'):
             self.assertEqual(TARGETS[target_id]['skips'], {}, target_id)
         self.assertIn(('github.com/ricevanta/ricevanta/server/internal/extensions/loader', 'TestParserBudgetExtended'), TARGETS['loader-fuzz']['skips'])
@@ -455,6 +462,24 @@ class GoSuiteTests(unittest.TestCase):
 
 
 class GoSelectedTests(unittest.TestCase):
+    def test_keyfile_root_proof_rejects_skips_and_missing_execution(self):
+        package = 'github.com/ricevanta/ricevanta/server/internal/platform/config'
+        name = 'TestReadKeyFileGroupRules'
+        target = TARGETS['server-keyfile-root']
+        listing = name + '\nok  \t' + package + '\t0.002s\n'
+        passing = event('run', package, name) + event('pass', package, name) + event('pass', package)
+        self.assertEqual(run_selected.verify(target, listing, passing, b'', 0, None),
+                         {'package': package, 'tests': [name]})
+        for data in (event('run', package, name) + event('skip', package, name) + event('pass', package),
+                     event('pass', package), passing.replace(name.encode(), b'TestRenamed')):
+            with self.subTest(data=data), self.assertRaises(EvidenceError):
+                run_selected.verify(target, listing, data, b'', 0, None)
+        for target_id in ('server-unit', 'server-race', 'go-fuzz:./internal/platform/config:FuzzLoad'):
+            allowance = run_selected.check_skip(TARGETS[target_id], {}, package, name)
+            self.assertEqual(allowance['proof'], 'server-keyfile-root')
+            with self.assertRaises(EvidenceError):
+                run_selected.check_skip(TARGETS[target_id], {}, package, name + 'Other')
+
     def setUp(self):
         self.target = {'id': 'beta', 'mode': 'go-selected', 'cwd': '.', 'packages': ['.'], 'tests': ['TestBeta'], 'skips': {}}
         self.listing = 'TestBeta\nok  \texample.com/tiny\t0.002s\n'
@@ -563,22 +588,24 @@ class GoFuzzTests(unittest.TestCase):
 class GoCostModelTests(unittest.TestCase):
     def setUp(self):
         self.package = 'github.com/ricevanta/ricevanta/server/internal/events/body'
-        self.target = {'mode': 'go-cost-model', 'tests': ['TestDecodeCostModel'], 'cases': 34}
+        self.target = dict(TARGETS['ingest-cost-model'])
+        self.target['cases'] = 50
+        self.target['case_keys'] = ['case%d' % n for n in range(50)]
         self.listing = 'TestDecodeCostModel\nok  \t' + self.package + '\t0.002s\n'
         self.events = event('run', self.package, 'TestDecodeCostModel')
-        for n in range(34):
-            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_MEASUREMENT case=case{n}\n')
-        self.events += event('output', self.package, 'TestDecodeCostModel', 'COST_MODEL_CASES n=34\n')
+        for n in range(50):
+            self.events += event('output', self.package, 'TestDecodeCostModel', f'COST_MEASUREMENT case=case{n} mode=limited shape=a n=1 window=1 size=1 weight=1 baseline=1 limit=2 lines=1 allocs=1 cpu_ms=1 wall_ms=1 peak=1 peak_ratio=0.5 vmhwm=1 gc_cycles=1 limiter_cycle=0 preflight_cpu_ns=1 decode_cpu_ns=1 cpu_ns=2 blocks=1 codecs=1 paid=131072 repeats=1\n')
+        self.events += event('output', self.package, 'TestDecodeCostModel', 'COST_MODEL_CASES n=50\n')
         self.events += event('pass', self.package, 'TestDecodeCostModel') + event('pass', self.package)
 
     def test_complete_measurements_and_negative_controls(self):
         summary = run_selected.verify(self.target, self.listing, self.events, b'', 0, None)
-        self.assertEqual(summary['measurements'], 34)
+        self.assertEqual(summary['measurements'], 50)
         for name, data, status in (
             ('missing measurement', drop_lines(self.events, 'case=case0'), 0),
             ('extra measurement', duplicate_line(self.events, 'case=case0'), 0),
             ('missing total', drop_lines(self.events, 'COST_MODEL_CASES'), 0),
-            ('wrong total', self.events.replace(b'n=34', b'n=33'), 0),
+            ('wrong total', self.events.replace(b'n=50', b'n=49'), 0),
             ('duplicate total', duplicate_line(self.events, 'COST_MODEL_CASES'), 0),
             ('wrong attribution', self.events.replace(b'"Test": "TestDecodeCostModel", "Output"', b'"Test": "TestOther", "Output"'), 0),
             ('skipped proof', self.events.replace(b'"Action": "pass", "Package": "' + self.package.encode() + b'", "Test"', b'"Action": "skip", "Package": "' + self.package.encode() + b'", "Test"'), 0),
@@ -586,6 +613,46 @@ class GoCostModelTests(unittest.TestCase):
         ):
             with self.subTest(name=name), self.assertRaises(EvidenceError):
                 run_selected.verify(self.target, self.listing, data, b'', status, None)
+
+    def catalogue_events(self):
+        data = self.events
+        # Replace longer keys first to keep case1 from rewriting case10.
+        for n, key in reversed(list(enumerate(TARGETS['ingest-cost-model']['case_keys']))):
+            data = data.replace(('case=case%d ' % n).encode(), ('case=' + key + ' ').encode())
+        return data
+
+    def test_closed_keys_fields_and_attribution(self):
+        mutations = {
+            'duplicate replacing missing': self.events.replace(b'case=case49 ', b'case=case48 '),
+            'unknown key': self.events.replace(b'case=case49 ', b'case=unknown '),
+            'empty field': self.events.replace(b'case=case49 ', b'case= '),
+            'empty field name': self.events.replace(b'case=case49 ', b'case=case49 =oops '),
+            'duplicate field': self.events.replace(b'case=case49 ', b'case=case49 mode=limited '),
+            'unknown field': self.events.replace(b'case=case49 ', b'case=case49 extra=1 '),
+            'bare field': self.events.replace(b'case=case49 ', b'case49 '),
+            'missing field': self.events.replace(b'mode=limited ', b''),
+            'wrong mode': self.events.replace(b'mode=limited ', b'mode=reference '),
+            'reference only': self.events.replace(b'COST_MEASUREMENT ', b'COST_REFERENCE '),
+            'wrong package': self.events.replace(self.package.encode(), b'example/wrong'),
+            'nonfinite': self.events.replace(b'peak_ratio=0.5', b'peak_ratio=nan'),
+            'malformed number': self.events.replace(b'cpu_ns=2', b'cpu_ns=x'),
+            'benchmark in tests': self.events + event('run', self.package, 'BenchmarkDecodeCost'),
+            'unselected': self.events + event('run', self.package, 'TestOther') + event('pass', self.package, 'TestOther'),
+            'failed test': self.events.replace(b'"Action": "pass", "Package": "' + self.package.encode() + b'", "Test"', b'"Action": "fail", "Package": "' + self.package.encode() + b'", "Test"'),
+        }
+        # An output marker without selected-test attribution cannot supply proof.
+        for attribution in (None, 'TestOther', 'TestDecodeCostModel/unstarted'):
+            events = run_selected.parse_go_events(self.events)
+            for row in events:
+                if row['Action'] == 'output':
+                    if attribution is None: row.pop('Test', None)
+                    else: row['Test'] = attribution
+            mutations['attribution ' + str(attribution)] = b''.join((json.dumps(row)+'\n').encode() for row in events)
+        for label, data in mutations.items():
+            with self.subTest(label=label), self.assertRaises(EvidenceError):
+                run_selected.verify(self.target, self.listing, data, b'', 0, None)
+        with self.assertRaises(EvidenceError):
+            run_selected.verify(self.target, self.listing, event('run',self.package,'TestDecodeCostModel')+event('pass',self.package,'TestDecodeCostModel')+event('pass',self.package), self.events, 0, None)
 
     def test_catalogue_sets_full_model_and_pinned_budgets(self):
         target = TARGETS['ingest-cost-model']
@@ -614,9 +681,9 @@ class GoCostModelTests(unittest.TestCase):
                     if '-list' in command:
                         data = ((bench if is_bench else 'TestDecodeCostModel') + '\nok  \t' + self.package + '\t0.002s\n').encode()
                     else:
-                        data = output if is_bench else self.events
+                        data = output if is_bench else self.catalogue_events()
                     stdout.write_bytes(data)
-                    stderr.write_bytes(b'benchmark diagnostic\n' if is_bench and '-list' not in command else b'')
+                    stderr.write_bytes((b'benchmark diagnostic\n' if is_bench else b'test diagnostic\n') if '-list' not in command else b'')
                     return benchmark_exit if is_bench and '-list' not in command else 0
                 evidence = Path(temp) / 'evidence'
                 with patch.object(run_selected, 'execute', side_effect=execute):
@@ -628,11 +695,102 @@ class GoCostModelTests(unittest.TestCase):
                         self.assertEqual(record['summary']['benchmark']['operations'], 3)
                 self.assertEqual(len(calls), 4)
                 log = (Path(temp) / 'ingest-measurements/cost-model.log').read_text()
-                self.assertEqual(log.count('COST_MEASUREMENT '), 34)
+                self.assertEqual(log.count('COST_MEASUREMENT '), 50)
                 self.assertIn(bench + '-2 3 10 ns/op', log)
                 self.assertIn('benchmark diagnostic', log)
+                self.assertIn('test diagnostic', log)
                 verified = evidence / run_selected.evidence_name('ingest-cost-model') / 'verified.json'
                 self.assertEqual(verified.exists(), benchmark_exit == 0)
+
+    def test_phase_failures_erase_stale_success_and_keep_diagnostics(self):
+        for failed in ('test-discovery','test-payload','test-validation','benchmark-discovery','benchmark-payload','benchmark-validation'):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as temp:
+                evidence=Path(temp)/'evidence'
+                directory=evidence/run_selected.evidence_name('ingest-cost-model');directory.mkdir(parents=True)
+                (directory/'verified.json').write_text('{"result":"success"}')
+                calls=[]
+                def execute(command,cwd,env,stdout,stderr):
+                    bench=any('BenchmarkDecodeCost' in arg for arg in command)
+                    phase=('benchmark' if bench else 'test')+('-discovery' if '-list' in command else '-payload')
+                    calls.append(phase)
+                    name='BenchmarkDecodeCost' if bench else 'TestDecodeCostModel'
+                    if '-list' in command: data=(name+'\nok  \t'+self.package+'\t0.002s\n').encode()
+                    elif bench:
+                        data=event('run',self.package,name)+event('output',self.package,name,name+'-2 3 10 ns/op 4 B/op 1 allocs/op\n')+event('pass',self.package)
+                    else:data=self.catalogue_events()
+                    if failed==('benchmark-validation' if bench else 'test-validation') and '-list' not in command:
+                        data=b'malformed payload stdout\n'
+                    stdout.write_bytes(data);stderr.write_text(phase+' stderr diagnostic\n')
+                    return 1 if failed==phase else 0
+                with patch.object(run_selected,'execute',side_effect=execute), self.assertRaises(EvidenceError):
+                    run_selected.run('ingest-cost-model',evidence,env={'RUNNER_TEMP':temp})
+                self.assertFalse((directory/'verified.json').exists())
+                status_files=list(directory.glob('*.status.json'))
+                self.assertEqual(len(status_files),len(calls))
+                for status_file in status_files:
+                    status=json.loads(status_file.read_text())
+                    self.assertIsInstance(status['exit'],int)
+                    self.assertEqual(status['command'][0:2],['go','test'])
+                log=(Path(temp)/'ingest-measurements/cost-model.log').read_text()
+                self.assertTrue(log)
+                for phase in calls:self.assertIn(phase+' stderr diagnostic',log)
+                if failed.endswith('-validation'):self.assertIn('malformed payload stdout',log)
+                if failed.startswith('test-'):self.assertFalse(any(c.startswith('benchmark') for c in calls))
+
+    def test_benchmark_phase_negative_controls(self):
+        target=run_selected.cost_model_benchmark(TARGETS['ingest-cost-model'])
+        name='BenchmarkDecodeCost/a'
+        root=event('run',self.package,'BenchmarkDecodeCost')
+        leaf=event('run',self.package,name)
+        result=event('output',self.package,name,name+'-2 3 10 ns/op 4 B/op 1 allocs/op\n')
+        package=event('pass',self.package)
+        data=root+leaf+result+package
+        listing='BenchmarkDecodeCost\nok  \t'+self.package+'\t0.002s\n'
+        run_selected.verify_go_bench(target,listing,run_selected.parse_go_events(data),0)
+        throughput=data.replace(b'10 ns/op',b'10 ns/op 123.45 MB/s')
+        run_selected.verify_go_bench(target,listing,run_selected.parse_go_events(throughput),0)
+        for label,changed in {
+            'missing root':leaf+result+package,
+            'no leaves':package,
+            'missing result':root+leaf+package,
+            'duplicate result':root+leaf+result+result+package,
+            'wrong attribution':data.replace(('"Test": "'+name+'", "Output"').encode(),b'"Test": "BenchmarkDecodeCost", "Output"'),
+            'wrong package result':root+leaf+result.replace(self.package.encode(),b'wrong/package')+package,
+            'wrong root':data.replace(b'BenchmarkDecodeCost',b'BenchmarkOther'),
+            'test in benchmark':data+event('run',self.package,'TestOther')+event('pass',self.package,'TestOther'),
+            'failed package':root+leaf+result+event('fail',self.package),
+            'skipped package':root+leaf+result+event('skip',self.package),
+            'skipped leaf':root+leaf+result+event('skip',self.package,name)+package,
+            'one iteration':data.replace(b'3 10 ns/op',b'1 10 ns/op'),
+            'zero time':data.replace(b'10 ns/op',b'0 ns/op'),
+            'negative time':data.replace(b'10 ns/op',b'-1 ns/op'),
+            'infinite time':data.replace(b'10 ns/op',b'Inf ns/op'),
+            'NaN time':data.replace(b'10 ns/op',b'NaN ns/op'),
+            'huge time':data.replace(b'10 ns/op',b'999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999 ns/op'),
+        }.items():
+            with self.subTest(label=label),self.assertRaises(EvidenceError):
+                run_selected.verify_go_bench(target,listing,run_selected.parse_go_events(changed),0)
+        for wrong in ('BenchmarkOther\nok  \t'+self.package+'\t0.002s\n', 'BenchmarkDecodeCost\nok  \twrong/package\t0.002s\n'):
+            with self.assertRaises(EvidenceError):run_selected.verify_go_bench(target,wrong,run_selected.parse_go_events(data),0)
+
+    def test_exact_skip_does_not_excuse_missing_or_subtests(self):
+        package=self.package
+        target=TARGETS['server-unit']
+        self.assertEqual(run_selected.check_skip(target,{},package,'TestDecodeCostModel')['proof'],'ingest-cost-model')
+        for pkg,name in ((package,'TestDecodeCostModel/child'),('other/body','TestDecodeCostModel'),(package,'TestOther')):
+            with self.subTest(package=pkg,name=name),self.assertRaises(EvidenceError):run_selected.check_skip(target,{},pkg,name)
+        with self.assertRaises(EvidenceError):run_selected.check_skip(TARGETS['ingest-cost-model'],{},package,'TestDecodeCostModel')
+        suite={**target,'packages':['./internal/events/body'],'fuzz_inventory':[]}
+        packages=json.dumps({'ImportPath':package,'Dir':'/tmp/cost-fixture','TestGoFiles':['cost_test.go']})
+        declarations='test\tTestDecodeCostModel\t/tmp/cost-fixture/cost_test.go\n'
+        skipped=event('run',package,'TestDecodeCostModel')+event('skip',package,'TestDecodeCostModel')+event('pass',package)
+        summary=run_selected.verify_go_suite(suite,self.listing,run_selected.parse_go_events(skipped),0,packages,declarations)
+        self.assertEqual(summary['skipped'][0]['proof'],'ingest-cost-model')
+        with self.assertRaises(EvidenceError):
+            run_selected.verify_go_suite(suite,self.listing,run_selected.parse_go_events(event('pass',package)),0,packages,declarations)
+        # Missing selected proof, even with an allowance installed, is no skip.
+        empty=event('pass',package)
+        with self.assertRaises(EvidenceError):run_selected.verify(self.target,self.listing,empty,b'',0,None)
 
 
 class GoBenchTests(unittest.TestCase):
@@ -727,6 +885,34 @@ class RustTests(unittest.TestCase):
         for name, change in controls.items():
             with self.subTest(control=name), self.assertRaises(EvidenceError):
                 self.verify(**change)
+
+    def test_json_property_accepted_count_is_bound_to_its_exact_target(self):
+        target = dict(TARGETS['json-extended'])
+        listing = self.listing.replace('props_extended', target['test'])
+        stdout = self.stdout.replace(b'props_extended', target['test'].encode())
+        record = b'seed=0x52564a534f4e5631 cases=20000 accepted=100 elapsed=100ms\n'
+        def verify(record=record, selected=target):
+            return run_selected.verify(selected, listing, stdout, record, 0, None)
+        summary = verify()
+        self.assertEqual(summary, {'test': 'fuzz_json_extended', 'seed': '0x52564a534f4e5631',
+                                   'cases': 20000, 'accepted': 100, 'elapsed': '100ms'})
+        for changed in [b'', record * 2, record + record.replace(b'accepted=100 ', b''), record.replace(b'accepted=100 ', b''),
+                        record.replace(b'accepted=100', b'accepted=0'),
+                        record.replace(b'accepted=100', b'accepted=20001'),
+                        record.replace(b'accepted=100', b'accepted=-1'),
+                        record.replace(b'accepted=100', b'accepted=1.5'),
+                        record.replace(b'cases=20000', b'cases=19999'),
+                        record.replace(b'52564a534f4e5631', b'52564a534f4e5632'),
+                        record.replace(b'elapsed=', b'extra=1 elapsed=')]:
+            with self.subTest(record=changed), self.assertRaises(EvidenceError):
+                verify(changed)
+        for selected in [{**target, 'id': 'other'}, {**target, 'test': 'other'},
+                         {**target, 'cargo': ['--locked', '-p', 'other', '--test', 'fuzz_json']}]:
+            with self.subTest(target=selected), self.assertRaises(EvidenceError):
+                verify(selected=selected)
+        # An accepted field cannot broaden the established generic format.
+        with self.assertRaises(EvidenceError):
+            self.verify(stderr=self.stderr.replace(b' elapsed=', b' accepted=100 elapsed='))
 
     def test_suite_positive_and_controls(self):
         allowance = {'test': 'props_extended', 'target': 'props', 'reason': 'extended', 'proof': 'props'}
@@ -1186,6 +1372,67 @@ class RealToolTests(unittest.TestCase):
 
 
 class VerifiedRecordTests(unittest.TestCase):
+    def test_native_delegation_and_requires_share_identity_root_and_cycle_guard(self):
+        binding = {'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
+        ignored = {'test': 'root_child', 'target': 'protection', 'reason': 'root', 'proof': 'native-root'}
+        targets = {
+            'native-suite': {'mode': 'rust-suite', 'skips': {('p', 'root_child'): ignored}, 'requires': ['server-unit']},
+            'native-root': {'mode': 'rust-root', 'tests': ['root_child']},
+            'server-unit': {'mode': 'go-suite', 'requires': ['server-root']},
+            'server-root': {'mode': 'go-selected'},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence, checkout = Path(tmp) / 'evidence', Path(tmp) / 'checkout'
+            def write(target_id, summary=None, **changes):
+                directory = evidence / run_selected.evidence_name(target_id)
+                directory.mkdir(parents=True, exist_ok=True)
+                record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'result': 'success', 'exit': 0,
+                          'summary': summary or {}, **binding, **changes}
+                (directory / 'verified.json').write_text(json.dumps(record))
+            def catalogue(root):
+                self.assertEqual(root, checkout)
+                return targets
+            write('native-suite', {'ignored': [ignored], 'children': [], 'required': []})
+            write('native-root', {'tests': ['root_child'], 'passed': 1})
+            write('server-unit')
+            write('server-root')
+            with patch.object(run_selected, 'inventory', side_effect=catalogue):
+                self.assertEqual(run_selected.verified(evidence, 'native-suite', binding, checkout)['id'], 'native-suite')
+                for proof in ('native-root', 'server-root'):
+                    path = evidence / run_selected.evidence_name(proof) / 'verified.json'
+                    original = path.read_text()
+                    for key, value in (('GITHUB_RUN_ID', '6'), ('GITHUB_RUN_ATTEMPT', '2'), ('GITHUB_SHA', 'b' * 40)):
+                        path.write_text(json.dumps({**json.loads(original), key: value}))
+                        with self.subTest(proof=proof, key=key), self.assertRaises(ValueError):
+                            run_selected.verified(evidence, 'native-suite', binding, checkout)
+                    path.unlink()
+                    with self.subTest(missing=proof), self.assertRaises(ValueError):
+                        run_selected.verified(evidence, 'native-suite', binding, checkout)
+                    path.write_text(original)
+                targets['native-root']['requires'] = ['native-suite']
+                with self.assertRaisesRegex(ValueError, 'cyclic selected-run proof'):
+                    run_selected.verified(evidence, 'native-suite', binding, checkout)
+
+    def test_server_unit_receipt_requires_same_run_root_proof(self):
+        binding = {'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence = Path(tmp)
+            def write(target_id, **changes):
+                directory = evidence / run_selected.evidence_name(target_id)
+                directory.mkdir(exist_ok=True)
+                record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'result': 'success', 'exit': 0,
+                          **binding, **changes}
+                (directory / 'verified.json').write_text(json.dumps(record))
+            write('server-unit')
+            with self.assertRaises(ValueError): run_selected.verified(evidence, 'server-unit', binding)
+            write('server-keyfile-root')
+            self.assertEqual(run_selected.verified(evidence, 'server-unit', binding)['id'], 'server-unit')
+            for key, value in (('GITHUB_RUN_ID', '6'), ('GITHUB_RUN_ATTEMPT', '2'), ('GITHUB_SHA', 'b' * 40),
+                               ('result', 'failure'), ('exit', 1)):
+                write('server-keyfile-root', **{key: value})
+                with self.subTest(key=key), self.assertRaises(ValueError):
+                    run_selected.verified(evidence, 'server-unit', binding)
+
     def test_verified_record_controls(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1196,6 +1443,9 @@ class VerifiedRecordTests(unittest.TestCase):
             path = directory / 'verified.json'
             path.write_text(json.dumps(record))
             binding = {'GITHUB_RUN_ID': '5', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
+            proof = root / run_selected.evidence_name('server-keyfile-root')
+            proof.mkdir()
+            (proof / 'verified.json').write_text(json.dumps({**record, 'id': 'server-keyfile-root'}))
             self.assertEqual(run_selected.verified(root, 'server-unit')['id'], 'server-unit')
             self.assertEqual(run_selected.verified(root, 'server-unit', binding)['id'], 'server-unit')
             with self.assertRaises(ValueError): run_selected.verified(root, 'server-race')

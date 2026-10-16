@@ -9,7 +9,7 @@
 //!   `unsafe trait`, `unsafe extern` or edition-2024 `#[unsafe(...)]`
 //!   attribute.
 //! - Every unsafe block is preceded by a `// SAFETY:` comment and sits in a
-//!   function whose own attribute block carries
+//!   non-exported function whose own attribute block carries
 //!   `#[expect(unsafe_code, reason = "...")]`.
 //! - No `allow(unsafe_code)` anywhere, so a stray `allow` cannot replace
 //!   the `expect` that fails when unused.
@@ -191,8 +191,8 @@ fn tok_at(tokens: &[(usize, Tok)], index: usize) -> Option<&Tok> {
 }
 
 /// For every `fn` with a body: the index of its body's `{` and the
-/// identifiers of its own contiguous attribute block.
-fn functions(tokens: &[(usize, Tok)]) -> Vec<(usize, String)> {
+/// identifiers of its own contiguous attribute block and whether it is exported.
+fn functions(tokens: &[(usize, Tok)]) -> Vec<(usize, String, bool)> {
     const QUALIFIERS: [&str; 9] = [
         "pub", "crate", "super", "self", "in", "const", "async", "unsafe", "extern",
     ];
@@ -203,10 +203,25 @@ fn functions(tokens: &[(usize, Tok)]) -> Vec<(usize, String)> {
         }
         // Walk back over qualifiers, then over `#[...]` attributes.
         let mut k = index;
+        let mut exported = false;
         while k > 0 {
             match &tokens[k - 1].1 {
-                Tok::Ident(w) if QUALIFIERS.contains(&w.as_str()) => k -= 1,
-                Tok::Punct('(' | ')') | Tok::Literal => k -= 1,
+                Tok::Ident(w) if QUALIFIERS.contains(&w.as_str()) => {
+                    exported |= w == "pub";
+                    k -= 1;
+                }
+                Tok::Punct(')') => {
+                    let Some(open) = (0..k - 1).rev().find(|&i| tokens[i].1 == Tok::Punct('('))
+                    else {
+                        break;
+                    };
+                    if open == 0 || !ident(&tokens[open - 1].1, "pub") {
+                        break;
+                    }
+                    // Restricted visibility stays within the crate boundary.
+                    k = open - 1;
+                }
+                Tok::Literal => k -= 1,
                 _ => break,
             }
         }
@@ -247,7 +262,7 @@ fn functions(tokens: &[(usize, Tok)]) -> Vec<(usize, String)> {
                 Tok::Punct('(' | '[') => depth += 1,
                 Tok::Punct(')' | ']') => depth -= 1,
                 Tok::Punct('{') if depth == 0 => {
-                    found.push((j, attributes));
+                    found.push((j, attributes, exported));
                     break;
                 }
                 Tok::Punct(';') if depth == 0 => break,
@@ -265,7 +280,7 @@ fn violations(name: &str, crate_name: &str, text: &str) -> Vec<String> {
     let tokens = &lexed.tokens;
     let bodies = functions(tokens);
     let mut found = Vec::new();
-    let mut scopes: Vec<(i32, String)> = Vec::new();
+    let mut scopes: Vec<(i32, String, bool)> = Vec::new();
     let mut depth = 0i32;
     let mut last_unsafe_line = 0;
     for (index, (line, tok)) in tokens.iter().enumerate() {
@@ -274,12 +289,14 @@ fn violations(name: &str, crate_name: &str, text: &str) -> Vec<String> {
         match tok {
             Tok::Punct('{') => {
                 depth += 1;
-                if let Some((_, attrs)) = bodies.iter().find(|(open, _)| *open == index) {
-                    scopes.push((depth, attrs.clone()));
+                if let Some((_, attrs, exported)) =
+                    bodies.iter().find(|(open, _, _)| *open == index)
+                {
+                    scopes.push((depth, attrs.clone(), *exported));
                 }
             }
             Tok::Punct('}') => {
-                if scopes.last().is_some_and(|(d, _)| *d == depth) {
+                if scopes.last().is_some_and(|(d, _, _)| *d == depth) {
                     scopes.pop();
                 }
                 depth -= 1;
@@ -343,7 +360,10 @@ fn violations(name: &str, crate_name: &str, text: &str) -> Vec<String> {
                 if !safety {
                     found.push(format!("{at}: unsafe block without a // SAFETY: comment"));
                 }
-                let expected = scopes.last().is_some_and(|(_, attrs)| {
+                if scopes.last().is_some_and(|(_, _, exported)| *exported) {
+                    found.push(format!("{at}: unsafe block in public function"));
+                }
+                let expected = scopes.last().is_some_and(|(_, attrs, _)| {
                     attrs.split('|').any(|group| {
                         group.trim_start().starts_with("expect unsafe_code")
                             && group.contains(" reason ")
@@ -509,6 +529,36 @@ fn review_bypasses_are_closed() {
         "#[unsafe(export_name = \"x\")]\nfn f() {}\n",
         "outside the native"
     ));
+}
+
+#[test]
+fn native_unsafe_implementation_is_confined_to_private_helpers() {
+    let body = "#[expect(unsafe_code, reason = \"x\")]\nVIS fn f() {\n    // SAFETY: fine.\n    unsafe { g() };\n}\n";
+    for public in ["pub", "pub async", "pub const", "pub extern \"system\""] {
+        let function = body.replace("VIS", public);
+        assert!(
+            fires("os-windows", &function, "public function"),
+            "{function}"
+        );
+        let method = format!("impl EventLog {{ {function} }}");
+        assert!(fires("os-windows", &method, "public function"), "{method}");
+    }
+    for private in ["", "pub(crate)", "pub(super)", "pub(in crate::native)"] {
+        assert_eq!(
+            violations("f.rs", "os-windows", &body.replace("VIS", private)),
+            Vec::<String>::new(),
+            "{private}"
+        );
+    }
+    let wrapper = "impl EventLog { pub fn open() { open_native(); } }\n";
+    assert_eq!(
+        violations(
+            "f.rs",
+            "os-windows",
+            &(wrapper.to_owned() + &body.replace("VIS", ""))
+        ),
+        Vec::<String>::new()
+    );
 }
 
 #[test]

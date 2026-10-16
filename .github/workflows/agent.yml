@@ -157,6 +157,26 @@ jobs:
         unset ZSTD_SYS_USE_PKG_CONFIG
         test -z "${ZSTD_SYS_USE_PKG_CONFIG+x}"
         python -B scripts/ci/run_selected.py --id batch-extended --evidence "$RUNNER_TEMP/evidence"
+    - name: Extended JSON property test
+      shell: bash
+      working-directory: .
+      env:
+        CARGO_NET_OFFLINE: 'true'
+      run: python -B scripts/ci/run_selected.py --id json-extended --evidence "$RUNNER_TEMP/evidence"
+    - name: Root Linux protection tests
+      if: runner.os == 'Linux'
+      shell: bash
+      working-directory: .
+      env:
+        CARGO_NET_OFFLINE: 'true'
+      run: python -B scripts/ci/run_selected.py --id agent-protection-root-linux --evidence "$RUNNER_TEMP/evidence"
+    - name: Root macOS protection tests
+      if: runner.os == 'macOS'
+      shell: bash
+      working-directory: .
+      env:
+        CARGO_NET_OFFLINE: 'true'
+      run: python -B scripts/ci/run_selected.py --id agent-protection-root-macos --evidence "$RUNNER_TEMP/evidence"
     - name: Write successful leaf receipt
       id: proof
       shell: bash --noprofile --norc -p -e -o pipefail {0}
@@ -165,7 +185,7 @@ jobs:
         ROUTE_JSON: ${{ inputs.route }}
         UNIT: agent
         CHECKS: '["agent-host", "agent-pins", "agent-fixtures", "agent-format", "agent-clippy", "agent-unit", "spool-extended",
-          "batch-extended"]'
+          "batch-extended", "json-extended"]'
         HOST_OS: ${{ matrix.os }}
       run: |
         python - <<'PY'
@@ -176,7 +196,8 @@ jobs:
         unit = os.environ['UNIT']
         if os.environ['HOST_OS']:
             unit += ':' + inventory.HOSTS[os.environ['HOST_OS']]
-        item = required.receipt(route, unit, json.loads(os.environ['CHECKS']), pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
+        checks = json.loads(os.environ['CHECKS']) + inventory.agent_native_checks(inventory.HOSTS[os.environ['HOST_OS']])
+        item = required.receipt(route, unit, checks, pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')
         out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'ci-proof'
         out.mkdir()
         (out / 'receipt.json').write_text(json.dumps(item) + '\n')

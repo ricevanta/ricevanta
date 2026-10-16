@@ -8,6 +8,8 @@ verified.json record that the leaf receipt step requires for its check ID.
 import argparse
 from collections import Counter
 import json
+import math
+import shutil
 import os
 from pathlib import Path
 import re
@@ -26,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GO_LIST_NAME = re.compile(r'^(Test|Benchmark|Fuzz|Example)\w*$')
 GO_LIST_OK = re.compile(r'^ok\s+(\S+)\s+\S+$')
 GO_LIST_NONE = re.compile(r'^\?\s+(\S+)\s+\[no test files\]$')
-GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op\s+(\d+) B/op\s+(\d+) allocs/op\s*$')
+GO_BENCH = re.compile(r'^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+([0-9.]+) ns/op(?:\s+[0-9.]+ MB/s)?\s+(\d+) B/op\s+(\d+) allocs/op\s*$')
 GO_BASELINE = re.compile(r'^fuzz: elapsed: \S+, gathering baseline coverage: (\d+)/(\d+) completed(, now fuzzing with (\d+) workers)?$')
 GO_EXECS = re.compile(r'^fuzz: elapsed: (\S+), execs: (\d+) \(\d+/sec\), new interesting: \d+ \(total: \d+\)$')
 GO_PACKAGE_FIELDS = '-json=ImportPath,Dir,TestGoFiles,XTestGoFiles'
@@ -59,6 +61,7 @@ RUST_LIST_TOTAL = re.compile(r'^(\d+) tests?, (\d+) benchmarks?$')
 RUST_TEST = re.compile(r'^test (.+?) \.\.\. (ok|FAILED|ignored(?:, .*)?)$')
 RUST_RESULT = re.compile(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in \S+$')
 RUST_RECORD = re.compile(r'^seed=(0x[0-9a-f]{16}) cases=(\d+) elapsed=(\S+)$')
+RUST_JSON_RECORD = re.compile(r'^seed=(0x[0-9a-f]{16}) cases=(\d+) accepted=(\d+) elapsed=(\S+)$')
 PLAYWRIGHT_PROJECTS = ('chromium', 'firefox', 'webkit')
 
 
@@ -111,11 +114,14 @@ def inventory(root=ROOT):
             proof = targets.get(row['proof'])
             if proof is None or row['proof'] in row['modes'] or proof['mode'] in row['modes']:
                 raise ValueError('skip allowance must name a separate proving unit: ' + row['test'])
-        elif not SKIP_NAME.match(row['parent']) or not row['parent'].startswith('Test') or row['parent'] == row['test']:
+        elif (not SKIP_NAME.match(row['parent']) or row['parent'] == row['test']
+              or (not row['parent'].startswith('Test') and 'target' not in row)):
             raise ValueError('skip allowance parent must be another exact test: ' + row['test'])
     for target in targets.values():
         if target['mode'] not in MODES: raise ValueError('unknown mode: ' + target['id'])
-        target['skips'] = {(s['package'], s['test']): s for s in skips if target['mode'] in s['modes'] or target['id'] in s['modes']}
+        target['skips'] = {(s['package'], s['test']): s for s in skips
+                           if (target['mode'] in s['modes'] or target['id'] in s['modes'])
+                           and s.get('platform', sys.platform) == sys.platform}
     return targets
 
 
@@ -148,6 +154,8 @@ def discovery_command(target):
         return ['cargo', 'test', *target['cargo'], '--', '--list']
     if mode == 'rust-selected':
         return ['cargo', 'test', *target['cargo'], target['test'], '--', '--ignored', '--exact', '--list']
+    if mode == 'rust-root':
+        return ['sudo', '{executable}', 'root_', '--ignored', '--list']
     return None
 
 
@@ -168,10 +176,33 @@ def run_command(target):
                 '-fuzztime=' + target['fuzztime'], '-parallel=' + str(target['parallel']),
                 *(['-fuzzminimizetime=' + target['fuzzminimizetime']] if 'fuzzminimizetime' in target else [])]
     if mode == 'rust-suite':
-        return ['cargo', 'test', *target['cargo']]
+        return ['cargo', 'test', *target['cargo'], '--', '--nocapture']
     if mode == 'rust-selected':
         return ['cargo', 'test', *target['cargo'], target['test'], '--', '--ignored', '--exact', '--nocapture', '--test-threads=1']
+    if mode == 'rust-root':
+        return ['sudo', '{executable}', 'root_', '--ignored']
     return list(target['command'])
+
+
+def build_command(target):
+    """Build privileged tests as the runner user, never through sudo."""
+    if target['mode'] == 'rust-root':
+        return ['cargo', 'test', *target['cargo'], '--no-run', '--message-format=json']
+    return None
+
+
+def rust_test_executable(target, text):
+    """Use Cargo's artifact message, never a guessed or globbed binary path."""
+    matches = []
+    for line in text.splitlines():
+        try: item = json.loads(line)
+        except ValueError as error: raise EvidenceError('invalid Cargo artifact JSON') from error
+        if (item.get('reason') == 'compiler-artifact' and item.get('target', {}).get('kind') == ['test']
+                and item['target'].get('name') == target['target'] and item.get('profile', {}).get('test') is True):
+            path = item.get('executable')
+            if isinstance(path, str) and os.path.isabs(path): matches.append(path)
+    if len(matches) != 1: raise EvidenceError('expected one executable artifact for ' + target['target'])
+    return matches[0]
 
 
 def parse_go_list(text, no_tests=None):
@@ -492,30 +523,70 @@ def verify_go_bench(target, discovery, events, exit_code):
     # Results belong to leaf benchmarks; each leaf reports once with the exact iteration count.
     leaves = {n for n in names if not any(other.startswith(n + '/') for other in names)}
     rows = {}
-    for _, test, line in go_lines(events):
+    for pkg, test, line in go_lines(events):
         match = GO_BENCH.match(line)
         if not match: continue
         if match[1] in rows: raise EvidenceError('duplicate benchmark result: ' + match[1])
-        if test != match[1]: raise EvidenceError('benchmark result %s attributed to %s' % (match[1], test))
+        if pkg != package or test != match[1]: raise EvidenceError('benchmark result %s attributed to %s' % (match[1], test))
         rows[match[1]] = match
     if set(rows) != leaves: raise EvidenceError('benchmark results %s differ from the started leaves %s' % (sorted(rows), sorted(leaves)))
     summary = {'package': package, 'results': {}}
     for name, match in rows.items():
         ops, ns = int(match[2]), float(match[3])
-        if ops != target['operations'] or ns <= 0: raise EvidenceError('%s ran %d operations in %s ns/op' % (name, ops, ns))
+        if ops != target['operations'] or not math.isfinite(ns) or ns <= 0: raise EvidenceError('%s ran %d operations in %s ns/op' % (name, ops, ns))
         summary['results'][name] = {'operations': ops, 'ns_per_op': ns, 'bytes_per_op': int(match[4]), 'allocs_per_op': int(match[5])}
     summary['operations'] = target['operations']
     return summary
 
 
+COST_PACKAGE = 'github.com/ricevanta/ricevanta/server/internal/events/body'
+COST_FIELDS = frozenset(('case mode shape n window size weight baseline limit lines allocs cpu_ms wall_ms peak peak_ratio vmhwm gc_cycles limiter_cycle preflight_cpu_ns decode_cpu_ns cpu_ns blocks codecs paid repeats').split())
+
+
+def cost_fields(text):
+    fields = {}
+    for token in text.split():
+        key, equal, value = token.partition('=')
+        if not equal or not key or not value or key in fields:
+            raise EvidenceError('malformed or duplicate cost-model field')
+        fields[key] = value
+    if fields.keys() != COST_FIELDS: raise EvidenceError('unexpected cost-model fields')
+    if fields['mode'] != 'limited': raise EvidenceError('cost-model measurement is not limited')
+    for key, value in fields.items():
+        if key in ('case', 'mode', 'shape'): continue
+        if key == 'peak_ratio':
+            try: number = float(value)
+            except ValueError: raise EvidenceError('malformed cost-model number')
+            if not math.isfinite(number) or number < 0: raise EvidenceError('invalid cost-model ratio')
+        elif not re.fullmatch(r'[0-9]+', value): raise EvidenceError('malformed cost-model integer')
+    return fields
+
+
 def verify_go_cost_model(target, discovery, events, exit_code):
     summary = verify_go_selected(target, discovery, events, exit_code)
-    lines = go_outputs(events, 'TestDecodeCostModel', subtests=True)
-    measurements = sum('COST_MEASUREMENT ' in line for line in lines)
-    totals = [line.strip().split('COST_MODEL_CASES ', 1)[1] for line in lines if 'COST_MODEL_CASES ' in line]
-    if measurements != target['cases'] or totals != ['n=' + str(target['cases'])]:
-        raise EvidenceError('incomplete ingest cost-model measurements or case total')
-    return {**summary, 'measurements': measurements}
+    if summary['package'] != COST_PACKAGE: raise EvidenceError('wrong cost-model package')
+    results, _, _ = go_results(events)
+    if any(pkg != COST_PACKAGE or not (name == 'TestDecodeCostModel' or name.startswith('TestDecodeCostModel/')) for pkg,name in results):
+        raise EvidenceError('unselected cost-model test')
+    keys, totals = [], []
+    expected = target['case_keys']
+    if len(expected) != 50 or len(set(expected)) != 50 or target['cases'] != 50:
+        raise EvidenceError('invalid cost-model case catalogue')
+    for package, test, line in go_lines(events):
+        measurement = 'COST_MEASUREMENT ' in line
+        total = 'COST_MODEL_CASES ' in line
+        if not (measurement or total): continue
+        if (package != COST_PACKAGE or test is None or
+            not (test == 'TestDecodeCostModel' or test.startswith('TestDecodeCostModel/')) or
+            results.get((package, test)) != 'pass'):
+            raise EvidenceError('cost-model marker outside a passing selected test')
+        if measurement:
+            fields = cost_fields(line.split('COST_MEASUREMENT ', 1)[1])
+            keys.append(fields['case'])
+        if total: totals.append(line.split('COST_MODEL_CASES ', 1)[1].strip())
+    if len(keys) != 50 or set(keys) != set(expected) or totals != ['n=50']:
+        raise EvidenceError('incomplete, duplicate or substituted cost-model measurements')
+    return {**summary, 'measurements': len(keys), 'case_keys': sorted(keys)}
 
 
 def cost_model_benchmark(target):
@@ -526,9 +597,13 @@ def retain_go_log(data, stderr, path, append=False):
     """Retain readable combined test/benchmark output outside receipt directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a' if append else 'w', encoding='utf-8') as log:
-        for _, _, line in go_lines(parse_go_events(data)):
-            log.write(line + '\n')
-        log.write(stderr.decode('utf-8', 'replace'))
+        try:
+            for _, _, line in go_lines(parse_go_events(data)): log.write(line + '\n')
+        except EvidenceError:
+            log.write(data.decode('utf-8', 'replace'))
+        finally:
+            log.write(stderr.decode('utf-8', 'replace'))
+
 
 
 def verify_go_fuzz(target, discovery, events, exit_code):
@@ -636,19 +711,56 @@ def verify_rust_suite(target, discovery, stdout, stderr, exit_code):
     allowed = {s['test']: s for s in target['skips'].values()}
     ok = sum(o == 'ok' for values in outcomes.values() for o in values)
     skipped = []
+    expected_children = []
+    passed_tests = {(binary, name) for binary, section in zip(binaries, sections)
+                    for name, outcome in section if outcome == 'ok'}
     for binary, section in zip(binaries, sections):
         for name, outcome in section:
             if not outcome.startswith('ignored'): continue
             allowance = allowed.get(name)
             # An allowance names one test in one harness; the name must be unique in the suite.
-            if allowance is None or 'proof' not in allowance or allowance.get('target') != binary or listed[name] != 1:
+            if allowance is None or allowance.get('target') != binary or listed[name] != 1:
                 raise EvidenceError('unexpected ignored Rust test %s in %s' % (name, binary))
+            if 'parent' in allowance:
+                parent = allowance['parent']
+                if (binary, parent) not in passed_tests or listed[parent] != 1:
+                    raise EvidenceError('Rust helper parent did not pass in the same harness: ' + parent)
+                expected_children.append({'target': binary, 'parent': parent, 'test': name, 'result': 'success'})
+            elif 'proof' not in allowance:
+                raise EvidenceError('Rust ignore has no proving run: ' + name)
             skipped.append(name)
     if len(skipped) != len(set(skipped)): raise EvidenceError('a Rust test was ignored more than once')
     if any(o == 'FAILED' for values in outcomes.values() for o in values): raise EvidenceError('failed Rust test')
     if passed != ok or ignored != len(skipped): raise EvidenceError('harness summary disagrees with listed outcomes')
-    ignored = [{'test': name, 'target': allowed[name]['target'], 'reason': allowed[name]['reason'], 'proof': allowed[name]['proof']} for name in sorted(skipped)]
-    return {'tests': sum(listed.values()), 'passed': passed, 'ignored': ignored, 'binaries': len(summaries)}
+    children = []
+    for line in stderr.splitlines():
+        if line.startswith('RUST_CHILD '):
+            try: children.append(json.loads(line.removeprefix('RUST_CHILD ')))
+            except ValueError as error: raise EvidenceError('invalid Rust child record') from error
+    canonical = lambda rows: sorted(json.dumps(row, sort_keys=True) for row in rows)
+    if canonical(children) != canonical(expected_children):
+        raise EvidenceError('Rust child records differ from the required helper executions')
+    required = [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                if row.get('platform', sys.platform) == sys.platform]
+    if any((row['target'], row['test']) not in passed_tests for row in required):
+        raise EvidenceError('required Rust test did not pass in its named harness')
+    ignored = [{k: allowed[name][k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in allowed[name]}
+               for name in sorted(skipped)]
+    return {'tests': sum(listed.values()), 'passed': passed, 'ignored': ignored, 'binaries': len(summaries),
+            'children': children, 'required': required}
+
+
+def verify_rust_root(target, discovery, stdout, exit_code):
+    if exit_code != 0: raise EvidenceError('privileged test binary exited %d' % exit_code)
+    expected = Counter(target['tests'])
+    if parse_rust_list(discovery) != expected: raise EvidenceError('root discovery must name all four exact tests')
+    executed, outcomes, summaries = parse_rust_run(stdout)
+    if executed != expected or any(outcomes[name] != ['ok'] for name in expected):
+        raise EvidenceError('every selected root test must pass exactly once')
+    if (len(summaries) != 1 or summaries[0][1] != 'ok'
+            or tuple(map(int, summaries[0].groups()[1:5])) != (len(expected), 0, 0, 0)):
+        raise EvidenceError('root harness must report only the required passed tests')
+    return {'target': target['target'], 'tests': sorted(expected), 'passed': len(expected)}
 
 
 def verify_rust_selected(target, discovery, stdout, stderr, exit_code):
@@ -660,12 +772,24 @@ def verify_rust_selected(target, discovery, stdout, stderr, exit_code):
         raise EvidenceError('selected property test did not report ok exactly once')
     if len(summaries) != 1 or summaries[0][1] != 'ok' or (int(summaries[0][2]), int(summaries[0][3]), int(summaries[0][4])) != (1, 0, 0):
         raise EvidenceError('harness summary must report one passed, zero failed, zero ignored')
-    records = [RUST_RECORD.match(line.rstrip('\r')) for line in stderr.splitlines()]
+    json_record = target['id'] == 'json-extended'
+    if json_record and (target['test'] != 'fuzz_json_extended' or target['cargo'] !=
+                        ['--locked', '-p', 'ricevanta-json', '--test', 'fuzz_json']):
+        raise EvidenceError('JSON accepted-count evidence belongs only to the exact JSON target')
+    parser = RUST_JSON_RECORD if json_record else RUST_RECORD
+    records = [parser.match(line.rstrip('\r')) for line in stderr.splitlines()]
     records = [m for m in records if m]
     if len(records) != 1: raise EvidenceError('expected exactly one seed/count/duration record')
     seed, cases = records[0][1], int(records[0][2])
     if seed != target['seed'] or cases != target['cases']: raise EvidenceError('seed %s cases %d differ from the required %s/%d' % (seed, cases, target['seed'], target['cases']))
-    return {'test': target['test'], 'seed': seed, 'cases': cases, 'elapsed': records[0][3]}
+    summary = {'test': target['test'], 'seed': seed, 'cases': cases, 'elapsed': records[0][4 if json_record else 3]}
+    if json_record:
+        accepted = int(records[0][3])
+        if not 0 < accepted <= cases: raise EvidenceError('JSON accepted count must be positive and no greater than cases')
+        if any(RUST_RECORD.match(line.rstrip('\r')) for line in stderr.splitlines()):
+            raise EvidenceError('JSON target cannot also emit a generic property record')
+        summary['accepted'] = accepted
+    return summary
 
 
 def verify_vitest_report(report, expected_tests):
@@ -717,7 +841,7 @@ def verify_console(target, evidence_dir, exit_code):
     return verify_playwright_report(report, target['specs'])
 
 
-MODES = {'go-suite', 'go-selected', 'go-interop', 'go-cost-model', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'console-vitest', 'console-playwright'}
+MODES = {'go-suite', 'go-selected', 'go-interop', 'go-cost-model', 'go-bench', 'go-fuzz', 'rust-suite', 'rust-selected', 'rust-root', 'console-vitest', 'console-playwright'}
 
 
 def evidence_name(target_id):
@@ -760,6 +884,7 @@ def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=
     if mode == 'go-fuzz': return verify_go_fuzz(target, discovery, parse_go_events(stdout), exit_code)
     if mode == 'rust-suite': return verify_rust_suite(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
     if mode == 'rust-selected': return verify_rust_selected(target, discovery, stdout.decode('utf-8', 'replace'), stderr.decode('utf-8', 'replace'), exit_code)
+    if mode == 'rust-root': return verify_rust_root(target, discovery, stdout.decode('utf-8', 'replace'), exit_code)
     return verify_console(target, evidence_dir, exit_code)
 
 
@@ -876,6 +1001,8 @@ def preconditions(target, env, root=ROOT):
     refused = rust_env.c_toolchain_names(env)
     if refused: raise EvidenceError('C toolchain variables in the environment could replace the compiler, archiver or flags: ' + ', '.join(refused))
     cargo_guard(target, env, root)
+    if target['mode'] == 'rust-root' and target['platform'] != sys.platform:
+        raise EvidenceError('privileged test selected for a foreign host')
     if target['mode'] == 'go-interop':
         path = env.get('RICEVANTA_BATCH_VECTOR', '')
         if not os.path.isabs(path) or not os.path.isfile(path): raise EvidenceError('RICEVANTA_BATCH_VECTOR must name an existing absolute writer path')
@@ -886,13 +1013,36 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     targets = inventory(root)
     if target_id not in targets: raise EvidenceError('unknown selected target: ' + target_id)
     target = targets[target_id]
+    evidence_dir = Path(evidence_root) / evidence_name(target_id)
+    cost_log = None
+    if target['mode'] == 'go-cost-model':
+        if evidence_dir.is_symlink(): raise EvidenceError('symlink cost-model evidence directory')
+        if evidence_dir.exists(): shutil.rmtree(evidence_dir)
+        cost_log = Path(env['RUNNER_TEMP']) / 'ingest-measurements/cost-model.log'
+        cost_log.parent.mkdir(parents=True, exist_ok=True)
+        cost_log.write_text('Starting ingest cost-model proof\n', encoding='utf-8')
     preconditions(target, env, root)
     admitted_tool_guard(env)
     env = child_environment(target, env)
-    evidence_dir = Path(evidence_root) / evidence_name(target_id)
     if evidence_dir.exists(): raise EvidenceError('evidence directory already exists: ' + str(evidence_dir))
     evidence_dir.mkdir(parents=True)
     cwd = root / target['cwd']
+    build, executable = build_command(target), None
+    if build:
+        print('build:', shlex.join(build), flush=True)
+        code = execute(build, cwd, env, evidence_dir / 'build.txt', evidence_dir / 'build.stderr.txt')
+        if code != 0: raise EvidenceError('test binary build exited %d' % code)
+        executable = rust_test_executable(target, (evidence_dir / 'build.txt').read_text(encoding='utf-8'))
+        target_dir = env.get('CARGO_TARGET_DIR', '')
+        if (not os.path.isabs(target_dir) or not os.path.isfile(executable) or os.path.islink(executable)
+                or os.path.commonpath([os.path.realpath(target_dir), os.path.realpath(executable)]) != os.path.realpath(target_dir)):
+            raise EvidenceError('test executable must be a file in the admitted Cargo target directory')
+
+    def cost_execute(command, stdout_name, stderr_name):
+        code = execute(command,cwd,env,evidence_dir/stdout_name,evidence_dir/stderr_name)
+        if cost_log is not None:
+            (evidence_dir/(stdout_name+'.status.json')).write_text(json.dumps({'command':command,'exit':code})+'\n',encoding='utf-8')
+        return code
     packages_command, packages_text = package_command(target), None
     if packages_command:
         print('packages:', shlex.join(packages_command), flush=True)
@@ -911,29 +1061,39 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     discovery = discovery_command(target)
     discovery_text = ''
     if discovery:
+        discovery = [executable if part == '{executable}' else part for part in discovery]
         print('discovery:', shlex.join(discovery), flush=True)
-        code = execute(discovery, cwd, env, evidence_dir / 'discovery.txt', evidence_dir / 'discovery.stderr.txt')
+        code = cost_execute(discovery, 'discovery.txt', 'discovery.stderr.txt')
         discovery_text = (evidence_dir / 'discovery.txt').read_bytes().decode('utf-8', 'replace')
+        if cost_log is not None:
+            with cost_log.open('a') as log:
+                log.write(discovery_text)
+                log.write((evidence_dir / 'discovery.stderr.txt').read_text(encoding='utf-8', errors='replace'))
         if code != 0: raise EvidenceError('discovery exited %d' % code)
-    command = [part.replace('{report}', str(evidence_dir / 'report.json')) for part in run_command(target)]
+    command = [executable if part == '{executable}' else part.replace('{report}', str(evidence_dir / 'report.json'))
+               for part in run_command(target)]
     cargo_guard(target, env, root)
     print('command:', shlex.join(command), flush=True)
-    exit_code = execute(command, cwd, env, evidence_dir / 'output.txt', evidence_dir / 'stderr.txt')
-    cost_log = None
-    if target['mode'] == 'go-cost-model':
-        cost_log = Path(env['RUNNER_TEMP']) / 'ingest-measurements/cost-model.log'
-        retain_go_log((evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(), cost_log)
+    exit_code = cost_execute(command, 'output.txt', 'stderr.txt')
+    if cost_log is not None:
+        retain_go_log((evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(), cost_log, append=True)
     summary = verify(target, discovery_text, (evidence_dir / 'output.txt').read_bytes(), (evidence_dir / 'stderr.txt').read_bytes(),
                      exit_code, evidence_dir, packages_text, declarations_text)
     benchmark_commands = None
     if cost_log is not None:
         bench = cost_model_benchmark(target)
         bench_discovery = discovery_command(bench)
-        code = execute(bench_discovery, cwd, env, evidence_dir / 'benchmark-discovery.txt', evidence_dir / 'benchmark-discovery.stderr.txt')
+        code = cost_execute(bench_discovery, 'benchmark-discovery.txt', 'benchmark-discovery.stderr.txt')
+        bench_text = (evidence_dir / 'benchmark-discovery.txt').read_text(encoding='utf-8', errors='replace')
+        with cost_log.open('a') as log:
+            log.write(bench_text)
+            log.write((evidence_dir / 'benchmark-discovery.stderr.txt').read_text(encoding='utf-8', errors='replace'))
         if code != 0: raise EvidenceError('benchmark discovery exited %d' % code)
+        if parse_go_list(bench_text) != {COST_PACKAGE: [target['benchmark']]}:
+            raise EvidenceError('wrong cost-model benchmark discovery')
         bench_command = run_command(bench)
         print('command:', shlex.join(bench_command), flush=True)
-        code = execute(bench_command, cwd, env, evidence_dir / 'benchmark-output.txt', evidence_dir / 'benchmark-stderr.txt')
+        code = cost_execute(bench_command, 'benchmark-output.txt', 'benchmark-stderr.txt')
         stdout = (evidence_dir / 'benchmark-output.txt').read_bytes()
         retain_go_log(stdout, (evidence_dir / 'benchmark-stderr.txt').read_bytes(), cost_log, append=True)
         summary['benchmark'] = verify_go_bench(bench, (evidence_dir / 'benchmark-discovery.txt').read_text(encoding='utf-8'), parse_go_events(stdout), code)
@@ -942,6 +1102,7 @@ def run(target_id, evidence_root, root=ROOT, env=None):
     record = {'kind': 'selected-run', 'version': 1, 'id': target_id, 'mode': target['mode'], 'cwd': target['cwd'],
               'packages': packages_command, 'discovery': discovery, 'command': command, 'exit': exit_code, 'result': 'success',
               'summary': summary}
+    if build: record.update(build=build, executable=executable)
     if benchmark_commands is not None: record['benchmark'] = benchmark_commands
     for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA'):
         if env.get(key): record[key] = env[key]
@@ -953,12 +1114,13 @@ def run(target_id, evidence_root, root=ROOT, env=None):
 RUN_BINDING = ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA')
 
 
-def verified(evidence_root, target_id, binding=None):
+def verified(evidence_root, target_id, binding=None, root=ROOT, ancestors=()):
     """Read the verified record one leaf receipt requires for a check ID.
 
     binding maps GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT or GITHUB_SHA to the value of
     the invocation that must have produced the record; each named key must match.
     """
+    if target_id in ancestors: raise ValueError('cyclic selected-run proof: ' + target_id)
     path = Path(evidence_root) / evidence_name(target_id) / 'verified.json'
     if not path.is_file() or path.is_symlink(): raise ValueError('missing verified selected run: ' + target_id)
     record = json.loads(path.read_text(encoding='utf-8'))
@@ -967,7 +1129,64 @@ def verified(evidence_root, target_id, binding=None):
     for key, value in (binding or {}).items():
         if key not in RUN_BINDING: raise ValueError('unknown run binding: ' + key)
         if not value or record.get(key) != value: raise ValueError('verified record of %s comes from another invocation (%s)' % (target_id, key))
+    target = inventory(root).get(target_id)
+    proof_binding = {key: record.get(key) for key in RUN_BINDING}
+    if target and target['mode'] == 'rust-root':
+        summary = record.get('summary', {})
+        if summary.get('tests') != sorted(target['tests']) or summary.get('passed') != len(target['tests']):
+            raise ValueError('root evidence must name every required test: ' + target_id)
+    if target and target['mode'] == 'rust-suite':
+        summary = record.get('summary', {})
+        expected_ignored = [{k: row[k] for k in ('test', 'target', 'reason', 'proof', 'parent') if k in row}
+                            for row in target['skips'].values()]
+        canonical = lambda rows: sorted(json.dumps(row, sort_keys=True) for row in rows)
+        if canonical(summary.get('ignored', [])) != canonical(expected_ignored):
+            raise ValueError('missing or unexpected Rust delegated test evidence')
+        for ignored in summary.get('ignored', []):
+            if 'proof' in ignored:
+                verified(evidence_root, ignored['proof'], proof_binding, root, (*ancestors, target_id))
+            elif {'target': ignored['target'], 'parent': ignored.get('parent'), 'test': ignored['test'], 'result': 'success'} not in summary.get('children', []):
+                raise ValueError('missing Rust child execution evidence: ' + ignored['test'])
+        expected = [{'target': row['target'], 'test': row['test']} for row in target.get('required', [])
+                    if row.get('platform', sys.platform) == sys.platform]
+        if summary.get('required') != expected: raise ValueError('missing required Rust test evidence')
+    # A leaf may include a separate selected root run without adding a routing
+    # leaf. Its receipt still requires that run, bound to this exact invocation.
+    for proof in (target or {}).get('requires', []):
+        verified(evidence_root, proof, proof_binding, root, (*ancestors, target_id))
+    if target_id == 'ingest-cost-model': validate_cost_record(record)
     return record
+
+
+def validate_cost_record(record):
+    """A receipt needs both successful phases, exact commands and the fixed key set."""
+    target = inventory()['ingest-cost-model']
+    bench = cost_model_benchmark(target)
+    summary = record.get('summary', {})
+    expected = {
+        'version': 1, 'mode': 'go-cost-model', 'cwd': 'server',
+        'discovery': discovery_command(target), 'command': run_command(target),
+        'benchmark': {'discovery': discovery_command(bench), 'command': run_command(bench)},
+    }
+    if any(record.get(key) != value for key, value in expected.items()):
+        raise ValueError('incomplete cost-model command proof')
+    if (not isinstance(summary, dict) or summary.get('package') != COST_PACKAGE or
+        summary.get('tests') != ['TestDecodeCostModel'] or summary.get('measurements') != 50 or
+        summary.get('case_keys') != sorted(target['case_keys'])):
+        raise ValueError('incomplete cost-model test proof')
+    benchmark = summary.get('benchmark', {})
+    if (not isinstance(benchmark, dict) or benchmark.get('package') != COST_PACKAGE or
+        benchmark.get('operations') != 3 or not isinstance(benchmark.get('results'), dict) or not benchmark['results']):
+        raise ValueError('incomplete cost-model benchmark proof')
+    for name, row in benchmark['results'].items():
+        if (not (name == 'BenchmarkDecodeCost' or name.startswith('BenchmarkDecodeCost/')) or
+            not isinstance(row, dict) or row.get('operations') != 3):
+            raise ValueError('invalid cost-model benchmark result')
+        ns = row.get('ns_per_op')
+        if isinstance(ns, bool) or not isinstance(ns, (float, int)) or not math.isfinite(ns) or ns <= 0:
+            raise ValueError('invalid cost-model benchmark time')
+        for key in ('bytes_per_op', 'allocs_per_op'):
+            if type(row.get(key)) is not int or row[key] < 0: raise ValueError('invalid cost-model benchmark allocation')
 
 
 def listing(root=ROOT):
