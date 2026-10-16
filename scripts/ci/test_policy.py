@@ -557,7 +557,6 @@ class PolicyTests(unittest.TestCase):
             'dropped interop prefixes': baseline.replace('subtest_prefixes = ["TestRustWriterFixtures/body/", "TestRustWriterFixtures/header/", "TestRustWriterFixtures/descriptor/"]', 'subtest_prefixes = []', 1),
             'dropped interop helper': baseline.replace('helpers = ["TestRustWriterPrecondition", "TestRustWriterCaptureChild"]', 'helpers = ["TestRustWriterPrecondition"]', 1),
             'dropped loader marker': baseline.replace('args = ["-loader-budget-extended"]\nmarker = "LOADER_MEASUREMENT"', 'args = ["-loader-budget-extended"]'),
-            'dropped fuzz inventory cross-check': baseline.replace('packages = ["./..."]\nfuzz_inventory = true\n\n[[selected]]\nid = "server-race"', 'packages = ["./..."]\n\n[[selected]]\nid = "server-race"'),
             'extra fuzz flag': baseline.replace('[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "60s"',
                                                 '[loader]\npackage = "./internal/extensions/loader"\ntarget = "FuzzParserQualification"\nfuzztime = "30s"'),
         }
@@ -568,6 +567,26 @@ class PolicyTests(unittest.TestCase):
                 self.assertTrue(any(error.startswith('scripts/ci/targets.toml') for error in check_policy.check(self.root)), label)
         path.write_text(baseline)
         self.assertEqual(check_policy.check(self.root), [])
+
+    def test_fuzz_inventory_cross_checks_cannot_be_removed(self):
+        path = self.root / 'scripts/ci/targets.toml'
+        baseline = path.read_text()
+        self.assertEqual(check_policy.selected_errors(self.root), [])
+        for target_id in ('server-unit', 'server-race', 'ocsf-native'):
+            with self.subTest(target=target_id):
+                rows = [row for row in baseline.split('[[selected]]\n') if row.startswith(f'id = "{target_id}"\n')]
+                self.assertEqual(len(rows), 1)
+                row = rows[0]
+                self.assertEqual(row.count('fuzz_inventory = true\n'), 1)
+                mutated = baseline.replace('[[selected]]\n' + row,
+                                           '[[selected]]\n' + row.replace('fuzz_inventory = true\n', '', 1), 1)
+                self.assertNotEqual(mutated, baseline)
+                try:
+                    path.write_text(mutated)
+                    self.assertEqual(check_policy.selected_errors(self.root), [
+                        'scripts/ci/targets.toml: fuzz inventory cross-check mismatch: ' + target_id])
+                finally:
+                    path.write_text(baseline)
 
     def test_selected_rows_cannot_move_their_commands(self):
         self.assertEqual(set(check_policy.SELECTED_PLACES), set(check_policy.SELECTED_COMMANDS))

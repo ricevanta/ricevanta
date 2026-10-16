@@ -1,10 +1,8 @@
 """One admitted Cargo/rustc allowlist and one C toolchain rule (CI hardening section 6), shared by every consumer."""
-from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 import rust_env
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 class RustEnvTests(unittest.TestCase):
@@ -40,11 +38,25 @@ class RustEnvTests(unittest.TestCase):
         self.assertIs(run_selected.rust_env, rust_env)
         self.assertIs(check_policy.rust_env, rust_env)
         self.assertIs(bootstrap.rust_env, rust_env)
-        for module in ('run_selected.py', 'check_policy.py', 'bootstrap.py'):
-            with self.subTest(module=module):
-                text = (ROOT / 'scripts/ci' / module).read_text(encoding='utf-8')
-                for copy in ("'CARGO_NET_OFFLINE'", "'CARGO_TERM_COLOR'", "'RUST_BACKTRACE'", "'CARGO_HTTP_CAINFO'"):
-                    self.assertNotIn(copy, text, f'{module} keeps its own copy of the allowlist')
+        self.assertIs(bootstrap.ADMITTED_RUST_ENV, rust_env.ADMITTED_RUST_ENV)
+
+    def test_wrapper_uses_the_shared_allowlist(self):
+        import run_selected
+        names = sorted(rust_env.ADMITTED_RUST_ENV)
+        self.assertEqual(run_selected.cargo_environment_overrides(names), [])
+        for name in names:
+            with self.subTest(name=name), patch.object(rust_env, 'ADMITTED_RUST_ENV', rust_env.ADMITTED_RUST_ENV - {name}):
+                self.assertEqual(run_selected.cargo_environment_overrides(names), [name])
+
+    def test_policy_uses_the_shared_workflow_allowlist(self):
+        import check_policy
+        names = sorted(rust_env.WORKFLOW_RUST_ENV)
+        workflow = {'jobs': {'validate': {'env': dict.fromkeys(names, '1')}}}
+        self.assertEqual(check_policy.cargo_override_errors(workflow), [])
+        for name in names:
+            with self.subTest(name=name), patch.object(rust_env, 'WORKFLOW_RUST_ENV', rust_env.WORKFLOW_RUST_ENV - {name}):
+                self.assertEqual(check_policy.cargo_override_errors(workflow), [
+                    'validate: unreviewed Cargo or rustc variable ' + name + ' forbidden'])
 
 
 if __name__ == '__main__':

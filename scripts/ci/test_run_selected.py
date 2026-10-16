@@ -1260,6 +1260,8 @@ class RealToolTests(unittest.TestCase):
         run_selected.preconditions(target, {**self.env, 'CC_ENABLE_DEBUG_OUTPUT': '1'}, self.root)
 
     def test_admitted_homes_are_required_when_bootstrapped(self):
+        # CI has already bootstrapped this process; cover that inherited state even in a local run.
+        self.env['CI_ADMITTED_ROOT'] = str(self.root / 'runner-admitted')
         admitted = self.root / 'admitted'
         homes = {'CI_ADMITTED_ROOT': str(admitted), 'CARGO_HOME': str(admitted / 'cargo-home'),
                  'RUSTUP_HOME': str(admitted / 'rustup-home'), 'RUSTUP_AUTO_INSTALL': '0'}
@@ -1276,7 +1278,8 @@ class RealToolTests(unittest.TestCase):
                     run_selected.preconditions(target, env, self.root)
                 self.assertIn('admitted', str(caught.exception))
         # Without the bootstrap (a developer shell), the homes are not pinned.
-        run_selected.preconditions(target, {**self.env, 'CARGO_HOME': str(self.root / 'runner-cargo')}, self.root)
+        developer_env = {k: v for k, v in self.env.items() if k != 'CI_ADMITTED_ROOT'}
+        run_selected.preconditions(target, {**developer_env, 'CARGO_HOME': str(self.root / 'runner-cargo')}, self.root)
 
     def test_cargo_configuration_above_the_repository_is_refused(self):
         """Cargo reads every ancestor up to the filesystem root, including the runner home above the checkout."""
