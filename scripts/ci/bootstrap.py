@@ -130,39 +130,56 @@ class WindowsRegistry:
         import winreg  # pragma: no cover - Windows only
         return winreg
 
-    def _children(self, hive, path):  # pragma: no cover - Windows only
+    def _open_key(self, hive, path):
         winreg = self._winreg()
         try:
-            key = winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
-        except OSError:
-            return []
-        names = []
-        with key:
-            index = 0
-            while True:
-                try: names.append(winreg.EnumKey(key, index))
-                except OSError: return names
-                index += 1
+            return winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise BootstrapError(f'could not open registry key {path}: {exc}') from exc
 
-    def _value(self, hive, path, name):  # pragma: no cover - Windows only
+    def _children(self, hive, path):
         winreg = self._winreg()
+        key = self._open_key(hive, path)
+        if key is None: return []
+        names = []
         try:
-            with winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
-                return str(winreg.QueryValueEx(key, name)[0])
-        except OSError:
-            return ''
+            with key:
+                index = 0
+                while True:
+                    try: names.append(winreg.EnumKey(key, index))
+                    except OSError as exc:
+                        if getattr(exc, 'winerror', None) == 259: break  # ERROR_NO_MORE_ITEMS
+                        raise
+                    index += 1
+        except OSError as exc:
+            raise BootstrapError(f'could not enumerate registry key {path}: {exc}') from exc
+        return names
+
+    def _value(self, hive, path, name):
+        winreg = self._winreg()
+        key = self._open_key(hive, path)
+        if key is None: return ''
+        try:
+            with key:
+                try: return str(winreg.QueryValueEx(key, name)[0])
+                except FileNotFoundError: return ''
+        except OSError as exc:
+            raise BootstrapError(f'could not read registry value {path}\\{name}: {exc}') from exc
 
     def user_core(self, minor):  # pragma: no cover - Windows only
         """A per-user PEP 514 registration means a per-user install already ran in this session."""
         return self._exists(self._winreg().HKEY_CURRENT_USER, f'Software\\Python\\PythonCore\\{minor}')
 
-    def _exists(self, hive, path):  # pragma: no cover - Windows only
-        winreg = self._winreg()
+    def _exists(self, hive, path):
+        key = self._open_key(hive, path)
+        if key is None: return False
         try:
-            winreg.OpenKey(hive, path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY).Close()
+            with key: pass
             return True
-        except OSError:
-            return False
+        except OSError as exc:
+            raise BootstrapError(f'could not read registry key {path}: {exc}') from exc
 
     def registrations(self, minor):  # pragma: no cover - Windows only
         """(hive name, key path, display name) for every 'Python 3.N.* (64-bit)' product registration."""
@@ -779,6 +796,8 @@ def layout_python(members, entry, host):
 def install_python(ctx, entry, members, staging):
     minor = '.'.join(entry['version'].split('.')[:2])
     target = ctx.dest / 'python'
+    if ctx.host.is_windows or ctx.host.is_macos:
+        require_ephemeral_host(ctx.host, entry, f'install Python {entry["version"]}')
     if ctx.host.is_windows:
         registry = ctx.host.registry
         if registry.user_core(minor):
@@ -786,7 +805,6 @@ def install_python(ctx, entry, members, staging):
         # The runner image installs this same bundle per machine; Burn would then repair that copy instead of installing.
         # Purge the runner's Python <minor> product registrations exactly as the payload's own setup.ps1 does.
         registrations = registry.registrations(minor)
-        if registrations: require_ephemeral_host(ctx.host, entry, f'remove {len(registrations)} Python {minor} registrations')
         for registration in registrations:
             log('replaced runner-provided', 'Python registration', *registration)
             try:
@@ -805,7 +823,6 @@ def install_python(ctx, entry, members, staging):
     if ctx.host.is_macos:
         framework = ctx.host.framework_root / 'Versions' / minor
         if framework.exists() or framework.is_symlink():
-            require_ephemeral_host(ctx.host, entry, f'remove the runner Python framework {framework}')
             log('replaced runner-provided', 'Python framework at', framework)
             ctx.run(entry, ['sudo', '-n', 'rm', '-rf', framework])
             if framework.exists(): raise BootstrapError(f'{entry["id"]}: could not empty {framework}')

@@ -1,14 +1,20 @@
 """Selected-run proof: discovery, exact names, counts and terminal success are mandatory."""
 from collections import Counter
 from copy import deepcopy
+import contextlib
+import gc
+import io
 import json
 import os
 from pathlib import Path
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
+import warnings
 from unittest.mock import patch
 
 import inventory
@@ -69,6 +75,115 @@ def insert_before(data, needle, extra):
     lines = data.decode().splitlines(keepends=True)
     index = next(i for i, l in enumerate(lines) if needle in l)
     return ''.join(lines[:index]).encode() + extra + ''.join(lines[index:]).encode()
+
+
+class ExecuteTests(unittest.TestCase):
+    def test_execute_closes_pipes_and_preserves_both_streams_and_exit(self):
+        with tempfile.TemporaryDirectory(prefix='selected-pipes-') as directory:
+            out, err = Path(directory) / 'out', Path(directory) / 'err'
+            for code in (0, 7):
+                stdout, stderr = io.BytesIO(), io.BytesIO()
+                with io.TextIOWrapper(stdout, write_through=True) as mirror_out, io.TextIOWrapper(stderr, write_through=True) as mirror_err:
+                    with warnings.catch_warnings(record=True) as caught, contextlib.redirect_stdout(mirror_out), contextlib.redirect_stderr(mirror_err):
+                        warnings.simplefilter('always', ResourceWarning)
+                        result = run_selected.execute([sys.executable, '-B', '-c',
+                            'import os, sys; os.write(1, b"out\\x00\\n" * 20000); os.write(2, b"err\\x00\\n" * 20000); sys.exit(int(sys.argv[1]))', str(code)],
+                            Path(directory), dict(os.environ), out, err)
+                        gc.collect()
+                    self.assertEqual(result, code)
+                    self.assertEqual(out.read_bytes(), b'out\x00\n' * 20000)
+                    self.assertEqual(err.read_bytes(), b'err\x00\n' * 20000)
+                    self.assertEqual(stdout.getvalue(), out.read_bytes()); self.assertEqual(stderr.getvalue(), err.read_bytes())
+                    self.assertEqual([w for w in caught if issubclass(w.category, ResourceWarning)], [])
+
+    def test_execute_closes_pipes_when_a_reader_cannot_start(self):
+        processes, start = [], subprocess.Popen
+        def launch(*args, **kwargs):
+            process = start(*args, **kwargs); processes.append(process)
+            return process
+        with tempfile.TemporaryDirectory(prefix='selected-pipe-failure-') as directory:
+            try:
+                with patch.object(run_selected.subprocess, 'Popen', side_effect=launch), patch.object(run_selected.threading.Thread, 'start', side_effect=RuntimeError('reader refused')):
+                    with self.assertRaisesRegex(RuntimeError, 'reader refused'):
+                        run_selected.execute([sys.executable, '-B', '-c', 'pass'], directory, dict(os.environ),
+                                             Path(directory) / 'out', Path(directory) / 'err')
+                closed = [(process.stdout.closed, process.stderr.closed, process.poll() is not None) for process in processes]
+            finally:
+                for process in processes:
+                    process.stdout.close(); process.stderr.close(); process.wait()
+            self.assertEqual(closed, [(True, True, True)])
+
+    def test_execute_reaps_a_pipe_filling_child_when_second_reader_cannot_start(self):
+        # Isolate the deadlock control from the test runner. The supervisor owns the whole process tree.
+        with tempfile.TemporaryDirectory(prefix='selected-second-reader-') as directory:
+            work = Path(directory)
+            probe = work / 'probe.py'
+            probe.write_text(textwrap.dedent('''\
+                import json, os, sys, threading
+                from pathlib import Path
+                from unittest.mock import patch
+                sys.path.insert(0, sys.argv[1])
+                import run_selected
+                work = Path(sys.argv[2])
+                entered = threading.Event()
+                pump, start, join, launch = run_selected.stream, threading.Thread.start, threading.Thread.join, run_selected.subprocess.Popen
+                started, joined, processes = [], [], []
+                refused = RuntimeError('second reader refused')
+                calls = 0
+                def pumping(*args):
+                    entered.set()
+                    return pump(*args)
+                def starting(thread):
+                    global calls
+                    calls += 1
+                    if calls == 2:
+                        assert entered.wait(1), 'stdout reader never entered'
+                        raise refused
+                    start(thread)
+                    started.append(thread)
+                def joining(thread, *args, **kwargs):
+                    joined.append(thread)
+                    return join(thread, *args, **kwargs)
+                def launching(*args, **kwargs):
+                    process = launch(*args, **kwargs)
+                    processes.append(process)
+                    return process
+                with patch.object(run_selected, 'stream', pumping), patch.object(threading.Thread, 'start', starting), patch.object(threading.Thread, 'join', joining), patch.object(run_selected.subprocess, 'Popen', launching):
+                    try:
+                        run_selected.execute([sys.executable, '-B', '-c', 'import os; os.write(2, b"e" * 1_000_000); os.write(1, b"out\\\\n")'],
+                                             work, dict(os.environ), work / 'out', work / 'err')
+                    except RuntimeError as error:
+                        result = {'original_error': error is refused, 'started': len(started),
+                                  'joined': all(thread in joined for thread in started),
+                                  'readers_stopped': all(not thread.is_alive() for thread in started),
+                                  'reaped': all(process.returncode is not None for process in processes),
+                                  'pipes_closed': all(process.stdout.closed and process.stderr.closed for process in processes)}
+                        print(json.dumps(result))
+                    else:
+                        raise AssertionError('reader start failure was swallowed')
+                '''), encoding='utf-8')
+            options = {'start_new_session': True} if os.name == 'posix' else {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+            with (work / 'supervisor-out').open('wb') as out, (work / 'supervisor-err').open('wb') as err:
+                process = subprocess.Popen([sys.executable, '-B', str(probe), str(ROOT / 'scripts/ci'), str(work)],
+                                           stdout=out, stderr=err, **options)
+                try:
+                    process.wait(timeout=4)
+                except subprocess.TimeoutExpired:
+                    if os.name == 'posix':
+                        try: os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError: pass
+                    else:
+                        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, timeout=5, check=False)
+                    process.wait(timeout=5)
+                    self.fail('second-reader cleanup exceeded the isolated four-second bound')
+                finally:
+                    if process.poll() is None:
+                        process.kill(); process.wait(timeout=5)
+            self.assertEqual(process.returncode, 0, (work / 'supervisor-err').read_text())
+            self.assertEqual(json.loads((work / 'supervisor-out').read_text()),
+                             {'original_error': True, 'started': 1, 'joined': True, 'readers_stopped': True,
+                              'reaped': True, 'pipes_closed': True})
 
 
 class InventoryTests(unittest.TestCase):

@@ -22,6 +22,7 @@ from unittest import mock
 import zipfile
 
 import bootstrap
+import run_selected
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = ROOT / 'scripts/ci/toolchains.lock.json'
@@ -124,6 +125,51 @@ class FakeRegistry:
 
     def delete(self, registration):
         self.items.remove(registration); self.deleted.append(registration)
+
+
+class RegistryReaderTests(unittest.TestCase):
+    def registry(self, *, opening=None, enumeration=None, value=None):
+        class Key:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def Close(self): pass
+        class Winreg:
+            KEY_READ = KEY_WOW64_64KEY = 0
+            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, HKEY_CLASSES_ROOT = 'HKCU', 'HKLM', 'HKCR'
+            def OpenKey(self, *args):
+                if opening: raise opening
+                return Key()
+            def EnumKey(self, key, index):
+                if index == 0: return 'child'
+                raise enumeration
+            def QueryValueEx(self, *args):
+                if value: raise value
+                return 'Python 3.14.8 (64-bit)', 1
+        registry = bootstrap.WindowsRegistry()
+        registry._winreg = lambda: Winreg()
+        return registry
+
+    def test_missing_registry_keys_values_and_enumeration_end_are_absent(self):
+        missing = FileNotFoundError(2, 'not found')
+        registry = self.registry(opening=missing)
+        self.assertEqual(registry.registrations('3.14'), [])
+        self.assertFalse(registry.user_core('3.14'))
+        ended = OSError('no more data'); ended.winerror = 259
+        registry = self.registry(enumeration=ended, value=missing)
+        self.assertEqual(registry._children('HKCU', 'key'), ['child'])
+        self.assertEqual(registry._value('HKCU', 'key', 'DisplayName'), '')
+        self.assertTrue(registry.user_core('3.14'))
+
+    def test_registry_read_errors_are_typed_refusals(self):
+        for error in (PermissionError(5, 'Access is denied'), OSError(6, 'invalid handle')):
+            for operation in ('open', 'enumerate', 'query'):
+                with self.subTest(operation=operation, error=type(error).__name__):
+                    registry = self.registry(opening=error if operation == 'open' else None,
+                                             enumeration=error, value=error if operation == 'query' else None)
+                    with self.assertRaisesRegex(bootstrap.BootstrapError, 'registry'):
+                        if operation == 'enumerate': registry._children('HKCU', 'key')
+                        elif operation == 'query': registry._value('HKCU', 'key', 'DisplayName')
+                        else: registry.user_core('3.14')
 
 
 RUNNER_PYTHON = [('HKLM', r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{bundle}', 'Python 3.14.8 (64-bit)'),
@@ -869,6 +915,29 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(code, 1); self.assertIn('outside a GitHub-hosted runner', error)
         self.assertTrue((self.framework / 'Versions' / '3.14').exists()); self.assertFalse(any(c[0] == 'sudo' for c in execute.calls))
 
+    def test_first_python_install_requires_a_github_hosted_runner(self):
+        for identity in ('windows-x64', 'macos-arm64'):
+            for runner in ('self-hosted', ''):
+                with self.subTest(identity=identity, runner=runner):
+                    base = self.base / (identity + '-' + (runner or 'unset')); base.mkdir()
+                    self.fixtures = Fixtures(base, identity); self.fixtures.python()
+                    registry = FakeRegistry()
+                    host = make_host(identity, base, registry=registry,
+                                     environ={'RUNNER_ENVIRONMENT': runner, 'PATH': ''})
+                    executor = FakeExecute(responses(identity), side_effect=installers(identity, host.framework_root))
+                    code, error, journal, execute, dest = self.run_bootstrap('python', host=host, execute=executor, dest=base / 'dest')
+                    self.assertEqual(code, 1, journal)
+                    self.assertIn('outside a GitHub-hosted runner', error)
+                    self.assertEqual(execute.calls, []); self.assertEqual(registry.deleted, [])
+                    self.assertFalse(host.framework_root.exists()); self.assertEqual(list(dest.iterdir()), [])
+
+    def test_unreadable_windows_registry_prevents_installer_execution(self):
+        self.fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures.python()
+        registry = RegistryReaderTests().registry(opening=PermissionError(5, 'Access is denied'))
+        code, error, journal, execute, dest = self.run_bootstrap('python', host=make_host('windows-x64', self.base, registry))
+        self.assertEqual(code, 1, journal); self.assertIn('registry', error)
+        self.assertEqual(execute.calls, []); self.assertEqual(list(dest.iterdir()), [])
+
     def test_every_archive_is_inspected_before_any_installer_runs(self):
         fixtures = Fixtures(self.base, 'windows-x64'); self.fixtures = fixtures
         fixtures.python()
@@ -900,6 +969,25 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual([c[2] for c in execute.calls if c[0] == 'sudo'], ['rm', 'installer'])
         self.assertEqual(os.readlink(dest / 'python' / 'bin' / 'python'), str(stale / 'python3.14'))
         self.assertIn('bootstrap: replaced runner-provided ', journal)
+        (stale / 'python3.14').chmod(0o755)
+        env = dict(line.split('=', 1) for line in (self.base / 'env').read_text().splitlines())
+        run_selected.admitted_tool_guard(env)
+        alias = dest / 'python' / 'bin' / 'python'
+        alias.unlink(); alias.write_bytes(b'wrapper'); alias.chmod(0o755)
+        with self.assertRaisesRegex(run_selected.EvidenceError, 'python resolves outside'):
+            run_selected.admitted_tool_guard(env)
+        alias.unlink(); alias.symlink_to(stale / 'python3.14')
+        proof_path = dest / 'bootstrap-evidence.json'; proof = json.loads(proof_path.read_text())
+        for key, value in (('installed', str(self.base / 'foreign-python')), ('verified', False), ('version', '3.14.7')):
+            changed = json.loads(json.dumps(proof)); changed['entries'][0][key] = value
+            proof_path.write_text(json.dumps(changed))
+            with self.subTest(field=key), self.assertRaisesRegex(run_selected.EvidenceError, 'python resolves outside'):
+                run_selected.admitted_tool_guard(env)
+        proof_path.write_text(json.dumps(proof))
+        (alias.parent / 'go').symlink_to(stale / 'python3.14')
+        proof['entries'].append({'tool': 'go'}); proof_path.write_text(json.dumps(proof))
+        with self.assertRaisesRegex(run_selected.EvidenceError, 'go resolves outside'):
+            run_selected.admitted_tool_guard(env)
 
     def test_macos_reexec_leaves_the_framework_being_replaced(self):
         framework = self.base / 'Frameworks' / 'Python.framework'

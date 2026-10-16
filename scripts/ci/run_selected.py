@@ -734,12 +734,21 @@ def stream(pipe, sink, mirror):
 def execute(command, cwd, env, stdout_path, stderr_path):
     """Stream both pipes into CI logs while retaining the raw bytes."""
     with open(stdout_path, 'wb') as out, open(stderr_path, 'wb') as err:
-        process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        threads = [threading.Thread(target=stream, args=(process.stdout, out, sys.stdout)),
-                   threading.Thread(target=stream, args=(process.stderr, err, sys.stderr))]
-        for thread in threads: thread.start()
-        for thread in threads: thread.join()
-        return process.wait()
+        with subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            threads = [threading.Thread(target=stream, args=(process.stdout, out, sys.stdout)),
+                       threading.Thread(target=stream, args=(process.stderr, err, sys.stderr))]
+            try:
+                for thread in threads: thread.start()
+                for thread in threads: thread.join()
+                return process.wait()
+            except BaseException:
+                # A started pump can hold a pipe's read lock while the child blocks on the other pipe.
+                # Reap the child and join every started pump before Popen closes either reader.
+                if process.poll() is None: process.kill()
+                process.wait()
+                for thread in threads:
+                    if thread.ident is not None: thread.join()
+                raise
 
 
 def verify(target, discovery, stdout, stderr, exit_code, evidence_dir, packages=None, declarations=None):
@@ -800,6 +809,23 @@ def child_environment(target, env):
     return result
 
 
+def admitted_framework_python(found, name, root, evidence):
+    """Only the exact macOS Python aliases made by bootstrap may leave the admitted root."""
+    rows = [row for row in evidence['entries'] if row.get('tool') == 'python']
+    if len(rows) != 1 or not found: return False
+    row = rows[0]
+    version = python_env.read_python_version((ROOT / '.github/python-version').read_text(encoding='utf-8'))
+    minor = '.'.join(version.split('.')[:2])
+    installed = Path(row.get('installed', ''))
+    alias = root / 'python' / 'bin' / name
+    if (row.get('verified') is not True or row.get('version') != version or row.get('id') != f'python-{version}-macos-arm64'
+            or not same_path(evidence.get('destination', ''), root) or not installed.is_absolute()
+            or installed.parts[-5:] != ('Python.framework', 'Versions', minor, 'bin', f'python{minor}')
+            or not same_path(found, alias) or (root / 'python').is_symlink() or alias.parent.is_symlink()):
+        return False
+    return alias.is_symlink() and os.readlink(alias) == str(installed)
+
+
 def admitted_tool_guard(env):
     """Check bootstrap PATH order and tool resolution before discovering or executing tests."""
     if not env.get('CI_ADMITTED_ROOT'): return
@@ -835,6 +861,8 @@ def admitted_tool_guard(env):
         for name in commands:
             found = shutil.which(name + ('.exe' if windows else ''), path=env.get('PATH', ''))
             allowed = found and Path(found).resolve().is_relative_to(root.resolve())
+            if evidence.get('platform') == 'macos-arm64' and tool == 'python':
+                allowed = admitted_framework_python(found, name, root, evidence)
             if validator and name in ('python', 'python3') and found:
                 allowed = allowed or python_env.path_key(Path(found).parent) == python_env.path_key(validator)
             if not allowed: raise EvidenceError(f'admitted tool {name} resolves outside the admitted root: {found}')
