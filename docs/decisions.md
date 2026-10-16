@@ -549,7 +549,7 @@ Rejected: mock authenticated state and a permissive development-server smoke tes
 Detail: [console foundation spec](specs/console-foundation.md) and [implementation plan](plans/console-foundation.md).
 
 ### BE-14. Permission catalogue
-Decision: a versioned JSON catalogue under `schemas/permissions/v1/` defines exact permission names, scope kinds, grant kinds and approval metadata; the Go `authz/catalogue` library embeds an identical copy guarded by a byte drift test, rejects unknown or retired names, and keeps permanent retirement tombstones.
+Decision: a versioned JSON catalogue under `schemas/permissions/v1/` defines exact permission names, scope kinds, grant kinds and approval metadata; the Go `authz/catalogue` library embeds an identical copy guarded by a byte drift test, rejects unknown or retired names, and keeps permanent retirement tombstones. Existing uses remain immutable except for the proposed exact event-bound transition in [permission API migration](specs/permission-api-migration.md), which requires independent approval and atomic integration before activation.
 Why: console, API and GitOps consumers need one explicit inventory without giving runtime data authority to redefine permissions.
 Rejected: generated Go literals add a generator, runtime loading admits replacement metadata, and wildcard permissions obscure distinct actions.
 Detail: [Permission catalogue](specs/permission-catalogue.md) and [implementation plan](plans/permission-catalogue.md).
@@ -561,7 +561,7 @@ Rejected: a default of all roles that silently runs only the implemented ones; s
 Detail: [server runtime spec](specs/server-runtime.md) and [implementation plan](plans/server-runtime.md).
 
 ### BE-16. Administration API contract and permission bindings
-Decision: one hand-written OpenAPI 3.1.2 document defines strict bounded requests, problem details, keyset pagination, explicit versioned-write classifications with mandatory strong revision preconditions, scoped idempotency and exact permission or protocol/subject bindings, validated offline with shared fixtures. A proposed catalogue delta remains separate until the canonical and embedded catalogues and coverage inventory can change together; the existing runtime keeps its reserved-prefix refusal until complete reviewed handlers are admitted.
+Decision: one hand-written OpenAPI 3.1.2 document defines strict bounded requests, problem details, keyset pagination, explicit versioned-write classifications with mandatory strong revision preconditions, scoped idempotency and exact permission or protocol/subject bindings, validated offline with shared fixtures. The revision-4 catalogue delta remains separate until its exact compatibility migration, canonical and embedded catalogues, validator lifecycle and coverage inventory can change together under [contract validation](plans/contract-validation.md); the existing runtime keeps its reserved-prefix refusal until complete reviewed handlers are admitted.
 Why: one explicit contract makes omitted authorization and client/server drift detectable without advertising unimplemented endpoints.
 Rejected: undocumented handlers, permissive request parsing and `501` route stubs, which weaken the BE-15 runtime boundary.
 Detail: [API foundation](specs/api-foundation.md), `schemas/openapi/v1/`.
