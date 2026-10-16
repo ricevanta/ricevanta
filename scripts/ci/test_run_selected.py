@@ -1530,6 +1530,108 @@ class PythonUnittestEvidenceTests(unittest.TestCase):
         self.assertEqual(record['summary']['skipped'], [])
         self.assertTrue((self.root / 'evidence/verified.json').is_file())
 
+    def test_python_unittest_refuses_execution_substitution(self):
+        cases = {
+            'wrapped no-op': '''
+                import functools, unittest
+                def ignore(function):
+                    @functools.wraps(function)
+                    def wrapper(self): pass
+                    return wrapper
+                class T(unittest.TestCase):
+                    @ignore
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'constructor shadow': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def __init__(self, methodName="runTest"):
+                        super().__init__(methodName)
+                        self.test_a = lambda: None
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'replaced code with declared location': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail")
+                original = T.test_a.__code__
+                T.test_a.__code__ = (lambda self: None).__code__.replace(
+                    co_filename=original.co_filename, co_firstlineno=original.co_firstlineno)
+            ''',
+            'descriptor substitution': '''
+                import unittest
+                class Replace:
+                    def __init__(self, function): self.function = function
+                    def __get__(self, instance, owner):
+                        return self.function if instance is None else lambda: None
+                class T(unittest.TestCase):
+                    @Replace
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'attribute substitution': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def __getattribute__(self, name):
+                        return (lambda: None) if name == "test_a" else super().__getattribute__(name)
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'class fixture replacement': '''
+                import unittest
+                class T(unittest.TestCase):
+                    @classmethod
+                    def setUpClass(cls): cls.test_a = lambda self: None
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'module fixture replacement': '''
+                import unittest
+                def setUpModule(): T.test_a = lambda self: None
+                class T(unittest.TestCase):
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'earlier test replacement': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def test_a(self): type(self).test_b = lambda self: None
+                    def test_b(self): self.fail("declared body must fail")
+            ''',
+            'method dispatch override': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def _callTestMethod(self, method): pass
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'class fixture dispatch override': '''
+                import unittest
+                class T(unittest.TestCase):
+                    @classmethod
+                    def setUpClass(cls): cls._callTestMethod = lambda self, method: None
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'setup dispatch override': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def setUp(self): self._callTestMethod = lambda method: None
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+            'setup dispatch override restored': '''
+                import unittest
+                class T(unittest.TestCase):
+                    def setUp(self):
+                        original = self._callTestMethod
+                        def ignore(method): self._callTestMethod = original
+                        self._callTestMethod = ignore
+                    def test_a(self): self.fail("declared body must fail")
+            ''',
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                self.source.write_text(textwrap.dedent(source))
+                try:
+                    with self.assertRaises(EvidenceError): self.run_tiny()
+                    self.assertFalse((self.root / 'evidence/verified.json').exists())
+                finally:
+                    shutil.rmtree(self.root / 'evidence')
+
     def test_python_unittest_refuses_filtered_dynamic_and_failed_work(self):
         outside = self.root / 'outside'
         outside.mkdir()

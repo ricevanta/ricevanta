@@ -1286,7 +1286,7 @@ def python_declarations(cwd, target, *, locations=False):
                         if item.name in ('run', '__call__', 'id'): raise EvidenceError('custom Python test execution forbidden')
                         if item.name.startswith('test_'):
                             if not isinstance(item, ast.FunctionDef): raise EvidenceError('async Python test declaration forbidden')
-                            inherited[item.name] = (path.resolve(), item.lineno)
+                            inherited[item.name] = (path.resolve(), min([item.lineno] + [d.lineno for d in item.decorator_list]))
                     elif isinstance(item, (ast.Assign, ast.AnnAssign)):
                         for item_target in item.targets if isinstance(item, ast.Assign) else [item.target]:
                             if isinstance(item_target, ast.Name) and item_target.id.startswith('test_'):
@@ -1302,12 +1302,64 @@ def python_declarations(cwd, target, *, locations=False):
     return declared if locations else sorted(declared)
 
 
-def python_discover(cwd, target):
-    import inspect
+class PythonCaseGuard:
+    """Bind ordinary unittest dispatch to the declared function, without unwrapping substitutes."""
+    def __init__(self, cwd, target):
+        import inspect
+        import types
+        import unittest
+        self.inspect, self.types = inspect, types
+        self.declarations = python_declarations(cwd, target, locations=True)
+        self.codes = {}
+        for path in {location[0] for location in self.declarations.values()}:
+            def collect(code):
+                for value in code.co_consts:
+                    if type(value) is types.CodeType:
+                        self.codes.setdefault((path, value.co_firstlineno), []).append(value)
+                        collect(value)
+            # Compile without executing: filenames and line numbers alone can be
+            # copied onto replacement bytecode with CodeType.replace().
+            collect(compile(path.read_text(encoding='utf-8'), str(path), 'exec', dont_inherit=True))
+        self.hooks = {key: getattr(unittest.TestCase, key) for key in
+                      ('run', '__call__', 'id', '_callSetUp', '_callTestMethod', '_callTearDown', 'doCleanups', '__getattribute__')}
+        self.call_method = unittest.TestCase._callTestMethod
+        # unittest marks a skipped method and never dispatches its wrapper. Admit
+        # only that exact standard-library wrapper, never arbitrary __wrapped__.
+        self.skip_code = unittest.skip('')(lambda: None).__code__
+        self.suite_run, self.suite_call = unittest.TestSuite.run, unittest.TestSuite.__call__
+
+    def check(self, item, dispatch=None):
+        static = self.inspect.getattr_static
+        for key, expected in self.hooks.items():
+            if static(type(item), key) is not expected or (
+                    key in vars(item) and not (key == '_callTestMethod' and dispatch is not None and vars(item)[key] is dispatch)):
+                raise EvidenceError('custom Python test execution forbidden')
+        if static(type(item), '__getattr__', None) is not None:
+            raise EvidenceError('custom Python test attribute lookup forbidden')
+        if dispatch is not None and getattr(item, '_callTestMethod') is not dispatch:
+            raise EvidenceError('replaced Python test dispatch')
+        name = item.id()
+        if name not in self.declarations: raise EvidenceError('unknown Python test declaration: ' + name)
+        method_name = item._testMethodName
+        declared = static(type(item), method_name)
+        method = getattr(item, method_name)
+        if (method_name in vars(item) or type(declared) is not self.types.FunctionType
+                or type(method) is not self.types.MethodType or method.__self__ is not item or method.__func__ is not declared):
+            raise EvidenceError('replaced Python test callable: ' + name)
+        function = declared
+        if function.__code__ is self.skip_code:
+            function = getattr(function, '__wrapped__', None)
+        if (type(function) is not self.types.FunctionType
+                or (Path(function.__code__.co_filename).resolve(), function.__code__.co_firstlineno) != self.declarations[name]
+                or function.__code__ not in self.codes[self.declarations[name]]):
+            raise EvidenceError('replaced Python test declaration: ' + name)
+        return method
+
+
+def python_discover(cwd, target, *, guard=None):
     import unittest
-    case_run, case_call, case_id = unittest.TestCase.run, unittest.TestCase.__call__, unittest.TestCase.id
-    suite_run, suite_call = unittest.TestSuite.run, unittest.TestSuite.__call__
-    declarations = python_declarations(cwd, target, locations=True)
+    guard = guard or PythonCaseGuard(cwd, target)
+    declarations = guard.declarations
     tree = (cwd / target['directory']).resolve()
     sys.path.insert(0, str(tree))
     loader = unittest.TestLoader()
@@ -1317,24 +1369,10 @@ def python_discover(cwd, target):
     def flatten(item):
         if any(key in vars(item) for key in ('run', '__call__', 'id')):
             raise EvidenceError('custom Python test execution forbidden')
-        if type(item) is unittest.TestSuite and type(item).run is suite_run and type(item).__call__ is suite_call:
+        if type(item) is unittest.TestSuite and type(item).run is guard.suite_run and type(item).__call__ is guard.suite_call:
             for child in item: flatten(child)
         elif isinstance(item, unittest.TestCase):
-            if (type(item).run is not case_run or type(item).__call__ is not case_call
-                    or type(item).id is not case_id):
-                raise EvidenceError('custom Python test execution forbidden')
-            name = item.id()
-            if name not in declarations: raise EvidenceError('unknown Python test declaration: ' + name)
-            method = inspect.unwrap(getattr(type(item), item._testMethodName))
-            code = getattr(method, '__code__', None)
-            if code is None or (Path(code.co_filename).resolve(), code.co_firstlineno) != declarations[name]:
-                # Decorated methods start at their first decorator line in CPython.
-                source, line = inspect.getsourcelines(method)
-                import textwrap
-                parsed = ast.parse(textwrap.dedent(''.join(source)))
-                if (code is None or Path(code.co_filename).resolve() != declarations[name][0]
-                        or line + parsed.body[0].lineno - 1 != declarations[name][1]):
-                    raise EvidenceError('replaced Python test declaration: ' + name)
+            guard.check(item)
             cases.append(item)
         else: raise EvidenceError('custom Python test suite forbidden')
     flatten(suite)
@@ -1420,15 +1458,32 @@ def python_child(target, events, phase, env):
             if len(data) > PYTHON_LINE_BYTES or size > PYTHON_EVENT_BYTES: raise EvidenceError('Python event bound exceeded')
             output.write(data); output.flush()
         emit(python_header(target, env, phase))
-        suite, ids = python_discover(Path.cwd(), target)
+        guard = PythonCaseGuard(Path.cwd(), target)
+        suite, ids = python_discover(Path.cwd(), target, guard=guard)
         emit({'event': 'inventory', 'ids': ids})
         if phase == 'discover':
             emit({'event': 'totals', 'discovered': len(ids)})
             return 0
         class Result(unittest.TestResult):
             def startTest(self, test):
+                method = guard.check(test)
+                state = {'calls': 0}
+                def dispatch(item, called):
+                    current = guard.check(item, state['dispatch'])
+                    if (type(called) is not guard.types.MethodType or called.__self__ is not item
+                            or called.__func__ is not method.__func__ or current.__func__ is not method.__func__):
+                        raise EvidenceError('replaced Python test execution')
+                    state['calls'] += 1
+                    guard.call_method(item, called)
+                state['dispatch'] = guard.types.MethodType(dispatch, test)
+                self.executions[test.id()] = state
+                test._callTestMethod = state['dispatch']
+                guard.check(test, state['dispatch'])
                 super().startTest(test); emit({'event': 'start', 'id': test.id()})
             def addSuccess(self, test):
+                state = self.executions[test.id()]
+                guard.check(test, state['dispatch'])
+                if state['calls'] != 1: raise EvidenceError('missing Python test method execution')
                 super().addSuccess(test); emit({'event': 'pass', 'id': test.id()})
             def addSkip(self, test, reason):
                 super().addSkip(test, reason); emit({'event': 'skip', 'id': test.id(), 'reason': reason})
@@ -1444,6 +1499,7 @@ def python_child(target, events, phase, env):
             def addUnexpectedSuccess(self, test):
                 super().addUnexpectedSuccess(test); emit({'event': 'fail', 'id': test.id()})
         result = Result()
+        result.executions = {}
         suite.run(result)
         emit({'event': 'totals', 'discovered': len(ids), 'testsRun': result.testsRun,
               'passed': result.testsRun - len(result.skipped) - len(result.failures) - len(result.errors) - len(result.expectedFailures) - len(result.unexpectedSuccesses),
