@@ -950,13 +950,13 @@ class WorkflowConsumerTests(unittest.TestCase):
         self.assertGreater(setups, 0)
 
     def test_every_closure_consumer_uses_the_exact_recipe_and_re_checks_before_its_receipt(self):
-        consumers = 0
+        consumers = set()
         for name, data in self.workflows():
             for jid, job in data.get('jobs', {}).items():
                 steps = job.get('steps', [])
                 installs = [s for s in steps if 'pip install' in s.get('run', '')]
                 if not installs: continue
-                consumers += 1
+                consumers.add((name, jid))
                 with self.subTest(workflow=name, job=jid):
                     self.assertEqual([s.get('run') for s in installs], [python_env.INSTALL_COMMAND])
                     venv = [s for s in steps if s.get('run') == python_env.VENV_COMMAND]
@@ -976,7 +976,14 @@ class WorkflowConsumerTests(unittest.TestCase):
                     elif jid == 'ci-required': receipt = len(steps) - 1
                     else: receipt = len(steps)
                     self.assertEqual(steps.index(checks[0]) + 1, receipt, 'the re-check must immediately precede the receipt')
-        self.assertEqual(consumers, 5, 'design, ci-contracts, ci-required, bootstrap and Copilot consume the closure')
+        self.assertEqual(consumers, {
+            ('agent.yml', 'footprint-unit'),
+            ('bootstrap.yml', 'validate'),
+            ('ci.yml', 'ci-contracts'),
+            ('ci.yml', 'ci-required'),
+            ('copilot-code-review.yml', 'copilot-setup-steps'),
+            ('design.yml', 'validate'),
+        })
 
     def test_copilot_environment_runs_on_every_closure_input(self):
         data = yaml.load((ROOT / '.github/workflows/copilot-code-review.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
