@@ -367,11 +367,29 @@ func TestStrictJSONKeysAndEscapes(t *testing.T) {
 			wantCode(t, err, e.code)
 		})
 	}
-	// A valid surrogate pair stays accepted.
-	m, _ := fixture(t)
-	m[".vite/manifest.json"].Data = []byte(`{"index.html":{"file":"assets/index-Bx1a2b3c.js","css":["assets/index-Cx9y8z7w.css"],"name":"😀"}}`)
-	if _, err := console.Verify(m, manifestFor(t, m), devIdentity); err != nil {
-		t.Fatalf("valid surrogate pair: %v", err)
+	// Both escaped pairs and literal UTF-8 stay accepted through verification.
+	for _, tc := range []struct {
+		name, data, key string
+	}{
+		{"escaped value", `{"index.html":{"file":"assets/index-Bx1a2b3c.js","name":"\ud83d\ude00"}}`, "index.html"},
+		{"escaped key", `{"\ud83d\ude00":{"file":"assets/index-Bx1a2b3c.js","name":"😀"}}`, "\U0001F600"},
+		{"literal UTF-8", `{"😀":{"file":"assets/index-Bx1a2b3c.js","name":"😀"}}`, "\U0001F600"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _ := fixture(t)
+			data := []byte(tc.data)
+			m[".vite/manifest.json"].Data = data
+			if _, err := console.Verify(m, manifestFor(t, m), devIdentity); err != nil {
+				t.Fatalf("valid Unicode: %v", err)
+			}
+			var decoded map[string]struct{ Name string }
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			if got, ok := decoded[tc.key]; len(decoded) != 1 || !ok || got.Name != "\U0001F600" {
+				t.Fatalf("decoded %q, want key %q and name U+1F600", decoded, tc.key)
+			}
+		})
 	}
 	// manifest.json itself: a case variant duplicate of files.
 	m, mf := fixture(t)
