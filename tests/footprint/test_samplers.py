@@ -19,13 +19,14 @@ from pathlib import Path
 from unittest import mock
 
 import samplers
+from measure import base_python
 from samplers import darwin, linux, windows
 from samplers import Sample, SamplerError
 
 MIB = 1024 * 1024
 
 CHILD = r"""
-import sys, threading, time
+import os, sys, threading, time
 files_dir = sys.argv[1]
 block = bytearray(64 * 1024 * 1024)
 for offset in range(0, len(block), 4096):
@@ -41,7 +42,7 @@ def rest():
 threads = [threading.Thread(target=spin, daemon=True)] + [threading.Thread(target=rest, daemon=True) for _ in range(3)]
 for t in threads:
     t.start()
-sys.stdout.write("ready\n")
+sys.stdout.write(f"ready {os.getpid()}\n")
 sys.stdout.flush()
 sys.stdin.readline()
 stop.set()
@@ -52,7 +53,7 @@ def start_child(test):
     files = tempfile.TemporaryDirectory(prefix="rv-sampler-")
     test.addCleanup(files.cleanup)
     proc = subprocess.Popen(
-        [sys.executable, "-B", "-c", CHILD, files.name],
+        [base_python(), "-B", "-c", CHILD, files.name],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,
@@ -67,7 +68,7 @@ def start_child(test):
 
     test.addCleanup(stop)
     line = proc.stdout.readline()
-    test.assertEqual(line.strip(), "ready")
+    test.assertEqual(line.strip(), f"ready {proc.pid}")
     return proc
 
 
@@ -102,14 +103,14 @@ class NativeSamplerTests(unittest.TestCase):
         self.assertGreaterEqual(s.footprint_bytes, 60 * MIB)
 
     def test_dead_pid_raises(self):
-        proc = subprocess.Popen([sys.executable, "-B", "-c", "pass"])
+        proc = subprocess.Popen([base_python(), "-B", "-c", "pass"])
         proc.wait(timeout=30)
         with self.assertRaises(SamplerError):
             self.mod.sample(proc.pid)
 
     def test_bound_sampler_fails_after_exit(self):
         proc = subprocess.Popen(
-            [sys.executable, "-B", "-c", "import sys; sys.stdin.readline()"],
+            [base_python(), "-B", "-c", "import sys; sys.stdin.readline()"],
             stdin=subprocess.PIPE,
         )
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
