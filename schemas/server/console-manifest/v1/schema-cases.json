@@ -1,0 +1,97 @@
+{
+  "schema": "manifest.schema.json",
+  "cases": [
+    {
+      "id": "single-index",
+      "valid": true,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "index.html", "size": 1024, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "dot-directory-vite",
+      "valid": true,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": ".vite/manifest.json", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "empty-files",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [] }
+    },
+    {
+      "id": "missing-schema",
+      "valid": false,
+      "instance": { "files": [ { "path": "index.html", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "absolute-path",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "/index.html", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "parent-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "assets/../index.html", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "backslash-path",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "assets\\index.js", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "uppercase-digest",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "index.html", "size": 1, "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } ] }
+    },
+    {
+      "id": "size-as-string",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "index.html", "size": "1024", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "extra-field",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "index.html", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mtime": 0 } ] }
+    },
+    {
+      "id": "duplicate-entry",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [
+        { "path": "index.html", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        { "path": "index.html", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "current-directory-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "assets/./index.js", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "empty-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "assets//index.js", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "vite-directory-other-file",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": ".vite/other.json", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "other-dot-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": ".well-known/security.txt", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "dot-segment-inside-tree",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "assets/.hidden.js", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "vite-manifest-wrong-case",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": ".Vite/manifest.json", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    },
+    {
+      "id": "trailing-dot-segment",
+      "valid": false,
+      "instance": { "schema": "ricevanta-console-manifest-v1", "files": [ { "path": "assets/index.", "size": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+    }
+  ]
+}

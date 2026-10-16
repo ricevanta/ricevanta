@@ -1,0 +1,14 @@
+{
+  "schema": "readiness.schema.json",
+  "cases": [
+    { "id": "liveness-ok", "valid": true, "instance": { "status": "ok" } },
+    { "id": "readiness-stopping", "valid": true, "instance": { "status": "stopping", "roles": { "api": "stopping" } } },
+    { "id": "readiness-starting-two-roles", "valid": true, "instance": { "status": "starting", "roles": { "api": "ready", "jobs": "starting" } } },
+    { "id": "liveness-with-version", "valid": false, "instance": { "status": "ok", "version": "0.1.0-alpha.1" } },
+    { "id": "readiness-without-roles", "valid": false, "instance": { "status": "ready" } },
+    { "id": "readiness-empty-roles", "valid": false, "instance": { "status": "ready", "roles": {} } },
+    { "id": "readiness-unknown-role", "valid": false, "instance": { "status": "ready", "roles": { "console": "ready" } } },
+    { "id": "readiness-free-text-state", "valid": false, "instance": { "status": "ready", "roles": { "api": "listening on :8443" } } },
+    { "id": "readiness-ok-status", "valid": false, "instance": { "status": "ok", "roles": { "api": "ready" } } }
+  ]
+}

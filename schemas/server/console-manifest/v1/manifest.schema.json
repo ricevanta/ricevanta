@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ricevanta.io/schemas/server/console-manifest/v1/manifest.schema.json",
+  "title": "Embedded console manifest v1",
+  "description": "manifest.json written beside the copied console tree and embedded with it (docs/specs/server-runtime.md section 6). Sorting by path and path uniqueness are semantic checks the server and the release verifier repeat.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "files"],
+  "properties": {
+    "schema": { "const": "ricevanta-console-manifest-v1" },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16384,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "size", "sha256"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "pattern": "^(?:\\.vite/manifest\\.json|[A-Za-z0-9](?:[A-Za-z0-9_.+-]{0,238}[A-Za-z0-9_+-])?(?:/[A-Za-z0-9](?:[A-Za-z0-9_.+-]{0,238}[A-Za-z0-9_+-])?){0,31})$(?![\\s\\S])",
+            "description": "Release builds section 5.1 member paths: slash-separated segments that start with an ASCII letter or digit, continue with letters, digits, underscore, dot, plus and hyphen, do not end in a dot and are at most 240 bytes, at most 32 segments and 1,024 bytes; the one exception is the exact path .vite/manifest.json. Windows device names are a semantic check"
+          },
+          "size": { "type": "integer", "minimum": 0, "maximum": 2147483648 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])" }
+        }
+      }
+    }
+  }
+}
