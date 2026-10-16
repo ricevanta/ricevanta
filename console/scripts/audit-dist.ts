@@ -3,6 +3,7 @@ import { resolve, relative, sep } from 'node:path'
 import { createHash } from 'node:crypto'
 import { brotliCompressSync, constants } from 'node:zlib'
 import { osvExceptionPackages, resolvedLicenses } from './audit-deps.ts'
+import { isToolCachePath } from './installed-packages.ts'
 import type { ResolvedLicense } from './audit-deps.ts'
 export interface ManifestEntry {
   file: string
@@ -37,6 +38,7 @@ export function auditOutput(
     issues.push('html')
   const recorded = new Map((graph.outputs ?? []).map((output) => [output.file, output]))
   for (const [name, bytes] of files) {
+    if (isToolCachePath(name)) issues.push(`cache-output:${name}`)
     const output = recorded.get(name)
     if (!output) issues.push(`unrecorded:${name}`)
     else if (
@@ -63,6 +65,7 @@ export function auditOutput(
     ...(graph.outputs ?? []).flatMap((output) => output.sources),
   ]) {
     const source = module.replaceAll('\\', '/')
+    if (isToolCachePath(source)) issues.push(`cache-provenance:${module}`)
     if (
       /\/(?:@vue\/compiler-(?:core|dom|sfc)|@intlify\/message-compiler)(?:\/|@)|\/tests\//.test(
         source,

@@ -1,3 +1,11 @@
+import {
+  installedPackages,
+  lockedPackages,
+  supportsArchitecture,
+  validateCatalogue,
+  rawLicenses,
+} from './installed-packages.ts'
+export { lockedPackages } from './installed-packages.ts'
 import { checkedTool } from './run-tool.ts'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -6,11 +14,7 @@ interface Package {
   name: string
   version: string
 }
-interface LockedPackage extends Package {
-  os?: string[]
-  cpu?: string[]
-  libc?: string[]
-}
+import type { LockedPackage } from './installed-packages.ts'
 interface LicenseInput extends Package {
   declared: string
   runtime: boolean
@@ -444,64 +448,6 @@ export function runtimePairs(tree: unknown): Set<string> {
   walk(tree)
   return result
 }
-export function lockedPackages(text: string): LockedPackage[] {
-  // Read only lockfile format 9's package-key block. Reject unfamiliar encodings instead of omitting keys.
-  if (!text.startsWith("lockfileVersion: '9.0'\n")) throw new Error('Unknown lockfile format')
-  const sections = text.split('\npackages:\n')
-  if (sections.length !== 2) throw new Error('Missing lockfile packages')
-  const block = (sections[1] ?? '').split(/\n[^ \n]/)[0] ?? ''
-  const packages: LockedPackage[] = []
-  for (const line of block.split('\n')) {
-    const platform = /^ {4}(os|cpu|libc):\s*(.*)$/.exec(line)
-    if (platform) {
-      const pkg = packages.at(-1)
-      const field = platform[1]
-      const value = platform[2] ?? ''
-      if (!pkg || (field !== 'os' && field !== 'cpu' && field !== 'libc') || field in pkg)
-        throw new Error('Invalid locked platform field')
-      // pnpm format 9 emits inline string lists. Fail on other encodings rather than waive evidence.
-      if (!/^\[.*\]$/.test(value)) throw new Error('Invalid locked platform list')
-      const items = value.slice(1, -1).trim()
-      pkg[field] = items
-        ? items.split(',').map((item) => {
-            const match =
-              /^(?:'(!?[a-z][a-z0-9_-]*)'|"(!?[a-z][a-z0-9_-]*)"|(!?[a-z][a-z0-9_-]*))$/.exec(
-                item.trim(),
-              )
-            const token = match?.[1] ?? match?.[2] ?? match?.[3]
-            if (!token) throw new Error('Invalid locked platform value')
-            return token
-          })
-        : []
-      continue
-    }
-    if (!line.trim() || line.startsWith('    ')) continue
-    const match = /^ {2}(?:'([^']+)'|([^'\s]+)):(?: \{\})?$/.exec(line)
-    const pair = match?.[1] ?? match?.[2] ?? ''
-    const parts = /^(@?[^@\s]+)@(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)$/.exec(pair)
-    const name = parts?.[1]
-    const version = parts?.[2]
-    if (!name || !version) throw new Error('Invalid locked package key')
-    packages.push({ name, version })
-  }
-  if (!packages.length) throw new Error('Empty lockfile packages')
-  return packages
-}
-function supportsArchitecture(pkg: LockedPackage): boolean {
-  function allows(values: readonly string[] | undefined, target: string): boolean {
-    if (!values?.length) return true
-    if (values.length === 1 && values[0] === 'any') return true
-    if (values.includes(`!${target}`)) return false
-    const positive = values.filter((value) => !value.startsWith('!'))
-    return !positive.length || positive.includes(target)
-  }
-  // Keep the combinations aligned with the spec's exact supportedArchitectures lists.
-  return ['linux', 'darwin', 'win32'].some((os) =>
-    ['x64', 'arm64'].some(
-      (cpu) => allows(pkg.os, os) && allows(pkg.cpu, cpu) && allows(pkg.libc, 'glibc'),
-    ),
-  )
-}
 export function reconcileLicenses(
   locked: readonly LockedPackage[],
   inventory: readonly ResolvedLicense[],
@@ -527,63 +473,34 @@ export function reconcileLicenses(
   })
 }
 export async function resolvedLicenses(): Promise<ResolvedLicense[]> {
-  const modules = record(JSON.parse(readFileSync('node_modules/.modules.yaml', 'utf8')) as unknown)
-  const storeDir = modules['storeDir']
-  if (typeof storeDir !== 'string' || !storeDir.endsWith('/v11'))
-    throw new Error('Unknown pnpm store')
-  const licenses = record(
-    JSON.parse(
-      await checkedTool('pnpm', [
-        `--config.store-dir=${storeDir.slice(0, -4)}`,
-        'licenses',
-        'list',
-        '--json',
-      ]),
-    ) as unknown,
-  )
+  const before = installedPackages()
+  const raw = await rawLicenses()
   const runtimeTree: unknown = JSON.parse(
     await checkedTool('pnpm', ['list', '--prod', '--depth', 'Infinity', '--json']),
   )
+  const physical = installedPackages()
+  if (JSON.stringify(before) !== JSON.stringify(physical))
+    throw new Error('Installation changed during license audit')
+  const licenses = validateCatalogue(physical, raw)
   const runtime = runtimePairs(runtimeTree)
   const output: ResolvedLicense[] = []
-  for (const [declared, entries] of Object.entries(licenses)) {
-    if (!Array.isArray(entries)) throw new Error('Invalid license inventory')
-    for (const value of entries) {
-      const entry = record(value)
-      const name = entry['name']
-      const versions = entry['versions']
-      const paths = entry['paths']
-      if (
-        typeof name !== 'string' ||
-        !Array.isArray(versions) ||
-        !Array.isArray(paths) ||
-        !paths.every((path: unknown) => typeof path === 'string')
-      )
-        throw new Error('Invalid package inventory')
-      for (const version of versions) {
-        if (typeof version !== 'string') throw new Error('Invalid version')
-        let evidence = ''
-        if (declared === 'Python-2.0') {
-          const path = paths[0]
-          if (typeof path !== 'string') throw new Error('Missing LICENSE')
-          evidence = readFileSync(`${path}/LICENSE`, 'utf8')
-        }
-        output.push({
-          name,
-          version,
-          declared,
-          normalized: normalizeLicense({
-            name,
-            version,
-            declared,
-            runtime: runtime.has(`${name}@${version}`),
-            modified: false,
-            evidence,
-          }),
-          paths,
-        })
-      }
-    }
+  for (const { name, version, declared, paths } of licenses) {
+    const evidence =
+      declared === 'Python-2.0' ? readFileSync(`${paths[0] ?? ''}/LICENSE`, 'utf8') : ''
+    output.push({
+      name,
+      version,
+      declared,
+      paths,
+      normalized: normalizeLicense({
+        name,
+        version,
+        declared,
+        runtime: runtime.has(`${name}@${version}`),
+        modified: false,
+        evidence,
+      }),
+    })
   }
   return reconcileLicenses(
     lockedPackages(readFileSync('pnpm-lock.yaml', 'utf8')),

@@ -22,6 +22,8 @@ export async function buildWorkspace(
   run: (command: string, args: readonly string[], cwd: string) => Promise<string> = checkedTool,
 ): Promise<void> {
   await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], work)
+  await run('node', ['scripts/finalize-install.ts'], work)
+  await run('pnpm', ['audit:deps'], work)
   await run('pnpm', ['build'], work)
 }
 if (import.meta.main) {
