@@ -229,7 +229,7 @@ func paddedCostFrame(t testing.TB, frame []byte, count int) []byte {
 func adversarialCostInput(t testing.TB, key string) costInput {
 	t.Helper()
 	c := costInput{window: 128 << 10, size: 103, lines: 1, blocks: 2, codecs: 1}
-	small := func() []byte { return encodeCostFrame(t, genMinOK(1), true) }
+	small := func() []byte { return encodeCostFrame(t, genFlat(1, 103), true) }
 	switch key {
 	case "blocks-min-at", "blocks-min-over", "blocks-min-ceiling":
 		c.window = 103
@@ -339,6 +339,9 @@ func TestAdversarialCostCorpus(t *testing.T) {
 func checkCostInput(t testing.TB, c costInput) {
 	t.Helper()
 	f, err := ReadFrame(&io.LimitedReader{R: bytes.NewReader(c.frame), N: compressedBudget})
+	if err == nil && (f.Window() != c.window || f.ContentSize() != c.size) {
+		t.Fatalf("qualification metadata: frame window=%d size=%d, charged window=%d size=%d", f.Window(), f.ContentSize(), c.window, c.size)
+	}
 	if c.codecs == 0 {
 		if c.rateDeficit {
 			if err != nil {
