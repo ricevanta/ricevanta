@@ -235,3 +235,35 @@ it('unlinks staged hardlinks without changing content-store or retained eligible
   expect(readFileSync(join(value.root, 'cache/v11/package-payload'), 'utf8')).toBe(bytes)
   expect(readFileSync(join(value.root, eligible, 'payload'), 'utf8')).toBe(bytes)
 })
+
+it.each([
+  'node_modules/.cache',
+  'node_modules/.cache/prettier',
+  'node_modules/.vite-temp',
+  'node_modules/.vue-global-types',
+  '.vite/cache',
+])('rejects consumed installation before removal %s', async (path) => {
+  const value = fixture(true)
+  const { mkdirSync } = await import('node:fs')
+  mkdirSync(join(value.root, path), { recursive: true })
+  const result = await finalizeInstall(value.root, () => Promise.resolve(value.catalogue)).then(
+    () => '',
+    (error: unknown) => String(error),
+  )
+  expect(result).toContain('Installation is unaccepted')
+  for (const [key, payload] of value.paths)
+    if (key.includes('musl'))
+      expect(readFileSync(join(value.root, payload, 'payload'), 'utf8')).toContain('payload')
+})
+
+it.each([
+  '.vite/cache/deps/entry.js',
+  'node_modules/.vue-global-types/vue_3.5_1.d.ts',
+  'node_modules/.cache/prettier',
+])('rejects a special generated entry in the read-only audit %s', async (path) => {
+  const value = fixture()
+  value.put(path, 'export {}')
+  interruption.specialPath = join(value.root, path)
+  const { installedPackages } = await import('../../scripts/installed-packages.ts')
+  expect(() => installedPackages(value.root)).toThrow('Special generated output')
+})

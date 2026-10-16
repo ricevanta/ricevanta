@@ -128,6 +128,7 @@ export interface PhysicalInventory {
   identities: Record<string, string>
   metadata: Record<string, string>
   candidates: Instance[]
+  generated: Record<string, GeneratedEntry>
 }
 const metadataPaths = [
   'package.json',
@@ -247,10 +248,130 @@ function platformMatches(manifest: Record<string, unknown>, pkg: LockedPackage):
     )
   })
 }
-export function installedPackages(project = process.cwd(), allowStaged = false): PhysicalInventory {
+export interface GeneratedEntry {
+  type: 'directory' | 'file'
+  identity: string
+  sha256?: string
+  bytes?: number
+}
+const installedOutputRoots = [
+  'node_modules/.cache',
+  'node_modules/.vite-temp',
+  'node_modules/.vue-global-types',
+]
+export function isToolCachePath(path: string): boolean {
+  return /(?:^|\/)\.vite\/cache(?:\/|$)/.test(path.replaceAll('\\', '/').split(/[?#]/)[0] ?? '')
+}
+export function generatedOutput(
+  project = process.cwd(),
+  fresh = false,
+): Record<string, GeneratedEntry> {
+  const root = resolve(project)
+  const output: Record<string, GeneratedEntry> = {}
+  const optionalStat = (path: string) => {
+    try {
+      return lstatSync(join(root, path), { bigint: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+  }
+  function visit(path: string, cache: boolean): void {
+    const stat = lstatSync(join(root, path), { bigint: true })
+    if (stat.isSymbolicLink()) throw new Error(`Linked generated output: ${path}`)
+    const identity = `${String(stat.dev)}:${String(stat.ino)}`
+    if (stat.isDirectory()) {
+      if (!cache && !installedOutputRoots.includes(path) && path !== 'node_modules/.cache/prettier')
+        throw new Error(`Unexpected generated directory: ${path}`)
+      if (
+        cache &&
+        ['node_modules', '.bin', '.pnpm'].includes(
+          path.slice(path.lastIndexOf('/') + 1).toLowerCase(),
+        )
+      )
+        throw new Error(`Package directory in cache: ${path}`)
+      output[path] = { type: 'directory', identity }
+      for (const name of readdirSync(join(root, path)).sort()) {
+        if (!/^[\x20-\x7e]+$/.test(name) || name.includes('\\'))
+          throw new Error(`Invalid generated name: ${path}`)
+        const child = `${path}/${name}`
+        if (
+          !cache &&
+          child !== 'node_modules/.cache/prettier' &&
+          child !== 'node_modules/.vue-global-types/vue_3.5_1.d.ts'
+        )
+          throw new Error(`Unexpected generated output: ${child}`)
+        visit(child, cache)
+      }
+    } else if (stat.isFile()) {
+      if (stat.nlink !== 1n || (stat.mode & 0o111n) !== 0n)
+        throw new Error(`Linked or executable generated file: ${path}`)
+      const bytes = readFileSync(join(root, path))
+      const sha256 = digest(bytes)
+      if (!cache) {
+        if (
+          path !== 'node_modules/.vue-global-types/vue_3.5_1.d.ts' ||
+          bytes.length !== 6275 ||
+          sha256 !== 'c0839b07826141fc02396e0bd396f77da30e7d5eb5c46331a03c103fcdccd1e2'
+        )
+          throw new Error(`Unreviewed generated declaration: ${path}`)
+      } else {
+        if (!/\.(js|mjs|json|map|css)$/.test(path))
+          throw new Error(`Unknown cache file type: ${path}`)
+        const name = path.slice(path.lastIndexOf('/') + 1)
+        if (
+          name.toLowerCase() === 'package.json' &&
+          (name !== 'package.json' || bytes.toString('utf8') !== '{\n  "type": "module"\n}\n')
+        )
+          throw new Error(`Package manifest in cache: ${path}`)
+        const magic = bytes.subarray(0, 4).toString('hex')
+        if (
+          bytes.subarray(0, 2).toString() === 'MZ' ||
+          [
+            '7f454c46',
+            'feedface',
+            'feedfacf',
+            'cefaedfe',
+            'cffaedfe',
+            'cafebabe',
+            'bebafeca',
+            'cafebabf',
+            'bfbafeca',
+            '0061736d',
+          ].includes(magic) ||
+          bytes.subarray(0, 8).toString() === '!<arch>\n'
+        )
+          throw new Error(`Native payload in cache: ${path}`)
+      }
+      output[path] = { type: 'file', identity, sha256, bytes: bytes.length }
+    } else throw new Error(`Special generated output: ${path}`)
+  }
+  for (const path of installedOutputRoots) {
+    if (!optionalStat(path)) continue
+    if (fresh) throw new Error(`Generated output in fresh installation: ${path}`)
+    if (!optionalStat(path)?.isDirectory() || optionalStat(path)?.isSymbolicLink())
+      throw new Error(`Invalid generated scaffold: ${path}`)
+    visit(path, false)
+  }
+  if (optionalStat('.vite')) regularDirectory(join(root, '.vite'))
+  if (optionalStat('.vite/cache')) {
+    if (fresh) throw new Error('Generated cache in fresh installation')
+    regularDirectory(join(root, '.vite/cache'))
+    const parent = lstatSync(join(root, '.vite'), { bigint: true })
+    output['.vite'] = { type: 'directory', identity: `${String(parent.dev)}:${String(parent.ino)}` }
+    visit('.vite/cache', true)
+  }
+  return output
+}
+export function installedPackages(
+  project = process.cwd(),
+  allowStaged = false,
+  fresh = false,
+): PhysicalInventory {
   const root = resolve(project)
   if (realpathSync(root) !== root) throw new Error('Linked project directory')
   const locked = checkProfile(root)
+  const generated = generatedOutput(root, fresh)
   const lock = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8')
   const graph = snapshots(lock)
   const rootEdges = importerEdges(lock, json(join(root, 'package.json')))
@@ -353,6 +474,8 @@ export function installedPackages(project = process.cwd(), allowStaged = false):
   const knownMetadata = new Set(metadataPaths)
   function walk(path: string, owner?: Instance): void {
     const rel = normalized(path)
+    // The dedicated classifier has fully walked these exact output subtrees.
+    if (installedOutputRoots.includes(rel) && rel in generated) return
     const stat = lstatSync(path, { bigint: true })
     identities[rel] = `${String(stat.dev)}:${String(stat.ino)}`
     if (stat.isSymbolicLink()) {
@@ -457,6 +580,7 @@ export function installedPackages(project = process.cwd(), allowStaged = false):
     identities,
     metadata,
     candidates: instances.filter((item) => !item.eligible),
+    generated,
   }
 }
 export async function rawLicenses(root = process.cwd()): Promise<unknown> {

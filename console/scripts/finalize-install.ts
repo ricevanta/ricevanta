@@ -23,6 +23,7 @@ function state(inventory: PhysicalInventory) {
     links: inventory.links,
     metadata: inventory.metadata,
     identities: inventory.identities,
+    generated: inventory.generated,
   }
 }
 function retained(inventory: PhysicalInventory) {
@@ -61,7 +62,7 @@ export async function finalizeInstall(
   catalogue: (root: string) => Promise<unknown> = rawLicenses,
 ) {
   try {
-    const before = installedPackages(root, true)
+    const before = installedPackages(root, true, true)
     const raw = await catalogue(before.root)
     const licenses = validateCatalogue(before, raw).map((pkg) => ({
       ...pkg,
@@ -77,7 +78,7 @@ export async function finalizeInstall(
     }))
     const expected = retained(before)
     // Reading pnpm's catalogue is not an authority to mutate: repeat complete preflight afterward.
-    const rechecked = installedPackages(root, true)
+    const rechecked = installedPackages(root, true, true)
     if (JSON.stringify(state(before)) !== JSON.stringify(state(rechecked)))
       throw new Error('Installation changed during preflight')
     const incoming = Object.entries(before.links).filter(([path]) =>
@@ -154,7 +155,7 @@ export async function finalizeInstall(
         rmdirSync(path)
       }
     }
-    const after = installedPackages(before.root)
+    const after = installedPackages(before.root, false, true)
     validateCatalogue(after, raw)
     if (JSON.stringify(expected) !== JSON.stringify(retained(after)))
       throw new Error('Retained installation changed')

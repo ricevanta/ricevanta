@@ -1,10 +1,43 @@
-import { afterEach, expect, it } from 'vitest'
-import { mkdirSync, rmSync, symlinkSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { afterEach, expect, it, vi } from 'vitest'
+import {
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  readFileSync,
+  linkSync,
+  chmodSync,
+  writeFileSync,
+  realpathSync,
+} from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { installedPackages, validateCatalogue } from '../../scripts/installed-packages.ts'
 import { tree } from '../fixtures/dependencies/install-tree.ts'
+const generatedStat = vi.hoisted(() => ({ executablePath: '', badNameDirectory: '' }))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    lstatSync: (...args: Parameters<typeof actual.lstatSync>) => {
+      const stat = actual.lstatSync(...args)
+      if (!stat || String(args[0]) !== generatedStat.executablePath) return stat
+      return new Proxy(stat, {
+        get(target, key, receiver): unknown {
+          if (key === 'mode')
+            return typeof target.mode === 'bigint' ? target.mode | 0o111n : target.mode | 0o111
+          return Reflect.get(target, key, receiver) as unknown
+        },
+      })
+    },
+    readdirSync: (...args: Parameters<typeof actual.readdirSync>) => {
+      if (String(args[0]) === generatedStat.badNameDirectory) return ['back\\slash.js']
+      return actual.readdirSync(...args)
+    },
+  }
+})
 const cleanups: (() => void)[] = []
 afterEach(() => {
+  generatedStat.executablePath = ''
+  generatedStat.badNameDirectory = ''
   cleanups.splice(0).forEach((cleanup) => {
     cleanup()
   })
@@ -170,5 +203,251 @@ it.each(['.hidden', 'node_modules/hidden'])(
       '{"name":"lightningcss-linux-x64-musl","version":"1.33.0","license":"MPL-2.0"}',
     )
     expect(() => installedPackages(value.root)).toThrow('Nested package')
+  },
+)
+
+it.each([
+  'node_modules/.cache',
+  'node_modules/.cache/prettier',
+  'node_modules/.vite-temp',
+  'node_modules/.vue-global-types',
+  '.vite/cache',
+  '.vite/cache/deps',
+])('audits exact generated scaffold %s without package evidence', (path) => {
+  const value = fixture()
+  mkdirSync(join(value.root, path), { recursive: true })
+  const inventory = installedPackages(value.root)
+  expect(inventory.pairs).toHaveLength(342)
+  expect(inventory.generated).toHaveProperty(path)
+})
+it('inventories the exact reviewed generated Vue declaration', () => {
+  const value = fixture()
+  value.put(
+    'node_modules/.vue-global-types/vue_3.5_1.d.ts',
+    readFileSync('tests/fixtures/dependencies/vue-global-types.txt', 'utf8'),
+  )
+  expect(
+    installedPackages(value.root).generated['node_modules/.vue-global-types/vue_3.5_1.d.ts']
+      ?.sha256,
+  ).toBe('c0839b07826141fc02396e0bd396f77da30e7d5eb5c46331a03c103fcdccd1e2')
+})
+it.each([
+  '.cache/package.json',
+  '.cache/prettier/package.json',
+  '.vite-temp/package.json',
+  '.vue-global-types/package.json',
+  '.cache/prettier/file',
+  '.vite-temp/module.mjs',
+  '.vue-global-types/vue_3.5_0.d.ts',
+  '.vue-global-types/Vue_3.5_1.d.ts',
+  '.cache/other/file',
+  '.vite/result.json',
+])('rejects unapproved installed generated output %s', (path) => {
+  const value = fixture()
+  value.put(`node_modules/${path}`, '{}')
+  expect(() => installedPackages(value.root)).toThrow()
+})
+it.each(['byte', 'size', 'hardlink', 'symlink', 'executable'])(
+  'rejects modified generated declaration %s',
+  (kind) => {
+    const value = fixture()
+    const path = 'node_modules/.vue-global-types/vue_3.5_1.d.ts'
+    const content = readFileSync('tests/fixtures/dependencies/vue-global-types.txt', 'utf8')
+    value.put(
+      path,
+      kind === 'byte' ? 'X' + content.slice(1) : kind === 'size' ? content + '\n' : content,
+    )
+    if (kind === 'hardlink')
+      linkSync(join(value.root, path), join(value.root, 'linked-declaration'))
+    if (kind === 'symlink') {
+      rmSync(join(value.root, path))
+      symlinkSync(join(value.root, 'package.json'), join(value.root, path), 'file')
+    }
+    if (kind === 'executable') {
+      chmodSync(join(value.root, path), 0o755)
+      generatedStat.executablePath = join(value.root, path)
+    }
+    expect(() => installedPackages(value.root)).toThrow()
+  },
+)
+it('enumerates relocated optimizer output and exact type-only manifest', () => {
+  const value = fixture()
+  for (const extension of ['js', 'mjs', 'json', 'map', 'css'])
+    value.put(`.vite/cache/deps/entry.${extension}`, '{}')
+  value.put('.vite/cache/deps/package.json', '{\n  "type": "module"\n}\n')
+  const inventory = installedPackages(value.root)
+  expect(Object.keys(inventory.generated).filter((path) => path.endsWith('.js'))).toEqual([
+    '.vite/cache/deps/entry.js',
+  ])
+  expect(inventory.pairs).toHaveLength(342)
+})
+it.each([
+  'node_modules/hidden.js',
+  '.pnpm/hidden.js',
+  '.bin/hidden.js',
+  'deps/package.json',
+  'deps/Package.json',
+  'deps/addon.node',
+  'deps/.hidden',
+  'deps/entry.JS',
+  'deps/back\\slash.js',
+])('rejects invalid relocated cache content %s', (path) => {
+  const value = fixture()
+  if (path.includes('\\')) {
+    value.put('.vite/cache/deps/valid.js', '{}')
+    generatedStat.badNameDirectory = join(value.root, '.vite/cache/deps')
+  } else value.put(`.vite/cache/${path}`, '{}')
+  expect(() => installedPackages(value.root)).toThrow()
+})
+it.each(['elf', 'pe', 'macho', 'wasm', 'executable', 'hardlink', 'link', 'package-link'])(
+  'rejects unsafe relocated cache payload %s',
+  (kind) => {
+    const value = fixture()
+    value.put('.vite/cache/deps/payload.js', '{}')
+    const path = join(value.root, '.vite/cache/deps/payload.js')
+    if (['elf', 'pe', 'macho', 'wasm'].includes(kind))
+      writeFileSync(
+        path,
+        Buffer.from(
+          kind === 'elf'
+            ? [127, 69, 76, 70]
+            : kind === 'pe'
+              ? [77, 90]
+              : kind === 'macho'
+                ? [254, 237, 250, 207]
+                : [0, 97, 115, 109],
+        ),
+      )
+    if (kind === 'executable') {
+      chmodSync(path, 0o755)
+      generatedStat.executablePath = path
+    }
+    if (kind === 'hardlink') linkSync(path, join(value.root, 'cache-link'))
+    if (kind === 'link') symlinkSync(path, join(value.root, '.vite/cache/deps/linked.js'), 'file')
+    if (kind === 'package-link')
+      symlinkSync(path, join(value.root, 'node_modules/cache-package'), 'file')
+    expect(() => installedPackages(value.root)).toThrow()
+  },
+)
+it.each([
+  'node_modules/.cache',
+  'node_modules/.cache/prettier',
+  'node_modules/.vite-temp',
+  'node_modules/.vue-global-types',
+  '.vite',
+  '.vite/cache',
+])('rejects linked generated directory component %s', (path) => {
+  const value = fixture()
+  mkdirSync(dirname(join(value.root, path)), { recursive: true })
+  symlinkSync(value.root, join(value.root, path), 'junction')
+  expect(() => installedPackages(value.root)).toThrow()
+})
+
+it('rejects a directory masquerading as the generated declaration file', () => {
+  const value = fixture()
+  mkdirSync(join(value.root, 'node_modules/.vue-global-types/vue_3.5_1.d.ts'), { recursive: true })
+  expect(() => installedPackages(value.root)).toThrow()
+})
+
+it('classifies actual pinned producer output from a fresh inert fixture', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { runTool } = await import('../../scripts/run-tool.ts')
+  const { generatedOutput } = await import('../../scripts/installed-packages.ts')
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'rv-generated-output-')))
+  try {
+    mkdirSync(join(root, 'node_modules'))
+    writeFileSync(
+      join(root, 'package.json'),
+      '{"name":"inert-generated-output","private":true,"type":"module"}\n',
+    )
+    writeFileSync(join(root, 'sample.ts'), 'export const value = 1;\n')
+    expect(
+      (
+        await runTool(
+          process.execPath,
+          [resolve('node_modules/prettier/bin/prettier.cjs'), '--check', 'sample.ts'],
+          root,
+        )
+      ).code,
+    ).toBe(0)
+    expect(generatedOutput(root)).toHaveProperty('node_modules/.cache/prettier')
+    writeFileSync(
+      join(root, 'vitest.config.mjs'),
+      "import { fileURLToPath } from 'node:url'\nexport default { cacheDir: fileURLToPath(new URL('./.vite/cache', import.meta.url)), test: { globals: true, include: ['sample.test.ts'], environment: 'node' } }\n",
+    )
+    writeFileSync(
+      join(root, 'sample.test.ts'),
+      "test('inert generated output', () => { expect(1).toBe(1) })\n",
+    )
+    expect(
+      (
+        await runTool(
+          process.execPath,
+          [resolve('node_modules/vitest/vitest.mjs'), 'run', '--config', 'vitest.config.mjs'],
+          root,
+        )
+      ).code,
+    ).toBe(0)
+    expect(
+      Object.keys(generatedOutput(root)).some(
+        (path) => path.startsWith('.vite/cache/vitest/') && path.endsWith('/results.json'),
+      ),
+    ).toBe(true)
+    symlinkSync(realpathSync('node_modules/vue'), join(root, 'node_modules/vue'), 'dir')
+    writeFileSync(
+      join(root, 'sample.vue'),
+      '<script setup lang="ts">\nconst value = 1\n</script>\n<template><div>{{ value }}</div></template>\n',
+    )
+    writeFileSync(
+      join(root, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          lib: ['ES2022', 'DOM'],
+          types: [],
+        },
+        include: ['sample.vue'],
+        vueCompilerOptions: { strictTemplates: true },
+      }),
+    )
+    expect(
+      (
+        await runTool(
+          process.execPath,
+          [resolve('node_modules/vue-tsc/bin/vue-tsc.js'), '--noEmit', '-p', 'tsconfig.json'],
+          root,
+        )
+      ).code,
+    ).toBe(0)
+    expect(generatedOutput(root)['node_modules/.vue-global-types/vue_3.5_1.d.ts']?.sha256).toBe(
+      'c0839b07826141fc02396e0bd396f77da30e7d5eb5c46331a03c103fcdccd1e2',
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}, 30000)
+
+it.each([
+  '{\n  "type": "module"\n}',
+  '{\r\n  "type": "module"\r\n}\r\n',
+  '{"type":"module"}\n',
+  '{\n  "type": "module",\n  "name": "hidden-package"\n}\n',
+])('rejects nonexact Vite cache package manifest %s', (content) => {
+  const value = fixture()
+  value.put('.vite/cache/deps/package.json', content)
+  expect(() => installedPackages(value.root)).toThrow('Package manifest in cache')
+})
+it.each(['deps/unicode-é.js', 'node_modules/.hidden/package.json'])(
+  'rejects nonconforming cache names or nested packages %s',
+  (path) => {
+    const value = fixture()
+    value.put(`.vite/cache/${path}`, '{}')
+    expect(() => installedPackages(value.root)).toThrow()
   },
 )
