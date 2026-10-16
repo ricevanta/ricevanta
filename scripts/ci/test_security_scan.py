@@ -285,7 +285,7 @@ class SemgrepExceptionTests(unittest.TestCase):
         self.entry=dict(advisoryId='CVE-2026-93687',osvAdvisoryId='GHSA-vfj7-8cjw-p6xm',product='sca',severity='ERROR',
             rule='ssc-dc89f360-8dea-4ff2-92c4-e67670eb22ef',package='braces',packageVersion='3.0.3',ecosystem='npm',
             path='console/pnpm-lock.yaml',line=870,consoleFiles=117,
-            consoleSha256='72a9d16e71a9f481a6a3e0aabebb6ed74c7fb989cc059bc488d5994a5426369b',
+            consoleSha256='84c5c6ead3f3ee54ecb326e021cbc334eb80322d4c81a0394b9bb2be73fc6135',
             rationale='CVE-2026-93687 consumes only reviewed repository build patterns.',
             provenance='console/security/osv-exceptions.json; docs/specs/console-foundation.md')
         self.document=dict(version=1,scanner='1.178.0',exception=[self.entry])

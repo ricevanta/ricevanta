@@ -43,6 +43,8 @@ Owner: implementer. Own `tests/footprint/check.py`, `budgets.json`, `test_check.
 - [x] Run `python -B -m unittest discover -s tests/footprint -p test_check.py -v`; require pass.
 - [ ] CI proof: `footprint-unit` on all three hosts.
 
+The bounded native unit-leaf wiring and exact skip/evidence contract for Tasks 1 through 3 live in [contract validation Task 3](contract-validation.md#task-3-native-footprint-unit-leaves). That work does not satisfy Task 4 or promote a baseline.
+
 ## Task 4. The footprint job and the baselines
 
 Owner: implementer, coordinated with the CI owner; the coordinator lands the baselines. Own the `agent-footprint` job in `.github/workflows/agent.yml`, `targets.toml` IDs `footprint-linux-x64`, `footprint-windows-x64`, `footprint-macos-arm64`, the `check_policy.py` rule that an `agent/` change must select them, and `tests/footprint/baselines/`.

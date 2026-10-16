@@ -260,7 +260,8 @@ def responses(platform=HOST):
         'go': go_handler(platform),
         'python3.14': python_check(platform), 'python': python_check(platform),
         'rustc': RUSTC_VV.format(triple=spec['rust']), 'cargo': cargo, 'rustfmt': RUSTFMT, 'cargo-clippy': CLIPPY,
-        'node': 'v24.21.0 linux-x64\n', 'pnpm': pnpm,
+        'node': 'v24.21.0 ' + spec['node'] + '\n', 'pnpm': pnpm,
+        'otool': 'Load command 0\n          cmd LC_LOAD_DYLIB\n         name /usr/lib/libSystem.B.dylib (offset 24)\n',
         'chrome-headless-shell': 'Chrome Headless Shell 147.0.7727.15 \n',
         'firefox': 'Mozilla Firefox 148.0.2\n',
         'ffmpeg-linux': 'ffmpeg version n7.0.1-playwright-build-1011 Copyright (c) 2000-2024 the FFmpeg developers\n',
@@ -346,10 +347,12 @@ class Fixtures:
             self.add(tool, '1.99.0', tar_bytes(members, mode), f'{tool}.{extension}')
 
     def node(self):
-        members = [directory('node-v24.21.0-linux-x64'), regular('node-v24.21.0-linux-x64/LICENSE', b'MIT'),
-                   directory('node-v24.21.0-linux-x64/bin'), regular('node-v24.21.0-linux-x64/bin/node', b'#!/bin/sh\n', 0o755),
-                   symlink('node-v24.21.0-linux-x64/bin/npm', '../lib/node_modules/npm/bin/npm-cli.js')]
-        return self.add('node', '24.21.0', tar_bytes(members, 'w:xz'), 'node.tar.xz')
+        top = 'node-v24.21.0-' + bootstrap.PLATFORMS[self.platform]['node']
+        members = [directory(top), regular(top + '/LICENSE', b'MIT'), directory(top + '/bin'),
+                   regular(top + '/bin/node', b'#!/bin/sh\n', 0o755),
+                   symlink(top + '/bin/npm', '../lib/node_modules/npm/bin/npm-cli.js')]
+        return self.add('node', '24.21.0', tar_bytes(members, 'w:gz' if self.platform == 'macos-arm64' else 'w:xz'),
+                        'node.tar.gz' if self.platform == 'macos-arm64' else 'node.tar.xz')
 
     def pnpm(self):
         manifest = json.dumps({'name': 'pnpm', 'version': '11.18.0', 'license': 'MIT', 'bin': {'pnpm': 'bin/pnpm.mjs'}}).encode()
@@ -358,15 +361,16 @@ class Fixtures:
                    directory('package/dist'), regular('package/dist/pnpm.mjs', b'export {}\n')]
         return self.add('pnpm', '11.18.0', tar_bytes(members), 'pnpm.tgz')
 
-    def playwright(self, webkit_link='libwebkitgtk-6.0.so.4.17.0'):
+    def playwright(self):
+        if self.platform == 'macos-arm64':
+            self.add('webkit', '2272', zip_bytes([('pw_run.sh', b'#!/bin/sh\n', 0o755, False),
+                ('Playwright.app/Contents/MacOS/Playwright', b'\xcf\xfa\xed\xfe' + b'\0' * 12 + struct.pack('<I', 1) + b'\0' * 12, 0o755, False)]), 'webkit-mac-15-arm64.zip')
+            return
         self.add('chromium-headless-shell', '1217', zip_bytes([('chrome-headless-shell-linux64/chrome-headless-shell', b'ELF', 0o755, False),
                                                               ('chrome-headless-shell-linux64/LICENSE.headless_shell', b'credits', 0o644, False)]), 'chrome-headless-shell-linux64.zip')
         self.add('firefox', '1511', zip_bytes([('firefox/firefox', b'ELF', 0o755, False), ('firefox/omni.ja', b'PK', 0o644, False),
                                                ('firefox/libmozgtk.so', b'ELF', 0o755, False),
                                                ('firefox/gmp-clearkey/0.1/libclearkey.so', b'ELF', 0o755, False)]), 'firefox-ubuntu-24.04.zip')
-        self.add('webkit', '2272', zip_bytes([('pw_run.sh', b'#!/bin/sh\n', 0o755, False), ('minibrowser-gtk/MiniBrowser', b'#!/bin/sh\n', 0o755, False),
-                                              ('minibrowser-gtk/lib/libwebkitgtk-6.0.so.4.17.0', b'ELF', 0o755, False),
-                                              ('minibrowser-gtk/lib/libwebkitgtk-6.0.so.4', webkit_link.encode(), 0o777, True)]), 'webkit-ubuntu-24.04.zip')
         self.add('ffmpeg', '1011', zip_bytes([('COPYING.LGPLv2.1', b'LGPL', 0o644, False), ('ffmpeg-linux', b'ELF', 0o755, False)]), 'ffmpeg-linux.zip')
 
     def lock(self, extra=()):
@@ -447,7 +451,8 @@ class BootstrapTests(unittest.TestCase):
             tools = {e['tool'] for e in entries if e['platform'] == platform}
             self.assertTrue({'go', 'python', 'rustc', 'rust-std', 'cargo', 'rustfmt', 'clippy'} <= tools, platform)
         linux = {e['tool'] for e in entries if e['platform'] == 'linux-x64'}
-        self.assertTrue({'node', 'pnpm', 'chromium-headless-shell', 'firefox', 'webkit', 'ffmpeg'} <= linux)
+        self.assertTrue({'node', 'pnpm', 'chromium-headless-shell', 'firefox', 'ffmpeg'} <= linux)
+        self.assertNotIn('webkit', linux)
 
     def test_lock_review_rejects_defects(self):
         good = dict(id='go-1.27.1-linux-x64', tool='go', version='1.27.1', platform='linux-x64',
@@ -499,7 +504,7 @@ class BootstrapTests(unittest.TestCase):
     def test_cold_install_of_every_tool_path(self):
         self.fixtures.go(); self.fixtures.python(); self.fixtures.rust()
         tools = 'python,go,rust'
-        if HOST == 'linux-x64':
+        if HOST in ('linux-x64', 'macos-arm64'):
             self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
             tools += ',node,pnpm,playwright'
         code, error, journal, execute, dest = self.run_bootstrap(tools)
@@ -529,7 +534,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse((dest / '.downloads').exists(), 'payloads are deleted after admission in none mode')
         self.assertFalse((dest / '.staging').exists())
         executed = [Path(c[0]) for c in execute.calls]
-        self.assertTrue(all(dest in p.parents or self.framework in p.parents or p.name in ('sudo', 'ldd', 'ldconfig') for p in executed), executed)
+        self.assertTrue(all(dest in p.parents or self.framework in p.parents or p.name in ('sudo', 'ldd', 'ldconfig', 'otool') for p in executed), executed)
         # cargo fmt and cargo clippy are proven with only admitted directories and homes in view.
         for argv, call_env in zip(execute.calls, execute.envs):
             if Path(argv[0]).stem == 'cargo' and argv[1:2] in (['fmt'], ['clippy']):
@@ -544,10 +549,8 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(env['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'], '1')
             self.assertEqual(env['pnpm_config_pm_on_fail'], 'error')
             self.assertFalse(any(key.startswith('npm_config_') for key in env), 'pnpm 11 reads pnpm_config_*, not npm_config_*')
-            for name in ('chromium_headless_shell-1217', 'firefox-1511', 'webkit-2272', 'ffmpeg-1011'):
+            for name in ('chromium_headless_shell-1217', 'firefox-1511', 'ffmpeg-1011'):
                 self.assertTrue((dest / 'ms-playwright' / name / 'INSTALLATION_COMPLETE').is_file(), name)
-            link = dest / 'ms-playwright' / 'webkit-2272' / 'minibrowser-gtk' / 'lib' / 'libwebkitgtk-6.0.so.4'
-            self.assertTrue(link.is_symlink() and os.readlink(link) == 'libwebkitgtk-6.0.so.4.17.0')
             self.assertTrue((dest / 'bin' / 'pnpm').exists())
             self.assertIn(str(dest / 'node' / 'bin'), paths)
             self.assertTrue((dest / 'python' / 'bin' / 'python').is_symlink())
@@ -1045,7 +1048,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(code, 1); self.assertIn('version', error)
 
     def test_browser_libraries_follow_playwright_host_validation(self):
-        """Bundled libraries resolve through the browser's own directories; WebKit's dlopen libraries must be in the loader cache."""
+        """Linux checks only admitted headless-shell and Firefox libraries, without WebKit dependencies."""
         self.fixtures = Fixtures(self.base, 'linux-x64')
         self.fixtures.node(); self.fixtures.pnpm(); self.fixtures.playwright()
         execute = FakeExecute(responses('linux-x64'))
@@ -1062,10 +1065,7 @@ class BootstrapTests(unittest.TestCase):
         lddcalls = [c[-1] for c in execute.calls if c[0] == 'ldd']
         self.assertIn(str(dest / 'ms-playwright' / 'firefox-1511' / 'firefox' / 'firefox'), lddcalls)
         self.assertFalse(any('gmp-clearkey' in c for c in lddcalls), 'only the directories Playwright validates are inspected')
-        canned = responses('linux-x64')
-        canned['ldconfig'] = '\tlibGLESv2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so.2\n'
-        code, error, *_ = self.run_bootstrap('node,pnpm,playwright', execute=FakeExecute(canned), dest=self.base / 'dest-dlopen')
-        self.assertEqual(code, 1); self.assertIn('webkit', error); self.assertIn('libx264.so', error)
+        self.assertFalse(any(Path(c[0]).name == 'ldconfig' for c in execute.calls))
 
     def test_rust_components_must_come_from_the_admitted_rustc_build(self):
         self.fixtures.rust()
@@ -1429,3 +1429,145 @@ class HostIdentityTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class BrowserMigrationTests(unittest.TestCase):
+    def test_exact_native_browser_selections(self):
+        lock = bootstrap.load_lock(LOCK)
+        self.assertEqual({e['tool'] for e in bootstrap.select(lock, 'linux-x64', 'playwright')},
+                         {'chromium-headless-shell', 'firefox', 'ffmpeg'})
+        self.assertEqual({e['tool'] for e in bootstrap.select(lock, 'macos-arm64', 'node,pnpm,playwright')},
+                         {'node', 'pnpm', 'webkit'})
+        for platform, tool in [('macos-arm64', 'webkit'), ('linux-x64', 'firefox')]:
+            altered = {'entries': [e for e in lock['entries'] if (e['tool'], e['platform']) != (tool, platform)]}
+            with self.assertRaises(bootstrap.BootstrapError): bootstrap.select(altered, platform, 'playwright')
+        self.assertFalse(any(e['platform'].startswith('linux') and e['tool'] == 'webkit' for e in lock['entries']))
+
+    def test_retained_linux_webkit_row_is_refused(self):
+        lock = bootstrap.load_lock(LOCK)
+        webkit = next(e for e in lock['entries'] if e['tool'] == 'webkit')
+        altered = {**lock, 'entries': lock['entries'] + [{**webkit, 'platform': 'linux-x64', 'id': 'webkit-2272-linux-x64'}]}
+        with mock.patch.object(bootstrap, 'load_lock', return_value=altered):
+            self.assertTrue(any('browser row on unsupported host' in error for error in bootstrap.lock_errors(ROOT)))
+
+    def test_captured_webkit_loader_environment_commands(self):
+        """All 15 recorded commands from the admitted archive use their containing executable's bundle root."""
+        xpc_names = ['Networking', 'WebContent.CaptivePortal', 'WebContent', 'WebContent.Development',
+                     'Model', 'GPU', 'WebContent.EnhancedSecurity']
+        commands = {}
+        for name in xpc_names:
+            member = f'com.apple.WebKit.{name}.xpc/Contents/MacOS/com.apple.WebKit.{name}.Development'
+            commands[member] = ['DYLD_FRAMEWORK_PATH=@executable_path/../../..',
+                                'DYLD_LIBRARY_PATH=@executable_path/../../..']
+        commands['JavaScriptCore.framework/Versions/A/Helpers/jsc'] = ['DYLD_FRAMEWORK_PATH=@executable_path/../../../..']
+        self.assertEqual(sum(map(len, commands.values())), 15)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            for member in commands:
+                binary = root / member
+                binary.parent.mkdir(parents=True, exist_ok=True)
+                binary.write_bytes(b'\xcf\xfa\xed\xfe' + b'\0' * 12 + struct.pack('<I', len(commands[member])) + b'\0' * 12)
+            def execute(argv):
+                member = Path(argv[-1]).relative_to(root).as_posix()
+                return 0, ''.join(f'Load command {i}\n          cmd LC_DYLD_ENVIRONMENT\n         name {value} (offset 12)\n'
+                                  for i, value in enumerate(commands[member]))
+            ctx = mock.Mock(execute=mock.Mock(side_effect=execute))
+            bootstrap.check_macho_browser(ctx, {'id': 'webkit-2272-macos-arm64'}, root)
+            self.assertEqual(ctx.execute.call_count, 8)
+
+    def test_loader_environment_refuses_external_escaping_and_injection_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            binary = root / 'Example.xpc/Contents/MacOS/Example'
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b'\xcf\xfa\xed\xfe' + b'\0' * 12 + struct.pack('<I', 1) + b'\0' * 12)
+            values = [
+                'DYLD_INSERT_LIBRARIES=@executable_path/../../..',
+                'DYLD_FALLBACK_LIBRARY_PATH=@executable_path/../../..',
+                'DYLD_FRAMEWORK_PATH=/System/Library/Frameworks',
+                'DYLD_LIBRARY_PATH=/tmp',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../..',
+                'DYLD_LIBRARY_PATH=@loader_path/../../..',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../missing',
+                'DYLD_LIBRARY_PATH=@executable_path/../../..:/tmp',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../$(id)',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../;id',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../"quoted"',
+                'DYLD_LIBRARY_PATH=@executable_path/../../../back\\slash',
+                'DYLD_LIBRARY_PATH=@executable_path/../../..\nDYLD_INSERT_LIBRARIES=/tmp/evil',
+                'DYLD_LIBRARY_PATH=@executable_path/../../..\x00suffix',
+                'DYLD_LIBRARY_PATH=@executable_path/../../.. (offset 12)\nDYLD_INSERT_LIBRARIES=/tmp/evil',
+                'DYLD_LIBRARY_PATH=@executable_path/../../.. (offset 12)\nLoad command 1\n          cmd LC_UUID\n         uuid forged',
+                'DYLD_LIBRARY_PATH=', 'DYLD_LIBRARY_PATH',
+            ]
+            for value in values:
+                with self.subTest(value=value), self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.validate_macho_environment(binary, root, value)
+                output = 'Load command 0\n          cmd LC_DYLD_ENVIRONMENT\n         name ' + value + ' (offset 12)\n'
+                with self.subTest(otool=value), self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.check_macho_browser(mock.Mock(execute=lambda argv: (0, output)), {'id': 'webkit-2272-macos-arm64'}, root)
+            if POSIX:
+                (root / 'outside').symlink_to(root.parent, target_is_directory=True)
+                with self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.validate_macho_environment(binary, root, 'DYLD_LIBRARY_PATH=@executable_path/../../../outside')
+
+    @unittest.skipUnless(os.environ.get('RICEVANTA_TEST_WEBKIT_ARCHIVE'), 'requires the prefetched real WebKit archive; native CI admits it directly')
+    def test_actual_webkit_archive_all_loader_commands(self):
+        """Translate actual Mach-O command bytes to Apple's documented otool spelling, without native execution."""
+        entry = next(e for e in bootstrap.load_lock(LOCK)['entries'] if e['tool'] == 'webkit')
+        archive = Path(os.environ['RICEVANTA_TEST_WEBKIT_ARCHIVE'])
+        bootstrap.verify_file(archive, entry)
+        self.assertEqual(entry['sha256'], '2a2ed27069d2ca9ff1650202e6c4024b8165b14a8c9d9f999cc90b4436e3ae15')
+        names = {0xc: 'LC_LOAD_DYLIB', 0x18: 'LC_LOAD_WEAK_DYLIB', 0x80000018: 'LC_LOAD_WEAK_DYLIB',
+                 0x1f: 'LC_REEXPORT_DYLIB', 0x8000001f: 'LC_REEXPORT_DYLIB', 0x80000023: 'LC_LOAD_UPWARD_DYLIB',
+                 0x20: 'LC_LAZY_LOAD_DYLIB', 0xe: 'LC_LOAD_DYLINKER', 0x8000001c: 'LC_RPATH', 0x27: 'LC_DYLD_ENVIRONMENT'}
+        other_names = {0x2: 'LC_SYMTAB', 0xb: 'LC_DYSYMTAB', 0xd: 'LC_ID_DYLIB', 0x14: 'LC_SUB_UMBRELLA',
+                       0x19: 'LC_SEGMENT_64', 0x1b: 'LC_UUID', 0x1d: 'LC_CODE_SIGNATURE', 0x1e: 'LC_SEGMENT_SPLIT_INFO',
+                       0x26: 'LC_FUNCTION_STARTS', 0x29: 'LC_DATA_IN_CODE', 0x2a: 'LC_SOURCE_VERSION',
+                       0x32: 'LC_BUILD_VERSION', 0x80000028: 'LC_MAIN', 0x80000033: 'LC_DYLD_EXPORTS_TRIE',
+                       0x80000034: 'LC_DYLD_CHAINED_FIXUPS'}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / 'webkit'
+            members = bootstrap.inspect_archive(archive, entry, bootstrap.Host('macos-arm64'))
+            bootstrap.extract_archive(archive, members, root, entry)
+            outputs, environment = {}, {}
+            for binary in sorted(root.rglob('*')):
+                if not binary.is_file() or binary.is_symlink(): continue
+                data = binary.read_bytes()
+                if data[:4] != b'\xcf\xfa\xed\xfe': continue
+                offset, blocks = 32, []
+                for index in range(struct.unpack_from('<I', data, 16)[0]):
+                    command, size = struct.unpack_from('<II', data, offset)
+                    self.assertGreaterEqual(size, 8)
+                    self.assertLessEqual(offset + size, len(data))
+                    if command in names:
+                        start = struct.unpack_from('<I', data, offset + 8)[0]
+                        value = data[offset + start:offset + size].split(b'\0')[0].decode('ascii')
+                        field = 'path' if command == 0x8000001c else 'name'
+                        blocks.append(f'Load command {index}\n          cmd {names[command]}\n      cmdsize {size}\n         {field} {value} (offset {start})\n')
+                        if command == 0x27: environment.setdefault(binary, []).append(value)
+                    else:
+                        blocks.append(f'Load command {index}\n          cmd {other_names[command]}\n      cmdsize {size}\n')
+                    offset += size
+                outputs[str(binary)] = ''.join(blocks)
+            self.assertEqual((len(outputs), len(environment), sum(map(len, environment.values()))), (17, 8, 15))
+            ctx = mock.Mock(execute=mock.Mock(side_effect=lambda argv: (0, outputs[argv[-1]])))
+            bootstrap.check_macho_browser(ctx, entry, root)
+            self.assertEqual(ctx.execute.call_count, 17)
+
+    def test_macho_load_resolution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            binary = root / 'bin/MiniBrowser'
+            binary.parent.mkdir()
+            binary.write_bytes(b'')
+            (root / 'lib').mkdir()
+            (root / 'lib/own.dylib').write_bytes(b'')
+            (root / 'libswiftCompatibilitySpan.dylib').write_bytes(b'')
+            bootstrap.validate_macho_loads(binary, root, ['@rpath/libswiftCompatibilitySpan.dylib'], ['/usr/lib/swift'])
+            bootstrap.validate_macho_loads(binary, root, ['/usr/lib/libc.dylib', '/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit', '@loader_path/../lib/own.dylib'], [])
+            for load in ['/opt/homebrew/lib/other.dylib', '@loader_path/../../escape', '@rpath/missing.dylib', 'relative.dylib']:
+                with self.subTest(load=load), self.assertRaises(bootstrap.BootstrapError):
+                    bootstrap.validate_macho_loads(binary, root, [load], [])
+
+
+if __name__ == '__main__': unittest.main()
