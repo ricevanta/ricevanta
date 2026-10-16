@@ -4,7 +4,8 @@
 #![cfg(windows)]
 
 use ricevanta_os::{
-    CheckedDir, DirKind, FileKind, Mode, Object, Platform, ProtectionError, Reason,
+    CheckedDir, DirKind, FileKind, Mode, Object, Os, Platform, ProtectionError, Reason,
+    is_normal_form,
 };
 use ricevanta_os_windows::WindowsPlatform;
 use std::ffi::OsStr;
@@ -367,6 +368,182 @@ fn files_are_created_renamed_and_removed_in_the_checked_directory() {
     p.remove_in(&run_dir, log).unwrap();
     p.remove_in(&run_dir, log).unwrap();
     assert!(!tree.join("run").join("agent.log").exists());
+}
+
+fn new_output_has_trusted_owner_and_inherited_acl(
+    directory: &str,
+    dir_kind: DirKind,
+    name: &str,
+    file_kind: FileKind,
+    inherit_deny: bool,
+) {
+    let p = platform();
+    let tree = Tree::new();
+    let parent = tree.join(directory);
+    if inherit_deny {
+        icacls(&parent, &["/deny", "*S-1-5-32-545:(OI)(CI)(IO)(D)"]);
+    }
+    let dir = checked(&p, &parent, dir_kind).unwrap();
+    let path = parent.join(name);
+    assert!(!path.exists());
+    p.create_file(&dir, OsStr::new(name), file_kind)
+        .unwrap()
+        .write_all(b"new output")
+        .unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"new output");
+    // Independent persisted-descriptor oracle, including inheritance flags.
+    let facts = powershell(&format!(
+        "$acl = [System.IO.FileSystemAclExtensions]::GetAccessControl(\
+             [System.IO.FileInfo]::new({})); \
+         $raw = [System.Security.AccessControl.RawSecurityDescriptor]::new(\
+             $acl.GetSecurityDescriptorBinaryForm(), 0); \
+         $raw.Owner.Value; \
+         foreach ($ace in $raw.DiscretionaryAcl) {{ \
+             '{{0}}|{{1}}|{{2}}|{{3}}' -f [int]$ace.AceType, [int]$ace.AceFlags, \
+                 $ace.AccessMask, $ace.SecurityIdentifier.Value \
+         }}",
+        literal(&path)
+    ));
+    let mut got: Vec<_> = facts.lines().map(str::trim).collect();
+    let mut expected = vec![
+        "S-1-5-32-544",
+        "0|16|2032127|S-1-5-18",
+        "0|16|2032127|S-1-5-32-544",
+    ];
+    if inherit_deny {
+        expected.push("1|16|65536|S-1-5-32-545");
+    }
+    got.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(got, expected, "{}", path.display());
+}
+
+#[test]
+fn new_health_output_has_trusted_owner_and_inherited_acl() {
+    new_output_has_trusted_owner_and_inherited_acl(
+        "run",
+        DirKind::Runtime,
+        "health.json.tmp",
+        FileKind::HealthDocument,
+        false,
+    );
+}
+
+#[test]
+fn new_log_output_has_trusted_owner_and_inherited_acl() {
+    new_output_has_trusted_owner_and_inherited_acl(
+        "logs",
+        DirKind::Log,
+        "agent.log",
+        FileKind::Log,
+        false,
+    );
+}
+
+#[test]
+fn new_service_outputs_preserve_inheritable_denies() {
+    for (directory, dir_kind, name, file_kind) in [
+        (
+            "run",
+            DirKind::Runtime,
+            "health.json.tmp",
+            FileKind::HealthDocument,
+        ),
+        ("logs", DirKind::Log, "agent.log", FileKind::Log),
+    ] {
+        new_output_has_trusted_owner_and_inherited_acl(directory, dir_kind, name, file_kind, true);
+    }
+}
+
+#[test]
+fn new_service_outputs_support_long_normal_paths() {
+    let p = platform();
+    let tree = Tree::new();
+    let mut path = tree.0.clone();
+    for n in 0..3 {
+        path = path.join(format!("long-{n}-{}", "x".repeat(100)));
+        fs::create_dir(&path).unwrap();
+        powershell(&format!(
+            "$dir = [System.IO.DirectoryInfo]::new({}); \
+             $acl = [System.IO.FileSystemAclExtensions]::GetAccessControl($dir); \
+             $acl.SetOwner([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')); \
+             [System.IO.FileSystemAclExtensions]::SetAccessControl($dir, $acl)",
+            literal(&path)
+        ));
+    }
+    assert!(path.to_str().unwrap().encode_utf16().count() > 260);
+    let dir = checked(&p, &path, DirKind::Runtime).unwrap();
+    for (name, kind, expected) in [
+        ("health.json.tmp", FileKind::HealthDocument, b"B".as_slice()),
+        ("agent.log", FileKind::Log, b"AB".as_slice()),
+    ] {
+        for bytes in [b"A", b"B"] {
+            p.create_file(&dir, OsStr::new(name), kind)
+                .unwrap()
+                .write_all(bytes)
+                .unwrap();
+        }
+        assert_eq!(fs::read(path.join(name)).unwrap(), expected);
+    }
+}
+
+#[test]
+fn service_outputs_support_maximum_configured_directory_length() {
+    let p = platform();
+    for symbol in ['x', '🦀'] {
+        let tree = Tree::new();
+        let mut path = tree.0.clone();
+        // The schema counts Unicode scalar values, not bytes or UTF-16 units.
+        // Keep each added component within 200 units, below NTFS's 255-unit limit.
+        let mut remaining = 1_024 - path.to_str().unwrap().chars().count();
+        let max_component = 200 / symbol.len_utf16();
+        let components = remaining.div_ceil(max_component + 1);
+        for left in (1..=components).rev() {
+            let length = remaining / left - 1;
+            assert!((1..=max_component).contains(&length));
+            let component: String = std::iter::repeat_n(symbol, length).collect();
+            assert!(component.encode_utf16().count() <= 200);
+            path = path.join(component);
+            fs::create_dir(&path).unwrap();
+            powershell(&format!(
+                "$dir = [System.IO.DirectoryInfo]::new({}); \
+                 $acl = [System.IO.FileSystemAclExtensions]::GetAccessControl($dir); \
+                 $acl.SetOwner([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')); \
+                 [System.IO.FileSystemAclExtensions]::SetAccessControl($dir, $acl)",
+                literal(&path)
+            ));
+            remaining -= length + 1;
+        }
+        assert_eq!(remaining, 0);
+        let directory = path.to_str().unwrap();
+        assert_eq!(directory.chars().count(), 1_024);
+        assert!(is_normal_form(Os::Windows, directory));
+        for (dir_kind, name, kind, expected) in [
+            (
+                DirKind::Runtime,
+                "health.json.tmp",
+                FileKind::HealthDocument,
+                b"B".as_slice(),
+            ),
+            (DirKind::Log, "agent.log", FileKind::Log, b"AB".as_slice()),
+        ] {
+            let dir = checked(&p, &path, dir_kind).unwrap();
+            let output = path.join(name);
+            assert_eq!(output.to_str().unwrap().chars().count(), 1_025 + name.len());
+            assert!(!output.exists());
+            p.create_file(&dir, OsStr::new(name), kind)
+                .unwrap()
+                .write_all(b"A")
+                .unwrap();
+            assert_eq!(fs::read(&output).unwrap(), b"A");
+            // Reopen the existing trusted output: health truncates and log appends.
+            p.create_file(&dir, OsStr::new(name), kind)
+                .unwrap()
+                .write_all(b"B")
+                .unwrap();
+            assert_eq!(fs::read(&output).unwrap(), expected);
+        }
+    }
 }
 
 fn rejected_outputs_stay_unchanged(tamper: impl Fn(&Path), check_reason: impl Fn(Reason)) {
