@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -394,5 +395,34 @@ func TestManifestCheckedBeforeFiles(t *testing.T) {
 	} {
 		_, err := console.Verify(m, bad, devIdentity)
 		wantCode(t, err, console.CodeManifestInvalid)
+	}
+}
+
+func TestSidecarAdmission(t *testing.T) {
+	for _, name := range []string{"orphan.js.br", "orphan.js.gz", "bad.bin.br", "bad.bin.gz", "assets/index-Bx1a2b3c.js.br.gz", "assets/index-Bx1a2b3c.js.gz.br"} {
+		t.Run(name, func(t *testing.T) {
+			m, _ := fixture(t)
+			m[name] = &fstest.MapFile{Data: []byte("sidecar")}
+			if strings.HasPrefix(name, "bad.") {
+				m["bad.bin"] = &fstest.MapFile{Data: []byte("unknown")}
+			}
+			_, err := console.Verify(m, manifestFor(t, m), devIdentity)
+			wantCode(t, err, console.CodeUnknownType)
+		})
+	}
+	for _, name := range []string{"assets/index-Bx1a2b3c.js", "assets/index-Bx1a2b3c.js.br", "assets/index-Bx1a2b3c.js.gz"} {
+		for _, missing := range []bool{false, true} {
+			t.Run(name+"/"+strconv.FormatBool(missing), func(t *testing.T) {
+				m, mf := fixture(t)
+				if missing {
+					delete(m, name)
+				} else {
+					m[name].Data = append([]byte(nil), m[name].Data...)
+					m[name].Data[0] ^= 1
+				}
+				_, err := console.Verify(m, mf, devIdentity)
+				wantCode(t, err, console.CodeMismatch)
+			})
+		}
 	}
 }

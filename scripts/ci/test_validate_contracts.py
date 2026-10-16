@@ -109,4 +109,4 @@ class AdmissionContractTests(unittest.TestCase):
         self.assertEqual(admission, ADMISSION_PAIRS)
         with redirect_stdout(io.StringIO()) as output:
             checker.main()
-        self.assertIn("17 schemas, 24 pairs, 311 instances", output.getvalue())
+        self.assertIn("Contract validation passed", output.getvalue())

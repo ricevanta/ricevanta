@@ -169,3 +169,13 @@ func TestMethodNotAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestStoppingRejectsLateReady(t *testing.T) {
+	r := health.NewRegistry([]string{"api"})
+	r.SetAll(health.Stopping)
+	r.Set("api", health.Ready)
+	r.SetAll(health.Ready)
+	if code, body := r.Readiness(); code != 503 || string(body) != `{"status":"stopping","roles":{"api":"stopping"}}` {
+		t.Fatalf("late readiness: %d %s", code, body)
+	}
+}

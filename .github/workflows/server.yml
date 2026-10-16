@@ -54,6 +54,10 @@ jobs:
           printf '%s\n' "$unformatted"
           exit 1
         fi
+    - name: Test key-file group rules as root
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id server-keyfile-root --evidence "$RUNNER_TEMP/evidence"
     - name: Test
       shell: bash
       working-directory: .
@@ -63,14 +67,9 @@ jobs:
       working-directory: .
       run: python -B scripts/ci/run_selected.py --id key-admission-bench --evidence "$RUNNER_TEMP/evidence"
     - name: Ingest cost model
-      run: |
-        set -euo pipefail
-        log="$RUNNER_TEMP/ingest-measurements/cost-model.log"
-        mkdir -p "$RUNNER_TEMP/ingest-measurements"
-        RICEVANTA_COST_MODEL=full GOGC=100 go test -count=1 -timeout=15m ./internal/events/body -run '^TestDecodeCostModel$' -v 2>&1 | tee "$log"
-        go test -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body 2>&1 | tee -a "$log"
-        test "$(grep -c 'COST_MODEL_CASES n=34$' "$log")" -eq 1
-        test "$(grep -c 'COST_MEASUREMENT ' "$log")" -eq 34
+      shell: bash
+      working-directory: .
+      run: python -B scripts/ci/run_selected.py --id ingest-cost-model --evidence "$RUNNER_TEMP/evidence"
     - name: Verify ingest measurement log
       if: always()
       run: |
@@ -286,7 +285,7 @@ jobs:
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}
-        path: server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**
+        path: ${{ matrix.corpus }}
         if-no-files-found: ignore
         retention-days: 30
     - name: Write successful leaf receipt

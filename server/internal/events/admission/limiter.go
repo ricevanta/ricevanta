@@ -287,9 +287,9 @@ func priorityQueue(class batch.SpoolClass) int {
 // Receive admits a request after authentication and header parsing, before any
 // body byte. It checks the device's slots, then its bucket, then in-flight
 // capacity, and charges MinCharge on admission and on concurrency and
-// in-flight refusals whenever the bucket holds it; a bucket below MinCharge
-// refuses with device_rate and charges nothing. It never blocks. A refusal
-// returns a nil ticket.
+// capacity refusals whenever the bucket holds it. A deficit counts as rate
+// evidence even when device_concurrency remains the response reason. Receive
+// never blocks. A refusal returns a nil ticket.
 func (l *Limiter) Receive(device string, class batch.SpoolClass) (*Ticket, Decision, error) {
 	if device == "" {
 		return nil, Decision{}, ErrDevice
@@ -310,21 +310,35 @@ func (l *Limiter) Receive(device string, class batch.SpoolClass) (*Ticket, Decis
 	// Check order: device slots, then the bucket, then in-flight capacity.
 	e.refill(now)
 	if e.slots >= PerDeviceInflight {
+		var finding Finding
 		if e.tokens >= MinCharge {
 			e.tokens -= MinCharge
+		} else {
+			finding = l.rateEvidence(e, now, "")
 		}
 		l.refused[ReasonDeviceConcurrency]++
-		return nil, Decision{Status: 429, RetryAfter: retryMin, Reason: ReasonDeviceConcurrency}, nil
+		return nil, Decision{Status: 429, RetryAfter: l.jitter(retryMin), Reason: ReasonDeviceConcurrency, Finding: finding}, nil
 	}
 	if e.tokens < MinCharge {
 		return nil, l.rateRefusal(e, now, MinCharge, ""), nil
 	}
 	e.tokens -= MinCharge
-	// The in-flight invariant normally guarantees room for C; refusing when it
-	// does not keeps the bytes in use within the budget.
-	if l.inflight >= l.config.MaxInflight || l.inUse+CompressedWeight > l.config.Budget {
-		l.refused[ReasonInflight]++
-		return nil, Decision{Status: 503, RetryAfter: l.inflightRetryAfter(now), Reason: ReasonInflight}, nil
+	q := priorityQueue(class)
+	reason := Reason("")
+	retry := 0
+	switch {
+	case l.inflight >= l.config.MaxInflight:
+		reason, retry = ReasonInflight, l.inflightRetryAfter(now)
+	case q == 1 && l.config.MaxInflight-l.inflight-1 < (l.config.MaxInflight+3)/4:
+		reason, retry = ReasonReserve, l.inflightRetryAfter(now)
+	case l.config.Budget-l.inUse < CompressedWeight:
+		reason, retry = ReasonBudget, l.retryAfter(now, l.waitingBytes, CompressedWeight)
+	case !l.fits(q, CompressedWeight):
+		reason, retry = ReasonReserve, l.retryAfter(now, l.waitingBytes, CompressedWeight+l.reserve)
+	}
+	if reason != "" {
+		l.refused[reason]++
+		return nil, Decision{Status: 503, RetryAfter: retry, Reason: reason}, nil
 	}
 	e.slots++
 	l.inflight++
@@ -332,7 +346,7 @@ func (l *Limiter) Receive(device string, class batch.SpoolClass) (*Ticket, Decis
 	return &Ticket{l: l, entry: e, class: class}, Decision{}, nil
 }
 
-// Decode charges the device bucket max(size, MinCharge) - MinCharge, the rest
+// Decode charges the device bucket max(window, size, MinCharge) - MinCharge, the rest
 // of the request's charge after Receive, then waits at most
 // DecodeWait, or until ctx ends, for H(w) + S(s) + T(s) bytes of budget. A
 // refusal leaves the ticket in the receive phase. A canceled wait returns
@@ -359,8 +373,8 @@ func (t *Ticket) Decode(ctx context.Context, window, size uint64) (Decision, err
 		l.oversize[t.class]++
 		finding = l.flag(e, now, FindingOversize)
 	}
-	// Receive already took MinCharge; the request costs max(size, MinCharge).
-	rest := max(size, MinCharge) - MinCharge
+	// Receive already took MinCharge; the request costs max(window, size, MinCharge).
+	rest := max(window, size, MinCharge) - MinCharge
 	e.refill(now)
 	if e.tokens < rest {
 		d := l.rateRefusal(e, now, rest, finding)
@@ -412,7 +426,11 @@ func (t *Ticket) Decode(ctx context.Context, window, size uint64) (Decision, err
 		reason = ReasonReserve
 	}
 	l.refused[reason]++
-	return Decision{Status: 503, RetryAfter: l.retryAfter(now, l.waitingBytes, need), Reason: reason, Finding: finding}, nil
+	retryWeight := need
+	if reason == ReasonReserve {
+		retryWeight += l.reserve
+	}
+	return Decision{Status: 503, RetryAfter: l.retryAfter(now, l.waitingBytes, retryWeight), Reason: reason, Finding: finding}, nil
 }
 
 // Decoded adds a decode's duration to the device's attribution counters. It
@@ -576,14 +594,20 @@ func (l *Limiter) flag(e *deviceEntry, now time.Time, f Finding) Finding {
 // ceil(deficit / ServerRefill) clamped to 5 through 60.
 func (l *Limiter) rateRefusal(e *deviceEntry, now time.Time, need uint64, finding Finding) Decision {
 	l.refused[ReasonDeviceRate]++
+	finding = l.rateEvidence(e, now, finding)
+	deficit := need - e.tokens
+	retry := int(min(max((deficit+ServerRefill-1)/ServerRefill, retryMin), retryMax))
+	return Decision{Status: 429, RetryAfter: l.jitter(int64(retry)), Reason: ReasonDeviceRate, Finding: finding}
+}
+
+// rateEvidence counts a credit deficit independently of the response reason.
+func (l *Limiter) rateEvidence(e *deviceEntry, now time.Time, finding Finding) Finding {
 	m := l.minute(now)
 	e.add(m, counterRate, 1)
 	if finding == "" && e.counters(m, counterRate) > rateFindingLimit {
-		finding = l.flag(e, now, FindingRate)
+		return l.flag(e, now, FindingRate)
 	}
-	deficit := need - e.tokens
-	retry := int(min(max((deficit+ServerRefill-1)/ServerRefill, retryMin), retryMax))
-	return Decision{Status: 429, RetryAfter: retry, Reason: ReasonDeviceRate, Finding: finding}
+	return finding
 }
 
 // inflightRetryAfter paces in-flight refusals by how fast slots free:

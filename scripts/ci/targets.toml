@@ -145,6 +145,38 @@ target = "FuzzTar"
 fuzztime = "60s"
 parallel = 2
 
+[[fuzz]]
+package = "./internal/extensions/admission"
+target = "FuzzDecide"
+fuzztime = "60s"
+parallel = 2
+fuzzminimizetime = "3s"
+
+[[fuzz]]
+package = "./internal/extensions/admission"
+target = "FuzzParse"
+fuzztime = "60s"
+parallel = 2
+fuzzminimizetime = "3s"
+
+[[fuzz]]
+package = "./internal/platform/config"
+target = "FuzzLoad"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/transport/console"
+target = "FuzzPath"
+fuzztime = "60s"
+parallel = 2
+
+[[fuzz]]
+package = "./internal/transport/console"
+target = "FuzzAcceptEncoding"
+fuzztime = "60s"
+parallel = 2
+
 [loader]
 package = "./internal/extensions/loader"
 target = "FuzzParserQualification"
@@ -157,6 +189,15 @@ mode = "go-suite"
 cwd = "server"
 packages = ["./..."]
 fuzz_inventory = true
+requires = ["server-keyfile-root"]
+
+[[selected]]
+id = "server-keyfile-root"
+mode = "go-selected"
+cwd = "server"
+packages = ["./internal/platform/config"]
+tests = ["TestReadKeyFileGroupRules"]
+test_flags = ["-exec", "sudo -n --"]
 
 [[selected]]
 id = "server-race"
@@ -175,6 +216,70 @@ packages = ["./internal/signing/ed25519key"]
 benchmark = "BenchmarkValidate"
 test_flags = ["-benchmem", "-benchtime=100x"]
 operations = 100
+
+[[selected]]
+id = "ingest-cost-model"
+mode = "go-cost-model"
+cwd = "server"
+packages = ["./internal/events/body"]
+tests = ["TestDecodeCostModel"]
+test_flags = ["-timeout=15m"]
+cases = 50
+case_keys = [
+  "arrayobjs-64x1MiB-single/1",
+  "arrayobjs-64x1MiB-single/4",
+  "badid-10000-single/1",
+  "badid-10000-single/8",
+  "blocks-4m-at",
+  "blocks-4m-over",
+  "blocks-64m-at",
+  "blocks-64m-over",
+  "blocks-min-at",
+  "blocks-min-ceiling",
+  "blocks-min-over",
+  "concurrent-blocks64",
+  "concurrent-small-window64",
+  "dense-4x1MiB-win4/1",
+  "dense-4x1MiB-win4/16",
+  "dense-64x1MiB-single/1",
+  "densenested-64x1MiB-single/1",
+  "flat-10000x6710-single/1",
+  "flat-16x1MiB-single/1",
+  "flat-16x1MiB-win4/1",
+  "flat-1x1MiB-single/1",
+  "flat-1x1MiB-win4/1",
+  "flat-4x1MiB-single/1",
+  "flat-4x1MiB-win4/1",
+  "flat-64x1MiB-single/1",
+  "flat-64x1MiB-single/4",
+  "flat-64x1MiB-win4/1",
+  "late-checksum64",
+  "malformed-entropy",
+  "minok-10000-single/1",
+  "nested-64x1MiB-single/1",
+  "numbers-64x1MiB-single/1",
+  "prefix-64x1MiB-single/1",
+  "preflight-ceiling",
+  "preflight-rate-deficit",
+  "random3-64x1MiB-single/1",
+  "random3-64x1MiB-single/4",
+  "realistic-10000-win4/1",
+  "realistic-2000-win4/1",
+  "realistic-5000-win4/1",
+  "realistic-5000-win4/8",
+  "round-10000x5377-single/1",
+  "round-2047x32769-single/1",
+  "round-2047x32769-single/4",
+  "singlechar-64x1MiB-single/1",
+  "singlechar-64x1MiB-single/4",
+  "size-lie-small",
+  "small-window64",
+  "small-window64-checksum",
+  "strings-64x1MiB-single/1",
+]
+benchmark = "BenchmarkDecodeCost"
+benchmark_flags = ["-benchmem", "-benchtime=3x", "-timeout=15m"]
+operations = 3
 
 [[selected]]
 id = "loader-extended"
@@ -302,6 +407,13 @@ children = [
 # named parent test and tests that a separate selected unit proves. No wildcard
 # allowance exists; check_policy.py pins every row.
 [[skips]]
+package = "github.com/ricevanta/ricevanta/server/internal/platform/config"
+test = "TestReadKeyFileGroupRules"
+reason = "foreign file group requires root; selected root binary proves the live check"
+proof = "server-keyfile-root"
+modes = ["server-unit", "server-race", "go-fuzz"]
+
+[[skips]]
 package = "github.com/ricevanta/ricevanta/server/internal/extensions/loader"
 test = "TestParserBudgetExtended"
 reason = "native extended parser corpus"
@@ -349,6 +461,13 @@ test = "TestParserMeasurementChild"
 reason = "fresh measurement child entry point"
 proof = "loader-extended"
 modes = ["server-unit", "server-race"]
+
+[[skips]]
+package = "github.com/ricevanta/ricevanta/server/internal/events/body"
+test = "TestDecodeCostModel"
+reason = "full ingest cost model runs separately without race instrumentation"
+proof = "ingest-cost-model"
+modes = ["server-unit", "server-race", "go-fuzz"]
 
 [[skips]]
 package = "ricevanta-spool"

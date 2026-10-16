@@ -20,11 +20,14 @@ func FuzzPath(f *testing.F) {
 	for _, s := range []string{
 		"/", "/a/../b", "/..", "/./x", "//x", "/a%2Fb", "/a%2fb", "/a%00b", "/a%5Cb", "/%2e%2e/b",
 		"/assets/index-Bx1a2b3c.js", "/assets/index-Bx1a2b3c.js.br", "/assets/../assets/index-Bx1a2b3c.js",
+		"/index.html.br", "/missing.gz", "/missing%2ebr", "/brand/favicon.ico.gz", "/assets/missing.%67z",
 		"/brand/favicon.ico", "/healthz", "/readyz", "/api/v1/x", "*", "/" + strings.Repeat("a", 1024),
 		"http://x/a/../b", "/devices/42?x=1", "/a\\b",
 	} {
 		f.Add(s, "text/html")
 	}
+	f.Add("/missing.br", "")
+	f.Add("/missing.gz", "")
 	h := newHandlerTB(f)
 	files := map[string]bool{}
 	m, _ := fixture(f)
@@ -55,6 +58,9 @@ func FuzzPath(f *testing.F) {
 		}
 		escaped := r.URL.EscapedPath()
 		if decoded, err := url.PathUnescape(escaped); err == nil && strings.HasPrefix(decoded, "/") && decoded != "/" {
+			if (strings.HasSuffix(decoded, ".br") || strings.HasSuffix(decoded, ".gz")) && w.Code != 404 {
+				t.Fatalf("%q: direct sidecar status %d", target, w.Code)
+			}
 			for _, seg := range strings.Split(decoded[1:], "/") {
 				if (seg == "" || seg == "." || seg == "..") && w.Code == 200 {
 					t.Fatalf("%q: served a path with segment %q", target, seg)

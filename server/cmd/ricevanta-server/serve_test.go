@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -941,14 +942,10 @@ func TestStopBeforeReadyExitsZero(t *testing.T) {
 	t.Fatal("every SIGTERM landed after ready; the before-ready path was not exercised")
 }
 
-// TestHTTP2SlowDrainHoldsUntilShutdownDeadline is the residual of spec
-// section 4: an HTTP/2 client that drains a few bytes every 5 s keeps
-// WriteByteTimeout from firing and holds its stream, so a SIGTERM during the
-// trickle ends at the shutdown deadline with shutdown_timeout and exit 1.
-// drainBytes is the burst the slow-drain client reads every 5 s. Measured
-// on Linux loopback: 4 KiB, 64 KiB and 256 KiB bursts let WriteByteTimeout
-// close the connection after about 10.4 s; 1 MiB held the stream to the
-// shutdown deadline. 2 MiB leaves margin for other send-buffer sizes.
+// TestHTTP2SlowDrainHoldsUntilShutdownDeadline exercises server write
+// progress sustained by draining enough bytes, past the write-progress timeout.
+// Shutdown must force Close within the original stop budget. The 2 MiB burst
+// is a Linux fixture parameter, not a portable socket-capacity threshold.
 const drainBytes = 2 << 20
 
 func TestHTTP2SlowDrainHoldsUntilShutdownDeadline(t *testing.T) {
@@ -1000,13 +997,21 @@ func TestHTTP2SlowDrainHoldsUntilShutdownDeadline(t *testing.T) {
 		hold = at.Sub(requested)
 	case <-time.After(2 * time.Second):
 	}
-	t.Logf("observed hold: stream held %v after the request; process exited %v after SIGTERM (shutdown.timeout_ms 12000)",
-		hold.Round(time.Millisecond), exited.Sub(stopAt).Round(time.Millisecond))
+	t.Logf("toolchain=%s OS=%s burst=%d interval=5s hold=%v stop=%v budget=12s tolerance=500ms",
+		runtime.Version(), runtime.GOOS, drainBytes, hold, exited.Sub(stopAt))
+	if elapsed := exited.Sub(stopAt); elapsed > 12500*time.Millisecond || elapsed < 11900*time.Millisecond {
+		t.Fatalf("stop elapsed %v outside original budget and finalization reserve", elapsed)
+	}
+	for _, record := range s.logs() {
+		if strings.Contains(record, `"msg":"shutdown_complete"`) {
+			t.Fatal("timeout reported as complete")
+		}
+	}
 	if code != 1 {
 		t.Fatalf("exit %d, want 1:\n%s", code, s.logText())
 	}
 	checkLogs(t, s.logs(), "stop_requested", "shutdown_timeout")
 	if hold < 10*time.Second {
-		t.Fatalf("stream held only %v; the trickle did not outlast the 10 s write bound", hold)
+		t.Fatalf("stream held only %v; the drain did not sustain server write progress past 10 s", hold)
 	}
 }

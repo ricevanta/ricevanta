@@ -68,10 +68,14 @@ RECEIPT_WITH_EVIDENCE = "required.receipt(route, unit, json.loads(os.environ['CH
 AGENT_CHECKS = "checks = json.loads(os.environ['CHECKS']) + inventory.agent_native_checks(inventory.HOSTS[os.environ['HOST_OS']])"
 AGENT_RECEIPT = "required.receipt(route, unit, checks, pathlib.Path(os.environ['RUNNER_TEMP']) / 'evidence')"
 SELECTED_COMMANDS = {
+    'server-keyfile-root': ("go test -list '^(TestReadKeyFileGroupRules)$' ./internal/platform/config",
+                            "go test -json -count=1 -exec 'sudo -n --' ./internal/platform/config -run '^(TestReadKeyFileGroupRules)$'"),
     'server-unit': ("go test -list '.*' ./...", 'go test -json -count=1 ./...'),
     'server-race': ("go test -race -list '.*' ./...", 'go test -json -race -count=1 -timeout=15m ./...'),
     'key-admission-bench': ("go test -list '^BenchmarkValidate$' ./internal/signing/ed25519key",
                             "go test -json -run '^$' -bench '^BenchmarkValidate$' -benchmem -benchtime=100x ./internal/signing/ed25519key"),
+    'ingest-cost-model': ("go test -list '^(TestDecodeCostModel)$' ./internal/events/body",
+                          "go test -json -count=1 -timeout=15m ./internal/events/body -run '^(TestDecodeCostModel)$'"),
     'loader-extended': ("go test -list '^(TestParserBudgetExtended)$' ./internal/extensions/loader",
                         "go test -json -count=1 ./internal/extensions/loader -run '^(TestParserBudgetExtended)$' -args -loader-budget-extended"),
     'loader-repeat': ("go test -list '^(TestParserBudgetSmoke)$' ./internal/extensions/loader",
@@ -110,13 +114,70 @@ INTEROP_PROOF = {
 }
 # Where and how each selected ID executes; a row may not move its command elsewhere.
 SELECTED_PLACES = {
+    'server-keyfile-root': ('server', 'go-selected'),
     'server-unit': ('server', 'go-suite'), 'server-race': ('server', 'go-suite'), 'key-admission-bench': ('server', 'go-bench'),
+    'ingest-cost-model': ('server', 'go-cost-model'),
     'loader-extended': ('server', 'go-selected'), 'loader-repeat': ('server', 'go-selected'), 'loader-fuzz': ('server', 'go-fuzz'),
     'loader-gate-b-extended': ('server', 'go-selected'), 'ocsf-native': ('server', 'go-suite'), 'agent-unit': ('agent', 'rust-suite'),
     'spool-extended': ('agent', 'rust-selected'), 'batch-extended': ('agent', 'rust-selected'),
     'interop-unit': ('server', 'go-interop'), 'interop-race': ('server', 'go-interop'),
 }
+INGEST_CASE_KEYS = [
+    'arrayobjs-64x1MiB-single/1',
+    'arrayobjs-64x1MiB-single/4',
+    'badid-10000-single/1',
+    'badid-10000-single/8',
+    'blocks-4m-at',
+    'blocks-4m-over',
+    'blocks-64m-at',
+    'blocks-64m-over',
+    'blocks-min-at',
+    'blocks-min-ceiling',
+    'blocks-min-over',
+    'concurrent-blocks64',
+    'concurrent-small-window64',
+    'dense-4x1MiB-win4/1',
+    'dense-4x1MiB-win4/16',
+    'dense-64x1MiB-single/1',
+    'densenested-64x1MiB-single/1',
+    'flat-10000x6710-single/1',
+    'flat-16x1MiB-single/1',
+    'flat-16x1MiB-win4/1',
+    'flat-1x1MiB-single/1',
+    'flat-1x1MiB-win4/1',
+    'flat-4x1MiB-single/1',
+    'flat-4x1MiB-win4/1',
+    'flat-64x1MiB-single/1',
+    'flat-64x1MiB-single/4',
+    'flat-64x1MiB-win4/1',
+    'late-checksum64',
+    'malformed-entropy',
+    'minok-10000-single/1',
+    'nested-64x1MiB-single/1',
+    'numbers-64x1MiB-single/1',
+    'prefix-64x1MiB-single/1',
+    'preflight-ceiling',
+    'preflight-rate-deficit',
+    'random3-64x1MiB-single/1',
+    'random3-64x1MiB-single/4',
+    'realistic-10000-win4/1',
+    'realistic-2000-win4/1',
+    'realistic-5000-win4/1',
+    'realistic-5000-win4/8',
+    'round-10000x5377-single/1',
+    'round-2047x32769-single/1',
+    'round-2047x32769-single/4',
+    'singlechar-64x1MiB-single/1',
+    'singlechar-64x1MiB-single/4',
+    'size-lie-small',
+    'small-window64',
+    'small-window64-checksum',
+    'strings-64x1MiB-single/1',
+]
 SELECTED_BUDGETS = {'loader-repeat': {'marker': 'PARSER_MEASUREMENT', 'marker_samples': 50}, 'key-admission-bench': {'operations': 100},
+                    'ingest-cost-model': {'packages': ['./internal/events/body'], 'tests': ['TestDecodeCostModel'],
+                                          'test_flags': ['-timeout=15m'], 'cases': 50, 'case_keys': INGEST_CASE_KEYS, 'benchmark': 'BenchmarkDecodeCost', 'operations': 3,
+                                          'benchmark_flags': ['-benchmem', '-benchtime=3x', '-timeout=15m']},
                     'loader-extended': {'marker': 'PARSER_MEASUREMENT'}, 'loader-gate-b-extended': {'marker': 'LOADER_MEASUREMENT'},
                     'spool-extended': {'seed': '0x525653505f763031', 'cases': 100000},
                     'batch-extended': {'seed': '0x5249564241544348', 'cases': 20000},
@@ -141,6 +202,11 @@ LOADER = 'github.com/ricevanta/ricevanta/server/internal/extensions/loader'
 YAMLTOKENS = LOADER + '/internal/yamltokens'
 GO_SKIP_MODES = ['server-unit', 'server-race', 'go-fuzz']
 SKIP_ALLOWANCES = [
+    {'package': 'github.com/ricevanta/ricevanta/server/internal/platform/config', 'test': 'TestReadKeyFileGroupRules',
+     'reason': 'foreign file group requires root; selected root binary proves the live check',
+     'proof': 'server-keyfile-root', 'modes': GO_SKIP_MODES},
+    {'package': 'github.com/ricevanta/ricevanta/server/internal/events/body', 'test': 'TestDecodeCostModel',
+     'reason': 'full ingest cost model runs separately without race instrumentation', 'proof': 'ingest-cost-model', 'modes': GO_SKIP_MODES},
     {'package': LOADER, 'test': 'TestParserBudgetExtended', 'reason': 'native extended parser corpus',
      'proof': 'loader-extended', 'modes': GO_SKIP_MODES},
     {'package': LOADER, 'test': 'TestLoaderBudgetExtended', 'reason': 'native extended complete-loader corpus',
@@ -258,6 +324,8 @@ def selected_errors(root):
         return ['scripts/ci/targets.toml: invalid selected inventory: ' + str(error)]
     errors = []
     for target_id, target in targets.items():
+        if target.get('requires', []) != (['server-keyfile-root'] if target_id == 'server-unit' else []):
+            errors.append('scripts/ci/targets.toml: required selected proof mismatch: ' + target_id)
         # No other wrapper ID may exist; console IDs are pinned here when Task 8 adds them.
         if target_id not in SELECTED_COMMANDS and not (target_id.startswith('go-fuzz:') and target['mode'] == 'go-fuzz'):
             errors.append('scripts/ci/targets.toml: unreviewed selected target ' + target_id)
@@ -281,9 +349,16 @@ def selected_errors(root):
             errors.append('scripts/ci/targets.toml: selected directory or mode mismatch: ' + target_id)
         for key, value in SELECTED_BUDGETS.get(target_id, {}).items():
             if target.get(key) != value: errors.append('scripts/ci/targets.toml: selected budget mismatch: ' + target_id)
+    cost=targets.get('ingest-cost-model')
+    if cost:
+        bench=run_selected.cost_model_benchmark(cost)
+        if (shlex.join(run_selected.discovery_command(bench)) != "go test -list '^BenchmarkDecodeCost$' ./internal/events/body" or
+            shlex.join(run_selected.run_command(bench)) != "go test -json -run '^$' -bench '^BenchmarkDecodeCost$' -benchmem -benchtime=3x -timeout=15m ./internal/events/body"):
+            errors.append('scripts/ci/targets.toml: ingest benchmark commands mismatch')
     for package, name in inventory.FUZZ_PAIRS:
         target = targets.get(f'go-fuzz:{package}:{name}')
-        if target is None or (target['cwd'], target['mode']) != ('server', 'go-fuzz') or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2":
+        minimize = ' -fuzzminimizetime=3s' if package == './internal/extensions/admission' else ''
+        if target is None or (target['cwd'], target['mode']) != ('server', 'go-fuzz') or shlex.join(run_selected.run_command(target)) != f"go test -json -count=1 {package} '-fuzz=^{name}$' -fuzztime=60s -parallel=2{minimize}":
             errors.append(f'scripts/ci/targets.toml: fuzz command mismatch: {package} {name}')
     for row in targets.values():
         for allowance in row['skips'].values():
@@ -316,7 +391,7 @@ def agent_native_errors(job):
 
 
 COMMANDS = {
-    ('server', 'validate'): ('gofmt -l .', wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench')),
+    ('server', 'validate'): ('gofmt -l .', wrapper('server-keyfile-root'), wrapper('server-unit'), 'go vet ./...', wrapper('key-admission-bench'), wrapper('ingest-cost-model')),
     ('server', 'race'): (wrapper('server-race'),),
     ('server', 'fuzz'): (FUZZ_WRAPPER,),
     ('server', 'loader-gate-a'): (wrapper('loader-extended'), wrapper('loader-repeat'), wrapper('loader-fuzz')),
@@ -942,7 +1017,7 @@ def fuzz_evidence_errors(job, root, native_parser=False):
     if selected != [expected]: errors.append('exact unconditional fuzz command required')
     corpus = {'name': 'Upload failing corpus', 'if': 'failure()', 'uses': UPLOAD,
               'with': {'name': 'loader-gate-a-${{ matrix.os }}' if native_parser else 'go-fuzz-${{ strategy.job-index }}-${{ matrix.target }}',
-                       'path': 'server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**' if native_parser else 'server/${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}/**',
+                       'path': 'server/internal/extensions/loader/testdata/fuzz/FuzzParserQualification/**' if native_parser else '${{ matrix.corpus }}',
                        'if-no-files-found': 'ignore', 'retention-days': '30'}}
     if sum(step == corpus for step in job.get('steps', [])) != 1:
         errors.append('exact failure corpus upload required')
@@ -1012,6 +1087,36 @@ def loader_qualification_errors(job, gate):
     return errors
 
 
+def ingest_evidence_errors(job, root):
+    """Pin the composite proof, both required inventories and retained diagnostics."""
+    errors = []
+    expected = [
+        {'name': 'Ingest cost model', 'shell': 'bash', 'working-directory': '.', 'run': wrapper('ingest-cost-model')},
+        {'name': 'Verify ingest measurement log', 'if': 'always()',
+         'run': 'set -euo pipefail\ntest -s "$RUNNER_TEMP/ingest-measurements/cost-model.log"\n'},
+        {'name': 'Upload ingest measurements', 'if': 'always()', 'uses': UPLOAD,
+         'with': {'name': 'ingest-measurements-${{ github.run_id }}-${{ github.run_attempt }}',
+                  'path': '${{ runner.temp }}/ingest-measurements/cost-model.log', 'retention-days': '30', 'if-no-files-found': 'error'}},
+    ]
+    steps = job.get('steps', [])
+    for row in expected:
+        if [s for s in steps if s.get('name') == row['name']] != [row]: errors.append('exact ingest proof step required: ' + row['name'])
+    positions = [next((i for i,s in enumerate(steps) if s.get('name')==row['name']), -1) for row in expected]
+    if positions != sorted(set(positions)) or -1 in positions: errors.append('ingest evidence order changed')
+    proof = [s for s in steps if s.get('id')=='proof']
+    try: checks = json.loads(proof[0]['env']['CHECKS']) if len(proof)==1 else []
+    except (KeyError, ValueError): checks = []
+    if checks.count('ingest-cost-model') != 1: errors.append('server-validate must require ingest-cost-model')
+    # Parse only the literal CHECKS assignment; do not execute a candidate file.
+    import ast
+    try:
+        tree=ast.parse((root/'scripts/ci/inventory.py').read_text())
+        rows=[ast.literal_eval(node.value) for node in tree.body if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='CHECKS' for t in node.targets)]
+        if len(rows)!=1 or rows[0].get('server-validate',[]).count('ingest-cost-model')!=1: errors.append('inventory omits ingest-cost-model')
+    except (OSError,SyntaxError,ValueError,TypeError): errors.append('invalid ingest check inventory')
+    return errors
+
+
 def check(root: Path) -> list[str]:
     errors = []
     LOCK_TOOLS.clear(); LOCK_TOOLS.update(lock_tools(root))
@@ -1075,6 +1180,7 @@ def check(root: Path) -> list[str]:
     if not required_names <= set(workflows): return errors
     if not observer_command_valid(root):
         errors.append('scripts/ci/semgrep_observer.py: exact Code/Supply Chain Pro command required')
+    errors += ['server: ' + e for e in ingest_evidence_errors(workflows['server'].get('jobs',{}).get('validate',{}),root)]
     ci = workflows['ci']
     events = ci.get('on', {})
     if events != {'push': {'branches': ['master']}, 'pull_request': {'branches': ['master'], 'types': ['opened', 'synchronize', 'reopened', 'ready_for_review', 'edited']}}:

@@ -100,6 +100,7 @@ export function serveFile(root: string, request: RequestInput, probes?: string):
     path.split('/').some((segment) => segment === '..' || segment === '.')
   )
     return error(400)
+  if (path.endsWith('.br') || path.endsWith('.gz')) return error(404)
   const isReserved = reserved.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
   const isProbe = path === '/__test__' || path.startsWith('/__test__/')
   if (isProbe && !probes) return error(404)
